@@ -280,6 +280,17 @@
     ;;(UUID. sb) ; Equality fails on roundtrips
     (.toString sb)))
 
+(defn exp-backoff "Returns binary exponential backoff value."
+  [attempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
+  (let [binary-exp (Math/pow 2 (dec attempt))
+        time (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
+    ;; (cond-> time
+    ;;         min' (max min')
+    ;;         max' (min max'))
+    (long (let [time (if min' (max min' time) time)
+                time (if max' (min max' time) time)]
+            time))))
+
 ;;;; Date+time
 
 (defn now-udt []
@@ -895,6 +906,8 @@
     (js/print x))
   nil)
 
+#+cljs (defn logf [fmt & xs] (log (apply format fmt xs)))
+
 #+cljs
 (defn get-window-location
   "Returns browser window's current location. Forgeable."
@@ -911,6 +924,10 @@
          :hash     (.-hash     loc*) ; "#bang"
          }]
     loc))
+
+#+cljs
+(defn set-exp-backoff-timeout! [nullary-f & [attempt]]
+  (.setTimeout js/window nullary-f (exp-backoff (or attempt 0))))
 
 ;;;; Ajax
 
