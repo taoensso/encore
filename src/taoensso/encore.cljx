@@ -280,6 +280,17 @@
     ;;(UUID. sb) ; Equality fails on roundtrips
     (.toString sb)))
 
+(defn exp-backoff "Returns binary exponential backoff value."
+  [attempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
+  (let [binary-exp (Math/pow 2 (dec attempt))
+        time (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
+    ;; (cond-> time
+    ;;         min' (max min')
+    ;;         max' (min max'))
+    (long (let [time (if min' (max min' time) time)
+                time (if max' (min max' time) time)]
+            time))))
+
 ;;;; Date+time
 
 (defn now-udt []
@@ -889,11 +900,23 @@
   [fmt & args] (apply gstr/format fmt args))
 
 #+cljs
-(defn log [x]
-  (if (js* "typeof console != 'undefined'")
-    (.log js/console x)
-    (js/print x))
-  nil)
+(do ; Logging stuff
+
+  (defn log [x]
+    (if (js* "typeof console != 'undefined'")
+      (.log js/console x)
+      (js/print x))
+    nil)
+
+  (defn sayp [& xs]     (js/alert (str/join " " xs)))
+  (defn sayf [fmt & xs] (js/alert (apply format fmt xs)))
+  (defn logp [& xs]     (log (str/join " " xs)))
+  (defn logf [fmt & xs] (log (apply format fmt xs)))
+
+  (def debugf (comp #(str ""        %) logf))
+  (def infof  (comp #(str ""        %) logf))
+  (def warnf  (comp #(str "WARN: "  %) logf))
+  (def errorf (comp #(str "ERROR: " %) logf)))
 
 #+cljs
 (defn get-window-location
@@ -911,6 +934,10 @@
          :hash     (.-hash     loc*) ; "#bang"
          }]
     loc))
+
+#+cljs
+(defn set-exp-backoff-timeout! [nullary-f & [attempt]]
+  (.setTimeout js/window nullary-f (exp-backoff (or attempt 0))))
 
 ;;;; Ajax
 
