@@ -12,13 +12,17 @@
                    ;; [cljs.core.async   :as async]
                    [cljs.reader       :as edn]
                    ;;[goog.crypt.base64 :as base64]
-                   ;; [clojure.browser.net :as net]
-                   ;; [goog.net.XhrIo      :as gxhrio]
-                   ;; [goog.net.XhrIoPool  :as gxhrio-pool]
-                   ;; [goog.net.EventType  :as gnet-event-type]
                    [goog.string         :as gstr]
                    [goog.string.format]
-                   [goog.string.StringBuffer])
+                   [goog.string.StringBuffer]
+                   [goog.events         :as gevents]
+                   [goog.net.XhrIo      :as gxhr]
+                   [goog.net.XhrIoPool  :as gxhr-pool]
+                   ;; [goog.net.XhrManager :as xhrm]
+                   [goog.Uri.QueryData  :as gquery-data]
+                   [goog.structs        :as gstructs]
+                   [goog.net.EventType]
+                   [goog.net.ErrorCode])
   #+cljs (:require-macros [taoensso.encore :as encore-macros]))
 
 ;;;; Core
@@ -907,3 +911,101 @@
          :hash     (.-hash     loc*) ; "#bang"
          }]
     loc))
+
+;;;; Ajax
+
+#+cljs
+(def ^:private xhr-pool_
+  ;; TODO Do we need to add the X-Requested-With header manually?
+  (delay (goog.net.XhrIoPool. #js{"X-Requested-With" "XMLHTTPRequest"} 1 6)))
+
+#+cljs
+(defn- get-pooled-xhr!
+  "Returns an immediately available XhrIo instance, or nil. The instance must be
+  released back to pool manually. Use core.async to wait for an available
+  instance, etc."
+  []
+  (let [result (.getObject @xhr-pool_)]
+    (when-not (undefined? result) result)))
+
+#+cljs
+(defn- coerce-xhr-params "[uri method get-or-post-params] -> [uri post-content]"
+  [uri method params] {:pre [(or (nil? params) (map? params))]}
+  (let [?pstr ; URL-encoded string, or nil
+        (when params
+          (let [s (-> params clj->js gstructs/Map. gquery-data/createFromMap
+                      .toString)]
+            (when-not (str/blank? s) s)))]
+    (case method
+      :get  [(if ?pstr (str uri "?" ?pstr) uri) nil]
+      :post [uri ?pstr])))
+
+#+cljs
+(defn ajax-lite
+  "Alpha - subject to change.
+  Simple+lightweight Ajax via Google Closure.
+  Ref. https://developers.google.com/closure/library/docs/xhrio"
+  [uri {:keys [method params headers timeout resp-type]
+        :or   {method :get timeout 10000 resp-type :auto}}
+   callback]
+  {:pre [(or (nil? timeout) (nneg-int? timeout))]}
+  (if-let [xhr (get-pooled-xhr!)]
+    (let [method* (case method :get "GET" :post "POST")
+          params  (map-keys name params)
+          headers (map-keys name params)
+          ;;
+          [uri* post-content*] (coerce-xhr-params uri method params)
+          headers*
+          (if-not post-content* headers
+            (assoc headers "Content-Type"
+              "application/x-www-form-urlencoded; charset=UTF-8"))]
+
+      (try
+        (doto xhr
+          (gevents/listen goog.net.EventType/COMPLETE
+            (fn wrapped-callback [resp]
+              (let [status       (.getStatus xhr) ; -1 or http-status
+                    got-resp?    (not= status -1)
+                    content-type (.getResponseHeader xhr "Content-Type")]
+                (callback
+                 {;;; Raw stuff
+                  :raw-resp resp
+                  :xhr      xhr ; = (.-target resp)
+                  ;;;
+                  :content-type (when got-resp? content-type)
+                  :content
+                  (when got-resp?
+                    (let [resp-type
+                          (if-not (= resp-type :auto) resp-type
+                            (condp #(str-ends-with? %2 %1)
+                                   (str content-type) ; Prevent nil
+                              "edn"  :edn
+                              "json" :json
+                              "xml"  :xml
+                              "html" :xml
+                              :text))]
+                      (case resp-type
+                        :text (.getResponseText xhr)
+                        :json (.getResponseJson xhr)
+                        :xml  (.getResponseXml  xhr)
+                        :edn  (edn/read-string (.getResponseText xhr)))))
+
+                  :status (when got-resp? status) ; nil or http-status
+                  :error ; nil, error status, or keyword
+                  (if got-resp?
+                    (when-not (<= 200 status 299) status) ; Non 2xx resp
+                    (case (.getLastErrorCode xhr)
+                      ;; goog.net.ErrorCode/NO_ERROR nil
+                      goog.net.ErrorCode/EXCEPTION  :exception
+                      goog.net.ErrorCode/HTTP_ERROR :http-error
+                      goog.net.ErrorCode/ABORT      :abort
+                      goog.net.ErrorCode/TIMEOUT    :timeout
+                      :unknown))}))))
+
+          (.setTimeoutInterval (or timeout 0)) ; nil = 0 = no timeout
+          (.send uri* post-content* headers*))
+
+      (finally (.releaseObject @xhr-pool_ xhr))))
+
+    ;; Pool failed to return an available xhr instance:
+    (callback {:error :xhr-pool-depleted})))
