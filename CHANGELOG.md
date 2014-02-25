@@ -1,3 +1,10 @@
+## v0.9.1 / 2014 Feb 25
+
+### Fixes
+
+ * Fix faulty cljs utils: `ajax-lite`, `str-ends-with?`, `str-trunc`.
+
+
 ## v0.9.0 / 2014 Feb 24
 
 ### New
