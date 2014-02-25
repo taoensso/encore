@@ -546,13 +546,13 @@
 
 (defn str-ends-with? [s substr]
   #+clj  (.endsWith ^String s ^String substr)
-  #+cljs (let [s-len      (.length s)
-               substr-len (.length substr)]
+  #+cljs (let [s-len      (alength s) ; not .length!
+               substr-len (alength substr)]
            (when (>= s-len substr-len)
              (not= -1 (.indexOf s substr (- s-len substr-len))))))
 
 (defn str-trunc [^String s max-len]
-  (if (<= (.length s) max-len) s
+  (if (<= (alength s) max-len) s
       (.substring s 0 max-len)))
 
 (comment (str-trunc "Hello this is a long string" 5))
@@ -941,11 +941,7 @@
 
 ;;;; Ajax
 
-#+cljs
-(def ^:private xhr-pool_
-  ;; TODO Do we need to add the X-Requested-With header manually?
-  (delay (goog.net.XhrIoPool. #js{"X-Requested-With" "XMLHTTPRequest"} 1 6)))
-
+#+cljs (def ^:private xhr-pool_ (delay (goog.net.XhrIoPool.)))
 #+cljs
 (defn- get-pooled-xhr!
   "Returns an immediately available XhrIo instance, or nil. The instance must be
@@ -959,7 +955,7 @@
 (defn- coerce-xhr-params "[uri method get-or-post-params] -> [uri post-content]"
   [uri method params] {:pre [(or (nil? params) (map? params))]}
   (let [?pstr ; URL-encoded string, or nil
-        (when params
+        (when-not (empty? params)
           (let [s (-> params clj->js gstructs/Map. gquery-data/createFromMap
                       .toString)]
             (when-not (str/blank? s) s)))]
@@ -977,62 +973,71 @@
    callback]
   {:pre [(or (nil? timeout) (nneg-int? timeout))]}
   (if-let [xhr (get-pooled-xhr!)]
-    (let [method* (case method :get "GET" :post "POST")
-          params  (map-keys name params)
-          headers (map-keys name params)
-          ;;
-          [uri* post-content*] (coerce-xhr-params uri method params)
-          headers*
-          (if-not post-content* headers
-            (assoc headers "Content-Type"
-              "application/x-www-form-urlencoded; charset=UTF-8"))]
+    (try
+      (let [method* (case method :get "GET" :post "POST")
+            params  (map-keys name params)
+            headers (merge {"X-Requested-With" "XMLHTTPRequest"}
+                           (map-keys name headers))
+            ;;
+            [uri* post-content*] (coerce-xhr-params uri method params)
+            headers*
+            (clj->js
+             (if-not post-content* headers
+               (assoc headers "Content-Type"
+                 "application/x-www-form-urlencoded; charset=UTF-8")))]
 
-      (try
         (doto xhr
-          (gevents/listen goog.net.EventType/COMPLETE
+          (gevents/listenOnce goog.net.EventType/READY
+            (fn [_] (.releaseObject @xhr-pool_ xhr)))
+
+          (gevents/listenOnce goog.net.EventType/COMPLETE
             (fn wrapped-callback [resp]
               (let [status       (.getStatus xhr) ; -1 or http-status
                     got-resp?    (not= status -1)
-                    content-type (.getResponseHeader xhr "Content-Type")]
-                (callback
-                 {;;; Raw stuff
-                  :raw-resp resp
-                  :xhr      xhr ; = (.-target resp)
-                  ;;;
-                  :content-type (when got-resp? content-type)
-                  :content
-                  (when got-resp?
-                    (let [resp-type
-                          (if-not (= resp-type :auto) resp-type
-                            (condp #(str-ends-with? %2 %1)
+                    content-type (when got-resp?
+                                   (.getResponseHeader xhr "Content-Type"))
+                    cb-arg
+                    {;;; Raw stuff
+                     :raw-resp resp
+                     :xhr      xhr ; = (.-target resp)
+                     ;;;
+                     :content-type (when got-resp? content-type)
+                     :content
+                     (when got-resp?
+                       (let [resp-type
+                             (if-not (= resp-type :auto) resp-type
+                               (condp #(str-ends-with? %2 %1)
                                    (str content-type) ; Prevent nil
-                              "edn"  :edn
-                              "json" :json
-                              "xml"  :xml
-                              "html" :xml
-                              :text))]
-                      (case resp-type
-                        :text (.getResponseText xhr)
-                        :json (.getResponseJson xhr)
-                        :xml  (.getResponseXml  xhr)
-                        :edn  (edn/read-string (.getResponseText xhr)))))
+                                 "edn"  :edn
+                                 "json" :json
+                                 "xml"  :xml
+                                 "html" :xml
+                                 :text))]
+                         (case resp-type
+                           :text (.getResponseText xhr)
+                           :json (.getResponseJson xhr)
+                           :xml  (.getResponseXml  xhr)
+                           :edn  (edn/read-string (.getResponseText xhr)))))
 
-                  :status (when got-resp? status) ; nil or http-status
-                  :error ; nil, error status, or keyword
-                  (if got-resp?
-                    (when-not (<= 200 status 299) status) ; Non 2xx resp
-                    (case (.getLastErrorCode xhr)
-                      ;; goog.net.ErrorCode/NO_ERROR nil
-                      goog.net.ErrorCode/EXCEPTION  :exception
-                      goog.net.ErrorCode/HTTP_ERROR :http-error
-                      goog.net.ErrorCode/ABORT      :abort
-                      goog.net.ErrorCode/TIMEOUT    :timeout
-                      :unknown))}))))
+                     :status (when got-resp? status) ; nil or http-status
+                     :error ; nil, error status, or keyword
+                     (if got-resp?
+                       (when-not (<= 200 status 299) status) ; Non 2xx resp
+                       (get {;; goog.net.ErrorCode/NO_ERROR nil
+                             goog.net.ErrorCode/EXCEPTION  :exception
+                             goog.net.ErrorCode/HTTP_ERROR :http-error
+                             goog.net.ErrorCode/ABORT      :abort
+                             goog.net.ErrorCode/TIMEOUT    :timeout}
+                            (.getLastErrorCode xhr) :unknown))}]
+                (callback cb-arg))))
 
           (.setTimeoutInterval (or timeout 0)) ; nil = 0 = no timeout
-          (.send uri* post-content* headers*))
+          (.send uri* method* post-content* headers*)))
 
-      (finally (.releaseObject @xhr-pool_ xhr))))
+      (catch js/error e
+        (logf "Ajax error: %s" e)
+        (.releaseObject @xhr-pool_ xhr)
+        nil))
 
     ;; Pool failed to return an available xhr instance:
     (callback {:error :xhr-pool-depleted})))
