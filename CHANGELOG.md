@@ -1,3 +1,10 @@
+## v0.9.2 / 2014 Feb 26
+
+### Fixes
+
+ * Fix project.clj to prevent unnecessary downstream deps.
+
+
 ## v0.9.1 / 2014 Feb 25
 
 ### Fixes

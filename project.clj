@@ -58,7 +58,7 @@
   :codox {:sources ["target/classes"]}
   :aliases
   {"test-all"   ["with-profile" "default:+1.5:+1.6" "expectations"]
-   ;; "test-all"   ["with-profile" "default:+1.6," "expectations"]
+   ;; "test-all"   ["with-profile" "default:+1.6" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "build-once" ["do" "cljx" "once," "cljsbuild" "once"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
