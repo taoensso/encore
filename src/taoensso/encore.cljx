@@ -281,8 +281,8 @@
     (.toString sb)))
 
 (defn exp-backoff "Returns binary exponential backoff value."
-  [attempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
-  (let [binary-exp (Math/pow 2 (dec attempt))
+  [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
+  (let [binary-exp (Math/pow 2 (dec nattempt))
         time (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
     ;; (cond-> time
     ;;         min' (max min')
@@ -936,8 +936,8 @@
     loc))
 
 #+cljs
-(defn set-exp-backoff-timeout! [nullary-f & [attempt]]
-  (.setTimeout js/window nullary-f (exp-backoff (or attempt 0))))
+(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
+  (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
 
 ;;;; Ajax
 
