@@ -1,3 +1,10 @@
+## v0.9.3 / 2014 Feb 27
+
+### Fixes
+
+ * Fix `as-map` post-condition: can return nil.
+
+
 ## v0.9.2 / 2014 Feb 26
 
 ### Fixes
