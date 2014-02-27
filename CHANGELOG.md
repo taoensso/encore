@@ -1,3 +1,10 @@
+## Pending / unreleased
+
+### Fixes
+
+ * Faulty `str-trunc` (clj). Regression from v0.9.1.
+
+
 ## v0.9.3 / 2014 Feb 27
 
 ### Fixes
