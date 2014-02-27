@@ -14,7 +14,6 @@
    ;; [org.clojure/clojure "1.5.1"] ; Soon...
    ]
 
-  :cljsbuild {:builds []}
   :test-paths ["test" "src"]
   :profiles
   {;; :default [:base :system :user :provided :dev]
