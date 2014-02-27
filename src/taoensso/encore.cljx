@@ -551,9 +551,11 @@
            (when (>= s-len substr-len)
              (not= -1 (.indexOf s substr (- s-len substr-len))))))
 
-(defn str-trunc [^String s max-len]
-  (if (<= (alength s) max-len) s
-      (.substring s 0 max-len)))
+(defn str-trunc [s max-len]
+  #+clj  (if (<= (.length ^String s) max-len) s
+           (.substring ^String s 0 max-len))
+  #+cljs (if (<= (alength s) max-len) s
+           (.substring s 0 max-len)))
 
 (comment (str-trunc "Hello this is a long string" 5))
 
