@@ -124,9 +124,13 @@
 
 (defn nnil? [x] (not (nil? x)))
 
+#+cljs
+(defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
+  [fmt & args] (apply gstr/format fmt args))
+
 ;;;; Coercions
 
-(defn as-bool
+(defn parse-bool
   "Returns x as a unambiguous Boolean, or nil on failure. Requires more
   explicit truthiness than (boolean x)."
   [x]
@@ -136,7 +140,16 @@
           (or (= x "true")  (= x "TRUE")  (= x "1") (= x 1)) true
           :else nil)))
 
-(defn as-int "Returns x as Long (or JavaScript integer), or nil on failure."
+(defn as-bool [x] "Like `parse-bool` but throws on unparseable non-nil."
+  (when x
+    (let [p (parse-bool x)]
+      (if-not (nil? p) p
+        (throw (ex-info (format "as-bool failed: %s" x) {:type (type x)}))))))
+
+(comment (parse-bool "foo")
+         (as-bool    "foo"))
+
+(defn parse-int "Returns x as Long (or JavaScript integer), or nil on failure."
   [x]
   (when x
     #+clj
@@ -153,7 +166,15 @@
                         (when-not (js/isNaN x) x))
           :else        nil)))
 
-(defn as-float "Returns x as Double (or JavaScript float), or nil on failure."
+(defn as-int [x] "Like `parse-int` but throws on unparseable non-nil."
+  (when x
+    (or (parse-int x)
+        (throw (ex-info (format "as-int failed: %s" x) {:type (type x)})))))
+
+(comment (parse-int "122.5h")
+         (as-int    "122.5h"))
+
+(defn parse-float "Returns x as Double (or JavaScript float), or nil on failure."
   [x]
   (when x
     #+clj
@@ -167,6 +188,13 @@
           (string? x) (let [x (js/parseFloat x)]
                         (when-not (js/isNan x) x))
           :else       nil)))
+
+(defn as-float [x] "Like parse-float` but throws on unparseable non-nil."
+  (or (parse-float x)
+      (throw (ex-info (format "as-float failed: %s" x) {:type (type x)}))))
+
+(comment (parse-float "122.5h")
+         (as-float    "122.5h"))
 
 ;;;; Keywords
 
@@ -896,10 +924,6 @@
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
 
 ;;;; Client misc
-
-#+cljs
-(defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
-  [fmt & args] (apply gstr/format fmt args))
 
 #+cljs
 (do ; Logging stuff
