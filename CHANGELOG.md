@@ -1,3 +1,7 @@
+## Pending / unreleased
+
+ * NEW: Add clj-side `format` fn for easier cross-platform use.
+
 ## v0.9.4 / 2014 Feb 28
 
  * FIX: Faulty `str-trunc` (clj). Regression from v0.9.1.

@@ -124,6 +124,7 @@
 
 (defn nnil? [x] (not (nil? x)))
 
+#+clj (def format clojure.core/format)
 #+cljs
 (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
   [fmt & args] (apply gstr/format fmt args))
