@@ -289,6 +289,7 @@
     (if-not modifier rounded
       (/ rounded modifier))))
 
+(def round* round) ; Alias for ns refers
 (defn round2 "Optimized common case." [x] (/ (Math/round (* x 1000.0)) 1000.0))
 
 (comment
