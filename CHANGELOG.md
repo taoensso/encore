@@ -1,6 +1,10 @@
-## Pending / unreleased
+## v0.9.5 / 2014 Mar 6
 
  * NEW: Add clj-side `format` fn for easier cross-platform use.
+ * NEW: Add clj(s)-side `nblank?` fns.
+ * NEW: Add `round*` alias.
+ * NEW: Add `now-udt-mock-fn`, `make-timestamp-fn`.
+
 
 ## v0.9.4 / 2014 Feb 28
 

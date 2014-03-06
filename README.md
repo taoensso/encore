@@ -1,7 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/encore "0.9.4"] ; Initial release
+[com.taoensso/encore "0.9.5"]
 ```
 
 # Taoensso lib support utils
