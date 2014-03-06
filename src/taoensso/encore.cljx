@@ -8,6 +8,8 @@
                    ;; [clojure.core.async  :as async]
                    [clojure.edn         :as edn])
   ;; #+clj  (:import [org.apache.commons.codec.binary Base64])
+  #+clj  (:import  [java.util Date Locale]
+                   [java.text SimpleDateFormat])
   ;;;
   #+cljs (:require [clojure.string    :as str]
                    ;; [cljs.core.async   :as async]
@@ -323,11 +325,19 @@
                 time (if max' (min max' time) time)]
             time))))
 
-;;;; Date+time
+;;;; Date & time
 
 (defn now-udt []
   #+clj  (System/currentTimeMillis)
   #+cljs (.valueOf (js/Date.)))
+
+(defn now-udt-mock-fn "Useful for testing."
+  [& [mock-udts]]
+  (let [mock-udts (or mock-udts (range))
+        idx       (atom -1)]
+    (fn [] (nth mock-udts (swap! idx inc)))))
+
+(comment (with-redefs [now-udt (now-udt-mock-fn)] (repeatedly 10 now-udt)))
 
 (defn secs->ms [secs] (*    secs  1000))
 (defn ms->secs [ms]   (quot ms    1000))
@@ -350,6 +360,23 @@
 (def secs (comp ms->secs ms))
 (comment (ms   :years 88 :months 3 :days 33)
          (secs :years 88 :months 3 :days 33))
+
+#+clj
+(defn make-timestamp-fn*
+  "Returns a unary fn that formats java.util.Date instants using given pattern
+  string and an optional java.util.Locale."
+  ;; Thread safe SimpleDateTime soln. from instant.clj, Ref. http://goo.gl/CEBJnQ
+  [^String pattern ^Locale locale]
+  (let [format (proxy [ThreadLocal] [] ; For thread safety
+                 (initialValue []
+                   (if locale
+                     (SimpleDateFormat. pattern locale)
+                     (SimpleDateFormat. pattern))))]
+    (fn [^Date dt] (.format ^SimpleDateFormat (.get format) dt))))
+
+(comment ((make-timestamp-fn "yyyy-MMM-dd" nil) (Date.)))
+
+#+clj (def make-timestamp-fn (memoize make-timestamp-fn*))
 
 ;;;; Collections
 
