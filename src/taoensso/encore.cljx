@@ -2,6 +2,7 @@
   "The utils you want, in the package you deserve™.
   Subset of the commonest Ensso utils w/o external dependencies."
   {:author "Peter Taoussanis"}
+  #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
                    [clojure.java.io     :as io]
                    ;; [clojure.core.async  :as async]
@@ -122,7 +123,8 @@
 
 (comment (when-lets [a :a b nil] "foo"))
 
-(defn nnil? [x] (not (nil? x)))
+(def nnil?   (complement nil?))
+(def nblank? (complement str/blank?))
 
 #+clj (def format clojure.core/format)
 #+cljs
