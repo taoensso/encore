@@ -1,3 +1,8 @@
+## Pending / unreleased
+
+ * NEW: Add `simple-date-format` util (clj only).
+
+
 ## v0.9.5 / 2014 Mar 6
 
  * NEW: Add clj-side `format` fn for easier cross-platform use.

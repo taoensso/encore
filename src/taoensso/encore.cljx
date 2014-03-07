@@ -8,7 +8,7 @@
                    ;; [clojure.core.async  :as async]
                    [clojure.edn         :as edn])
   ;; #+clj  (:import [org.apache.commons.codec.binary Base64])
-  #+clj  (:import  [java.util Date Locale]
+  #+clj  (:import  [java.util Date Locale TimeZone]
                    [java.text SimpleDateFormat])
   ;;;
   #+cljs (:require [clojure.string    :as str]
@@ -361,22 +361,54 @@
 (comment (ms   :years 88 :months 3 :days 33)
          (secs :years 88 :months 3 :days 33))
 
+(defmacro thread-local-proxy
+  "Thread-safe proxy wrapper, Ref. http://goo.gl/CEBJnQ (instant.clj)."
+  [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
+
+(comment
+  (.get (thread-local-proxy (println "Foo")))
+  (let [p (thread-local-proxy (println "Foo"))]
+    (println "---")
+    (dotimes [_ 100] (.get p))) ; Prints once
+
+  (let [p (thread-local-proxy (println "Foo"))]
+    (println "---")
+    (.get p)
+    (.get p)
+    (future (.get p))
+    (.get p)) ; Prints twice (2 threads)
+  )
+
 #+clj
-(defn make-timestamp-fn*
-  "Returns a unary fn that formats java.util.Date instants using given pattern
-  string and an optional java.util.Locale."
-  ;; Thread safe SimpleDateTime soln. from instant.clj, Ref. http://goo.gl/CEBJnQ
-  [^String pattern ^Locale locale]
-  (let [format (proxy [ThreadLocal] [] ; For thread safety
-                 (initialValue []
-                   (if locale
-                     (SimpleDateFormat. pattern locale)
-                     (SimpleDateFormat. pattern))))]
-    (fn [^Date dt] (.format ^SimpleDateFormat (.get format) dt))))
+(def ^:private simple-date-format*
+  "Returns a SimpleDateFormat ThreadLocal proxy."
+  (memoize
+   (fn [^String pattern & [{:keys [^Locale locale ^TimeZone timezone]}]]
+     (thread-local-proxy
+      (let [^SimpleDateFormat sdformat
+            (if locale
+              (SimpleDateFormat. pattern locale)
+              (SimpleDateFormat. pattern))]
+        (when timezone (.setTimeZone sdformat timezone))
+        sdformat)))))
 
-(comment ((make-timestamp-fn "yyyy-MMM-dd" nil) (Date.)))
+#+clj
+(defn simple-date-format
+  "Returns a thread-local java.text.SimpleDateFormat for simple date formatting
+  and parsing. Uses JVM's default locale + timezone when unspecified.
 
-#+clj (def make-timestamp-fn (memoize make-timestamp-fn*))
+  (.format (simple-date-format \"yyyy-MMM-dd\") (Date.)) => \"2014-Mar-07\"
+  Ref. http://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html
+
+  Prefer the java.time (Java 8) or Joda-Time (external lib) APIs when available.
+  Tower also offers facilities built on DateFormat (rather than the more
+  restrictive SimpleDateFormat)."
+  ;; Note fully qualified type hint!
+  ^java.text.SimpleDateFormat [pattern & [{:keys [locale timezone] :as opts}]]
+  (.get ^ThreadLocal (simple-date-format* pattern opts)))
+
+(comment
+  (time (dotimes [_ 10000] (.format (simple-date-format "yyyy-MMM-dd") (Date.)))))
 
 ;;;; Collections
 
