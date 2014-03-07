@@ -1,4 +1,4 @@
-## Pending / unreleased
+## v0.9.6 / 2014 Mar 7
 
  * NEW: Add `simple-date-format` util (clj only).
 
