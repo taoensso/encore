@@ -128,12 +128,14 @@
 (def nnil?   (complement nil?))
 (def nblank? (complement str/blank?))
 
-#+clj (def format clojure.core/format)
+#+clj (def format clojure.core/format) ; For easier encore/format portability
 #+cljs
 (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
   [fmt & args] (apply gstr/format fmt args))
 
 ;;;; Coercions
+;; `parse-x` => success, or nil
+;;    `as-x` => success, (sometimes nil arg), or throw
 
 (defn parse-bool
   "Returns x as a unambiguous Boolean, or nil on failure. Requires more
@@ -407,8 +409,8 @@
   ^java.text.SimpleDateFormat [pattern & [{:keys [locale timezone] :as opts}]]
   (.get ^ThreadLocal (simple-date-format* pattern opts)))
 
-(comment
-  (time (dotimes [_ 10000] (.format (simple-date-format "yyyy-MMM-dd") (Date.)))))
+(comment (time (dotimes [_ 10000] (.format (simple-date-format "yyyy-MMM-dd")
+                                           (Date.)))))
 
 ;;;; Collections
 
