@@ -1134,3 +1134,50 @@
 
     ;; Pool failed to return an available xhr instance:
     (callback {:error :xhr-pool-depleted})))
+
+;;;; Ring
+
+#+clj
+(defn session-swap
+  "Small util to help correctly manage (modify) funtional sessions. Please use
+  this when writing Ring middleware!"
+  [req resp f & args]
+  (when resp
+    (if (contains? resp :session) ; Use response session (may be nil)
+      (assoc resp :session (apply f (:session resp) args))
+      (assoc resp :session (apply f (:session req)  args)))))
+
+(comment
+  (session-swap {:session {:req? true}} {:session nil}           assoc :new-k :new-v)
+  (session-swap {:session {:req? true}} {:session {:resp? true}} assoc :new-k :new-v)
+  (session-swap {:session {:old? true}} {}                       assoc :new-k :new-v))
+
+#+clj
+(defn normalize-headers [req-or-resp]
+  (when req-or-resp
+    (assoc req-or-resp :headers (map-keys str/lower-case (:headers req-or-resp)))))
+
+(comment (normalize-headers {:headers {"Foo1" "bar1" "FOO2" "bar2" "foo3" "bar3"}}))
+
+#+clj
+(do
+  (defn- ->body-in-map [x] (when x (if-not (map? x) {:body x} x)))
+  (defn set-body      [resp body]    (assoc     (->body-in-map resp) :body   body))
+  (defn set-status    [resp code]    (assoc     (->body-in-map resp) :status code))
+  (defn merge-headers [resp headers] (update-in (->body-in-map resp) [:headers]
+                                                merge headers)))
+
+(comment (merge-headers {:body "foo"} {"BAR" "baz"})
+         (merge-headers "foo"         {"bar" "baz"}))
+
+#+clj
+(defn redirect-resp
+  ([url] (redirect-resp :temp url nil))
+  ([type url & [flash]]
+     {:status  (case type (301 :permanent :perm)     301
+                          (302 :temporary :temp nil) 302)
+      :headers {"location" url}
+      :body    nil
+      :flash   flash}))
+
+(comment (redirect-resp :temp "/foo" "boo!"))

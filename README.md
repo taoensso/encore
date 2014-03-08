@@ -6,7 +6,7 @@
 
 # Taoensso lib support utils
 
-Cross-platform shared support utils for [taoensso.com Clojure libs](https://www.taoensso.com/clojure-libraries). < 1000 loc, no external dependencies.
+Cross-platform shared support utils for [taoensso.com Clojure libs](https://www.taoensso.com/clojure-libraries). < ~1000 loc, no external dependencies.
 
 ## Contact & contributing
 

@@ -1,6 +1,7 @@
 ## Unreleased / pending
 
  * NEW: Add `pow` fn (cross-platform).
+ * NEW: Add some Ring utils (clj only).
 
 
 ## v0.9.6 / 2014 Mar 7
