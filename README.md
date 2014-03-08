@@ -1,12 +1,12 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/encore "0.9.6"]
+[com.taoensso/encore "0.9.7"]
 ```
 
 # Taoensso lib support utils
 
-Cross-platform shared support utils for [taoensso.com Clojure libs](https://www.taoensso.com/clojure-libraries). < ~1000 loc, no external dependencies.
+Cross-platform shared support utils for [taoensso.com Clojure libs](https://www.taoensso.com/clojure-libraries). < ~1200 loc, no external dependencies.
 
 ## Contact & contributing
 
