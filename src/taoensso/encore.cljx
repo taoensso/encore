@@ -278,23 +278,25 @@
 
 ;;;; Math
 
+(defn pow [n exp] (Math/pow n exp))
+
 (defn round
-  [x & [type nplaces]]
+  [n & [type nplaces]]
   (let [modifier (when nplaces (Math/pow 10.0 nplaces))
-        x* (if-not modifier x (* x modifier))
+        n* (if-not modifier n (* n modifier))
         rounded
         (case (or type :round)
           ;;; Note same API for both #+clj and #+cljs:
-          :round (Math/round (double x*))        ; Round to nearest int or nplaces
-          :floor (long (Math/floor (double x*))) ; Round down to -inf
-          :ceil  (long (Math/ceil  (double x*))) ; Round up to +inf
-          :trunc (long x*)                       ; Round up/down toward zero
+          :round (Math/round (double n*))        ; Round to nearest int or nplaces
+          :floor (long (Math/floor (double n*))) ; Round down to -inf
+          :ceil  (long (Math/ceil  (double n*))) ; Round up to +inf
+          :trunc (long n*)                       ; Round up/down toward zero
           (throw (ex-info "Unknown round type" {:type type})))]
     (if-not modifier rounded
       (/ rounded modifier))))
 
 (def round* round) ; Alias for ns refers
-(defn round2 "Optimized common case." [x] (/ (Math/round (* x 1000.0)) 1000.0))
+(defn round2 "Optimized common case." [n] (/ (Math/round (* n 1000.0)) 1000.0))
 
 (comment
   (round -1.5 :floor)
