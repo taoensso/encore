@@ -1,3 +1,8 @@
+## v0.9.8 / 2014 Mar 10
+
+ * FIX: `ajax-lite` broken response type detection.
+
+
 ## v0.9.7 / 2014 Mar 8
 
  * NEW: Add `pow` fn (cross-platform).

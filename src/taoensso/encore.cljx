@@ -1099,12 +1099,12 @@
                      (when got-resp?
                        (let [resp-type
                              (if-not (= resp-type :auto) resp-type
-                               (condp #(str-ends-with? %2 %1)
+                               (condp #(str-contains? %2 %1)
                                    (str content-type) ; Prevent nil
-                                 "edn"  :edn
-                                 "json" :json
-                                 "xml"  :xml
-                                 "html" :xml
+                                 "/edn"  :edn
+                                 "/json" :json
+                                 "/xml"  :xml
+                                 "/html" :xml
                                  :text))]
                          (case resp-type
                            :text (.getResponseText xhr)
