@@ -1,3 +1,8 @@
+## Pending / unreleased
+ 
+ * NEW: Add `swap!*` fn (cross-platform).
+
+
 ## v0.9.8 / 2014 Mar 10
 
  * FIX: `ajax-lite` broken response type detection.

@@ -416,6 +416,20 @@
 
 ;;;; Collections
 
+(defn swap!*
+  "Like `swap!` but returns {:old-val _ :new-val _} instead of just `<new-val>`.
+  Useful for writing atomic primitives like `pull!`, etc."
+  [atom_ f & args]
+  (let [old-val_ (atom nil)
+        new-val  (swap! atom_
+                   (fn [old-val]
+                     (reset! old-val_ old-val)
+                     (apply f old-val args)))]
+    {:old-val @old-val_
+     :new-val new-val}))
+
+(comment (let [a_ (atom [])] (swap!* a_ conj :a :b)))
+
 #+clj (defn queue? [x] (instance? clojure.lang.PersistentQueue x))
 #+clj
 (defn queue "Returns a PersistentQueue containing the args."
