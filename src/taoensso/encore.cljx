@@ -430,6 +430,10 @@
 
 (comment (let [a_ (atom [])] (swap!* a_ conj :a :b)))
 
+(defn reset!* [atom_ newval] (swap!* atom_ (fn [_] newval)))
+
+(comment (let [a_ (atom [])] (reset!* a_ [:new])))
+
 #+clj (defn queue? [x] (instance? clojure.lang.PersistentQueue x))
 #+clj
 (defn queue "Returns a PersistentQueue containing the args."
