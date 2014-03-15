@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "0.9.8"
+(defproject com.taoensso/encore "0.9.9"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Shared support utils for taoensso.com Clojure libs"
   :url "https://github.com/ptaoussanis/encore"
@@ -18,7 +18,7 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
-   :1.6  {:dependencies [[org.clojure/clojure "1.6.0-beta1"]]}
+   :1.6  {:dependencies [[org.clojure/clojure "1.6.0-RC1"]]}
    :test {:dependencies [[expectations            "1.4.56"]
                          [reiddraper/simple-check "0.5.6"]]
           :plugins [[lein-expectations "0.0.8"]

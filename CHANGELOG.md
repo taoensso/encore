@@ -1,7 +1,8 @@
-## Pending / unreleased
- 
+## v0.9.9 / 2014 Mar 15
+
  * NEW: Add `swap!*`, `reset!*` fns (cross-platform).
  * NEW: Add `substr` fn (cross-platform).
+ * DEPRECATED: `str-trunc` (`substr` is a more general form).
 
 
 ## v0.9.8 / 2014 Mar 10
