@@ -649,6 +649,41 @@
 
 ;;;; Strings
 
+(defn substr
+  "Gives a consistent, flexible, cross-platform substring API with support for:
+    * Clamping of indexes beyond string limits.
+    * Negative indexes: [   0   |   1   |  ...  |  n-1  |   n   ) or
+                        [  -n   | -n+1  |  ...  |  -1   |   0   ).
+                        (start index inclusive, end index exclusive).
+
+  Note that `max-len` was chosen over `end-idx` since it's less ambiguous and
+  easier to reason about - esp. when accepting negative indexes."
+  [s start-idx & [max-len]]
+  {:pre [(or (nil? max-len) (nneg-int? max-len))]}
+  (let [;; s       (str   s)
+        slen       (count s)
+        start-idx* (if (>= start-idx 0)
+                     (min start-idx slen)
+                     (max 0 (dec (+ slen start-idx))))
+        end-idx*   (if-not max-len slen
+                     (min (+ start-idx* max-len) slen))]
+    ;; (println [start-idx* end-idx*])
+    #+clj  (.substring ^String s start-idx* end-idx*)
+    ;; Could also use .substr:
+    #+cljs (.substring         s start-idx* end-idx*)))
+
+(comment
+  (substr "Hello"  0 5) ; "Hello"
+  (substr "Hello"  0 9) ; "Hello"
+  (substr "Hello" -4 5) ; "Hello"
+  (substr "Hello"  2 2) ; "ll"
+  (substr "Hello" -2 2) ; "ll"
+  (substr "Hello" -2)   ; "llo"
+  (substr "Hello"  2)   ; "llo"
+  (substr "Hello"  9 9) ; ""
+  (substr "Hello"  0 0) ; ""
+  )
+
 (defn str-contains? [s substr]
   #+clj  (.contains ^String s ^String substr)
   #+cljs (not= -1 (.indexOf s substr)))
@@ -663,14 +698,6 @@
                substr-len (alength substr)]
            (when (>= s-len substr-len)
              (not= -1 (.indexOf s substr (- s-len substr-len))))))
-
-(defn str-trunc [s max-len]
-  #+clj  (if (<= (.length ^String s) max-len) s
-           (.substring ^String s 0 max-len))
-  #+cljs (if (<= (alength s) max-len) s
-           (.substring s 0 max-len)))
-
-(comment (str-trunc "Hello this is a long string" 5))
 
 (defn join-once
   "Like `clojure.string/join` but ensures no double separators."
@@ -1199,3 +1226,8 @@
       :flash   flash}))
 
 (comment (redirect-resp :temp "/foo" "boo!"))
+
+;;;; Deprecated
+
+(defn str-trunc "DEPRECATED: Use more general `substr` instead."
+  [s max-len] (substr s 0 max-len))

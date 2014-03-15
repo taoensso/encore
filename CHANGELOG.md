@@ -1,6 +1,7 @@
 ## Pending / unreleased
  
  * NEW: Add `swap!*`, `reset!*` fns (cross-platform).
+ * NEW: Add `substr` fn (cross-platform).
 
 
 ## v0.9.8 / 2014 Mar 10
