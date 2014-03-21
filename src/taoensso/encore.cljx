@@ -420,13 +420,13 @@
   "Like `swap!` but returns {:old-val _ :new-val _} instead of just `<new-val>`.
   Useful for writing atomic primitives like `pull!`, etc."
   [atom_ f & args]
-  (let [old-val_ (atom nil)
-        new-val  (swap! atom_
-                   (fn [old-val]
-                     (reset! old-val_ old-val)
-                     (apply f old-val args)))]
-    {:old-val @old-val_
-     :new-val new-val}))
+  (loop [] ; Ref. http://goo.gl/rFG8mW
+    (let [old-val @atom_
+          new-val (apply f old-val args)]
+      (if (compare-and-set! atom_ old-val new-val)
+        {:old-val old-val
+         :new-val new-val}
+        (recur)))))
 
 (comment (let [a_ (atom [])] (swap!* a_ conj :a :b)))
 
