@@ -775,18 +775,10 @@
 
 ;;; TODO
 ;; * Consider implementing a self-gc'ing hashmap for use here & elsewhere?
-;;
-;; * Invalidating memoize* cache doesn't scale horizontally; we could make a
-;;   distributed version that maintains a local udt-last-invalidated and on
-;;   each op checks it against a master udt-last-invalidated in Redis. Would
-;;   need similar extra provisions if we want per-arg-seq invalidation, etc.
-;;   It'd be doable.
-;;
-;; * The Clojure STM is optimistic. Would a `dissoc-ks`-based GC not maybe be
-;;   better since it'd be less susceptible to contention? Probably wouldn't be a
-;;   measurable difference anyway.
+;; * Invalidating memoize* cache doesn't scale horizontally; could easily build
+;;   a Redis-backed distributed version with pttl, though it'd be slower.
 
-(def ^:private ^:const gc-rate (/ 1.0 8000))
+(def ^:private ^:const gc-rate (/ 1.0 16000))
 
 (defn- locked [lock-object f]
   #+clj  (locking lock-object (f)) ; For thread racing
