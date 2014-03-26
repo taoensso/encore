@@ -61,6 +61,7 @@
                   (let [ns (namespace n)
                         v  (name n)
                         m  (meta n)]
+                    (println (str ns))
                     `(do (in-ns  '~(symbol ns))
                          (declare ~(with-meta (symbol v) m))))) names)
          (in-ns '~(symbol original-ns)))))
@@ -630,17 +631,16 @@
 (defmacro repeatedly-into*
   [coll n & body]
   `(let [coll# ~coll
-         n# ~n]
+         n#    ~n]
      (if (instance? clojure.lang.IEditableCollection coll#)
        (loop [v# (transient coll#) idx# 0]
          (if (>= idx# n#)
            (persistent! v#)
            (recur (conj! v# ~@body)
                   (inc idx#))))
-       (loop [v# coll#
+       (loop [v#   coll#
               idx# 0]
-         (if (>= idx# n#)
-           v#
+         (if (>= idx# n#) v#
            (recur (conj v# ~@body)
                   (inc idx#)))))))
 
