@@ -1,12 +1,16 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/encore "0.9.9"]
+[com.taoensso/encore "1.0.0"] ; Stable
 ```
 
-# Taoensso lib support utils
+# Cross-platform Clojure utils library
 
-Cross-platform shared support utils for [taoensso.com Clojure libs](https://www.taoensso.com/clojure-libraries). < ~1200 loc, no external dependencies.
+Grab-bag of the most common Clojure/Script utils I find myself reaching for again and again. Acts as a kind of an adjunct to what's in Clojure core (hence _encore_).
+
+  * See the [API docs][] and/or [source][] to see what's available.
+  * < ~1200 loc, **no external dependencies**.
+  * Used as a shared support library for the [taoensso Clojure libs][].
 
 ## Contact & contributing
 
@@ -23,6 +27,7 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [API docs]: <http://ptaoussanis.github.io/encore/>
 [CHANGELOG]: <https://github.com/ptaoussanis/encore/blob/master/CHANGELOG.md>
 [other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
+[taoensso Clojure libs]: <https://www.taoensso.com/clojure-libraries>
 [Twitter]: <https://twitter.com/ptaoussanis>
 [semantic]: <http://semver.org/>
 [Leiningen]: <http://leiningen.org/>
@@ -33,3 +38,4 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [Cider]: <https://github.com/clojure-emacs/cider>
 [taoensso.com]: <https://www.taoensso.com>
 [Eclipse Public License]: <https://raw2.github.com/ptaoussanis/encore/master/LICENSE>
+[source]: <https://github.com/ptaoussanis/encore/blob/master/src/taoensso/encore.cljx>

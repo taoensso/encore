@@ -1,3 +1,8 @@
+## v1.0.0 / 2014 Mar 26
+
+ * Minor housekeeping, **v1.0.0 release**.
+
+
 ## v0.9.9 / 2014 Mar 15
 
  * NEW: Add `swap!*`, `reset!*` fns (cross-platform).
