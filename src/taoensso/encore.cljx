@@ -435,6 +435,48 @@
 
 (comment (let [a_ (atom [])] (reset!* a_ [:new])))
 
+(defn swap-in! [atom_ korks f & args]
+  (let [ks (if (sequential? korks) korks [korks])
+        [old-val new-val]
+        (loop [] ; Ref. http://goo.gl/rFG8mW
+          (let [old-val @atom_
+                new-val (if (empty? ks)
+                          (apply f         old-val      args)
+                          (apply update-in old-val ks f args))]
+            (if-not (compare-and-set! atom_ old-val new-val) (recur)
+              [old-val new-val])))]
+    {:old-val    old-val
+     :new-val    new-val
+     :old-val-in (get-in old-val ks)
+     :new-val-in (get-in new-val ks)}))
+
+(defn reset-in! [atom_ korks newval] (swap-in! atom_ korks (fn [_] newval)))
+
+(comment
+  (let [a_ (atom {:a1 {:b1 {:c1 "a1b1c1"}
+                       :b2 {:c1 "a1b2c1"}}
+                  :a2 {:b1 {:c1 "a2b1c1"
+                            :c2 "a2b1c2"}}})]
+    [(swap-in!  a_ [:a1 :b2 :c1] str/upper-case)
+     (reset-in! a_ [:a1 :b2 :c1] "lo")]))
+
+(defn dissoc-in [m korks & dissoc-ks] (apply update-in m korks dissoc dissoc-ks))
+(defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
+
+(comment (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
+         (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
+         (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
+
+(defn assoc-some "Assocs each kv iff its value is not nil."
+  [m & kvs] {:pre [(even? (count kvs))]}
+  (into (or m {}) (for [[k v] (partition 2 kvs) :when (not (nil? v))] [k v])))
+
+(defn assoc-when "Assocs each kv iff its val is truthy."
+  [m & kvs] {:pre [(even? (count kvs))]}
+  (into (or m {}) (for [[k v] (partition 2 kvs) :when v] [k v])))
+
+(comment (assoc-some {:a :A} :b nil :c :C :d nil :e :E))
+
 #+clj (defn queue? [x] (instance? clojure.lang.PersistentQueue x))
 #+clj
 (defn queue "Returns a PersistentQueue containing the args."

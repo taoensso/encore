@@ -1,3 +1,8 @@
+## Pending / unreleased
+
+ * NEW: `swap-in!`, `reset-in!`, `dissoc-in`, `contains-in?`, `assoc-some`, `assoc-when` (all cross-platform).
+
+
 ## v1.0.0 / 2014 Mar 26
 
  * Minor housekeeping, **v1.0.0 release**.
