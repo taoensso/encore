@@ -1,4 +1,4 @@
-## Pending / unreleased
+## v1.1.0 / 2014 Mar 28
 
  * NEW: `swap-in!`, `reset-in!`, `dissoc-in`, `contains-in?`, `assoc-some`, `assoc-when` (all cross-platform).
 

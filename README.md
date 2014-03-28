@@ -1,15 +1,15 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/encore "1.0.0"] ; Stable
+[com.taoensso/encore "1.1.0"] ; Stable
 ```
 
 # Cross-platform Clojure utils library
 
-Grab-bag of the most common Clojure/Script utils I find myself reaching for again and again. Acts as a kind of an adjunct to what's in Clojure core (hence _encore_).
+Grab-bag of the most common Clojure/Script utils I find myself reaching for again and again. Acts as a kind of adjunct to what's in Clojure core (hence _encore_).
 
   * See the [API docs][] and/or [source][] to see what's available.
-  * < ~1200 loc, **no external dependencies**.
+  * ~1300 loc, **no external dependencies**.
   * Used as a shared support library for the [taoensso Clojure libs][].
 
 ## Contact & contributing
