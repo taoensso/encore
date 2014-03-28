@@ -30,6 +30,22 @@
 
 ;;;; Core
 
+#+clj
+(defn compiling-cljs?*
+  "Returns true iff called within the context of the ClojureScript compiler's
+  environment. Useful for writing macros that can produce different Clj/Cljs
+  code (this isn't something Cljx currently provides support for).
+  Stolen from Prismatic code, Ref. http://goo.gl/DhhhSN."
+  ;; TODO Is this idiomatic? Checking &env for cljs.env/*compiler* may be an
+  ;; alternative?
+  []
+  (boolean
+   (when-let [n (find-ns 'cljs.analyzer)]
+     (when-let [v (ns-resolve n '*cljs-file*)]
+       @v))))
+
+(defmacro compiling-cljs? [] (compiling-cljs?*))
+
 (defn name-with-attrs
   "Stolen from `clojure.tools.macro`.
   Handles optional docstrings & attr maps for a macro def's name."
