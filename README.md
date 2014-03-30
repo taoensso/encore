@@ -1,7 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/encore "1.1.0"] ; Stable
+[com.taoensso/encore "1.2.0"] ; Stable
 ```
 
 # Cross-platform Clojure utils library
@@ -25,7 +25,8 @@ Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Che
 Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
 
 [API docs]: <http://ptaoussanis.github.io/encore/>
-[CHANGELOG]: <https://github.com/ptaoussanis/encore/blob/master/CHANGELOG.md>
+[CHANGELOG_]: <https://github.com/ptaoussanis/encore/blob/master/CHANGELOG.md>
+[CHANGELOG]: <https://github.com/ptaoussanis/encore/releases>
 [other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
 [taoensso Clojure libs]: <https://www.taoensso.com/clojure-libraries>
 [Twitter]: <https://twitter.com/ptaoussanis>

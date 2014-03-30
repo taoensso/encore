@@ -1,4 +1,4 @@
-## Pending / unreleased
+## v1.2.0 / 2014 Mar 30
 
  * NEW: `compiling-cljs?` utils.
  * FIX: nix accidental `declare-remote` println.
