@@ -77,7 +77,6 @@
                   (let [ns (namespace n)
                         v  (name n)
                         m  (meta n)]
-                    (println (str ns))
                     `(do (in-ns  '~(symbol ns))
                          (declare ~(with-meta (symbol v) m))))) names)
          (in-ns '~(symbol original-ns)))))
