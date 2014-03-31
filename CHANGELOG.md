@@ -1,3 +1,8 @@
+## Pending / Unreleased
+
+ * FIX: `ajax-lite` catch typo.
+
+
 ## v1.2.0 / 2014 Mar 30
 
  * NEW: `compiling-cljs?` utils.

@@ -1221,7 +1221,7 @@
           (.setTimeoutInterval (or timeout 0)) ; nil = 0 = no timeout
           (.send uri* method* post-content* headers*)))
 
-      (catch js/error e
+      (catch js/Error e
         (logf "Ajax error: %s" e)
         (.releaseObject @xhr-pool_ xhr)
         nil))
