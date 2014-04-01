@@ -1198,7 +1198,7 @@
                                  "/edn"  :edn
                                  "/json" :json
                                  "/xml"  :xml
-                                 "/html" :xml
+                                 "/html" :text ; :xml only for text/xml!
                                  :text))]
                          (case resp-type
                            :text (.getResponseText xhr)
