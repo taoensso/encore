@@ -1,3 +1,8 @@
+## Pending / unreleased
+
+ * Housekeeping: `swap!` stuff.
+
+
 ## v1.2.1 / 2014 Apr 1
 
  * **FIX**: `ajax-lite` catch typo.

@@ -431,41 +431,43 @@
                                            (Date.)))))
 
 ;;;; Collections
+(defn- update-in! [atom_ korks f args & [reset?]]
+  (let [;; nil and [<val>] are actually ambiguous; we choose to interpret as
+        ;; [] and [<val>] here rather than [nil] [[<val>]]:
+        ks (when-not (nil? korks)
+             (let [ks* (if (sequential? korks) korks [korks])]
+               (when-not (empty? ks*) ks*)))
 
-(defn swap!*
-  "Like `swap!` but returns {:old-val _ :new-val _} instead of just `<new-val>`.
-  Useful for writing atomic primitives like `pull!`, etc."
-  [atom_ f & args]
-  (loop [] ; Ref. http://goo.gl/rFG8mW
-    (let [old-val @atom_
-          new-val (apply f old-val args)]
-      (if (compare-and-set! atom_ old-val new-val)
-        {:old-val old-val
-         :new-val new-val}
-        (recur)))))
-
-(comment (let [a_ (atom [])] (swap!* a_ conj :a :b)))
-
-(defn reset!* [atom_ newval] (swap!* atom_ (fn [_] newval)))
-
-(comment (let [a_ (atom [])] (reset!* a_ [:new])))
-
-(defn swap-in! [atom_ korks f & args]
-  (let [ks (if (sequential? korks) korks [korks])
-        [old-val new-val]
-        (loop [] ; Ref. http://goo.gl/rFG8mW
+        [old-val new-val nattempts]
+        (loop [nattempts 1]
           (let [old-val @atom_
-                new-val (if (empty? ks)
+                new-val (if-not ks
                           (apply f         old-val      args)
                           (apply update-in old-val ks f args))]
-            (if-not (compare-and-set! atom_ old-val new-val) (recur)
-              [old-val new-val])))]
+
+            (if reset? ; Forgo compare-and-set semantics
+              [old-val (reset! atom_ new-val) nattempts]
+              ;; Ref. http://goo.gl/rFG8mW:
+              (if (compare-and-set! atom_ old-val new-val)
+                [old-val new-val nattempts]
+                (recur (inc nattempts))))))]
+
     {:old-val    old-val
      :new-val    new-val
-     :old-val-in (get-in old-val ks)
-     :new-val-in (get-in new-val ks)}))
+     :nattempts  nattempts
+     :old-val-in (if-not ks old-val (get-in old-val ks))
+     :new-val-in (if-not ks new-val (get-in new-val ks))}))
 
-(defn reset-in! [atom_ korks newval] (swap-in! atom_ korks (fn [_] newval)))
+(defn swap-in!
+  "More powerful version of `swap!` that trades some speed to:
+    * Support optional `update-in`-like semantics.
+    * Return {:old-val _ :new-val _ :old-val-in _ :new-val-in _ :nattempts _}
+      rather than just <new-val>. This is useful when writing atomic pull fns,
+      etc."
+  [atom_ korks f & args] (update-in! atom_ korks f args))
+
+(defn reset-in! "As `swap-in!` for `reset!`."
+  [atom_ korks newval] (update-in! atom_ korks (constantly newval) '() :reset))
 
 (comment
   (let [a_ (atom {:a1 {:b1 {:c1 "a1b1c1"}
@@ -473,9 +475,15 @@
                   :a2 {:b1 {:c1 "a2b1c1"
                             :c2 "a2b1c2"}}})]
     [(swap-in!  a_ [:a1 :b2 :c1] str/upper-case)
-     (reset-in! a_ [:a1 :b2 :c1] "lo")]))
+     (swap-in!  a_ [:a1 :b2 :c1] (constantly "lo"))
+     ;;
+     (swap-in!  a_ nil   assoc :a1 {}) ; korks = nil   => []
+     (swap-in!  a_ :a1   assoc :b1 {}) ; korks = :a1   => [:a1]
+     (swap-in!  a_ [:a1] assoc :b1 {}) ; korks = [:a1] => [:a1]
+     (reset-in! a_ []    {})
+     (reset-in! a_ [:a1] {})]))
 
-(defn dissoc-in [m korks & dissoc-ks] (apply update-in m korks dissoc dissoc-ks))
+(defn dissoc-in [m ks & dissoc-ks] (apply update-in m ks dissoc dissoc-ks))
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
 (comment (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
@@ -1280,3 +1288,9 @@
 
 (defn str-trunc "DEPRECATED: Use more general `substr` instead."
   [s max-len] (substr s 0 max-len))
+
+(defn swap!*  "DEPRECATED: Use more general `swap-in!` instead."
+  [atom_ f & args] (update-in! atom_ [] f args))
+
+(defn reset!* "DEPRECATED: Use more general `reset-in!` instead."
+  [atom_ newval] (update-in! atom_ [] (constantly newval) '() :reset))
