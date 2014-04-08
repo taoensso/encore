@@ -144,6 +144,10 @@
 (def nnil?   (complement nil?))
 (def nblank? (complement str/blank?))
 
+(defn first-nth
+  ([coll]           (nth coll 0))
+  ([coll not-found] (nth coll 0 not-found)))
+
 #+clj (def format clojure.core/format) ; For easier encore/format portability
 #+cljs
 (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
@@ -431,6 +435,7 @@
                                            (Date.)))))
 
 ;;;; Collections
+
 (defn- update-in! [atom_ korks f args & [reset?]]
   (let [;; nil and [<val>] are actually ambiguous; we choose to interpret as
         ;; [] and [<val>] here rather than [nil] [[<val>]]:
@@ -844,54 +849,47 @@
 ;;   a Redis-backed distributed version with pttl, though it'd be slower.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
-
-(defn- locked [lock-object f]
-  #+clj  (locking lock-object (f)) ; For thread racing
-  #+cljs (f))
-
-;;;;
+(defn swap-val! ; Public since it can be useful for custom memoization utils
+  "Swaps associative value at key and returns the new value.
+  Specialized, fast `swap-in!` for use mostly by memoization utils."
+  [atom_ k f]
+  (loop []
+    (let [old-m @atom_
+          new-v (f (get old-m k))
+          new-m (assoc old-m k new-v)]
+      (if (compare-and-set! atom_ old-m new-m) new-v
+        (recur)))))
 
 (defn memoized
   "Like `(memoize* f)` but takes an explicit cache atom (possibly nil)
   and immediately applies memoized f to given arguments."
   [cache f & args]
-  (let [lockf
-        (fn []
-          (if-let [dv (@cache args)] @dv ; Retry after lock acquisition!
-            (let [dv (delay (apply f args))]
-              (swap! cache assoc args dv)
-              @dv)))]
-    (if-not cache (apply f args)
-      (if-let [dv (@cache args)] @dv
-        (locked cache lockf)))))
+  (if-not cache ; {<args> <delay-val>}
+    (apply f args)
+    @(swap-val! cache args #(if % % (delay (apply f args))))))
 
 (defn memoize*
   "Like `clojure.core/memoize` but:
-    * Uses delays & a fn lock to prevent unnecessary race value recomputation.
+    * Uses delays to prevent race conditions on writes.
     * Supports auto invalidation & gc with `ttl-ms` option.
     * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`.
     * Supports cache size limit & gc with `cache-size` option."
   ([f] ; De-raced, commands
-    (let [cache (atom {})] ; {<args> <dval>}
+    (let [cache (atom {})] ; {<args> <delay-val>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
         (if (identical? arg1 :mem/del)
           (do (if (identical? (first argn) :mem/all)
                 (reset! cache {})
                 (swap!  cache dissoc argn))
               nil)
-
           (let [fresh? (identical? arg1 :mem/fresh)
-                args   (if fresh? argn args)
-                try1   (fn [] (when-not fresh? (@cache args)))
-                lockf  (fn [] (if-let [dv (try1)] @dv ; Retry
-                               (let [dv (delay (apply f args))]
-                                 (swap! cache assoc args dv)
-                                 @dv)))]
-            (if-let [dv (try1)] @dv
-              (locked cache lockf)))))))
+                args   (if fresh? argn args)]
+            @(swap-val! cache args
+               (fn [?dv] (if (and ?dv (not fresh?)) ?dv
+                           (delay (apply f args))))))))))
 
   ([ttl-ms f] ; De-raced, commands, ttl, gc
-    (let [cache (atom {})] ; {<args> <[dval udt]>}
+    (let [cache (atom {})] ; {<args> <[delay-val udt :as cache-val]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
         (if (identical? arg1 :mem/del)
           (do (if (identical? (first argn) :mem/all)
@@ -907,24 +905,20 @@
                                       (if (> (- instant udt) ttl-ms) m*
                                           (assoc m* k cv))) {} m)))))
 
-            (let [fresh? (identical? arg1 :mem/fresh)
-                  args   (if fresh? argn args)
-                  try1   (fn []
-                           (when-let [[dv udt] (when-not fresh? (@cache args))]
-                             (when (and dv (< (- (now-udt) udt)
-                                              ttl-ms))
-                               dv)))
-                  lockf  (fn []
-                           (if-let [dv (try1)] @dv ; Retry
-                             (let [dv (delay (apply f args))
-                                   cv [dv (now-udt)]]
-                               (swap! cache assoc args cv)
-                               @dv)))]
-              (if-let [dv (try1)] @dv
-                (locked cache lockf))))))))
+            (let [fresh?  (identical? arg1 :mem/fresh)
+                  args    (if fresh? argn args)
+                  instant (now-udt)]
+              @(first-nth
+                (swap-val! cache args
+                  (fn [?cv]
+                    (if (and ?cv (not fresh?)
+                             (let [[_dv udt] ?cv]
+                               (< (- instant udt) ttl-ms))) ?cv
+                      [(delay (apply f args)) instant]))))))))))
 
   ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
-    (let [state (atom {:tick 0})] ; {:tick _ <args> <[dval udt tick-lru tick-lfu]>}
+    (let [state (atom {:tick 0})] ; {:tick _
+                                  ;  <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
         (if (identical? arg1 :mem/del)
           (do (if (identical? (first argn) :mem/all)
@@ -949,7 +943,7 @@
                                (->>
                                 (keys m*)
                                 (mapv (fn [k] (let [[_ _ tick-lru tick-lfu] (m* k)]
-                                               [(+ tick-lru tick-lfu) k])))
+                                                [(+ tick-lru tick-lfu) k])))
                                 (sort-by #(nth % 0))
                                 ;; (#(do (println %) %)) ; Debug
                                 (take    n-to-prune)
@@ -957,32 +951,27 @@
                                 (apply dissoc m*)))]
                       (assoc m* :tick (:tick m)))))))
 
-            (let [fresh? (identical? arg1 :mem/fresh)
-                  args   (if fresh? argn args)
-                  try1
-                  (fn []
-                    (let [state' @state
-                          tick'  (:tick state')]
-                      (when-let [[dv udt tick-lru tick-lfu]
-                                 (when-not fresh? (state' args))]
-                        (when (and dv (or (nil? ttl-ms)
-                                          (< (- (now-udt) udt)
-                                             ttl-ms)))
-                          ;; We don't particularly care about ticks being
-                          ;; completely synchronized:
-                          (let [sv [dv udt (inc tick') (inc tick-lfu)]]
-                            (swap! state assoc :tick (inc tick') args sv))
-                          dv))))
-                  lockf (fn []
-                          (if-let [dv (try1)] @dv ; Retry
-                            (let [dv   (delay (apply f args))
-                                  tick (:tick @state)
-                                  sv   [dv (when ttl-ms (now-udt))
-                                        (inc tick) 1]]
-                              (swap! state assoc :tick (inc tick) args sv)
-                              @dv)))]
-              (if-let [dv (try1)] @dv
-                (locked state lockf)))))))))
+            (let [fresh?   (identical? arg1 :mem/fresh)
+                  args     (if fresh? argn args)
+                  ?instant (when ttl-ms (now-udt))
+                  tick'    (:tick @state) ; Accuracy/sync irrelevant
+                  dv
+                  (first-nth
+                   (swap-val! state args
+                     (fn [?cv]
+                       (if (and ?cv (not fresh?)
+                                (or (nil? ?instant)
+                                    (let [[_dv udt] ?cv]
+                                      (< (- ?instant udt) ttl-ms)))) ?cv
+                         [(delay (apply f args)) ?instant tick' 1]))))]
+
+              (swap! state
+                (fn [m]
+                  (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
+                    (assoc m :tick (inc tick')
+                              args [dv ?udt tick' (inc tick-lfu)]))))
+
+              @dv)))))))
 
 (comment
   (def f0 (memoize         (fn [& xs] (Thread/sleep 600) (rand))))
@@ -991,11 +980,11 @@
   (def f3 (memoize* 2 nil  (fn [& xs] (Thread/sleep 600) (rand))))
   (def f4 (memoize* 2 5000 (fn [& xs] (Thread/sleep 600) (rand))))
 
-  (time (dotimes [_ 10000] (f0))) ;  ~2ms
-  (time (dotimes [_ 10000] (f1))) ;  ~3ms
-  (time (dotimes [_ 10000] (f2))) ;  ~4ms
-  (time (dotimes [_ 10000] (f3))) ; ~10ms
-  (time (dotimes [_ 10000] (f4))) ; ~13ms
+  (time (dotimes [_ 10000] (f0))) ;  ~3ms
+  (time (dotimes [_ 10000] (f1))) ;  ~4ms
+  (time (dotimes [_ 10000] (f2))) ;  ~9ms
+  (time (dotimes [_ 10000] (f3))) ;  ~9ms
+  (time (dotimes [_ 10000] (f4))) ; ~11ms
 
   (f1)
   (f1 :mem/del)
