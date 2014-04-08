@@ -1,4 +1,4 @@
-## Pending / unreleased
+## v1.3.0 / 2014 Apr 8
 
  * Housekeeping: `swap!` stuff.
  * Rewrote memoization utils for lock-free anti-contention (better performance under high contention).
