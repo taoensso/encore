@@ -965,6 +965,7 @@
                                       (< (- ?instant udt) ttl-ms)))) ?cv
                          [(delay (apply f args)) ?instant tick' 1]))))]
 
+              ;; We always adjust counters, even on reads:
               (swap! state
                 (fn [m]
                   (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
