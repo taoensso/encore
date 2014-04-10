@@ -6,7 +6,7 @@
   #+clj  (:require [clojure.string      :as str]
                    [clojure.java.io     :as io]
                    ;; [clojure.core.async  :as async]
-                   [clojure.edn         :as edn])
+                   [clojure.tools.reader.edn :as edn])
   ;; #+clj  (:import [org.apache.commons.codec.binary Base64])
   #+clj  (:import  [java.util Date Locale TimeZone]
                    [java.text SimpleDateFormat])

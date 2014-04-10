@@ -1,3 +1,8 @@
+## v1.3.1 / 2014 Apr 10
+
+ * **FIX** broken Clojure <1.5 support by using correct (tools.reader) edn reader (@kul).
+
+
 ## v1.3.0 / 2014 Apr 8
 
  * Housekeeping: `swap!` stuff.
