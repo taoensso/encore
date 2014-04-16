@@ -1,3 +1,8 @@
+## Pending / unreleased
+
+ * **NEW**: Add `nblank-str?`.
+
+
 ## v1.3.1 / 2014 Apr 10
 
  * **FIX** broken Clojure <1.5 support by using correct (tools.reader) edn reader (@kul).

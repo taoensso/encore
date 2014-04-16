@@ -143,6 +143,9 @@
 
 (def nnil?   (complement nil?))
 (def nblank? (complement str/blank?))
+(def nblank-str? (comp nblank? string?))
+
+(comment (nblank-str? []))
 
 (defn first-nth
   ([coll]           (nth coll 0))
