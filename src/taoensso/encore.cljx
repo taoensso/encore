@@ -439,57 +439,45 @@
 
 ;;;; Collections
 
-(defn- update-in! [atom_ korks f args & [reset?]]
-  (let [;; nil and [<val>] are actually ambiguous; we choose to interpret as
-        ;; [] and [<val>] here rather than [nil] [[<val>]]:
-        ks (when-not (nil? korks)
-             (let [ks* (if (sequential? korks) korks [korks])]
-               (when-not (empty? ks*) ks*)))
-
-        [old-val new-val nattempts]
-        (loop [nattempts 1]
-          (let [old-val @atom_
-                new-val (if-not ks
-                          (apply f         old-val      args)
-                          (apply update-in old-val ks f args))]
-
-            (if reset? ; Forgo compare-and-set semantics
-              [old-val (reset! atom_ new-val) nattempts]
-              ;; Ref. http://goo.gl/rFG8mW:
-              (if (compare-and-set! atom_ old-val new-val)
-                [old-val new-val nattempts]
-                (recur (inc nattempts))))))]
-
-    {:old-val    old-val
-     :new-val    new-val
-     :nattempts  nattempts
-     :old-val-in (if-not ks old-val (get-in old-val ks))
-     :new-val-in (if-not ks new-val (get-in new-val ks))}))
+(defrecord Swapped [new-val return-val])
+(defn      swapped [new-val return-val] (->Swapped new-val return-val))
+(defn- as-swapped [x] (if (instance? Swapped x) x {:new-val x :return-val x}))
 
 (defn swap-in!
-  "More powerful version of `swap!` that trades some speed to:
-    * Support optional `update-in`-like semantics.
-    * Return {:old-val _ :new-val _ :old-val-in _ :new-val-in _ :nattempts _}
-      rather than just <new-val>. This is useful when writing atomic pull fns,
-      etc."
-  [atom_ korks f & args] (update-in! atom_ korks f args))
+  "More powerful version of `swap!`:
+    * Supports optional `update-in` semantics.
+    * Swap fn can return `(swapped <new-val> <return-val>)` rather than just
+      <new-val>. This is useful when writing atomic pull fns, etc."
+  [atom_ ks f & args]
+  (let [ks (if (or (nil? ks) (empty? ks)) nil ks)]
+    (loop []
+      (let [old-val @atom_
+            {:keys [new-val return-val]}
+            (if-not ks
+              (as-swapped (apply f old-val args))
+              (let [old-val-in (get-in old-val ks)
+                    {new-val-in :new-val
+                     return-val :return-val}
+                    (as-swapped (apply f old-val-in args))]
+                {:new-val    (assoc-in old-val ks new-val-in)
+                 :return-val return-val}))]
+        ;; Ref. http://goo.gl/rFG8mW:
+        (if-not (compare-and-set! atom_ old-val new-val)
+          (recur)
+          return-val)))))
 
-(defn reset-in! "As `swap-in!` for `reset!`."
-  [atom_ korks newval] (update-in! atom_ korks (constantly newval) '() :reset))
+;; Actually uses CAS semantics to support `update-in` capability:
+(defn reset-in! [atom_ korks newval] (swap-in! atom_ korks (constantly newval)))
 
 (comment
-  (let [a_ (atom {:a1 {:b1 {:c1 "a1b1c1"}
-                       :b2 {:c1 "a1b2c1"}}
-                  :a2 {:b1 {:c1 "a2b1c1"
-                            :c2 "a2b1c2"}}})]
-    [(swap-in!  a_ [:a1 :b2 :c1] str/upper-case)
-     (swap-in!  a_ [:a1 :b2 :c1] (constantly "lo"))
-     ;;
-     (swap-in!  a_ nil   assoc :a1 {}) ; korks = nil   => []
-     (swap-in!  a_ :a1   assoc :b1 {}) ; korks = :a1   => [:a1]
-     (swap-in!  a_ [:a1] assoc :b1 {}) ; korks = [:a1] => [:a1]
-     (reset-in! a_ []    {})
-     (reset-in! a_ [:a1] {})]))
+  (let [a_ (atom {:a :A :b :B})] ; Returns new-val (default)
+    [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
+  (let [a_ (atom {:a :A :b :B})] ; Returns old-val
+    [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+  (let [a_ (atom {:a {:b :B}})] ; Returns new-val-in (default)
+    [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
+  (let [a_ (atom {:a {:b :B}})] ; Returns old-val-in
+    [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_]))
 
 (defn dissoc-in [m ks & dissoc-ks] (apply update-in m ks dissoc dissoc-ks))
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
@@ -1276,14 +1264,3 @@
       :flash   flash}))
 
 (comment (redirect-resp :temp "/foo" "boo!"))
-
-;;;; Deprecated
-
-(defn str-trunc "DEPRECATED: Use more general `substr` instead."
-  [s max-len] (substr s 0 max-len))
-
-(defn swap!*  "DEPRECATED: Use more general `swap-in!` instead."
-  [atom_ f & args] (update-in! atom_ [] f args))
-
-(defn reset!* "DEPRECATED: Use more general `reset-in!` instead."
-  [atom_ newval] (update-in! atom_ [] (constantly newval) '() :reset))

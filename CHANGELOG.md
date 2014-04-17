@@ -1,6 +1,7 @@
 ## Pending / unreleased
 
  * **NEW**: Add `nblank-str?`.
+ * **BREAKING**: Further simplify `swap-in!`, add support for arbitrary return values. See commit for details.
 
 
 ## v1.3.1 / 2014 Apr 10
