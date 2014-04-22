@@ -1,3 +1,11 @@
+## v1.5.0 / 2014 May 2
+
+ * **NEW**: Validation utils.
+ * **NEW**: Add `nvec?`.
+ * **FIX**: `nblank-str?`.
+ * **FIX**: `interleave-all`.
+
+
 ## v1.4.0 / 2014 Apr 17
 
  * **NEW**: Add `nblank-str?`.
