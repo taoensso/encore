@@ -141,11 +141,11 @@
 
 (comment (when-lets [a :a b nil] "foo"))
 
-(def nnil?   (complement nil?))
-(def nblank? (complement str/blank?))
-(def nblank-str? (comp nblank? string?))
+(def  nnil?   (complement nil?))
+(def  nblank? (complement str/blank?))
+(defn nblank-str? [x] (and (string? x) (nblank? x)))
 
-(comment (nblank-str? []))
+(comment (map nblank-str? ["foo" "" 5]))
 
 (defn first-nth
   ([coll]           (nth coll 0))
