@@ -147,6 +147,11 @@
 
 (comment (map nblank-str? ["foo" "" 5]))
 
+(defn nvec? "Is `x` a vector of size `n`?" [n x]
+  (and (vector? x) (= (count x) n)))
+
+(comment (nvec? 2 [:a :b]))
+
 (defn first-nth
   ([coll]           (nth coll 0))
   ([coll not-found] (nth coll 0 not-found)))
