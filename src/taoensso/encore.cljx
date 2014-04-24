@@ -44,7 +44,7 @@
      (when-let [v (ns-resolve n '*cljs-file*)]
        @v))))
 
-(defmacro compiling-cljs? [] (compiling-cljs?*))
+(defmacro ^:also-cljs compiling-cljs? [] (compiling-cljs?*))
 
 (defn name-with-attrs
   "Stolen from `clojure.tools.macro`.
@@ -91,7 +91,8 @@
                      (when-let [doc# ~doc] {:doc doc#})))
      (var ~name)))
 
-(defmacro cond-throw "Like `cond` but throws on no-match like `case`, `condp`."
+(defmacro ^:also-cljs cond-throw
+  "Like `cond` but throws on no-match like `case`, `condp`."
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
 (comment (cond false "false") (cond-throw false "false"))
@@ -106,7 +107,7 @@
        ~@(map pstep (partition 2 clauses))
        ~g)))
 
-(defmacro case-eval
+(defmacro ^:also-cljs case-eval
   "Like `case` but evaluates test constants for their compile-time value."
   [e & clauses]
   (let [;; Don't evaluate default expression!
@@ -117,7 +118,7 @@
                       clauses)
        ~(when default default))))
 
-(defmacro if-lets
+(defmacro ^:also-cljs if-lets
   "Like `if-let` but binds multiple values iff all tests are true."
   ([bindings then] `(if-lets ~bindings ~then nil))
   ([bindings then else]
@@ -131,7 +132,7 @@
          (if-lets [a :a b :b]  [a b])
          (if-lets [a :a b nil] [a b]))
 
-(defmacro when-lets
+(defmacro ^:also-cljs when-lets
   "Like `when-let` but binds multiple values iff all tests are true."
   [bindings & body]
   (let [[b1 b2 & bnext] bindings]
@@ -694,7 +695,7 @@
 
 (comment (repeatedly-into [] 10 rand))
 
-(defmacro repeatedly-into*
+(defmacro ^:also-cljs repeatedly-into*
   [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
@@ -710,7 +711,8 @@
            (recur (conj v# ~@body)
                   (inc idx#)))))))
 
-(defmacro repeatedly* "Like `repeatedly` but faster and returns a vector."
+(defmacro ^:also-cljs repeatedly*
+  "Like `repeatedly` but faster and returns a vector."
   [n & body] `(repeatedly-into* [] ~n ~@body))
 
 ;;;; Strings
@@ -1049,7 +1051,8 @@
 
 ;;;; Benchmarking
 
-(defmacro time-ms "Returns number of milliseconds it takes to execute body."
+(defmacro ^:also-cljs time-ms
+  "Returns number of milliseconds it takes to execute body."
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
 
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
