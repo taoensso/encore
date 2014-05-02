@@ -586,6 +586,8 @@
 (defn interleave-all
   "Greedy version of `interleave`.
   Ref. https://groups.google.com/d/msg/clojure/o4Hg0s_1Avs/rPn3P4Ig6MsJ"
+  ([]   '())
+  ([c1] (lazy-seq c1))
   ([c1 c2]
      (lazy-seq
       (let [s1 (seq c1) s2 (seq c2)]
