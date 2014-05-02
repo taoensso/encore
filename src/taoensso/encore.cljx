@@ -162,6 +162,78 @@
 (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
   [fmt & args] (apply gstr/format fmt args))
 
+;;;; Validation
+
+(defmacro ^:also-cljs check-some
+  "Low-level, general-purpose validator.
+  Returns first logical false/Ex expression, or nil."
+  ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
+  ([test]
+     (let [[error-id test]
+           (if (vector? test) ; Id'd test
+             (do (assert (= (count test) 2)) test)
+             [nil test])]
+       (if (compiling-cljs?)
+         `(let [test# (try ~test (catch :default _# false))]
+            (when-not test# (or ~error-id '~test :falsey)))
+
+         `(let [test# (try ~test (catch Exception _# false))]
+            (when-not test# (or ~error-id '~test :falsey)))))))
+
+(defmacro ^:also-cljs check-all
+  "Low-level, general-purpose validator.
+  Returns all logical false/Ex expressions, or nil."
+  ([test] `(check-some ~test))
+  ([test & more]
+     `(let [errors# (->> (list ~@(map (fn [test] `(check-some ~test))
+                                      (cons test more)))
+                         (filter identity))]
+        (when-not (empty? errors#) errors#))))
+
+(defmacro ^:also-cljs check
+  "General-purpose validator useable in or out of pre/post conds.
+  Throws a detailed, specific exception on any logical false/Ex forms.
+  Arbitrary data may be attached to exceptions (usu. the data being checked)."
+  [data & tests]
+  `(if-let [error# (check-some ~@tests)]
+     (let [data# ~data]
+       ;; Pre/post failures don't incl. useful info so we throw our own ex (an
+       ;; ex-info for portability):
+       (throw (ex-info (format "`check` failure: %s\n%s data:\n%s"
+                               (str error#)
+                               (str (or (type data#) "nil"))
+                               (str data#))
+                       {:error error#
+                        :data  data#})))
+     ;; For convenient use in pre/post conds:
+     true))
+
+(comment
+  (check-some
+   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+  (check-all
+   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+  (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
+                 :post [(check x (integer? x))]}
+    x)
+  (foo 5)
+  (foo nil))
+
+(defmacro try-exdata "Useful for `check`-based unit tests, etc."
+  [& body]
+  (if (compiling-cljs?)
+    `(try (do ~@body)
+          (catch :default e#
+            (if-let [data# (ex-data e#)]
+              data# (throw e#))))
+    `(try (do ~@body)
+          (catch Exception e#
+            (if-let [data# (ex-data e#)]
+              data# (throw e#))))))
+
+(comment (try-exdata (/ 5 0))
+         (try-exdata (check nil (true? false))))
+
 ;;;; Coercions
 ;; `parse-x` => success, or nil
 ;;    `as-x` => success, (sometimes nil arg), or throw
