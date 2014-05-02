@@ -1132,6 +1132,16 @@
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
   [& body] `(let [t0# (System/nanoTime)] ~@body (- (System/nanoTime) t0#)))
 
+(defmacro ^:also-cljs qbench
+  "Quick bench. Returns fastest of 3 sets of lap times, in msecs."
+  [nlaps & body]
+  `(let [times# (repeatedly 3
+                  (fn [] (time-ns (dotimes [_# ~nlaps] (do ~@body)))))
+         best-time-msecs# (/ (apply min times#) 1000000.0)]
+     best-time-msecs#))
+
+(comment (qbench 10000 (doall (range 1000))))
+
 #+clj
 (defn bench*
   "Repeatedly executes fn and returns time taken to complete execution."
