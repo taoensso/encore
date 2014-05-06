@@ -1,3 +1,9 @@
+## v1.5.1 / 2014 May 7
+
+ * [#1] **FIX**: missing tools.reader dependency (@ducky427).
+ * **NEW**: Add `qbench` macro.
+
+
 ## v1.5.0 / 2014 May 2
 
  * **NEW**: Validation utils.
