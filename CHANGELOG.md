@@ -1,3 +1,8 @@
+## v1.6.0 / 2014 May 8
+
+ * **NEW**: `ajax-lite` now returns XHR instance on success.
+
+
 ## v1.5.1 / 2014 May 7
 
  * [#1] **FIX**: missing tools.reader dependency (@ducky427).
