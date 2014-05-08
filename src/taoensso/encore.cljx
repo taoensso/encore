@@ -1234,7 +1234,7 @@
 #+cljs
 (defn ajax-lite
   "Alpha - subject to change.
-  Simple+lightweight Ajax via Google Closure.
+  Simple+lightweight Ajax via Google Closure. Returns nil, or the xhr instance.
   Ref. https://developers.google.com/closure/library/docs/xhrio"
   [uri {:keys [method params headers timeout resp-type]
         :or   {method :get timeout 10000 resp-type :auto}}
@@ -1300,15 +1300,19 @@
                 (callback cb-arg))))
 
           (.setTimeoutInterval (or timeout 0)) ; nil = 0 = no timeout
-          (.send uri* method* post-content* headers*)))
+          (.send uri* method* post-content* headers*))
+
+        ;; Allow aborts, etc.:
+        xhr)
 
       (catch js/Error e
         (logf "Ajax error: %s" e)
         (.releaseObject @xhr-pool_ xhr)
         nil))
 
-    ;; Pool failed to return an available xhr instance:
-    (callback {:error :xhr-pool-depleted})))
+    (do ; Pool failed to return an available xhr instance
+      (callback {:error :xhr-pool-depleted})
+      nil)))
 
 ;;;; Ring
 
