@@ -15,7 +15,8 @@
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
    ]
 
-  :test-paths ["test" "src"]
+  :source-paths ["src" "target/classes"]
+  :test-paths ["test" "target/test-classes"]
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
@@ -36,29 +37,37 @@
       [com.keminglabs/cljx             "0.3.2"] ; Must precede Austin!
       [com.cemerick/austin             "0.1.4"]
       [lein-cljsbuild                  "1.0.2"]
-      [com.cemerick/clojurescript.test "0.2.2"]
+      [com.cemerick/clojurescript.test "0.3.0"]
       [codox                           "0.6.7"]]
 
      :cljx
      {:builds
-      [{:source-paths ["src" "test"] :rules :clj  :output-path "target/classes"}
-       {:source-paths ["src" "test"] :rules :cljs :output-path "target/classes"}]}
+      [{:source-paths ["src"] :rules :clj :output-path "target/classes"}
+       {:source-paths ["test"] :rules :clj :output-path "target/test-classes"}
+       {:source-paths ["src"] :rules :cljs :output-path "target/classes"}
+       {:source-paths ["test"] :rules :cljs :output-path "target/test-classes"}]}
 
      :cljsbuild
-     {:test-commands {"node"    ["node" :node-runner "target/main.js"]
-                      "phantom" ["phantomjs" :runner "target/main.js"]}
+     {:test-commands {"node"    ["node" :node-runner "target/testable.js"]
+                      "phantom" ["phantomjs" :runner "target/testable.js"]}
       :builds
-      [{:id :main
-        :source-paths ["src" "test" "target/classes"]
+      {:main {
+        :source-paths ["src" "target/classes"]
         :compiler     {:output-to "target/main.js"
                        :optimizations :advanced
-                       :pretty-print false}}]}}]}
+                       :pretty-print false}}
+       :test {
+        :source-paths ["src" "target/classes" "test" "target/test-classes"]
+        :compiler     {:output-to "target/testable.js"
+                       :optimizations :advanced
+                       :pretty-print false}}}}}]}
 
   :codox {:sources ["target/classes"]}
   :aliases
   {"test-all"   ["with-profile" "default:+1.5:+1.6" "expectations"]
    ;; "test-all"   ["with-profile" "default:+1.6" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
+   "test-cljs-clean"  ["do" "clean," "cljx" "once," "cljsbuild" "test"]
    "build-once" ["do" "cljx" "once," "cljsbuild" "once"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+dev*" "repl" ":headless"]}

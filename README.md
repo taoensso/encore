@@ -20,6 +20,14 @@ Please use the project's GitHub [issues page][] for project questions/comments/s
 
 Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Cheers!
 
+### Development
+
+#### ClojureScript
+
+Test vith f.ex.:
+
+    lein test-cljs-clean
+
 ## License
 
 Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
