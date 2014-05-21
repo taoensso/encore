@@ -1,0 +1,27 @@
+<html>
+ <head>
+
+     <script src="/target/cljsbuild-compiler-1/goog/base.js"></script>
+     <script>
+         var CLOSURE_NO_DEPS = true;
+     </script>
+
+     <script src="/target/main.js"></script>
+     <script>
+         goog.require('taoensso.encore');
+         goog.require('taoensso.encore.memoization');
+     </script>
+     <script id="lt_ws" src="http://localhost:5678/socket.io/lighttable/ws.js"></script>
+ </head>
+
+    <h1>Test me!</h1>
+
+    <p>
+        Look at the sources and execute the JS functions; example:
+        <pre>
+           taoensso.encore.format("Hello %s!", "universe")
+           // => "Hello universe!"
+        </pre>
+    </p>
+
+</html>

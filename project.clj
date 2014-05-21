@@ -54,12 +54,12 @@
       {:main {
         :source-paths ["src" "target/classes"]
         :compiler     {:output-to "target/main.js"
-                       :optimizations :advanced
+                       :optimizations :none
                        :pretty-print false}}
        :test {
         :source-paths ["src" "target/classes" "test" "target/test-classes"]
         :compiler     {:output-to "target/testable.js"
-                       :optimizations :advanced
+                       :optimizations :simple
                        :pretty-print false}}}}}]}
 
   :codox {:sources ["target/classes"]}
