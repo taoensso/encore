@@ -11,7 +11,7 @@
                 *assert* true}
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
-   [org.clojure/tools.reader "0.8.3"]
+   [org.clojure/tools.reader "0.8.5"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
    ]
 
@@ -29,7 +29,7 @@
    :dev
    [:1.6 :test
     {:dependencies
-     [[org.clojure/clojurescript "0.0-2173"]
+     [[org.clojure/clojurescript "0.0-2261"]
       [org.clojure/core.async    "0.1.278.0-76b25b-alpha"]]
      :plugins
      [[lein-ancient                    "0.5.4"]
