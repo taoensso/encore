@@ -30,21 +30,15 @@
 
 ;;;; Core
 
-#+clj
-(defn compiling-cljs?*
-  "Returns true iff called within the context of the ClojureScript compiler's
-  environment. Useful for writing macros that can produce different Clj/Cljs
-  code (this isn't something Cljx currently provides support for).
-  Stolen from Prismatic code, Ref. http://goo.gl/DhhhSN."
-  ;; TODO Is this idiomatic? Checking &env for cljs.env/*compiler* may be an
-  ;; alternative?
-  []
-  (boolean
-   (when-let [n (find-ns 'cljs.analyzer)]
-     (when-let [v (ns-resolve n '*cljs-file*)]
-       @v))))
-
-(defmacro ^:also-cljs compiling-cljs? [] (compiling-cljs?*))
+(defmacro ^:also-cljs if-cljs
+  "Executes `then` clause iff generating ClojureScript code.
+  Useful for writing macros that can produce different Clj/Cljs code (this isn't
+  something Cljx currently provides support for). Stolen from Prismatic code,
+  Ref. http://goo.gl/DhhhSN,
+       https://groups.google.com/d/msg/clojurescript/iBY5HaQda4A/w1lAQi9_AwsJ."
+  [then else]
+  (if (:ns &env) ; nil in Clojure, nnil in ClojureScript
+    then else))
 
 (defn name-with-attrs
   "Stolen from `clojure.tools.macro`.
@@ -173,7 +167,7 @@
            (if (vector? test) ; Id'd test
              (do (assert (= (count test) 2)) test)
              [nil test])]
-       (if (compiling-cljs?)
+       (if-cljs
          `(let [test# (try ~test (catch :default _# false))]
             (when-not test# (or ~error-id '~test :falsey)))
 
@@ -221,7 +215,7 @@
 
 (defmacro try-exdata "Useful for `check`-based unit tests, etc."
   [& body]
-  (if (compiling-cljs?)
+  (if-cljs
     `(try (do ~@body)
           (catch :default e#
             (if-let [data# (ex-data e#)]
