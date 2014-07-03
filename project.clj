@@ -30,7 +30,7 @@
    [:1.6 :test
     {:dependencies
      [[org.clojure/clojurescript "0.0-2261"]
-      [org.clojure/core.async    "0.1.278.0-76b25b-alpha"]]
+      [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
      :plugins
      [[lein-ancient                    "0.5.4"]
       [com.keminglabs/cljx             "0.3.2"] ; Must precede Austin!
