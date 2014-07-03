@@ -33,9 +33,9 @@
       [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
      :plugins
      [[lein-ancient                    "0.5.4"]
-      [com.keminglabs/cljx             "0.3.2"] ; Must precede Austin!
+      [com.keminglabs/cljx             "0.4.0"] ; Must precede Austin!
       [com.cemerick/austin             "0.1.4"]
-      [lein-cljsbuild                  "1.0.2"]
+      [lein-cljsbuild                  "1.0.3"]
       [com.cemerick/clojurescript.test "0.2.2"]
       [codox                           "0.6.7"]]
 
