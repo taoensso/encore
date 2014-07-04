@@ -55,6 +55,7 @@
                        :pretty-print false}}]}}]}
 
   :codox {:sources ["target/classes"]}
+  :auto-clean false ; For Cljx targets, Ref. http://goo.gl/iDlcFQ
   :aliases
   {"test-all"   ["with-profile" "default:+1.5:+1.6" "expectations"]
    ;; "test-all"   ["with-profile" "default:+1.6" "expectations"]
