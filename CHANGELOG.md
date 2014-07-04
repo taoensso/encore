@@ -1,3 +1,9 @@
+## v1.7.0 / 2014 July 4
+
+ * Bump some dependencies.
+ * **BREAKING**: drop `compiling-cljs?*`, `compiling-cljs?` macros in favor of `if-cljs`.
+
+
 ## v1.6.0 / 2014 May 8
 
  * **NEW**: `ajax-lite` now returns XHR instance on success.
