@@ -1188,7 +1188,7 @@
         loc
         {;; Ref. http://bl.ocks.org/abernier/3070589
          :href     (.-href     loc*) ; "http://www.example.org:80/foo/bar?q=baz#bang"
-         :protocol (.-protocol loc*) ; "http"
+         :protocol (.-protocol loc*) ; "http:" ; Note the :
          :hostname (.-hostname loc*) ; "example.org"
          :host     (.-host     loc*) ; "example.org:80"
          :pathname (.-pathname loc*) ; "/foo/bar"
