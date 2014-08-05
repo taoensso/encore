@@ -186,7 +186,7 @@
 
 (defmacro ^:also-cljs check
   "General-purpose validator useable in or out of pre/post conds.
-  Throws a detailed, specific exception on any logical false/Ex forms.
+  Throws a detailed, specific exception on first logical false/Ex form.
   Arbitrary data may be attached to exceptions (usu. the data being checked)."
   [data & tests]
   `(if-let [error# (check-some ~@tests)]
@@ -206,6 +206,8 @@
   (check-some
    true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
   (check-all
+   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+  (check
    true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
   (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
                  :post [(check x (integer? x))]}
