@@ -365,7 +365,7 @@
 
 ;; (defn- chan? [x]
 ;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-;;   #+cljs (instance? cljs.core.async.impl.channels.ManyToManyChannel    x))
+;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
 
 ;;; Often useful for assertions, etc.
 (defn pos-int?  [x] (and (integer? x) (pos? x)))
