@@ -1,5 +1,9 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.7.1 / 2014 Aug 21
+
+ * Add some simple (Cljs) logging-level controls.
+
 
 ## v1.7.0 / 2014 July 4
 
