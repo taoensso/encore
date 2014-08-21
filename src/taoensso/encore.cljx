@@ -517,6 +517,7 @@
 (defn      swapped [new-val return-val] (->Swapped new-val return-val))
 (defn- as-swapped [x] (if (instance? Swapped x) x {:new-val x :return-val x}))
 
+;; Recall: no `korks` support since it makes `nil` ambiguous (`[]` vs `[nil]`).
 (defn swap-in!
   "More powerful version of `swap!`:
     * Supports optional `update-in` semantics.
