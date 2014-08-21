@@ -1177,10 +1177,27 @@
   (defn logp [& xs]     (log (str/join " " xs)))
   (defn logf [fmt & xs] (log (apply format fmt xs)))
 
-  (def debugf (comp #(str ""        %) logf))
-  (def infof  (comp #(str ""        %) logf))
-  (def warnf  (comp #(str "WARN: "  %) logf))
-  (def errorf (comp #(str "ERROR: " %) logf)))
+  ;;; Simplified logging stuff borrowed from Timbre
+  (def logging-level "Log only >= <this-level> calls" (atom :debug))
+  (def logging-level-sufficient?
+    (let [ordered-levels [#_nil :trace :debug :info :warn :error :fatal :report]
+          scored-levels  (zipmap ordered-levels (next (range)))
+          valid-level?   (set ordered-levels)]
+      (fn [level]
+        (let [current-level @logging-level]
+          (assert (valid-level? current-level))
+          (assert (valid-level? level))
+          (>= (scored-levels level)
+              (scored-levels current-level))))))
+
+  (comment (logging-level-sufficient? :debug)
+           (logging-level-sufficient? :invalid))
+
+  (def ^:private lls? logging-level-sufficient?)
+  (defn debugf [fmt & xs] (when (lls? :debug) (apply logf fmt xs)))
+  (defn infof  [fmt & xs] (when (lls? :info)  (apply logf fmt xs)))
+  (defn warnf  [fmt & xs] (when (lls? :warn)  (str "WARN: "  (apply logf fmt xs))))
+  (defn errorf [fmt & xs] (when (lls? :error) (str "ERROR: " (apply logf fmt xs)))))
 
 #+cljs
 (defn get-window-location
