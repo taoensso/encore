@@ -541,7 +541,7 @@
           return-val)))))
 
 ;; Actually uses CAS semantics to support `update-in` capability:
-(defn reset-in! [atom_ korks newval] (swap-in! atom_ korks (constantly newval)))
+(defn reset-in! [atom_ ks newval] (swap-in! atom_ ks (constantly newval)))
 
 (comment
   (let [a_ (atom {:a :A :b :B})] ; Returns new-val (default)
