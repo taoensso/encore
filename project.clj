@@ -13,7 +13,7 @@
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
-   [org.clojure/tools.reader "0.8.5"]]
+   [org.clojure/tools.reader "0.8.7"]]
 
   :plugins
   [[com.keminglabs/cljx "0.4.0"]
@@ -24,8 +24,8 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :test {:dependencies [[expectations              "2.0.7"]
-                         [org.clojure/test.check    "0.5.8"]
+   :test {:dependencies [[expectations              "2.0.9"]
+                         [org.clojure/test.check    "0.5.9"]
                          ;; [com.cemerick/double-check "0.5.7"]
                          ]}
    :dev
