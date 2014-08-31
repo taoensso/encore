@@ -4,6 +4,7 @@
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
+                   [clojure.set         :as set]
                    [clojure.java.io     :as io]
                    ;; [clojure.core.async  :as async]
                    [clojure.tools.reader.edn :as edn])
@@ -12,6 +13,7 @@
                    [java.text SimpleDateFormat])
   ;;;
   #+cljs (:require [clojure.string    :as str]
+                   [clojure.set         :as set]
                    ;; [cljs.core.async   :as async]
                    [cljs.reader       :as edn]
                    ;;[goog.crypt.base64 :as base64]
@@ -230,6 +232,21 @@
 (comment (try-exdata (/ 5 0))
          (try-exdata (check nil (true? false))))
 
+;;; Useful for map assertions, etc.
+(defn- set* [x] (if (set? x) x (set x)))
+(defn keys=  [m ks] (=             (set (keys m)) (set* ks)))
+(defn keys<= [m ks] (set/subset?   (set (keys m)) (set* ks)))
+(defn keys>= [m ks] (set/superset? (set (keys m)) (set* ks)))
+;;
+(defn  nnil-keys?  [m ks] (every? #(not (nil? (get m %))) ks))
+
+(comment
+  (keys=      {:a :A :b :B  :c :C}  #{:a :b})
+  (keys<=     {:a :A :b :B  :c :C}  #{:a :b})
+  (keys>=     {:a :A :b :B  :c :C}  #{:a :b})
+  (nnil-keys? {:a :A :b :B  :c nil} #{:a :b})
+  (nnil-keys? {:a :A :b nil :c nil} #{:a :b}))
+
 ;;;; Coercions
 ;; `parse-x` => success, or nil
 ;;    `as-x` => success, (sometimes nil arg), or throw
@@ -366,6 +383,7 @@
 ;; (defn- chan? [x]
 ;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
 ;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
 
 ;;; Often useful for assertions, etc.
 (defn pos-int?  [x] (and (integer? x) (pos? x)))
@@ -512,6 +530,10 @@
                                            (Date.)))))
 
 ;;;; Collections
+
+(defn atom? [x]
+  #+clj  (instance? clojure.lang.Atom x)
+  #+cljs (instance? Atom              x))
 
 (defrecord Swapped [new-val return-val])
 (defn      swapped [new-val return-val] (->Swapped new-val return-val))
