@@ -1,5 +1,11 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.7.3 / 2014 Sep 1
+
+ * Add remaining cljs logging fns.
+ * `uuid-str` now has an extra arity for trimming.
+
+
 ## v1.7.2 / 2014 Aug 31
 
  * Add `atom?` and key utils.
