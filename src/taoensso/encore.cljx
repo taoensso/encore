@@ -1217,10 +1217,14 @@
            (logging-level-sufficient? :invalid))
 
   (def ^:private lls? logging-level-sufficient?)
-  (defn debugf [fmt & xs] (when (lls? :debug) (apply logf fmt xs)))
-  (defn infof  [fmt & xs] (when (lls? :info)  (apply logf fmt xs)))
-  (defn warnf  [fmt & xs] (when (lls? :warn)  (str "WARN: "  (apply logf fmt xs))))
-  (defn errorf [fmt & xs] (when (lls? :error) (str "ERROR: " (apply logf fmt xs)))))
+  ;;; Note current lack of [?throwable fmt & xs] support:
+  (defn tracef  [fmt & xs] (when (lls? :trace)  (apply logf fmt xs)))
+  (defn debugf  [fmt & xs] (when (lls? :debug)  (apply logf fmt xs)))
+  (defn infof   [fmt & xs] (when (lls? :info)   (apply logf fmt xs)))
+  (defn warnf   [fmt & xs] (when (lls? :warn)   (str "WARN: "  (apply logf fmt xs))))
+  (defn errorf  [fmt & xs] (when (lls? :error)  (str "ERROR: " (apply logf fmt xs))))
+  (defn fatalf  [fmt & xs] (when (lls? :fatal)  (str "FATAL: " (apply logf fmt xs))))
+  (defn reportf [fmt & xs] (when (lls? :report) (apply logf fmt xs))))
 
 #+cljs
 (defn get-window-location
