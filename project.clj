@@ -13,7 +13,7 @@
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
-   [org.clojure/tools.reader "0.8.7"]]
+   [org.clojure/tools.reader "0.8.8"]]
 
   :plugins
   [[com.keminglabs/cljx "0.4.0"]
