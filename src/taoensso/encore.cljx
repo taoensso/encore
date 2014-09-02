@@ -1278,17 +1278,32 @@
 (defn ajax-lite
   "Alpha - subject to change.
   Simple+lightweight Ajax via Google Closure. Returns nil, or the xhr instance.
-  Ref. https://developers.google.com/closure/library/docs/xhrio"
-  [uri {:keys [method params headers timeout resp-type]
-        :or   {method :get timeout 10000 resp-type :auto}}
+  Ref. https://developers.google.com/closure/library/docs/xhrio.
+
+  (ajax-lite \"/my-post-route\"
+    {:method     :post
+     :params     {:username \"Rich Hickey\"
+                  :type     \"Awesome\"}
+     :headers    {\"Foo\" \"Bar\"}
+     :resp-type  :text
+     :timeout-ms 7000}
+    (fn async-callback [resp-map]
+      (let [{:keys [?status ?error ?content ?content-type]} resp-map]
+        ;; ?status - 200, 404, ..., or nil on no response
+        ;; ?error  - e/o #{:xhr-pool-depleted :exception :http-error :abort
+        ;;                 :timeout <http-error-status> nil}
+        (js/alert (str \"Ajax response: \" resp-map)))))"
+  [uri {:keys [method params headers timeout-ms resp-type] :as opts
+        :or   {method :get timeout-ms 10000 resp-type :auto}}
    callback]
-  {:pre [(or (nil? timeout) (nneg-int? timeout))]}
+  {:pre [(or (nil? timeout-ms) (nneg-int? timeout-ms))]}
   (if-let [xhr (get-pooled-xhr!)]
     (try
-      (let [method* (case method :get "GET" :post "POST")
-            params  (map-keys name params)
-            headers (merge {"X-Requested-With" "XMLHTTPRequest"}
-                           (map-keys name headers))
+      (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
+            method*    (case method :get "GET" :post "POST")
+            params     (map-keys name params)
+            headers    (merge {"X-Requested-With" "XMLHTTPRequest"}
+                         (map-keys name headers))
             ;;
             [uri* post-content*] (coerce-xhr-params uri method params)
             headers*
@@ -1303,22 +1318,22 @@
 
           (gevents/listenOnce goog.net.EventType/COMPLETE
             (fn wrapped-callback [resp]
-              (let [status       (.getStatus xhr) ; -1 or http-status
-                    got-resp?    (not= status -1)
-                    content-type (when got-resp?
-                                   (.getResponseHeader xhr "Content-Type"))
+              (let [status        (.getStatus xhr) ; -1 when no resp
+                    ?http-status  (when (not= status -1) status)
+                    ?content-type (when ?http-status
+                                    (.getResponseHeader xhr "Content-Type"))
                     cb-arg
                     {;;; Raw stuff
                      :raw-resp resp
                      :xhr      xhr ; = (.-target resp)
                      ;;;
-                     :content-type (when got-resp? content-type)
-                     :content
-                     (when got-resp?
+                     :?content-type (when ?http-status ?content-type)
+                     :?content
+                     (when ?http-status
                        (let [resp-type
                              (if-not (= resp-type :auto) resp-type
                                (condp #(str-contains? %2 %1)
-                                   (str content-type) ; Prevent nil
+                                   (str ?content-type) ; Prevent nil
                                  "/edn"  :edn
                                  "/json" :json
                                  "/xml"  :xml
@@ -1330,19 +1345,19 @@
                            :xml  (.getResponseXml  xhr)
                            :edn  (edn/read-string (.getResponseText xhr)))))
 
-                     :status (when got-resp? status) ; nil or http-status
-                     :error ; nil, error status, or keyword
-                     (if got-resp?
-                       (when-not (<= 200 status 299) status) ; Non 2xx resp
+                     :?status ?http-status
+                     :?error
+                     (if ?http-status
+                       (when-not (<= 200 ?http-status 299) ?http-status)
                        (get {;; goog.net.ErrorCode/NO_ERROR nil
                              goog.net.ErrorCode/EXCEPTION  :exception
                              goog.net.ErrorCode/HTTP_ERROR :http-error
                              goog.net.ErrorCode/ABORT      :abort
                              goog.net.ErrorCode/TIMEOUT    :timeout}
-                            (.getLastErrorCode xhr) :unknown))}]
+                         (.getLastErrorCode xhr) :unknown))}]
                 (callback cb-arg))))
 
-          (.setTimeoutInterval (or timeout 0)) ; nil = 0 = no timeout
+          (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
           (.send uri* method* post-content* headers*))
 
         ;; Allow aborts, etc.:
@@ -1354,7 +1369,7 @@
         nil))
 
     (do ; Pool failed to return an available xhr instance
-      (callback {:error :xhr-pool-depleted})
+      (callback {:?error :xhr-pool-depleted})
       nil)))
 
 ;;;; Ring
