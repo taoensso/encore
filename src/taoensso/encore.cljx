@@ -232,7 +232,7 @@
 (comment (try-exdata (/ 5 0))
          (try-exdata (check nil (true? false))))
 
-;;; Useful for map assertions, etc.
+;;; Useful for map assertions, etc. (does not check that input is a map)
 (defn- set* [x] (if (set? x) x (set x)))
 (defn keys=  [m ks] (=             (set (keys m)) (set* ks)))
 (defn keys<= [m ks] (set/subset?   (set (keys m)) (set* ks)))
