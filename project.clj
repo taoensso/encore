@@ -15,10 +15,6 @@
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
    [org.clojure/tools.reader "0.8.8"]]
 
-  :plugins
-  [[com.keminglabs/cljx "0.4.0"]
-   [lein-cljsbuild      "1.0.3"]]
-
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
@@ -35,7 +31,11 @@
       [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
 
      :plugins
-     [[lein-pprint                     "1.1.1"]
+     [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
+      [com.keminglabs/cljx             "0.4.0"]
+      [lein-cljsbuild                  "1.0.3"]
+      ;;
+      [lein-pprint                     "1.1.1"]
       [lein-ancient                    "0.5.5"]
       [com.cemerick/austin             "0.1.4"]
       [lein-expectations               "0.0.8"]
@@ -59,8 +59,10 @@
                     :pretty-print false}}]}
 
   :test-paths ["test" "src"]
-  ;;:hooks    [cljx.hooks leiningen.cljsbuild]
-  :prep-tasks [["cljx" "once"] "javac" "compile"]
+  ;;:hooks      [cljx.hooks leiningen.cljsbuild]
+  ;;:prep-tasks [["cljx" "once"] "javac" "compile"]
+  :prep-tasks   [["with-profile" "+dev" ; Workaround for :dev cljx
+                  "cljx" "once"] "javac" "compile"]
   :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
           :sources  ["target/classes"]
           :src-linenum-anchor-prefix "L"
