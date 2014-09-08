@@ -142,7 +142,13 @@
 (def  nblank? (complement str/blank?))
 (defn nblank-str? [x] (and (string? x) (nblank? x)))
 
-(comment (map nblank-str? ["foo" "" 5]))
+(defn nnil=
+  ([x y]        (and (nnil? x) (= x y)))
+  ([x y & more] (and (nnil? x) (apply = x y more))))
+
+(comment (map nblank-str? ["foo" "" 5])
+         (nnil= nil nil)
+         (nnil= :foo :foo :foo))
 
 (defn nvec? "Is `x` a vector of size `n`?" [n x]
   (and (vector? x) (= (count x) n)))
