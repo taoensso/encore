@@ -1,8 +1,13 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.8.2 / 2014 Sep 9
+
+ * **NEW**: Add utils `nnil=`, `have`.
+
+
 ## v1.8.1 / 2014 Sep 7
 
- * **FIX** https://github.com/ptaoussanis/timbre/issues/79.
+ * **FIX**: https://github.com/ptaoussanis/timbre/issues/79.
 
 
 ## v1.8.0 / 2014 Sep 2
