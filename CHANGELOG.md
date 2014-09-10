@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.8.3 / 2014 Sep 10
+
+ * **CHANGE**: Cljs `format` now treats undefined args as `nil`s.
+
+
 ## v1.8.2 / 2014 Sep 9
 
  * **NEW**: Add utils `nnil=`, `have`.
