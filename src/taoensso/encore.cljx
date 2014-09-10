@@ -168,9 +168,12 @@
   ([coll not-found] (nth coll 0 not-found)))
 
 #+clj (def format clojure.core/format) ; For easier encore/format portability
+
 #+cljs
-(defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
-  [fmt & args] (apply gstr/format fmt args))
+(do
+  (defn- undefined->nil [x] (if (undefined? x) nil x))
+  (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
+    [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
 ;;;; Validation
 
@@ -1207,6 +1210,7 @@
 (do ; Logging stuff
 
   (defn log [x]
+    ;; (undefined? (aget "console" js/window))
     (if (js* "typeof console != 'undefined'")
       (.log js/console x)
       (js/print x))
