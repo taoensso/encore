@@ -663,22 +663,27 @@
 
 (defn as-map "Cross between `hash-map` & `map-kvs`."
   [coll & [kf vf]]
-  {:pre  [(coll? coll) (or (nil? kf) (fn? kf) (identical? kf :keywordize))
-                       (or (nil? vf) (fn? vf))]
+  {:pre  [(or (coll? coll) (nil? coll))
+          (or (nil? kf) (fn? kf) (identical? kf :keywordize))
+          (or (nil? vf) (fn? vf))]
    :post [(or (nil? %) (map? %))]}
-  (when-let [s' (seq coll)]
-    (let [kf (if-not (identical? kf :keywordize) kf
-               (fn [k _] (keyword k)))]
-      (loop [m (transient {}) [k v :as s] s']
-        (let [k (if-not kf k (kf k v))
-              v (if-not vf v (vf k v))
-              new-m (assoc! m k v)]
-          (if-let [n (nnext s)]
-            (recur new-m n)
-            (persistent! new-m)))))))
+  (when coll
+    (if (empty? coll) {}
+      (let [kf (if-not (identical? kf :keywordize) kf
+                 (fn [k _] (keyword k)))]
+        (loop [m (transient {}) [k v :as s] coll]
+          (let [k (if-not kf k (kf k v))
+                v (if-not vf v (vf k v))
+                new-m (assoc! m k v)]
+            (if-let [n (nnext s)]
+              (recur new-m n)
+              (persistent! new-m))))))))
 
-(comment (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
-           (fn [k v] (case k (:a :b) (str "boo-" v) v))))
+(comment
+  (as-map nil)
+  (as-map [])
+  (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
+    (fn [k v] (case k (:a :b) (str "boo-" v) v))))
 
 (defn into-all "Like `into` but supports multiple \"from\"s."
   ([to from] (into to from))
