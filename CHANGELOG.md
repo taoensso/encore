@@ -1,5 +1,13 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.9.0 / 2014 Sep 11
+
+ * **BREAKING**: `swap-in!` extra arity (for `apply`) has been dropped.
+ * **CHANGE**: `as-map` now returns nil->nil (previously threw on nils).
+ * **CHANGE**: map transforms now return {} on nil inputs (previously returned nil).
+ * **NEW**: Experimental `replace-in`, bulk `swap-in!`+`reset-in!`.
+
+
 ## v1.8.3 / 2014 Sep 10
 
  * **CHANGE**: Cljs `format` now treats undefined args as `nil`s.
