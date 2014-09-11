@@ -618,21 +618,25 @@
   [f & args]
   (apply f (apply concat (butlast args) (last args))))
 
+(defn- clj1098
+  "Workaround for Clojure versions [1.4, 1.5) that blow up on `reduce-kv`s
+  against a nil coll, Ref. http://dev.clojure.org/jira/browse/CLJ-1098."
+  [x] (or x {}))
+
 (defn map-kvs [kf vf m]
-  (when m
+  (if-not m {} ; Note also clj1098-safe
     (let [kf (if-not (identical? kf :keywordize) kf (fn [k _] (keyword k)))
           vf (if-not (identical? vf :keywordize) vf (fn [_ v] (keyword v)))]
       (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k v) k)
                                                    (if vf (vf v v) v)))
-                              (transient {}) (or m {}))))))
+                              (transient {}) m)))))
 
 (defn map-keys [f m] (map-kvs (fn [k _] (f k)) nil m))
 (defn map-vals [f m] (map-kvs nil (fn [_ v] (f v)) m))
 
 (defn filter-kvs [predk predv m]
-  (when m
-    (reduce-kv (fn [m k v] (if (and (predk k) (predv v)) m (dissoc m k)))
-               (or m {}) (or m {}))))
+  (if-not m {} ; Note also clj1098-safe
+    (reduce-kv (fn [m k v] (if (and (predk k) (predv v)) m (dissoc m k))) m m)))
 
 (defn filter-keys [pred m] (filter-kvs pred (constantly true) m))
 (defn filter-vals [pred m] (filter-kvs (constantly true) pred m))
@@ -643,13 +647,16 @@
   "Smaller, common-case version of `filter-vals`. Esp useful with `nil?`/`blank?`
   pred when constructing maps: {:foo (when _ <...>) :bar (when _ <...>)} in a
   way that preservers :or semantics."
-  [pred m] (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m )) m m))
+  [pred m]
+  (if-not m {} ; Note also clj1098-safe
+    (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m)))
 
 (comment (remove-vals nil? {:a :A :b false :c nil :d :D}))
 
 ;; (def keywordize-map #(map-kvs :keywordize nil %))
 (defn keywordize-map [m]
-  (when m (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m)))
+  (if-not m {} ; Note also clj1098-safe
+    (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m)))
 
 (comment (keywordize-map nil)
          (keywordize-map {"akey" "aval" "bkey" "bval"}))
@@ -1014,7 +1021,7 @@
                 (swap! cache
                   (fn [m] (reduce-kv (fn [m* k [dv udt :as cv]]
                                       (if (> (- instant udt) ttl-ms) m*
-                                          (assoc m* k cv))) {} m)))))
+                                          (assoc m* k cv))) {} (clj1098 m))))))
 
             (let [fresh?  (identical? arg1 :mem/fresh)
                   args    (if fresh? argn args)
@@ -1047,7 +1054,7 @@
                           m* (if-not ttl-ms m*
                                (reduce-kv (fn [m* k [dv udt _ _ :as cv]]
                                             (if (> (- instant udt) ttl-ms) m*
-                                                (assoc m* k cv))) {} m*))
+                                                (assoc m* k cv))) {} (clj1098 m*)))
                           n-to-prune (- (count m*) cache-size)
                           ;; Then prune by descending tick-sum:
                           m* (if-not (pos? n-to-prune) m*
@@ -1130,7 +1137,8 @@
               [nil (reduce-kv
                     (fn [m* id [udt-window-start ncalls]]
                       (if (> (- instant udt-window-start) window-ms) m*
-                          (assoc m* id [udt-window-start ncalls]))) {} m)]))))
+                          (assoc m* id [udt-window-start ncalls]))) {}
+                          (clj1098 m))]))))
 
       (->
        (let [instant (now-udt)]
