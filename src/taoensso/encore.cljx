@@ -56,7 +56,7 @@
     attr (if (meta name) (conj (meta name) attr)     attr)]
     [(with-meta name attr) macro-args]))
 
-(defmacro defonce*
+(defmacro ^:also-cljs defonce*
   "Like `clojure.core/defonce` but supports optional docstring and attributes
   map for name symbol."
   {:arglists '([name expr])}
