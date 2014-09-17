@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.9.1 / 2014 Sep 17
+
+ * **NEW**: Add `kw-identical?` util, use internally to fix a number of bugs caused by http://goo.gl/be8CGP.
+
+
 ## v1.9.0 / 2014 Sep 11
 
  * **BREAKING**: `swap-in!` extra arity (for `apply`) has been dropped.
