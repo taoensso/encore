@@ -138,6 +138,12 @@
 
 (comment (when-lets [a :a b nil] "foo"))
 
+;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
+;; `keyword-identical?`. This util helps alleviate the pain of writing
+;;  cross-platform code. Ref. http://goo.gl/be8CGP.
+#+clj  (def kw-identical? identical?)
+#+cljs (def kw-identical? keyword-identical?)
+
 (def  nnil?   (complement nil?))
 (def  nblank? (complement str/blank?))
 (defn nblank-str? [x] (and (string? x) (nblank? x)))
@@ -692,8 +698,8 @@
 
 (defn map-kvs [kf vf m]
   (if-not m {} ; Note also clj1098-safe
-    (let [kf (if-not (identical? kf :keywordize) kf (fn [k _] (keyword k)))
-          vf (if-not (identical? vf :keywordize) vf (fn [_ v] (keyword v)))]
+    (let [kf (if-not (kw-identical? kf :keywordize) kf (fn [k _] (keyword k)))
+          vf (if-not (kw-identical? vf :keywordize) vf (fn [_ v] (keyword v)))]
       (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k v) k)
                                                    (if vf (vf v v) v)))
                               (transient {}) m)))))
@@ -731,12 +737,12 @@
 (defn as-map "Cross between `hash-map` & `map-kvs`."
   [coll & [kf vf]]
   {:pre  [(or (coll? coll) (nil? coll))
-          (or (nil? kf) (fn? kf) (identical? kf :keywordize))
+          (or (nil? kf) (fn? kf) (kw-identical? kf :keywordize))
           (or (nil? vf) (fn? vf))]
    :post [(or (nil? %) (map? %))]}
   (when coll
     (if (empty? coll) {}
-      (let [kf (if-not (identical? kf :keywordize) kf
+      (let [kf (if-not (kw-identical? kf :keywordize) kf
                  (fn [k _] (keyword k)))]
         (loop [m (transient {}) [k v :as s] coll]
           (let [k (if-not kf k (kf k v))
@@ -1067,12 +1073,12 @@
   ([f] ; De-raced, commands
     (let [cache (atom {})] ; {<args> <delay-val>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (identical? arg1 :mem/del)
-          (do (if (identical? (first argn) :mem/all)
+        (if (kw-identical? arg1 :mem/del)
+          (do (if (kw-identical? (first argn) :mem/all)
                 (reset! cache {})
                 (swap!  cache dissoc argn))
               nil)
-          (let [fresh? (identical? arg1 :mem/fresh)
+          (let [fresh? (kw-identical? arg1 :mem/fresh)
                 args   (if fresh? argn args)]
             @(swap-val! cache args
                (fn [?dv] (if (and ?dv (not fresh?)) ?dv
@@ -1081,8 +1087,8 @@
   ([ttl-ms f] ; De-raced, commands, ttl, gc
     (let [cache (atom {})] ; {<args> <[delay-val udt :as cache-val]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (identical? arg1 :mem/del)
-          (do (if (identical? (first argn) :mem/all)
+        (if (kw-identical? arg1 :mem/del)
+          (do (if (kw-identical? (first argn) :mem/all)
                 (reset! cache {})
                 (swap!  cache dissoc argn))
               nil)
@@ -1095,7 +1101,7 @@
                                       (if (> (- instant udt) ttl-ms) m*
                                           (assoc m* k cv))) {} (clj1098 m))))))
 
-            (let [fresh?  (identical? arg1 :mem/fresh)
+            (let [fresh?  (kw-identical? arg1 :mem/fresh)
                   args    (if fresh? argn args)
                   instant (now-udt)]
               @(first-nth
@@ -1110,8 +1116,8 @@
     (let [state (atom {:tick 0})] ; {:tick _
                                   ;  <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (identical? arg1 :mem/del)
-          (do (if (identical? (first argn) :mem/all)
+        (if (kw-identical? arg1 :mem/del)
+          (do (if (kw-identical? (first argn) :mem/all)
                 (reset! state {:tick 0})
                 (swap!  state dissoc argn))
               nil)
@@ -1141,7 +1147,7 @@
                                 (apply dissoc m*)))]
                       (assoc m* :tick (:tick m)))))))
 
-            (let [fresh?   (identical? arg1 :mem/fresh)
+            (let [fresh?   (kw-identical? arg1 :mem/fresh)
                   args     (if fresh? argn args)
                   ?instant (when ttl-ms (now-udt))
                   tick'    (:tick @state) ; Accuracy/sync irrelevant
