@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.9.2 / 2014 Sep 22
+
+ * Temporary (?) workaround for http://goo.gl/3At6xz, http://goo.gl/gAqxad.
+
+
 ## v1.9.1 / 2014 Sep 17
 
  * **NEW**: Add `kw-identical?` util, use internally to fix a number of bugs caused by http://goo.gl/be8CGP.
