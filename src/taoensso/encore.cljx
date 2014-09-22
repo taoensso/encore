@@ -545,9 +545,15 @@
   #+cljs (instance? Atom              x))
 
 (defrecord Swapped [new-val return-val])
-(defn      swapped [new-val return-val] (->Swapped new-val return-val))
+(defn      swapped [new-val return-val] (Swapped. new-val return-val))
 (defn-  as-swapped [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
                            [x x]))
+
+(comment ; TODO Debug
+  (defrecord Foo1 [x])
+  (instance? Foo1 (Foo1.  "bar"))
+  (instance? Foo1 (->Foo1 "bar"))
+  (compile 'taoensso.encore))
 
 ;; Recall: no `korks` support since it makes `nil` ambiguous (`[]` vs `[nil]`).
 ;; This ambiguity extends to (assoc-in {} [] :a), which (along with perf)
