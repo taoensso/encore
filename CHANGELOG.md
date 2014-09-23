@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.9.3 / 2014 Sep 23
+
+ * **NEW**: `asserted` util.
+
+
 ## v1.9.2 / 2014 Sep 22
 
  * Temporary (?) workaround for http://goo.gl/3At6xz, http://goo.gl/gAqxad.
