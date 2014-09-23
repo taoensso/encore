@@ -157,12 +157,15 @@
 (comment (nnil= nil nil)
          (nnil= :foo :foo :foo))
 
-(defn have
-  ([x] (assert (nnil? x)) x)
+(defn asserted
+  ([pred x] (assert (pred x)) x)
   ;; Allow [] destructuring:
-  ([x & more] (mapv have (into [x] more))))
+  ([pred x & more] (mapv (partial asserted pred) (into [x] more))))
 
-(comment (let [[x y z] (have :x :y :z)] [x y z]))
+(def have (partial asserted nnil?))
+
+(comment (let [[x y]   (asserted string? "a" "b")] [x y])
+         (let [[x y z] (have :x :y :z)] [x y z]))
 
 (defn nvec? "Is `x` a vector of size `n`?" [n x]
   (and (vector? x) (= (count x) n)))
