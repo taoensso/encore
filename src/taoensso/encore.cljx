@@ -309,7 +309,7 @@
 
     #+cljs
     (cond (number? x) (long x)
-          (string? x) (let [x (js/parseInt x)]
+          (string? x) (let [x (js/parseInt x 10)]
                         (when-not (js/isNaN x) x))
           :else        nil)))
 
