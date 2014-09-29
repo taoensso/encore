@@ -1,7 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/encore "1.9.3"]
+[com.taoensso/encore "1.9.4"]
 ```
 
 # Cross-platform Clojure utils library

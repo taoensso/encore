@@ -1,5 +1,11 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.9.4 / 2014 Sep 24
+
+ * **NEW**: Make `set*` public.
+ * **FIX**: Cljs `parse-int`, `as-int` now correctly use decimal radix (@favila).
+
+
 ## v1.9.3 / 2014 Sep 23
 
  * **NEW**: `asserted` util.
