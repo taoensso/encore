@@ -439,7 +439,7 @@
       (/ rounded modifier))))
 
 (def round* round) ; Alias for ns refers
-(defn round2 "Optimized common case." [n] (/ (Math/round (* n 1000.0)) 1000.0))
+(defn round2 "Optimized common case." [n] (/ (Math/round (* n 100.0)) 100.0))
 
 (comment
   (round -1.5 :floor)
@@ -537,8 +537,7 @@
   ^java.text.SimpleDateFormat [pattern & [{:keys [locale timezone] :as opts}]]
   (.get ^ThreadLocal (simple-date-format* pattern opts)))
 
-(comment (time (dotimes [_ 10000] (.format (simple-date-format "yyyy-MMM-dd")
-                                           (Date.)))))
+(comment (qb 10000 (.format (simple-date-format "yyyy-MMM-dd") (Date.))))
 
 ;;;; Collections
 
@@ -810,13 +809,13 @@
          (nth 0)
          persistent!)))
 
-(comment (distinctv        [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
-         (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]]))
-
 (comment
-  (time (dotimes [_ 10000] (distinctv [:a :a :b :c :d :d :e :a :b :c :d])))
-  (time (dotimes [_ 10000] (doall (distinct [:a :a :b :c :d :d :e :a :b :c :d]))))
-  (time (dotimes [_ 10000] (set [:a :a :b :c :d :d :e :a :b :c :d]))))
+  (distinctv        [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
+  (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
+  (qb 10000
+    (distinctv       [:a :a :b :c :d :d :e :a :b :c :d])
+    (doall (distinct [:a :a :b :c :d :d :e :a :b :c :d]))
+    (set             [:a :a :b :c :d :d :e :a :b :c :d])))
 
 (defn distinct-by "Like `sort-by` for distinct. Based on clojure.core/distinct."
   [keyfn coll]
@@ -1176,11 +1175,7 @@
   (def f3 (memoize* 2 nil  (fn [& xs] (Thread/sleep 600) (rand))))
   (def f4 (memoize* 2 5000 (fn [& xs] (Thread/sleep 600) (rand))))
 
-  (time (dotimes [_ 10000] (f0))) ;  ~3ms
-  (time (dotimes [_ 10000] (f1))) ;  ~4ms
-  (time (dotimes [_ 10000] (f2))) ;  ~9ms
-  (time (dotimes [_ 10000] (f3))) ;  ~9ms
-  (time (dotimes [_ 10000] (f4))) ; ~11ms
+  (qb 10000 (f0) (f1) (f2) (f3) (f4)) ; [1.094 2.535 5.397 6.254 7.678]
 
   (f1)
   (f1 :mem/del)
@@ -1257,14 +1252,17 @@
   [& body] `(let [t0# (System/nanoTime)] ~@body (- (System/nanoTime) t0#)))
 
 (defmacro ^:also-cljs qbench
-  "Quick bench. Returns fastest of 3 sets of lap times, in msecs."
-  [nlaps & body]
-  `(let [times# (repeatedly 3
-                  (fn [] (time-ns (dotimes [_# ~nlaps] (do ~@body)))))
-         best-time-msecs# (/ (apply min times#) 1000000.0)]
-     best-time-msecs#))
+  "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
+  ([nlaps form]
+     `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# ~nlaps] (do ~form))))]
+        (round2 (/ (apply min times#) 1000000.0))))
+  ([nlaps form & more]
+     (mapv (fn [form] `(qbench ~nlaps ~form)) (cons form more))))
 
-(comment (qbench 10000 (doall (range 1000))))
+(defmacro ^:also-cljs qb [& args] `(qbench ~@args)) ; Alias
+
+(comment (qb 2     (Thread/sleep 100))
+         (qb 10000 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
 
 #+clj
 (defn bench*
