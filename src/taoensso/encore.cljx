@@ -1244,14 +1244,25 @@
 
 ;;;; Benchmarking
 
+(def nano-time
+  #+clj (System/nanoTime) ; Since Unix Epoch
+  #+cljs ; Since window context, etc., Ref. http://goo.gl/mWZWnR
+  (if-let [perf (aget js/window "performance")]
+    ;; Ref. http://goo.gl/fn84us
+    (if-let [f (or (aget perf "now")  (aget perf "mozNow") (aget perf "msNow")
+                   (aget perf "oNow") (aget perf "webkitNow"))]
+      (fn [] (long (* 1000 (.call f perf))))
+      (fn [] (* 1000 (now-udt))))
+    (fn [] (* 1000 (now-udt)))))
+
 (defmacro ^:also-cljs time-ms
   "Returns number of milliseconds it takes to execute body."
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
 
-(defmacro time-ns "Returns number of nanoseconds it takes to execute body."
-  [& body] `(let [t0# (System/nanoTime)] ~@body (- (System/nanoTime) t0#)))
+(defmacro ^:also-cljs time-ns "Returns number of nanoseconds it takes to execute body."
+  [& body] `(let [t0# (nano-time)] ~@body (- (nano-time) t0#)))
 
-(defmacro qbench
+(defmacro ^:also-cljs qbench
   "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
   ([nlaps form]
      `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# ~nlaps] (do ~form))))]
