@@ -1,5 +1,13 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.10.0 / 2014 Sep 30
+
+ * General housekeeping.
+ * **DEPRECATED**: `nnil-keys?` -> `keys-nnil?`, `set-exp-backoff-timeout!`, `repeatedly*`, `first-nth`.
+ * **NEW**: `zero-num?`, `pos-num?`, `nneg-num?`, `vec*`, `abs`, `qbench` now works in Cljs.
+ * **CHANGE**: `qbench` can now compare multiple forms.
+
+
 ## v1.9.4 / 2014 Sep 24
 
  * **NEW**: Make `set*` public.
