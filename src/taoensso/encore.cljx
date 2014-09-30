@@ -1251,7 +1251,7 @@
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
   [& body] `(let [t0# (System/nanoTime)] ~@body (- (System/nanoTime) t0#)))
 
-(defmacro ^:also-cljs qbench
+(defmacro qbench
   "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
   ([nlaps form]
      `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# ~nlaps] (do ~form))))]
@@ -1259,7 +1259,7 @@
   ([nlaps form & more]
      (mapv (fn [form] `(qbench ~nlaps ~form)) (cons form more))))
 
-(defmacro ^:also-cljs qb [& args] `(qbench ~@args)) ; Alias
+(defmacro qb [& args] `(qbench ~@args)) ; Alias
 
 (comment (qb 2     (Thread/sleep 100))
          (qb 10000 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
