@@ -20,12 +20,13 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :test {:dependencies [[expectations              "2.0.9"]
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha2"]]}
+   :test {:dependencies [[expectations              "2.0.12"]
                          [org.clojure/test.check    "0.5.9"]
                          ;; [com.cemerick/double-check "0.5.7"]
                          ]}
    :dev
-   [:1.6 :test
+   [:1.7 :test
     {:dependencies
      [[org.clojure/clojurescript "0.0-2261"]
       [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
@@ -71,8 +72,8 @@
                             #(.replaceFirst (str %) "(.cljs$|.clj$)" ".cljx")}}
 
   :aliases
-  {"test-all"   ["with-profile" "default:+1.5:+1.6" "expectations"]
-   ;; "test-all"   ["with-profile" "default:+1.6" "expectations"]
+  {"test-all"   ["with-profile" "default:+1.5:+1.6:+1.7" "expectations"]
+   ;; "test-all"   ["with-profile" "default:+1.6:+1.7" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "build-once" ["do" "cljx" "once," "cljsbuild" "once"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
