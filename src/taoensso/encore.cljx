@@ -138,11 +138,35 @@
 
 (comment (when-lets [a :a b nil] "foo"))
 
+;;;; Types
+
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
 ;; `keyword-identical?`. This util helps alleviate the pain of writing
 ;;  cross-platform code. Ref. http://goo.gl/be8CGP.
 #+clj  (def kw-identical? identical?)
 #+cljs (def kw-identical? keyword-identical?)
+
+(defn atom? [x]
+  #+clj  (instance? clojure.lang.Atom x)
+  #+cljs (instance? Atom              x))
+
+#+clj (defn throwable? [x] (instance? Throwable x))
+#+clj (defn exception? [x] (instance? Exception x))
+(defn error? [x]
+  #+clj  (exception? x)
+  #+cljs (or (ex-data x) (instance? js/Error x)))
+
+;; (defn- chan? [x]
+;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
+;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
+(defn zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
+(defn  pos-num? [x] (and (number?  x) (pos? x)))
+(defn nneg-num? [x] (and (number?  x) (not (neg? x))))
+(defn  pos-int? [x] (and (integer? x) (pos? x)))
+(defn nneg-int? [x] (and (integer? x) (not (neg? x))))
+
+(comment (nneg-int? 0))
 
 (def  nnil?   (complement nil?))
 (def  nblank? (complement str/blank?))
@@ -172,12 +196,7 @@
 
 (comment (nvec? 2 [:a :b]))
 
-(defn first-nth
-  ([coll]           (nth coll 0))
-  ([coll not-found] (nth coll 0 not-found)))
-
 #+clj (def format clojure.core/format) ; For easier encore/format portability
-
 #+cljs
 (do
   (defn- undefined->nil [x] (if (undefined? x) nil x))
@@ -258,20 +277,21 @@
 (comment (try-exdata (/ 5 0))
          (try-exdata (check nil (true? false))))
 
-;;; Useful for map assertions, etc. (does not check that input is a map)
-(defn set* [x] (if (set? x) x (set x)))
-(defn keys=  [m ks] (=             (set (keys m)) (set* ks)))
-(defn keys<= [m ks] (set/subset?   (set (keys m)) (set* ks)))
-(defn keys>= [m ks] (set/superset? (set (keys m)) (set* ks)))
-;;
-(defn  nnil-keys?  [m ks] (every? #(not (nil? (get m %))) ks))
+(defn vec* [x] (if (vector? x) x (vec x)))
+(defn set* [x] (if (set?    x) x (set x)))
+
+;;; Useful for map assertions, etc. (do *not* check that input is a map)
+(defn keys=      [m ks] (=             (set (keys m)) (set* ks)))
+(defn keys<=     [m ks] (set/subset?   (set (keys m)) (set* ks)))
+(defn keys>=     [m ks] (set/superset? (set (keys m)) (set* ks)))
+(defn keys-nnil? [m ks] (every? #(nnil? (get m %)) ks))
 
 (comment
   (keys=      {:a :A :b :B  :c :C}  #{:a :b})
   (keys<=     {:a :A :b :B  :c :C}  #{:a :b})
   (keys>=     {:a :A :b :B  :c :C}  #{:a :b})
-  (nnil-keys? {:a :A :b :B  :c nil} #{:a :b})
-  (nnil-keys? {:a :A :b nil :c nil} #{:a :b}))
+  (keys-nnil? {:a :A :b :B  :c nil} #{:a :b})
+  (keys-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
 ;;;; Coercions
 ;; `parse-x` => success, or nil
@@ -398,28 +418,10 @@
            (let [[x y] (ba-split (.getBytes "foobar") 5)]
              [(String. x) (String. y)])))
 
-;;;; Types
-
-#+clj (defn throwable? [x] (instance? Throwable x))
-#+clj (defn exception? [x] (instance? Exception x))
-(defn error? [x]
-  #+clj  (exception? x)
-  #+cljs (or (ex-data x) (instance? js/Error x)))
-
-;; (defn- chan? [x]
-;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
-
-
-;;; Often useful for assertions, etc.
-(defn pos-int?  [x] (and (integer? x) (pos? x)))
-(defn nneg-int? [x] (and (integer? x) (not (neg? x))))
-
-(comment (nneg-int? 0))
-
 ;;;; Math
 
 (defn pow [n exp] (Math/pow n exp))
+(defn abs [n exp] (if (neg? n) (- n) n)) ; #+clj (Math/abs n) reflects
 
 (defn round
   [n & [type nplaces]]
@@ -427,7 +429,7 @@
         n* (if-not modifier n (* n modifier))
         rounded
         (case (or type :round)
-          ;;; Note same API for both #+clj and #+cljs:
+          ;;; Note same API for both #+clj, #+cljs:
           :round (Math/round (double n*))        ; Round to nearest int or nplaces
           :floor (long (Math/floor (double n*))) ; Round down to -inf
           :ceil  (long (Math/ceil  (double n*))) ; Round up to +inf
@@ -448,10 +450,7 @@
 (defn exp-backoff "Returns binary exponential backoff value."
   [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
   (let [binary-exp (Math/pow 2 (dec nattempt))
-        time (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
-    ;; (cond-> time
-    ;;         min' (max min')
-    ;;         max' (min max'))
+        time       (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
     (long (let [time (if min' (max min' time) time)
                 time (if max' (min max' time) time)]
             time))))
@@ -543,16 +542,12 @@
 
 ;;;; Collections
 
-(defn atom? [x]
-  #+clj  (instance? clojure.lang.Atom x)
-  #+cljs (instance? Atom              x))
-
 (defrecord Swapped [new-val return-val])
 (defn      swapped [new-val return-val] (Swapped. new-val return-val))
 (defn-  as-swapped [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
                            [x x]))
 
-(comment ; TODO Debug
+(comment ; TODO Debug, Ref. http://dev.clojure.org/jira/browse/CLJ-979
   (defrecord Foo1 [x])
   (instance? Foo1 (Foo1.  "bar"))
   (instance? Foo1 (->Foo1 "bar"))
@@ -623,7 +618,7 @@
      (let [pairs (into [[ks f]] (partition 2 more))]
        (swap! atom_ (fn [old-val] (replace-in* :swap old-val pairs))))))
 
-(defn reset-in! "To `reset!` as `swap-in!` is to `swap!`."
+(defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`."
   ([atom_ ks new-val]
      (if (empty? ks)
        (reset! atom_ new-val)
@@ -713,7 +708,7 @@
                                                    (if vf (vf v v) v)))
                               (transient {}) m)))))
 
-(defn map-keys [f m] (map-kvs (fn [k _] (f k)) nil m))
+(defn map-keys [f m] (map-kvs     (fn [k _] (f k)) nil m))
 (defn map-vals [f m] (map-kvs nil (fn [_ v] (f v)) m))
 
 (defn filter-kvs [predk predv m]
@@ -889,7 +884,8 @@
   [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
-     (if (instance? clojure.lang.IEditableCollection coll#)
+     (if #+clj  (instance?   clojure.lang.IEditableCollection coll#)
+         #+cljs (implements? IEditableCollection              coll#)
        (loop [v# (transient coll#) idx# 0]
          (if (>= idx# n#)
            (persistent! v#)
@@ -900,10 +896,6 @@
          (if (>= idx# n#) v#
            (recur (conj v# ~@body)
                   (inc idx#)))))))
-
-(defmacro ^:also-cljs repeatedly*
-  "Like `repeatedly` but faster and returns a vector."
-  [n & body] `(repeatedly-into* [] ~n ~@body))
 
 ;;;; Strings
 
@@ -1112,14 +1104,14 @@
 
             (let [fresh?  (kw-identical? arg1 :mem/fresh)
                   args    (if fresh? argn args)
-                  instant (now-udt)]
-              @(first-nth
-                (swap-val! cache args
-                  (fn [?cv]
-                    (if (and ?cv (not fresh?)
-                             (let [[_dv udt] ?cv]
-                               (< (- instant udt) ttl-ms))) ?cv
-                      [(delay (apply f args)) instant]))))))))))
+                  instant (now-udt)
+                  [dv]    (swap-val! cache args
+                            (fn [?cv]
+                              (if (and ?cv (not fresh?)
+                                    (let [[_dv udt] ?cv]
+                                      (< (- instant udt) ttl-ms))) ?cv
+                                      [(delay (apply f args)) instant])))]
+              @dv))))))
 
   ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
     (let [state (atom {:tick 0})] ; {:tick _
@@ -1160,15 +1152,13 @@
                   args     (if fresh? argn args)
                   ?instant (when ttl-ms (now-udt))
                   tick'    (:tick @state) ; Accuracy/sync irrelevant
-                  dv
-                  (first-nth
-                   (swap-val! state args
-                     (fn [?cv]
-                       (if (and ?cv (not fresh?)
-                                (or (nil? ?instant)
-                                    (let [[_dv udt] ?cv]
-                                      (< (- ?instant udt) ttl-ms)))) ?cv
-                         [(delay (apply f args)) ?instant tick' 1]))))]
+                  [dv]     (swap-val! state args
+                             (fn [?cv]
+                               (if (and ?cv (not fresh?)
+                                     (or (nil? ?instant)
+                                       (let [[_dv udt] ?cv]
+                                         (< (- ?instant udt) ttl-ms)))) ?cv
+                                         [(delay (apply f args)) ?instant tick' 1])))]
 
               ;; We always adjust counters, even on reads:
               (swap! state
@@ -1333,7 +1323,7 @@
            (logging-level-sufficient? :invalid))
 
   (def ^:private lls? logging-level-sufficient?)
-  ;;; Note current lack of [?throwable fmt & xs] support:
+  ;;; Note current lack of macros, [?throwable fmt & xs] support:
   (defn tracef  [fmt & xs] (when (lls? :trace)  (apply logf fmt xs)))
   (defn debugf  [fmt & xs] (when (lls? :debug)  (apply logf fmt xs)))
   (defn infof   [fmt & xs] (when (lls? :info)   (apply logf fmt xs)))
@@ -1358,10 +1348,6 @@
          :hash     (.-hash     loc*) ; "#bang"
          }]
     loc))
-
-#+cljs
-(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
-  (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
 
 ;;;; Ajax
 
@@ -1477,7 +1463,7 @@
         xhr)
 
       (catch js/Error e
-        (logf "Ajax error: %s" e)
+        (errorf "`ajax-lite` error: %s" e)
         (.releaseObject @xhr-pool_ xhr)
         nil))
 
@@ -1531,3 +1517,15 @@
       :flash   flash}))
 
 (comment (redirect-resp :temp "/foo" "boo!"))
+
+;;;; DEPRECATED
+
+(def nnil-keys? keys-nnil?)
+(defn first-nth ([coll] (nth coll 0)) ([coll not-found] (nth coll 0 not-found)))
+
+;; Used by Carmine <= v2.7.0
+(defmacro ^:also-cljs repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+
+;; Used by Sente <= v1.1.0
+#+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
+         (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
