@@ -150,15 +150,32 @@
   #+clj  (instance? clojure.lang.Atom x)
   #+cljs (instance? Atom              x))
 
-#+clj (defn throwable? [x] (instance? Throwable x))
-#+clj (defn exception? [x] (instance? Exception x))
-(defn error? [x]
-  #+clj  (exception? x)
-  #+cljs (or (ex-data x) (instance? js/Error x)))
-
 ;; (defn- chan? [x]
 ;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
 ;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
+#+clj (defn throwable? [x] (instance? Throwable x))
+#+clj (defn exception? [x] (instance? Exception x))
+      (defn error?     [x] #+clj  (throwable? x)
+                           #+cljs (instance? js/Error x))
+(defn error-data [x]
+  "Returns data map iff `x` is an error of any type on platform."
+  (when-let [data-map (or (ex-data x) ; ExceptionInfo
+                          #+clj  (when (instance? Throwable x) {})
+                          #+cljs (when (instance? js/Error  x) {}))]
+    (merge data-map
+      #+clj  (let [^Throwable t x] ; (catch Throwable t <...>)
+               {:type*    (type        t)
+                :message* (.getMessage t)
+                :cause*   (.getCause   t)})
+      #+cljs (let [err x] ; (catch :default t <...)
+               {:type*    (type        err)
+                :message* (.-message   err)
+                :cause*   (.-cause     err)}))))
+
+(comment (error-data (Throwable. "foo"))
+         (error-data (Exception. "foo"))
+         (error-data (ex-info    "foo" {:bar :baz})))
 
 (defn zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
 (defn  pos-num? [x] (and (number?  x) (pos? x)))
