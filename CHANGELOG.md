@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.10.1 / 2014 Oct 1
+
+ * **NEW**: cross-platform `error-data` fn.
+
+
 ## v1.10.0 / 2014 Sep 30
 
  * General housekeeping.
