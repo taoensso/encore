@@ -438,7 +438,7 @@
 ;;;; Math
 
 (defn pow [n exp] (Math/pow n exp))
-(defn abs [n exp] (if (neg? n) (- n) n)) ; #+clj (Math/abs n) reflects
+(defn abs [n]     (if (neg? n) (- n) n)) ; #+clj (Math/abs n) reflects
 
 (defn round
   [n & [type nplaces]]
