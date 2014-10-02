@@ -215,8 +215,8 @@
 ;; (defn asserted*
 ;;   ([cond-or-pred x]
 ;;      (if (ifn? cond-or-pred)
-;;        (let [hpred cond-or-pred] (do (assert (hpred x)) x))
-;;        (let [hcond cond-or-pred] (do (assert  hcond)    x))))
+;;        (let [pred cond-or-pred] (do (assert (pred x)) x))
+;;        (let [cond cond-or-pred] (do (assert  cond)    x))))
 ;;   ([cond-or-pred x & more]
 ;;      (if (ifn? cond-or-pred)
 ;;        (mapv (partial asserted* cond-or-pred) (into [x] more))
@@ -231,32 +231,30 @@
 
 (defmacro ^:also-cljs asserted
   "General-purpose assertion util for use in bindings."
+  ;; ([x] `(asserted taoensso.encore/nnil? ~x)) ; Confusing multi-arg behaviour
   ([cond-or-pred x]
-     (if-not *assert*
-       x
+     (if-not *assert* x
        `(let [cop# ~cond-or-pred]
           (if (ifn? cop#)
             (let [x# ~x]
-              (if-not (cop# x#)
+              (if (cop# x#) x#
                 (taoensso.encore/throw-assertion-error
                   (str "Asserted (pred x) failed: `"
-                    (pr-str (list '~cond-or-pred '~x)) "`"))
-                x#))
-            (if-not cop#
+                    (pr-str (list '~cond-or-pred '~x)) "`"))))
+            (if cop# ~x
               (taoensso.encore/throw-assertion-error
-                (str "Asserted cond failed: `" (pr-str '~cond-or-pred) "`"))
-              ~x)))))
+                (str "Asserted cond failed: `" (pr-str '~cond-or-pred) "`")))))))
 
   ;; Allow [] destructuring:
   ([cond-or-pred x & more]
      (let [xs (into [x] more)]
-       (if-not *assert*
-         xs
+       (if-not *assert* xs
          `(if (ifn? ~cond-or-pred)
             ~(mapv (fn [x] `(asserted ~cond-or-pred ~x)) xs)
             (asserted ~cond-or-pred ~xs))))))
 
 (comment
+  (asserted "foo")
   (asserted string? (do (println "eval") "foo"))
   (asserted number? (do (println "eval") "foo"))
   (asserted true    (do (println "eval") "foo"))
