@@ -198,16 +198,6 @@
 (comment (nnil= nil nil)
          (nnil= :foo :foo :foo))
 
-(defn asserted
-  ([pred x] (assert (pred x)) x)
-  ;; Allow [] destructuring:
-  ([pred x & more] (mapv (partial asserted pred) (into [x] more))))
-
-(def have (partial asserted nnil?))
-
-(comment (let [[x y]   (asserted string? "a" "b")] [x y])
-         (let [[x y z] (have :x :y :z)] [x y z]))
-
 (defn nvec? "Is `x` a vector of size `n`?" [n x]
   (and (vector? x) (= (count x) n)))
 
@@ -221,6 +211,71 @@
     [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
 ;;;; Validation
+
+;; (defn asserted*
+;;   ([cond-or-pred x]
+;;      (if (ifn? cond-or-pred)
+;;        (let [hpred cond-or-pred] (do (assert (hpred x)) x))
+;;        (let [hcond cond-or-pred] (do (assert  hcond)    x))))
+;;   ([cond-or-pred x & more]
+;;      (if (ifn? cond-or-pred)
+;;        (mapv (partial asserted* cond-or-pred) (into [x] more))
+;;        (asserted* cond-or-pred (into [x] more)))))
+
+;; (comment (asserted* some? 1 2 nil))
+
+;; Helper since we can't use #+clj / #+cljs in macro
+(defn throw-assertion-error [msg]
+  #+clj  (throw (AssertionError. msg))
+  #+cljs (throw (js/Error.       msg)))
+
+(defmacro ^:also-cljs asserted
+  "General-purpose assertion util for use in bindings."
+  ([cond-or-pred x]
+     (if-not *assert*
+       x
+       `(let [cop# ~cond-or-pred]
+          (if (ifn? cop#)
+            (let [x# ~x]
+              (if-not (cop# x#)
+                (taoensso.encore/throw-assertion-error
+                  (str "Asserted (pred x) failed: `"
+                    (pr-str (list '~cond-or-pred '~x)) "`"))
+                x#))
+            (if-not cop#
+              (taoensso.encore/throw-assertion-error
+                (str "Asserted cond failed: `" (pr-str '~cond-or-pred) "`"))
+              ~x)))))
+
+  ;; Allow [] destructuring:
+  ([cond-or-pred x & more]
+     (let [xs (into [x] more)]
+       (if-not *assert*
+         xs
+         `(if (ifn? ~cond-or-pred)
+            ~(mapv (fn [x] `(asserted ~cond-or-pred ~x)) xs)
+            (asserted ~cond-or-pred ~xs))))))
+
+(comment
+  (asserted string? (do (println "eval") "foo"))
+  (asserted number? (do (println "eval") "foo"))
+  (asserted true    (do (println "eval") "foo"))
+  (asserted false   (do (println "eval") "foo"))
+  ;;
+  (asserted string? (do (println "eval1") "foo")
+                    (do (println "eval2") "bar"))
+  (asserted number? (do (println "eval1") "foo")
+                    (do (println "eval2") "bar"))
+  (asserted true    (do (println "eval1") "foo")
+                    (do (println "eval2") "bar"))
+  (asserted false   (do (println "eval1") "foo")
+                    (do (println "eval2") "bar"))
+  ;;
+  (let [[x y] (asserted string?     "a" "b")] [x y])
+  (let [[x y] (asserted (number? 5) "a" "b")] [x y])
+  (let [[x y] (asserted some?       "a" nil)] [x y]))
+
+(defmacro ^:also-cljs have [& args] `(asserted ~@args)) ; Alias, experimental
 
 (defmacro ^:also-cljs check-some
   "Low-level, general-purpose validator.
