@@ -239,11 +239,14 @@
             (let [x# ~x]
               (if (cop# x#) x#
                 (taoensso.encore/throw-assertion-error
-                  (str "Asserted (pred x) failed: `"
-                    (pr-str (list '~cond-or-pred '~x)) "`"))))
+                  (format "Asserted fail [pred-form,val]: [%s,%s]"
+                    (pr-str (list '~cond-or-pred '~x))
+                    (pr-str ~x)))))
             (if cop# ~x
               (taoensso.encore/throw-assertion-error
-                (str "Asserted cond failed: `" (pr-str '~cond-or-pred) "`")))))))
+                (format "Asserted fail [cond-form,val]: [%s,%s]"
+                  (pr-str '~cond-or-pred)
+                  (pr-str ~cond-or-pred))))))))
 
   ;; Allow [] destructuring:
   ([cond-or-pred x & more]
