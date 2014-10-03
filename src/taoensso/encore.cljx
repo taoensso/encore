@@ -530,9 +530,10 @@
 
 ;;;; Date & time
 
+(defn  now-dt [] #+clj (java.util.Date.) #+cljs (js/Date.))
 (defn now-udt []
   #+clj  (System/currentTimeMillis)
-  #+cljs (.valueOf (js/Date.)))
+  #+cljs (.getTime (js/Date.)))
 
 (defn now-udt-mock-fn "Useful for testing."
   [& [mock-udts]]
