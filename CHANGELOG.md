@@ -1,5 +1,11 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.11.1 / 2014 Oct 4
+
+ * **NEW**: Add `now-dt`.
+ * **FIX**: `bench` regression.
+
+
 ## v1.11.0 / 2014 Oct 2
 
  * **BREAKING**: `asserted` is now a macro with `have` as alias.
