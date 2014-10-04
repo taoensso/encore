@@ -1319,7 +1319,7 @@
 ;;;; Benchmarking
 
 (def nano-time
-  #+clj (System/nanoTime) ; Since Unix Epoch
+  #+clj (fn [] (System/nanoTime)) ; Since Unix Epoch
   #+cljs ; Since window context, etc., Ref. http://goo.gl/mWZWnR
   (if-let [perf (aget js/window "performance")]
     ;; Ref. http://goo.gl/fn84us
