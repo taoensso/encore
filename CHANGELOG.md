@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.11.2 / 2014 Oct 5
+
+ * **NEW**: Add `have-in` macro.
+
+
 ## v1.11.1 / 2014 Oct 4
 
  * **NEW**: Add `now-dt`.
