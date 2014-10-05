@@ -230,7 +230,7 @@
   #+cljs (throw (js/Error.       msg)))
 
 (defmacro ^:also-cljs have ; asserted
-  "General-purpose assertion util for use in bindings."
+  "Experimental general-purpose assertion util for use in bindings."
   ;; ([x] `(have taoensso.encore/nnil? ~x)) ; Confusing multi-arg behaviour
   ([cond-or-pred x]
      (if-not *assert* x
@@ -256,6 +256,14 @@
             ~(mapv (fn [x] `(have ~cond-or-pred ~x)) xs)
             (have ~cond-or-pred ~xs))))))
 
+(defmacro ^:also-cljs have-in "Experimental."
+  [cond-or-pred xs]
+  (if-not *assert* xs
+    (let [g (gensym "have-in__")]
+      `(if (ifn? ~cond-or-pred)
+         (mapv (fn [~g] (have ~cond-or-pred ~g)) ~xs)
+         (have ~cond-or-pred ~xs)))))
+
 (comment
   (have "foo")
   (have string? (do (println "eval") "foo"))
@@ -274,7 +282,12 @@
   ;;
   (let [[x y] (have string?     "a" "b")] [x y])
   (let [[x y] (have (number? 5) "a" "b")] [x y])
-  (let [[x y] (have some?       "a" nil)] [x y]))
+  (let [[x y] (have some?       "a" nil)] [x y])
+  ;;
+  (have-in string? ["a" "b"])
+  (have-in string? (if true ["a" "b"] [1 2]))
+  (have-in string? (mapv str (range 10)))
+  (have-in string? [1 2]))
 
 (defmacro ^:also-cljs check-some
   "Low-level, general-purpose validator.
