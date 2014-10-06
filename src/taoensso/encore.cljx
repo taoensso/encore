@@ -230,7 +230,9 @@
   #+cljs (throw (js/Error.       msg)))
 
 (defmacro ^:also-cljs have ; asserted
-  "Experimental general-purpose assertion util for use in bindings."
+  "Experimental general-purpose assertion util.
+  Use instead of `assert`, use in bindings.
+  For pre/post conds, use `check` instead."
   ;; ([x] `(have taoensso.encore/nnil? ~x)) ; Confusing multi-arg behaviour
   ([cond-or-pred x]
      (if-not *assert* x
@@ -257,12 +259,13 @@
             (have ~cond-or-pred ~xs))))))
 
 (defmacro ^:also-cljs have-in "Experimental."
-  [cond-or-pred xs]
-  (if-not *assert* xs
-    (let [g (gensym "have-in__")]
-      `(if (ifn? ~cond-or-pred)
-         (mapv (fn [~g] (have ~cond-or-pred ~g)) ~xs)
-         (have ~cond-or-pred ~xs)))))
+  ;; ([xs] `(have-in taoenso.encore/nnil? ~xs)) ; Maybe...
+  ([cond-or-pred xs]
+     (if-not *assert* xs
+       (let [g (gensym "have-in__")]
+         `(if (ifn? ~cond-or-pred)
+            (mapv (fn [~g] (have ~cond-or-pred ~g)) ~xs)
+            (have ~cond-or-pred ~xs))))))
 
 (comment
   (have "foo")
@@ -272,13 +275,13 @@
   (have false   (do (println "eval") "foo"))
   ;;
   (have string? (do (println "eval1") "foo")
-                    (do (println "eval2") "bar"))
+                (do (println "eval2") "bar"))
   (have number? (do (println "eval1") "foo")
-                    (do (println "eval2") "bar"))
+                (do (println "eval2") "bar"))
   (have true    (do (println "eval1") "foo")
-                    (do (println "eval2") "bar"))
+                (do (println "eval2") "bar"))
   (have false   (do (println "eval1") "foo")
-                    (do (println "eval2") "bar"))
+                (do (println "eval2") "bar"))
   ;;
   (let [[x y] (have string?     "a" "b")] [x y])
   (let [[x y] (have (number? 5) "a" "b")] [x y])
@@ -300,10 +303,10 @@
              [nil test])]
        (if-cljs
          `(let [test# (try ~test (catch :default _# false))]
-            (when-not test# (or ~error-id '~test :falsey)))
+            (when-not test# (or ~error-id '~test :check/falsey)))
 
          `(let [test# (try ~test (catch Exception _# false))]
-            (when-not test# (or ~error-id '~test :falsey)))))))
+            (when-not test# (or ~error-id '~test :check/falsey)))))))
 
 (defmacro ^:also-cljs check-all
   "Low-level, general-purpose validator.
@@ -335,11 +338,11 @@
 
 (comment
   (check-some
-   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
   (check-all
-   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
   (check
-   true (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
+   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
   (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
                  :post [(check x (integer? x))]}
     x)
@@ -1408,10 +1411,8 @@
           valid-level?   (set ordered-levels)]
       (fn [level]
         (let [current-level @logging-level]
-          (assert (valid-level? current-level))
-          (assert (valid-level? level))
-          (>= (scored-levels level)
-              (scored-levels current-level))))))
+          (>= (scored-levels (encore-macros/have valid-level? level))
+              (scored-levels (encore-macros/have valid-level? current-level)))))))
 
   (comment (logging-level-sufficient? :debug)
            (logging-level-sufficient? :invalid))
