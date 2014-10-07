@@ -1516,39 +1516,47 @@
                     ?http-status  (when (not= status -1) status)
                     ?content-type (when ?http-status
                                     (.getResponseHeader xhr "Content-Type"))
+                    ?content
+                    (when ?http-status
+                      (let [resp-type
+                            (if-not (= resp-type :auto) resp-type
+                              (condp #(str-contains? %2 %1)
+                                  (str ?content-type) ; Prevent nil
+                                "/edn"  :edn
+                                "/json" :json
+                                "/xml"  :xml
+                                "/html" :text ; :xml only for text/xml!
+                                :text))]
+                        (try
+                          (case resp-type
+                            :text (.getResponseText xhr)
+                            :json (.getResponseJson xhr)
+                            :xml  (.getResponseXml  xhr)
+                            :edn  (edn/read-string (.getResponseText xhr)))
+                          (catch :default e
+                            ;; Undocumented, subject to change:
+                            {:ajax/bad-response-type resp-type
+                             :ajax/resp-as-text (.getResponseText xhr)}))))
+
                     cb-arg
                     {;;; Raw stuff
                      :raw-resp resp
                      :xhr      xhr ; = (.-target resp)
                      ;;;
                      :?content-type (when ?http-status ?content-type)
-                     :?content
-                     (when ?http-status
-                       (let [resp-type
-                             (if-not (= resp-type :auto) resp-type
-                               (condp #(str-contains? %2 %1)
-                                   (str ?content-type) ; Prevent nil
-                                 "/edn"  :edn
-                                 "/json" :json
-                                 "/xml"  :xml
-                                 "/html" :text ; :xml only for text/xml!
-                                 :text))]
-                         (case resp-type
-                           :text (.getResponseText xhr)
-                           :json (.getResponseJson xhr)
-                           :xml  (.getResponseXml  xhr)
-                           :edn  (edn/read-string (.getResponseText xhr)))))
-
-                     :?status ?http-status
+                     :?content ?content
+                     :?status  ?http-status
                      :?error
-                     (if ?http-status
-                       (when-not (<= 200 ?http-status 299) ?http-status)
-                       (get {;; goog.net.ErrorCode/NO_ERROR nil
-                             goog.net.ErrorCode/EXCEPTION  :exception
-                             goog.net.ErrorCode/HTTP_ERROR :http-error
-                             goog.net.ErrorCode/ABORT      :abort
-                             goog.net.ErrorCode/TIMEOUT    :timeout}
-                         (.getLastErrorCode xhr) :unknown))}]
+                     (or
+                       (if ?http-status
+                         (when-not (<= 200 ?http-status 299) ?http-status)
+                         (get { ;; goog.net.ErrorCode/NO_ERROR nil
+                               goog.net.ErrorCode/EXCEPTION  :exception
+                               goog.net.ErrorCode/HTTP_ERROR :http-error
+                               goog.net.ErrorCode/ABORT      :abort
+                               goog.net.ErrorCode/TIMEOUT    :timeout}
+                           (.getLastErrorCode xhr) :unknown))
+                       (when (nil? ?content) :no-content))}]
                 (callback cb-arg))))
 
           (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
