@@ -1,5 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.11.3 / 2014 Oct 7
+
+ * **CHANGE**: Improve `ajax-lite` error handling.
+
+
 ## v1.11.2 / 2014 Oct 5
 
  * **NEW**: Add `have-in` macro.
