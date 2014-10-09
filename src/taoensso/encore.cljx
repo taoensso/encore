@@ -780,7 +780,7 @@
     (mapply (fn [x & {:keys [y z]}] (str x y z)) 1 {:y 2 :z 3})
       where fn will receive args as: `(1 :y 2 :z 3)`."
   [f & args]
-  (apply f (apply concat (butlast args) (last args))))
+  (apply f (concat (butlast args) (seq-kvs (last args)))))
 
 (defn- clj1098
   "Workaround for Clojure versions [1.4, 1.5) that blow up on `reduce-kv`s
