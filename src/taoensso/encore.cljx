@@ -177,6 +177,22 @@
          (error-data (Exception. "foo"))
          (error-data (ex-info    "foo" {:bar :baz})))
 
+(defmacro ^:also-cljs catch-errors
+  "Experimental. Returns [<?result> <?error>]."
+  [& body]
+  (if-cljs
+    `(try [(do ~@body)] (catch :default  e# [nil e#]))
+    `(try [(do ~@body)] (catch Throwable t# [nil t#]))))
+
+(comment (catch-errors (zero? "a")))
+
+(defmacro caught-error-data "Handy for error-throwing unit tests."
+  [& body]
+  `(let [[result# err#] (catch-errors ~@body)]
+     (when err# (error-data err#))))
+
+(comment (caught-error-data (/ 5 0)))
+
 (defn zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
 (defn  pos-num? [x] (and (number?  x) (pos? x)))
 (defn nneg-num? [x] (and (number?  x) (not (neg? x))))
@@ -210,159 +226,142 @@
   (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
     [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
-;;;; Validation
+;;;; Validation ; Experimental!!
+;; * `have?`   - pred/cond form assertion/s; on success returns true.
+;; * `have`    - pred/cond form assertion/s; on success returns input/s.
+;; * `have-in` - pred/cond coll assertion/s; on success returns input/s.
 
-;; (defn have*
-;;   ([cond-or-pred x]
-;;      (if (ifn? cond-or-pred)
-;;        (let [pred cond-or-pred] (do (assert (pred x)) x))
-;;        (let [cond cond-or-pred] (do (assert  cond)    x))))
-;;   ([cond-or-pred x & more]
-;;      (if (ifn? cond-or-pred)
-;;        (mapv (partial have* cond-or-pred) (into [x] more))
-;;        (have* cond-or-pred (into [x] more)))))
+(defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
+(defn hthrow "Implementation detail." [type x y]
+  (let [pattern (case type
+                  :cond "Assert failed [cond-form,val]: [%s,%s]"
+                  :pred "Assert failed [pred-form,val]: [%s,%s]")]
+    (throw (assertion-error (format pattern (pr-str x) (pr-str y))))))
 
-;; (comment (have* some? 1 2 nil))
+(defmacro ^:also-cljs have?
+  "Experimental. Like `assert` but:
+  * Can take a pred with x/s.
+  * Returns true on success for convenient use in pre/post conds.
+  * Traps errors.
+  * Provides better messages on failure!"
+  ([cond]
+     (if-not *assert* true
+       `(let [[cond# err#] (catch-errors ~cond)]
+          (if cond# true
+            (hthrow :cond '~cond (or err# cond#))))))
+  ([pred x]
+     (if-not *assert* true
+       `(let [pred#           ~pred
+              [x#     x-err#] (catch-errors ~x)
+              [pass?# p-err#] (if x-err# [false nil] (catch-errors (pred# x#)))]
+          (if pass?# true
+            (hthrow :pred (list '~pred '~x) (or x-err# #_p-err x#))))))
+  ([pred x & more]
+     (let [xs (into [x] more)]
+       (if-not *assert* true ; Truthy when nothing throws:
+         (mapv (fn [x] `(have? ~pred ~x)) xs)))))
 
-;; Helper since we can't use #+clj / #+cljs in macro
-(defn throw-assertion-error [msg]
-  #+clj  (throw (AssertionError. msg))
-  #+cljs (throw (js/Error.       msg)))
+(comment
+  (have? (string? "foo"))
+  (have? string? 5)
+  (macroexpand '(have? integer? 0 0 0 "foo"))
+  (have? zero? 0 0 0 "foo"))
 
-(defmacro ^:also-cljs have ; asserted
-  "Experimental general-purpose assertion util.
-  Use instead of `assert`, use in bindings.
-  For pre/post conds, use `check` instead."
+(defmacro ^:also-cljs have
+  "Experimental. Like `have?` but returns input/s on success for use in bindings."
   ;; ([x] `(have taoensso.encore/nnil? ~x)) ; Confusing multi-arg behaviour
   ([cond-or-pred x]
      (if-not *assert* x
-       `(let [cop# ~cond-or-pred]
+       `(let [[cop# c-err#] (catch-errors ~cond-or-pred)]
           (if (ifn? cop#)
-            (let [x# ~x]
-              (if (cop# x#) x#
-                (taoensso.encore/throw-assertion-error
-                  (format "Assert failed [pred-form,val]: [%s,%s]"
-                    (pr-str (list '~cond-or-pred '~x))
-                    (pr-str ~x)))))
+            (let [[x#     x-err#] (catch-errors ~x)
+                  [pass?# p-err#] (if x-err# [false nil] (catch-errors (cop# x#)))]
+              (if pass?# x#
+                (hthrow :pred (list '~cond-or-pred '~x) (or x-err# #_p-err x#))))
             (if cop# ~x
-              (taoensso.encore/throw-assertion-error
-                (format "Assert failed [cond-form,val]: [%s,%s]"
-                  (pr-str '~cond-or-pred)
-                  (pr-str ~cond-or-pred))))))))
+              (hthrow :cond '~cond-or-pred (or c-err# cop#)))))))
 
   ;; Allow [] destructuring:
   ([cond-or-pred x & more]
      (let [xs (into [x] more)]
        (if-not *assert* xs
-         `(if (ifn? ~cond-or-pred)
+         `(if (ifn? (first (catch-errors ~cond-or-pred)))
             ~(mapv (fn [x] `(have ~cond-or-pred ~x)) xs)
             (have ~cond-or-pred ~xs))))))
 
-(defmacro ^:also-cljs have-in "Experimental."
+(defmacro ^:also-cljs have-in
+  "Experimental. Like `have` but takes an evaluated, single-form collection arg."
   ;; ([xs] `(have-in taoenso.encore/nnil? ~xs)) ; Maybe...
   ([cond-or-pred xs]
      (if-not *assert* xs
-       (let [g (gensym "have-in__")]
-         `(if (ifn? ~cond-or-pred)
+       (let [g (gensym "have-in__")] ; We necessarily lose exact form
+         `(if (ifn? (first (catch-errors ~cond-or-pred)))
             (mapv (fn [~g] (have ~cond-or-pred ~g)) ~xs)
             (have ~cond-or-pred ~xs))))))
 
 (comment
-  (have "foo")
+  ;; (have "foo")
   (have string? (do (println "eval") "foo"))
   (have number? (do (println "eval") "foo"))
-  (have true    (do (println "eval") "foo"))
-  (have false   (do (println "eval") "foo"))
+  (have (true? true)  (do (println "eval") "foo"))
+  (have (true? false) (do (println "eval") "foo"))
   ;;
   (have string? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
   (have number? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
-  (have true    (do (println "eval1") "foo")
-                (do (println "eval2") "bar"))
-  (have false   (do (println "eval1") "foo")
-                (do (println "eval2") "bar"))
+  (have (true? true)  (do (println "eval1") "foo")
+                      (do (println "eval2") "bar"))
+  (have (true? false) (do (println "eval1") "foo")
+                      (do (println "eval2") "bar"))
   ;;
-  (let [[x y] (have string?     "a" "b")] [x y])
-  (let [[x y] (have (number? 5) "a" "b")] [x y])
-  (let [[x y] (have some?       "a" nil)] [x y])
+  (let [[x y]  (have string?     "a" "b")] [x y])
+  (let [[x y]  (have (number? 5) "a" "b")] [x y])
+  (let [[x y]  (have some?       "a" nil)] [x y])
+  (let [x "5"] (have number? x))
   ;;
   (have-in string? ["a" "b"])
   (have-in string? (if true ["a" "b"] [1 2]))
   (have-in string? (mapv str (range 10)))
-  (have-in string? [1 2]))
+  (have-in string? [1 2])
+  ;;
+  (defn foo [x] {:pre [(have integer? x)]} (* x x))
+  (foo "foo")
+
+  ;;; Exception trapping
+  (have zero?     "a")
+  (have zero? 0 0 "a")
+  (have (zero? "a") "b")
+  (have (zero? "a") "b" "c")
+  (have-in zero? [0 0 "a" "b"])
+  (have-in (zero? "a") ["b" "c"])
+
+  ;;; Runtime perf
+  (qb 10000
+    (have? (nnil? "a"))
+    (have nnil? "a")
+    (have nnil? "a" "b" "c")
+    ["a" "b" "c"]))
 
 (defmacro ^:also-cljs check-some
-  "Low-level, general-purpose validator.
-  Returns first logical false/Ex expression, or nil."
+  "Experimental. Returns first logical false/throwing expression (id/form), or nil."
   ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
   ([test]
-     (let [[error-id test]
-           (if (vector? test) ; Id'd test
-             (do (assert (= (count test) 2)) test)
-             [nil test])]
-       (if-cljs
-         `(let [test# (try ~test (catch :default _# false))]
-            (when-not test# (or ~error-id '~test :check/falsey)))
-
-         `(let [test# (try ~test (catch Exception _# false))]
-            (when-not test# (or ~error-id '~test :check/falsey)))))))
+     (let [[error-id test] (if (vector? test) test [nil test])]
+       `(let [[test# err#] (catch-errors ~test)]
+          (when-not test# (or ~error-id '~test :check/falsey))))))
 
 (defmacro ^:also-cljs check-all
-  "Low-level, general-purpose validator.
-  Returns all logical false/Ex expressions, or nil."
+  "Experimental. Returns all logical false/throwing expressions (ids/forms), or nil."
   ([test] `(check-some ~test))
   ([test & more]
-     `(let [errors# (->> (list ~@(map (fn [test] `(check-some ~test))
-                                      (cons test more)))
-                         (filter identity))]
+     `(let [errors# (filter identity
+                      (list ~@(map (fn [test] `(check-some ~test))
+                                (cons test more))))]
         (when-not (empty? errors#) errors#))))
 
-(defmacro ^:also-cljs check
-  "General-purpose validator useable in or out of pre/post conds.
-  Throws a detailed, specific exception on first logical false/Ex form.
-  Arbitrary data may be attached to exceptions (usu. the data being checked)."
-  [data & tests]
-  `(if-let [error# (check-some ~@tests)]
-     (let [data# ~data]
-       ;; Pre/post failures don't incl. useful info so we throw our own ex (an
-       ;; ex-info for portability):
-       (throw (ex-info (format "`check` failure: %s\n%s data:\n%s"
-                               (str error#)
-                               (str (or (type data#) "nil"))
-                               (str data#))
-                       {:error error#
-                        :data  data#})))
-     ;; For convenient use in pre/post conds:
-     true))
-
-(comment
-  (check-some
-   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
-  (check-all
-   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
-  (check
-   :data (str/blank? 55) false [:bad-type (string? 55)] nil [:blank (str/blank? 55)])
-  (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
-                 :post [(check x (integer? x))]}
-    x)
-  (foo 5)
-  (foo nil))
-
-(defmacro try-exdata "Useful for `check`-based unit tests, etc."
-  [& body]
-  (if-cljs
-    `(try (do ~@body)
-          (catch :default e#
-            (if-let [data# (ex-data e#)]
-              data# (throw e#))))
-    `(try (do ~@body)
-          (catch Exception e#
-            (if-let [data# (ex-data e#)]
-              data# (throw e#))))))
-
-(comment (try-exdata (/ 5 0))
-         (try-exdata (check nil (true? false))))
+(comment (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
+         (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
@@ -1381,7 +1380,7 @@
                     (map deref)
                     (dorun)))))]
       (if as-ns? nanosecs (Math/round (/ nanosecs 1000000.0))))
-    (catch Exception e (format "DNF: %s" (.getMessage e)))))
+    (catch Throwable t (format "DNF: %s" (.getMessage t)))))
 
 (defmacro bench [nlaps bench*-opts & body]
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
@@ -1634,3 +1633,38 @@
          (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
 
 (defmacro asserted [& args] `(have ~@args))
+
+(defmacro ^:also-cljs check "DEPRECATED: prefer composed `have?`s."
+  [data & tests]
+  (if-not *assert* true
+    `(if-let [error# (check-some ~@tests)]
+       (let [data# ~data]
+         (throw (ex-info (format "Check failed: %s\n%s data:\n%s"
+                           (str error#)
+                           (str (or (type data#) "nil"))
+                           (str data#))
+                  {:error error#
+                   :data  data#})))
+       ;; For use in pre/post conds:
+       true)))
+
+(comment
+  (check :data false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
+  (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
+                 :post [(check x (integer? x))]} x)
+  (foo 5)
+  (foo nil))
+
+(defmacro try-exdata "DEPRECATED." [& body]
+  (if-cljs
+    `(try (do ~@body)
+          (catch :default e#
+            (if-let [data# (ex-data e#)]
+              data# (throw e#))))
+    `(try (do ~@body)
+          (catch Exception e#
+            (if-let [data# (ex-data e#)]
+              data# (throw e#))))))
+
+(comment (try-exdata (/ 5 0))
+         (try-exdata (check nil (true? false))))
