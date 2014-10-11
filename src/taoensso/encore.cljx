@@ -1569,49 +1569,9 @@
 
 ;;;; DEPRECATED
 
-(def nnil-keys? keys-nnil?)
-(defn first-nth ([coll] (nth coll 0)) ([coll not-found] (nth coll 0 not-found)))
-
 ;; Used by Carmine <= v2.7.0
 (defmacro ^:also-cljs repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
 
 ;; Used by Sente <= v1.1.0
 #+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
          (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
-
-(defmacro asserted [& args] `(have ~@args))
-
-(defmacro ^:also-cljs check "DEPRECATED: prefer composed `have?`s."
-  [data & tests]
-  (if-not *assert* true
-    `(if-let [error# (check-some ~@tests)]
-       (let [data# ~data]
-         (throw (ex-info (format "Check failed: %s\n%s data:\n%s"
-                           (str error#)
-                           (str (or (type data#) "nil"))
-                           (str data#))
-                  {:error error#
-                   :data  data#})))
-       ;; For use in pre/post conds:
-       true)))
-
-(comment
-  (check :data false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
-  (defn foo [x] {:pre  [(check x (or (nil? x) (integer? x)))]
-                 :post [(check x (integer? x))]} x)
-  (foo 5)
-  (foo nil))
-
-(defmacro try-exdata "DEPRECATED." [& body]
-  (if-cljs
-    `(try (do ~@body)
-          (catch :default e#
-            (if-let [data# (ex-data e#)]
-              data# (throw e#))))
-    `(try (do ~@body)
-          (catch Exception e#
-            (if-let [data# (ex-data e#)]
-              data# (throw e#))))))
-
-(comment (try-exdata (/ 5 0))
-         (try-exdata (check nil (true? false))))
