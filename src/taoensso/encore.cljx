@@ -227,121 +227,68 @@
     [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
 ;;;; Validation ; Experimental!!
-;; * `have?`   - pred/cond form assertion/s; on success returns true.
-;; * `have`    - pred/cond form assertion/s; on success returns input/s.
-;; * `have-in` - pred/cond coll assertion/s; on success returns input/s.
+;; * `have?`   - pred form assertion/s; on success returns true.
+;; * `have`    - pred form assertion/s; on success returns input/s.
+;; * `have-in` - pred coll assertion/s; on success returns input/s.
 
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [type x y]
-  (let [pattern (case type
-                  :cond "Assert failed [cond-form,val]: [%s,%s]"
-                  :pred "Assert failed [pred-form,val]: [%s,%s]")]
-    (throw (assertion-error (format pattern (pr-str x) (pr-str y))))))
+(defn hthrow "Implementation detail." [form val]
+  (let [pattern "Assert failed [pred-form,val]: [%s,%s]"]
+    (throw (assertion-error (format pattern (pr-str form) (pr-str val))))))
+
+(defmacro ^:also-cljs asserted* "Implementation detail."
+  ([truthy? x] `(asserted* ~truthy? nnil? ~x))
+  ([truthy? pred x]
+     (if-not *assert* (or truthy? x)
+       `(let [[[x# pass?#] err#]
+              (catch-errors
+                (let [pred# ~pred
+                      x#    ~x]
+                  [x# (pred# x#)]))]
+          (if pass?# (or ~truthy? x#)
+            (hthrow (list '~pred '~x) (or x# err#))))))
+  ([truthy? pred x & more]
+     (let [xs (into [x] more)]
+       (if-not *assert* (or truthy? xs)
+         ;; Truthy when nothing throws + allows [] destructuring:
+         (mapv (fn [x] `(asserted* ~truthy? ~pred ~x)) xs)))))
 
 (defmacro ^:also-cljs have?
   "Experimental. Like `assert` but:
-  * Can take a pred with x/s.
-  * Returns true on success for convenient use in pre/post conds.
-  * Traps errors.
-  * Provides better messages on failure!"
-  ([cond]
-     (if-not *assert* true
-       `(let [[cond# err#] (catch-errors ~cond)]
-          (if cond# true
-            (hthrow :cond '~cond (or err# cond#))))))
-  ([pred x]
-     (if-not *assert* true
-       `(let [pred#           ~pred
-              [x#     x-err#] (catch-errors ~x)
-              [pass?# p-err#] (if x-err# [false nil] (catch-errors (pred# x#)))]
-          (if pass?# true
-            (hthrow :pred (list '~pred '~x) (or x-err# #_p-err x#))))))
-  ([pred x & more]
-     (let [xs (into [x] more)]
-       (if-not *assert* true ; Truthy when nothing throws:
-         (mapv (fn [x] `(have? ~pred ~x)) xs)))))
-
-(comment
-  (have? (string? "foo"))
-  (have? string? 5)
-  (macroexpand '(have? integer? 0 0 0 "foo"))
-  (have? zero? 0 0 0 "foo"))
+    * Takes a pred and x/s.
+    * Returns true on success for convenient use in pre/post conds.
+    * Traps errors.
+    * Provides better messages on failure!"
+  [& args] `(asserted* (boolean :truthy) ~@args))
 
 (defmacro ^:also-cljs have
   "Experimental. Like `have?` but returns input/s on success for use in bindings."
-  ;; ([x] `(have taoensso.encore/nnil? ~x)) ; Confusing multi-arg behaviour
-  ([cond-or-pred x]
-     (if-not *assert* x
-       `(let [[cop# c-err#] (catch-errors ~cond-or-pred)]
-          (if (ifn? cop#)
-            (let [[x#     x-err#] (catch-errors ~x)
-                  [pass?# p-err#] (if x-err# [false nil] (catch-errors (cop# x#)))]
-              (if pass?# x#
-                (hthrow :pred (list '~cond-or-pred '~x) (or x-err# #_p-err x#))))
-            (if cop# ~x
-              (hthrow :cond '~cond-or-pred (or c-err# cop#)))))))
-
-  ;; Allow [] destructuring:
-  ([cond-or-pred x & more]
-     (let [xs (into [x] more)]
-       (if-not *assert* xs
-         `(if (ifn? (first (catch-errors ~cond-or-pred)))
-            ~(mapv (fn [x] `(have ~cond-or-pred ~x)) xs)
-            (have ~cond-or-pred ~xs))))))
+  [& args] `(asserted* (not :truthy) ~@args))
 
 (defmacro ^:also-cljs have-in
   "Experimental. Like `have` but takes an evaluated, single-form collection arg."
-  ;; ([xs] `(have-in taoenso.encore/nnil? ~xs)) ; Maybe...
-  ([cond-or-pred xs]
+  ([xs] `(have-in nnil? ~xs))
+  ([pred xs]
      (if-not *assert* xs
-       (let [g (gensym "have-in__")] ; We necessarily lose exact form
-         `(if (ifn? (first (catch-errors ~cond-or-pred)))
-            (mapv (fn [~g] (have ~cond-or-pred ~g)) ~xs)
-            (have ~cond-or-pred ~xs))))))
+       (let [g (gensym "have-in__")] ; Will (necessarily) lose exact form
+         `(mapv (fn [~g] (have ~pred ~g)) ~xs)))))
 
 (comment
-  ;; (have "foo")
-  (have string? (do (println "eval") "foo"))
-  (have number? (do (println "eval") "foo"))
-  (have (true? true)  (do (println "eval") "foo"))
-  (have (true? false) (do (println "eval") "foo"))
-  ;;
+  (let [x 5]      (have integer? x))
+  (let [x 5]      (have string?  x))
+  (let [x 5 y  6] (have odd?     x x x y x))
+  (let [x 0 y :a] (have zero?    x x x y x))
   (have string? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
   (have number? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
-  (have (true? true)  (do (println "eval1") "foo")
-                      (do (println "eval2") "bar"))
-  (have (true? false) (do (println "eval1") "foo")
-                      (do (println "eval2") "bar"))
-  ;;
-  (let [[x y]  (have string?     "a" "b")] [x y])
-  (let [[x y]  (have (number? 5) "a" "b")] [x y])
-  (let [[x y]  (have some?       "a" nil)] [x y])
-  (let [x "5"] (have number? x))
-  ;;
   (have-in string? ["a" "b"])
   (have-in string? (if true ["a" "b"] [1 2]))
   (have-in string? (mapv str (range 10)))
   (have-in string? [1 2])
-  ;;
-  (defn foo [x] {:pre [(have integer? x)]} (* x x))
-  (foo "foo")
-
-  ;;; Exception trapping
-  (have zero?     "a")
-  (have zero? 0 0 "a")
-  (have (zero? "a") "b")
-  (have (zero? "a") "b" "c")
-  (have-in zero? [0 0 "a" "b"])
-  (have-in (zero? "a") ["b" "c"])
-
-  ;;; Runtime perf
-  (qb 10000
-    (have? (nnil? "a"))
-    (have nnil? "a")
-    (have nnil? "a" "b" "c")
-    ["a" "b" "c"]))
+  ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
+  (macroexpand '(have? a))
+  (qb 10000 (have? "a") (have string? "a" "b" "c")))
 
 (defmacro ^:also-cljs check-some
   "Experimental. Returns first logical false/throwing expression (id/form), or nil."
