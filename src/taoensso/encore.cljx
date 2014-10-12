@@ -28,7 +28,8 @@
                    [goog.structs        :as gstructs]
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
-  #+cljs (:require-macros [taoensso.encore :as encore-macros]))
+  #+cljs (:require-macros [taoensso.encore :as encore-macros
+                           :refer [have? have have-in]]))
 
 ;;;; Core
 
@@ -193,19 +194,16 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(defn zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
-(defn  pos-num? [x] (and (number?  x) (pos? x)))
-(defn nneg-num? [x] (and (number?  x) (not (neg? x))))
-(defn  pos-int? [x] (and (integer? x) (pos? x)))
-(defn nneg-int? [x] (and (integer? x) (not (neg? x))))
-
-(comment (nneg-int? 0))
-
-(def  nnil?   (complement nil?))
-(def  nblank? (complement str/blank?))
-(defn nblank-str? [x] (and (string? x) (nblank? x)))
-
-(comment (map nblank-str? ["foo" "" 5]))
+;;; Or compose with `every-pred`, `some-fn` (`have` also now traps errors)
+(defn       nnil? [x] (not (nil? x))) ; some?
+(defn     nblank? [x] (not (str/blank? x)))
+(defn       nneg? [x] (not (neg? x)))
+(defn    pos-int? [x] (and (integer? x) (pos? x)))
+(defn   nneg-int? [x] (and (integer? x) (not (neg? x))))
+(defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
+(defn    pos-num? [x] (and (number? x) (pos? x)))
+(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
+(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
 
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
@@ -214,27 +212,29 @@
 (comment (nnil= nil nil)
          (nnil= :foo :foo :foo))
 
-(defn nvec? "Is `x` a vector of size `n`?" [n x]
-  (and (vector? x) (= (count x) n)))
+(defn nvec? "Is `x` a vector of size `n`?" [n x] (and (vector? x) (= (count x) n)))
 
 (comment (nvec? 2 [:a :b]))
-
-#+clj (def format clojure.core/format) ; For easier encore/format portability
-#+cljs
-(do
-  (defn- undefined->nil [x] (if (undefined? x) nil x))
-  (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
-    [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
 ;;;; Validation ; Experimental!!
 ;; * `have?`   - pred form assertion/s; on success returns true.
 ;; * `have`    - pred form assertion/s; on success returns input/s.
 ;; * `have-in` - pred coll assertion/s; on success returns input/s.
 
+(declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
 (defn hthrow "Implementation detail." [form val]
   (let [pattern "Assert failed [pred-form,val]: [%s,%s]"]
     (throw (assertion-error (format pattern (pr-str form) (pr-str val))))))
+
+(defn hpred "Implementation detail." [pred-form]
+  (if-not (vector? pred-form) pred-form
+    (let [[type & preds] pred-form]
+      (case type
+        :or  (apply some-fn    preds)
+        :and (apply every-pred preds)))))
+
+(comment (hpred string?) (hpred [:or nil? string?]))
 
 (defmacro ^:also-cljs asserted* "Implementation detail."
   ([truthy? x] `(asserted* ~truthy? nnil? ~x))
@@ -244,7 +244,7 @@
               (catch-errors
                 (let [pred# ~pred
                       x#    ~x]
-                  [x# (pred# x#)]))]
+                  [x# ((hpred pred#) x#)]))]
           (if pass?# (or ~truthy? x#)
             (hthrow (list '~pred '~x) (or x# err#))))))
   ([truthy? pred x & more]
@@ -288,7 +288,8 @@
   (have-in string? [1 2])
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
-  (qb 10000 (have? "a") (have string? "a" "b" "c")))
+  (qb 10000 (have? "a") (have string? "a" "b" "c"))
+  (have? [:or nil? string?] "hello"))
 
 (defmacro ^:also-cljs check-some
   "Experimental. Returns first logical false/throwing expression (id/form), or nil."
@@ -508,8 +509,8 @@
 (defn ms
   "Returns number of milliseconds in period defined by given args."
   [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}]
-  {:pre [(every? #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
-                 (keys opts))]}
+  {:pre [(have-in #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
+           (keys opts))]}
   (round
    (+ (if years  (* years  1000 60 60 24 365)   0)
       (if months (* months 1000 60 60 24 29.53) 0)
@@ -647,7 +648,7 @@
              return-val)))))
 
   ;; Experimental:
-  ([atom_ ks f & more] {:pre [(even? (count more))]}
+  ([atom_ ks f & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks f]] (partition 2 more))]
        (swap! atom_ (fn [old-val] (replace-in* :swap old-val pairs))))))
 
@@ -659,7 +660,7 @@
        (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
 
   ;; Experimental:
-  ([atom_ ks new-val & more] {:pre [(even? (count more))]}
+  ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks new-val]] (partition 2 more))]
        (swap! atom_ (fn [old-val] (replace-in* :reset old-val pairs))))))
 
@@ -697,11 +698,11 @@
          (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
 
 (defn assoc-some "Assocs each kv iff its value is not nil."
-  [m & kvs] {:pre [(even? (count kvs))]}
+  [m & kvs] {:pre [(have? even? (count kvs))]}
   (into (or m {}) (for [[k v] (partition 2 kvs) :when (not (nil? v))] [k v])))
 
 (defn assoc-when "Assocs each kv iff its val is truthy."
-  [m & kvs] {:pre [(even? (count kvs))]}
+  [m & kvs] {:pre [(have? even? (count kvs))]}
   (into (or m {}) (for [[k v] (partition 2 kvs) :when v] [k v])))
 
 (comment (assoc-some {:a :A} :b nil :c :C :d nil :e :E))
@@ -773,10 +774,9 @@
 
 (defn as-map "Cross between `hash-map` & `map-kvs`."
   [coll & [kf vf]]
-  {:pre  [(or (coll? coll) (nil? coll))
-          (or (nil? kf) (fn? kf) (kw-identical? kf :keywordize))
-          (or (nil? vf) (fn? vf))]
-   :post [(or (nil? %) (map? %))]}
+  {:pre  [(have? [:or nil? coll?] coll)
+          (have? [:or nil? ifn?]  kf vf)]
+   :post [(have? [:or nil? map?]  %)]}
   (when coll
     (if (empty? coll) {}
       (let [kf (if-not (kw-identical? kf :keywordize) kf
@@ -932,6 +932,13 @@
 
 ;;;; Strings
 
+#+clj (def format clojure.core/format) ; For easier encore/format portability
+#+cljs
+(do
+  (defn- undefined->nil [x] (if (undefined? x) nil x))
+  (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
+    [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
+
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API with support for:
     * Clamping of indexes beyond string limits.
@@ -942,7 +949,7 @@
   Note that `max-len` was chosen over `end-idx` since it's less ambiguous and
   easier to reason about - esp. when accepting negative indexes."
   [s start-idx & [max-len]]
-  {:pre [(or (nil? max-len) (nneg-int? max-len))]}
+  {:pre [(have? [:or nil? nneg-int?] max-len)]}
   (let [;; s       (str   s)
         slen       (count s)
         start-idx* (if (>= start-idx 0)
@@ -1009,7 +1016,7 @@
          (path "foo" nil "" "bar"))
 
 ;; (defn base64-enc "Encodes string as URL-safe Base64 string."
-;;   [s] {:pre [(string? s)]}
+;;   [s] {:pre [(have? string? s)]}
 ;;   #+clj  (Base64/encodeBase64URLSafeString (.getBytes ^String s "UTF-8"))
 ;;   #+cljs (base64/encodeString s (boolean :web-safe)))
 
@@ -1404,7 +1411,7 @@
 
 #+cljs
 (defn- coerce-xhr-params "[uri method get-or-post-params] -> [uri post-content]"
-  [uri method params] {:pre [(or (nil? params) (map? params))]}
+  [uri method params] {:pre [(have? [:or nil? map?] params)]}
   (let [?pstr ; URL-encoded string, or nil
         (when-not (empty? params)
           (let [s (-> params clj->js gstructs/Map. gquery-data/createFromMap
@@ -1436,7 +1443,7 @@
   [uri {:keys [method params headers timeout-ms resp-type] :as opts
         :or   {method :get timeout-ms 10000 resp-type :auto}}
    callback]
-  {:pre [(or (nil? timeout-ms) (nneg-int? timeout-ms))]}
+  {:pre [(have? [:or nil? nneg-int?] timeout-ms)]}
   (if-let [xhr (get-pooled-xhr!)]
     (try
       (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
