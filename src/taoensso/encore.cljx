@@ -229,10 +229,13 @@
 
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
-    (let [[type & preds] pred-form]
+    (let [[type p1 p2 & more] pred-form]
       (case type
-        :or  (apply some-fn    preds)
-        :and (apply every-pred preds)))))
+        ;; (apply some-fn preds):
+        :or  (fn [x] (or (when p1 (p1 x)) (when p2 (p2 x)) (some #(% x) more)))
+        ;; (apply every-pred preds):
+        :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
+                      (every? #(% x) more)))))))
 
 (comment (hpred string?) (hpred [:or nil? string?]))
 
@@ -288,8 +291,8 @@
   (have-in string? [1 2])
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
-  (qb 10000 (have? "a") (have string? "a" "b" "c"))
-  (have? [:or nil? string?] "hello"))
+  (have? [:or nil? string?] "hello")
+  (qb 10000 (have? "a") (have string? "a" "b" "c") (have? [:or nil? string?] "a" "b" "c")))
 
 (defmacro ^:also-cljs check-some
   "Experimental. Returns first logical false/throwing expression (id/form), or nil."
