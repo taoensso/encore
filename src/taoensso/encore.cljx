@@ -318,17 +318,17 @@
 (defn set* [x] (if (set?    x) x (set x)))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
-(defn keys=      [m ks] (=             (set (keys m)) (set* ks)))
-(defn keys<=     [m ks] (set/subset?   (set (keys m)) (set* ks)))
-(defn keys>=     [m ks] (set/superset? (set (keys m)) (set* ks)))
-(defn keys-nnil? [m ks] (every? #(nnil? (get m %)) ks))
+(defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
+(defn ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
+(defn ks>=     [ks m] (set/superset? (set (keys m)) (set* ks)))
+(defn ks-nnil? [ks m] (every? #(nnil? (get m %)) ks))
 
 (comment
-  (keys=      {:a :A :b :B  :c :C}  #{:a :b})
-  (keys<=     {:a :A :b :B  :c :C}  #{:a :b})
-  (keys>=     {:a :A :b :B  :c :C}  #{:a :b})
-  (keys-nnil? {:a :A :b :B  :c nil} #{:a :b})
-  (keys-nnil? {:a :A :b nil :c nil} #{:a :b}))
+  (ks=      {:a :A :b :B  :c :C}  #{:a :b})
+  (ks<=     {:a :A :b :B  :c :C}  #{:a :b})
+  (ks>=     {:a :A :b :B  :c :C}  #{:a :b})
+  (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
+  (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
 ;;;; Coercions
 ;; `parse-x` => success, or nil
@@ -1585,3 +1585,9 @@
 ;; Used by Sente <= v1.1.0
 #+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
          (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
+
+;; Arg order changed for easier partials
+(defn keys=      [m ks] (ks=      ks m))
+(defn keys<=     [m ks] (ks<=     ks m))
+(defn keys>=     [m ks] (ks>=     ks m))
+(defn keys=nnil? [m ks] (ks-nnil? ks m))
