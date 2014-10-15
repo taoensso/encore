@@ -1129,7 +1129,8 @@
                            (delay (apply f args))))))))))
 
   ([ttl-ms f] ; De-raced, commands, ttl, gc
-    (let [cache (atom {})] ; {<args> <[delay-val udt :as cache-val]>}
+     (have? [:or nil? pos-int?] ttl-ms)
+     (let [cache (atom {})] ; {<args> <[delay-val udt :as cache-val]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
         (if (kw-identical? arg1 :mem/del)
           (do (if (kw-identical? (first argn) :mem/all)
@@ -1157,6 +1158,8 @@
               @dv))))))
 
   ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
+    (have? [:or nil? pos-int?] ttl-ms)
+    (have? pos-int? cache-size)
     (let [state (atom {:tick 0})] ; {:tick _
                                   ;  <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
