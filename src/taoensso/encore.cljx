@@ -223,9 +223,11 @@
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [form val]
-  (let [pattern "Assert failed [pred-form,val]: [%s,%s]"]
-    (throw (assertion-error (format pattern (pr-str form) (pr-str val))))))
+(defn hthrow "Implementation detail." [ns-str form val]
+  ;; A line number would also be nice, waiting on
+  ;; http://dev.clojure.org/jira/browse/CLJ-865:
+  (let [pattern "Assert failed in `%s` [pred-form,val]: [%s,%s]"]
+    (throw (assertion-error (format pattern ns-str (pr-str form) (pr-str val))))))
 
 (declare set*)
 (defn hpred "Implementation detail." [pred-form]
@@ -251,7 +253,7 @@
                       x#    ~x]
                   [x# ((hpred pred#) x#)]))]
           (if pass?# (or ~truthy? x#)
-            (hthrow (list '~pred '~x) (or x# err#))))))
+            (hthrow (str *ns*) (list '~pred '~x) (or x# err#))))))
   ([truthy? pred x & more]
      (let [xs (into [x] more)]
        (if-not *assert* (or truthy? xs)
