@@ -223,11 +223,11 @@
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [ns-str form val]
-  ;; A line number would also be nice, waiting on
-  ;; http://dev.clojure.org/jira/browse/CLJ-865:
-  (let [pattern "Assert failed in `%s` [pred-form,val]: [%s,%s]"]
-    (throw (assertion-error (format pattern ns-str (pr-str form) (pr-str val))))))
+(defn hthrow "Implementation detail." [ns-str line form val]
+  ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
+  (let [pattern "Assert failed in `%s:%s` [pred-form,val]: [%s,%s]"]
+    (throw (assertion-error (format pattern ns-str line
+                              (pr-str form) (pr-str val))))))
 
 (declare set*)
 (defn hpred "Implementation detail." [pred-form]
@@ -244,8 +244,8 @@
 (comment (hpred string?) (hpred [:or nil? string?]))
 
 (defmacro ^:also-cljs asserted* "Implementation detail."
-  ([truthy? x] `(asserted* ~truthy? nnil? ~x))
-  ([truthy? pred x]
+  ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
+  ([line truthy? pred x]
      (if-not *assert* (or truthy? x)
        `(let [[[x# pass?#] err#]
               (catch-errors
@@ -253,12 +253,12 @@
                       x#    ~x]
                   [x# ((hpred pred#) x#)]))]
           (if pass?# (or ~truthy? x#)
-            (hthrow (str *ns*) (list '~pred '~x) (or x# err#))))))
-  ([truthy? pred x & more]
+            (hthrow (str *ns*) ~line (list '~pred '~x) (or x# err#))))))
+  ([line truthy? pred x & more]
      (let [xs (into [x] more)]
        (if-not *assert* (or truthy? xs)
          ;; Truthy when nothing throws + allows [] destructuring:
-         (mapv (fn [x] `(asserted* ~truthy? ~pred ~x)) xs)))))
+         (mapv (fn [x] `(asserted* ~line ~truthy? ~pred ~x)) xs)))))
 
 (defmacro ^:also-cljs have?
   "Experimental. Like `assert` but:
@@ -266,11 +266,11 @@
     * Returns true on success for convenient use in pre/post conds.
     * Traps errors.
     * Provides better messages on failure!"
-  [& args] `(asserted* (boolean :truthy) ~@args))
+  [& args] `(asserted* ~(:line (meta &form)) (boolean :truthy) ~@args))
 
 (defmacro ^:also-cljs have
   "Experimental. Like `have?` but returns input/s on success for use in bindings."
-  [& args] `(asserted* (not :truthy) ~@args))
+  [& args] `(asserted* ~(:line (meta &form)) (not :truthy) ~@args))
 
 (defmacro ^:also-cljs have-in
   "Experimental. Like `have` but takes an evaluated, single-form collection arg."
