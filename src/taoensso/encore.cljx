@@ -1314,7 +1314,8 @@
 (defmacro ^:also-cljs qbench
   "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
   ([nlaps form]
-     `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# ~nlaps] (do ~form))))]
+     `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# (have integer? ~nlaps)]
+                                                (do ~form))))]
         (round2 (/ (apply min times#) 1000000.0))))
   ([nlaps form & more]
      (mapv (fn [form] `(qbench ~nlaps ~form)) (cons form more))))
