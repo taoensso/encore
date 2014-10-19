@@ -594,6 +594,8 @@
   (instance? Foo1 (->Foo1 "bar"))
   (compile 'taoensso.encore))
 
+(declare dissoc-in)
+
 ;; Recall: no `korks` support since it makes `nil` ambiguous (`[]` vs `[nil]`).
 ;; This ambiguity extends to (assoc-in {} [] :a), which (along with perf)
 ;; is why we special case empty/nil ks.
@@ -611,7 +613,9 @@
             :reset (if (empty? ks) valf (assoc-in accum ks valf))
             :swap  (if (empty? ks)
                      (valf accum)
-                     (assoc-in accum ks (valf (get-in accum ks))))))))
+                     (if (= valf :swap/dissoc)
+                       (dissoc-in accum (butlast ks) (last ks))
+                       (assoc-in  accum ks (valf (get-in accum ks)))))))))
     m ops))
 
 (defn replace-in "Experimental. For use with `swap!`, etc."
@@ -629,9 +633,9 @@
   (let [a_ (atom {})]
     (swap! a_ replace-in
       [:reset [:a]    {:b :b1 :c :c1 :d 100}]
-      [:swap  [:a :d] inc])))
+      [:swap  [:a :d] inc]
+      [:swap  [:a :b] :swap/dissoc])))
 
-(declare dissoc-in)
 (defn swap-in!
   "More powerful version of `swap!`:
     * Supports optional `update-in` semantics.
@@ -705,7 +709,10 @@
       [:a :b] :b2
       [:a :d] inc)))
 
-(defn dissoc-in [m ks & dissoc-ks] (apply update-in m ks dissoc dissoc-ks))
+(defn dissoc-in [m ks & dissoc-ks]
+  (if (empty? ks)
+    (apply dissoc m dissoc-ks)
+    (apply update-in m ks dissoc dissoc-ks)))
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
 (comment (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
