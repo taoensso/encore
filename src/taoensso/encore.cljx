@@ -234,7 +234,8 @@
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form]
       (case type
-        :in  (fn [x] (contains? (set* p1) x))
+        :in     (fn [x] (contains? (set* p1) x))
+        :not-in (fn [x] (not (contains? (set* p1) x)))
         ;; (apply some-fn preds):
         :or  (fn [x] (or (when p1 (p1 x)) (when p2 (p2 x)) (some #(% x) more)))
         ;; (apply every-pred preds):
