@@ -234,11 +234,15 @@
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form]
       (case type
-        :in     (fn [x] (contains? (set* p1) x))
-        :not-in (fn [x] (not (contains? (set* p1) x)))
-        ;; (apply some-fn preds):
+        :in      (fn [x] (contains? (set* p1) x))
+        :not-in  (fn [x] (not (contains? (set* p1) x)))
+        ;; complement/none-of:
+        :not     (fn [x] (and (if-not p1 true (not (p1 x)))
+                             (if-not p2 true (not (p2 x)))
+                             (every? #(not (% x)) more)))
+        ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 (p1 x)) (when p2 (p2 x)) (some #(% x) more)))
-        ;; (apply every-pred preds):
+        ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
                       (every? #(% x) more)))))))
 
