@@ -631,6 +631,7 @@
       [:reset [:a]    {:b :b1 :c :c1 :d 100}]
       [:swap  [:a :d] inc])))
 
+(declare dissoc-in)
 (defn swap-in!
   "More powerful version of `swap!`:
     * Supports optional `update-in` semantics.
@@ -648,8 +649,12 @@
        (loop []
          (let [old-val @atom_
                old-val-in (get-in old-val ks)
-               [new-val-in return-val] (as-swapped (f old-val-in))
-               new-val (assoc-in old-val ks new-val-in)]
+               [new-val-in return-val] (as-swapped
+                                         (if (= f :swap/dissoc) :swap/dissoc
+                                           (f old-val-in)))
+               new-val (if (= new-val-in :swap/dissoc)
+                         (dissoc-in old-val (butlast ks) (last ks))
+                         (assoc-in  old-val ks new-val-in))]
            (if-not (compare-and-set! atom_ old-val new-val)
              (recur)
              return-val)))))
@@ -682,6 +687,9 @@
   (let [a_ (atom {:a {:b :B}})] ; Returns old-val-in
     [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
   (let [a_ (atom {:a {:b 100}})] (swap-in! a_ [:a :b] inc)) ; => 101
+
+  (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})]
+    (swap-in! a_ [:a :c] :swap/dissoc) @a_)
 
   ;;; Bulk atomic updates
   (let [a_ (atom {})]
