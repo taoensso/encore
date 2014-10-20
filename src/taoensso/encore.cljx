@@ -229,11 +229,16 @@
     (throw (assertion-error (format pattern ns-str line
                               (pr-str form) (pr-str val))))))
 
-(declare set*)
+(declare set* ks= ks<= ks>= ks-nnil?)
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form]
       (case type
+        :ks=      (fn [x] (ks=      p1 x))
+        :ks<=     (fn [x] (ks<=     p1 x))
+        :ks>=     (fn [x] (ks>=     p1 x))
+        :ks-nnil? (fn [x] (ks-nnil? p1 x))
+
         :in      (fn [x] (contains? (set* p1) x))
         :not-in  (fn [x] (not (contains? (set* p1) x)))
         ;; complement/none-of:
