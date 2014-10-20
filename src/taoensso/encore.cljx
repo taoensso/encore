@@ -259,13 +259,14 @@
   ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
   ([line truthy? pred x]
      (if-not *assert* (or truthy? x)
-       `(let [[[x# pass?#] err#]
+       `(let [[[x# pass?# have-x?#] err#]
               (catch-errors
                 (let [pred# ~pred
                       x#    ~x]
-                  [x# ((hpred pred#) x#)]))]
+                  [x# ((hpred pred#) x#) true]))]
           (if pass?# (or ~truthy? x#)
-            (hthrow (str *ns*) ~line (list '~pred '~x) (or x# err#))))))
+            (hthrow (str *ns*) ~line (list '~pred '~x)
+              (if have-x?# x# err#))))))
   ([line truthy? pred x & more]
      (let [xs (into [x] more)]
        (if-not *assert* (or truthy? xs)
@@ -301,6 +302,7 @@
                 (do (println "eval2") "bar"))
   (have number? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
+  (have nil? false)
   (have-in string? ["a" "b"])
   (have-in string? (if true ["a" "b"] [1 2]))
   (have-in string? (mapv str (range 10)))
