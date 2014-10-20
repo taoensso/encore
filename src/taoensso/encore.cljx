@@ -265,7 +265,7 @@
                       x#    ~x]
                   [x# ((hpred pred#) x#) true]))]
           (if pass?# (or ~truthy? x#)
-            (hthrow (str *ns*) ~line (list '~pred '~x)
+            (hthrow ~(str *ns*) ~line (list '~pred '~x)
               (if have-x?# x# err#))))))
   ([line truthy? pred x & more]
      (let [xs (into [x] more)]
