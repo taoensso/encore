@@ -232,7 +232,8 @@
 (declare set* ks= ks<= ks>= ks-nnil?)
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
-    (let [[type p1 p2 & more] pred-form]
+    (let [[type p1 p2 & more] pred-form
+          p1 (hpred p1)]
       (case type
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
@@ -251,7 +252,8 @@
         :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
                       (every? #(% x) more)))))))
 
-(comment (hpred string?) (hpred [:or nil? string?]))
+(comment (hpred string?) (hpred [:or nil? string?])
+         ((hpred [:or [:and integer? neg?] string?])))
 
 (defmacro ^:also-cljs asserted* "Implementation detail."
   ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
