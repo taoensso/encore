@@ -239,13 +239,13 @@
         :ks<=     (fn [x] (ks<=     p1 x))
         :ks>=     (fn [x] (ks>=     p1 x))
         :ks-nnil? (fn [x] (ks-nnil? p1 x))
-
-        :in      (fn [x] (contains? (set* p1) x))
-        :not-in  (fn [x] (not (contains? (set* p1) x)))
+        :=        (fn [x] (= p1 x)) ; partial =
+        :in       (fn [x] (contains? (set* p1) x))
+        :not-in   (fn [x] (not (contains? (set* p1) x)))
         ;; complement/none-of:
-        :not     (fn [x] (and (if-not p1 true (not (p1 x)))
-                             (if-not p2 true (not (p2 x)))
-                             (every? #(not (% x)) more)))
+        :not      (fn [x] (and (if-not p1 true (not (p1 x)))
+                              (if-not p2 true (not (p2 x)))
+                              (every? #(not (% x)) more)))
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 (p1 x)) (when p2 (p2 x)) (some #(% x) more)))
         ;; all-of, (apply every-pred preds):
