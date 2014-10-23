@@ -147,10 +147,8 @@
 #+clj  (def kw-identical? identical?)
 #+cljs (def kw-identical? keyword-identical?)
 
-(defn atom? [x]
-  #+clj  (instance? clojure.lang.Atom x)
-  #+cljs (instance? Atom              x))
-
+(defn stringy? [x] (or (keyword? x) (string? x)))
+(defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
 ;; (defn- chan? [x]
 ;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
 ;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
@@ -194,27 +192,70 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-;;; Or compose with `every-pred`, `some-fn` (`have` also now traps errors)
-(defn       nnil? [x] (not (nil? x))) ; some?
-(defn     nblank? [x] (not (str/blank? x)))
-(defn       nneg? [x] (not (neg? x)))
-(defn    pos-int? [x] (and (integer? x) (pos? x)))
-(defn   nneg-int? [x] (and (integer? x) (not (neg? x))))
+(defn     nnil? [x] (not (nil? x))) ; some?
+(defn   nblank? [x] (not (str/blank? x)))
+(defn     nneg? [x] (not (neg? x)))
+(defn  pos-int? [x] (and (integer? x) (pos? x)))
+(defn nneg-int? [x] (and (integer? x) (not (neg? x))))
+(defn   nvec? [n x] (and (vector?  x) (= (count x) n)))
+
+(def udt? nneg-int?)
+(defn vec2? [x] (nvec? 2 x))
+(defn vec3? [x] (nvec? 3 x))
+
+;;; These are less useful now that `have` traps errors
+(defn nblank-str? [x] (and (string?  x) (not (str/blank? x))))
+(defn   nneg-num? [x] (and (number?  x) (not (neg? x))))
+(defn    pos-num? [x] (and (number?  x) (pos? x)))
 (defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
-(defn    pos-num? [x] (and (number? x) (pos? x)))
-(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
-(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
+
+(defn as-?nblank [x] (when (string? x) (if (str/blank? x) nil x)))
+(defn as-?kw     [x] (cond (keyword? x)       x  (string? x) (keyword x)))
+(defn as-?name   [x] (cond (keyword? x) (name x) (string? x)          x))
+(defn as-?bool   [x] (cond (nil?  x) nil
+                       (or (true? x) (false? x)) x
+                       (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
+                       (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
+(defn as-?int [x]
+  (cond (nil?    x) nil
+        (number? x) (long x)
+        (string? x)
+        #+cljs (let [x (js/parseInt x 10)] (when-not (js/isNaN x) x))
+        #+clj  (try (Long/parseLong x)
+                    (catch NumberFormatException _
+                      (try (long (Float/parseFloat x))
+                           (catch NumberFormatException _ nil))))))
+(defn as-?float [x]
+  (cond (nil?    x) nil
+        (number? x) (double x)
+        (string? x)
+        #+cljs (let [x (js/parseFloat x)] (when-not (js/isNan x) x))
+        #+clj  (try (Double/parseDouble x)
+                    (catch NumberFormatException _ nil))))
+
+(comment (have (as-?int "42")))
 
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
   ([x y & more] (and (nnil? x) (apply = x y more))))
 
-(comment (nnil= nil nil)
-         (nnil= :foo :foo :foo))
+(comment (nnil= :foo :foo nil))
 
-(defn nvec? "Is `x` a vector of size `n`?" [n x] (and (vector? x) (= (count x) n)))
+(defn vec* [x] (if (vector? x) x (vec x)))
+(defn set* [x] (if (set?    x) x (set x)))
 
-(comment (nvec? 2 [:a :b]))
+;;; Useful for map assertions, etc. (do *not* check that input is a map)
+(defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
+(defn ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
+(defn ks>=     [ks m] (set/superset? (set (keys m)) (set* ks)))
+(defn ks-nnil? [ks m] (every? #(nnil? (get m %)) ks))
+
+(comment
+  (ks=      {:a :A :b :B  :c :C}  #{:a :b})
+  (ks<=     {:a :A :b :B  :c :C}  #{:a :b})
+  (ks>=     {:a :A :b :B  :c :C}  #{:a :b})
+  (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
+  (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
 ;;;; Validation ; Experimental!!
 ;; * `have?`   - pred form assertion/s; on success returns true.
@@ -229,11 +270,11 @@
     (throw (assertion-error (format pattern ns-str line
                               (pr-str form) (pr-str val))))))
 
-(declare set* ks= ks<= ks>= ks-nnil?)
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form
-          p1 (hpred p1)]
+          p1 (hpred p1)
+          p2 (hpred p2)]
       (case type
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
@@ -332,76 +373,8 @@
 (comment (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
          (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
-(defn vec* [x] (if (vector? x) x (vec x)))
-(defn set* [x] (if (set?    x) x (set x)))
-
-;;; Useful for map assertions, etc. (do *not* check that input is a map)
-(defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
-(defn ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
-(defn ks>=     [ks m] (set/superset? (set (keys m)) (set* ks)))
-(defn ks-nnil? [ks m] (every? #(nnil? (get m %)) ks))
-
-(comment
-  (ks=      {:a :A :b :B  :c :C}  #{:a :b})
-  (ks<=     {:a :A :b :B  :c :C}  #{:a :b})
-  (ks>=     {:a :A :b :B  :c :C}  #{:a :b})
-  (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
-  (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
-
-;;;; Coercions
-
-(defn as-?nblank-str [x] (when (string? x) (if (str/blank? x) nil x)))
-(defn as-?kw         [x] (cond (keyword? x)       x  (string? x) (keyword x)))
-(defn as-?name       [x] (cond (keyword? x) (name x) (string? x)          x))
-
-(defn as-?bool [x]
-  (when x
-    (cond (or (true? x) (false? x)) x
-          (or (= x "false") (= x "FALSE") (= x "0") (= x 0)) false
-          (or (= x "true")  (= x "TRUE")  (= x "1") (= x 1)) true
-          :else nil)))
-
-(defn as-?int [x]
-  (when x
-    #+clj
-    (cond (number? x) (long x)
-          (string? x) (try (Long/parseLong x)
-                           (catch NumberFormatException _
-                             (try (long (Float/parseFloat x))
-                                  (catch NumberFormatException _ nil))))
-          :else       nil)
-
-    #+cljs
-    (cond (number? x) (long x)
-          (string? x) (let [x (js/parseInt x 10)]
-                        (when-not (js/isNaN x) x))
-          :else        nil)))
-
-(defn as-?float [x]
-  (when x
-    #+clj
-    (cond (number? x) (double x)
-          (string? x) (try (Double/parseDouble x)
-                           (catch NumberFormatException _ nil))
-          :else       nil)
-
-    #+cljs
-    (cond (number? x) (double x)
-          (string? x) (let [x (js/parseFloat x)]
-                        (when-not (js/isNan x) x))
-          :else       nil)))
-
-;;; Legacy stuff (to be DEPRECATED eventually; currently used by Carmine)
-(def parse-bool  as-?bool)
-(def parse-int   as-?int)
-(def parse-float as-?float)
-(defn as-bool  [x] (when x (have (as-?bool  x))))
-(defn as-int   [x] (when x (have (as-?int   x))))
-(defn as-float [x] (when x (have (as-?float x))))
-
 ;;;; Keywords
 
-(defn stringy? [x] (or (keyword? x) (string? x)))
 (defn fq-name "Like `name` but includes namespace in string when present."
   [x] (if (string? x) x
           (let [n (name x)]
@@ -1609,3 +1582,11 @@
 (defn keys<=     [m ks] (ks<=     ks m))
 (defn keys>=     [m ks] (ks>=     ks m))
 (defn keys=nnil? [m ks] (ks-nnil? ks m))
+
+;;;; Legacy coercions (used by Carmine <= v2.7.1, at least)
+(def parse-bool  (partial as-?bool))
+(def parse-int   (partial as-?int))
+(def parse-float (partial as-?float))
+(defn as-bool  [x] (when x (have (as-?bool  x))))
+(defn as-int   [x] (when x (have (as-?int   x))))
+(defn as-float [x] (when x (have (as-?float x))))
