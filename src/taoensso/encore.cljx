@@ -1,21 +1,20 @@
 (ns taoensso.encore
-  "The utils you want, in the package you deserve™.
-  Subset of the commonest Ensso utils w/o external dependencies."
+  "Subset of the commonest Ensso utils w/o external dependencies."
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
                    [clojure.set         :as set]
                    [clojure.java.io     :as io]
-                   ;; [clojure.core.async  :as async]
+                   ;; [clojure.core.async    :as async]
                    [clojure.tools.reader.edn :as edn])
-  ;; #+clj  (:import [org.apache.commons.codec.binary Base64])
   #+clj  (:import  [java.util Date Locale TimeZone]
-                   [java.text SimpleDateFormat])
-  ;;;
-  #+cljs (:require [clojure.string    :as str]
+                   [java.text SimpleDateFormat]
+                   ;; [org.apache.commons.codec.binary Base64]
+                   )
+  #+cljs (:require [clojure.string      :as str]
                    [clojure.set         :as set]
-                   ;; [cljs.core.async   :as async]
-                   [cljs.reader       :as edn]
+                   ;; [cljs.core.async  :as async]
+                   [cljs.reader         :as edn]
                    ;;[goog.crypt.base64 :as base64]
                    [goog.string         :as gstr]
                    [goog.string.format]
@@ -28,8 +27,8 @@
                    [goog.structs        :as gstructs]
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
-  #+cljs (:require-macros [taoensso.encore :as encore-macros
-                           :refer [catch-errors have? have have-in]]))
+  #+cljs (:require-macros [taoensso.encore :as encore-macros :refer
+                           (catch-errors have? have have-in)]))
 
 ;;;; Core
 
@@ -267,7 +266,7 @@
 (defn hthrow "Implementation detail." [ns-str line form val]
   ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
   (let [pattern "Assert failed in `%s:%s` [pred-form,val]: [%s,%s]"]
-    (throw (assertion-error (format pattern ns-str line
+    (throw (assertion-error (format pattern ns-str (or line "?")
                               (pr-str form) (pr-str val))))))
 
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
@@ -1079,6 +1078,7 @@
 ;; * Consider implementing a self-gc'ing hashmap for use here & elsewhere?
 ;; * Invalidating memoize* cache doesn't scale horizontally; could easily build
 ;;   a Redis-backed distributed version with pttl, though it'd be slower.
+;; * Consider a timer-wheel for cheaper ttl gc.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn swap-val! ; Public since it can be useful for custom memoization utils
