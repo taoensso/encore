@@ -29,7 +29,7 @@
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
   #+cljs (:require-macros [taoensso.encore :as encore-macros
-                           :refer [have? have have-in]]))
+                           :refer [catch-errors have? have have-in]]))
 
 ;;;; Core
 
@@ -270,11 +270,12 @@
     (throw (assertion-error (format pattern ns-str line
                               (pr-str form) (pr-str val))))))
 
+(defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form
-          p1 (hpred p1)
-          p2 (hpred p2)]
+          p1 (when p1 (hpred p1))
+          p2 (when p2 (hpred p2))]
       (case type
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
@@ -288,13 +289,17 @@
                               (if-not p2 true (not (p2 x)))
                               (every? #(not (% x)) more)))
         ;; any-of, (apply some-fn preds):
-        :or  (fn [x] (or (when p1 (p1 x)) (when p2 (p2 x)) (some #(% x) more)))
+        :or  (fn [x] (or (when p1 ((non-throwing p1) x))
+                        (when p2 ((non-throwing p2) x))
+                        (some   #((non-throwing %)  x) more)))
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
                       (every? #(% x) more)))))))
 
-(comment (hpred string?) (hpred [:or nil? string?])
-         ((hpred [:or [:and integer? neg?] string?])))
+(comment ((hpred [:or nil? string?]) "foo")
+         ((hpred [:or [:and integer? neg?] string?]) 5)
+         ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
+         )
 
 (defmacro ^:also-cljs asserted* "Implementation detail."
   ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
