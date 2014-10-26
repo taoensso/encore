@@ -557,7 +557,7 @@
 
 (defrecord Swapped [new-val return-val])
 (defn      swapped [new-val return-val] (Swapped. new-val return-val))
-(defn-  as-swapped [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
+(defn-    swapped* [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
                            [x x]))
 
 (comment ; TODO Debug, Ref. http://dev.clojure.org/jira/browse/CLJ-979
@@ -567,6 +567,15 @@
   (compile 'taoensso.encore))
 
 (declare dissoc-in)
+(defn- swapped*-in "[<new-val> <return-val>]" [m ks f]
+  (if (kw-identical? f :swap/dissoc)
+    (swapped* (dissoc-in m (butlast ks) (last ks)))
+    (let [old-val-in (get-in m ks)
+          [new-val-in return-val] (swapped* (f old-val-in))
+          new-val (if (kw-identical? new-val-in :swap/dissoc)
+                    (dissoc-in m (butlast ks) (last ks))
+                    (assoc-in  m ks new-val-in))]
+      [new-val return-val])))
 
 ;; Recall: no `korks` support since it makes `nil` ambiguous (`[]` vs `[nil]`).
 ;; This ambiguity extends to (assoc-in {} [] :a), which (along with perf)
@@ -585,9 +594,8 @@
             :reset (if (empty? ks) valf (assoc-in accum ks valf))
             :swap  (if (empty? ks)
                      (valf accum)
-                     (if (= valf :swap/dissoc)
-                       (dissoc-in accum (butlast ks) (last ks))
-                       (assoc-in  accum ks (valf (get-in accum ks)))))))))
+                     ;; Currently ignore possible <return-val>:
+                     (nth (swapped*-in accum ks valf) 0))))))
     m ops))
 
 (defn replace-in "Experimental. For use with `swap!`, etc."
@@ -606,7 +614,8 @@
     (swap! a_ replace-in
       [:reset [:a]    {:b :b1 :c :c1 :d 100}]
       [:swap  [:a :d] inc]
-      [:swap  [:a :b] :swap/dissoc])))
+      [:swap  [:a :b] :swap/dissoc]
+      [:swap  [:a :c] (fn [_] :swap/dissoc)])))
 
 (defn swap-in!
   "More powerful version of `swap!`:
@@ -617,20 +626,14 @@
      (if (empty? ks)
        (loop []
          (let [old-val @atom_
-               [new-val return-val] (as-swapped (f old-val))]
+               [new-val return-val] (swapped* (f old-val))]
            (if-not (compare-and-set! atom_ old-val new-val)
              (recur) ; Ref. http://goo.gl/rFG8mW
              return-val)))
 
        (loop []
          (let [old-val @atom_
-               old-val-in (get-in old-val ks)
-               [new-val-in return-val] (as-swapped
-                                         (if (= f :swap/dissoc) :swap/dissoc
-                                           (f old-val-in)))
-               new-val (if (= new-val-in :swap/dissoc)
-                         (dissoc-in old-val (butlast ks) (last ks))
-                         (assoc-in  old-val ks new-val-in))]
+               [new-val return-val] (swapped*-in old-val ks f)]
            (if-not (compare-and-set! atom_ old-val new-val)
              (recur)
              return-val)))))
@@ -682,7 +685,9 @@
     (swap-in! a_
       []      (constantly {:a {:b :b1 :c :c1 :d 100}})
       [:a :b] (constantly :b2)
-      [:a]    #(dissoc % :c)
+      ;; [:a] #(dissoc % :c)
+      ;; [:a :c] :swap/dissoc
+      [:a :c] (fn [_] :swap/dissoc)
       [:a :d] inc))
 
   (let [a_ (atom {})]
