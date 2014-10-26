@@ -638,7 +638,12 @@
   ;; Experimental:
   ([atom_ ks f & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks f]] (partition 2 more))]
-       (swap! atom_ (fn [old-val] (replace-in* :swap old-val pairs))))))
+       (loop []
+         (let [old-val @atom_
+               new-val (replace-in* :swap old-val pairs)]
+           (if-not (compare-and-set! atom_ old-val new-val)
+             (recur)
+             {:old old-val :new new-val}))))))
 
 (defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`."
   ([atom_ ks new-val]
@@ -650,7 +655,12 @@
   ;; Experimental:
   ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks new-val]] (partition 2 more))]
-       (swap! atom_ (fn [old-val] (replace-in* :reset old-val pairs))))))
+       (loop []
+         (let [old-val @atom_
+               new-val (replace-in* :reset old-val pairs)]
+           (if-not (compare-and-set! atom_ old-val new-val)
+             (recur)
+             {:old old-val :new new-val}))))))
 
 (comment
   ;;; update-in, `swapped`
