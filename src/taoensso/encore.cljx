@@ -804,6 +804,17 @@
   (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
     (fn [k v] (case k (:a :b) (str "boo-" v) v))))
 
+(defn fzipmap "Faster `zipmap`." [ks vs]
+  (loop [m  (transient {})
+         ks (seq ks)
+         vs (seq vs)]
+    (if-not (and ks vs) (persistent! m)
+      (recur (assoc! m (first ks) (first vs))
+        (next ks)
+        (next vs)))))
+
+(comment (let [kvs (range 100)] (qb 100 (zipmap kvs kvs) (fzipmap kvs kvs))))
+
 (defn into-all "Like `into` but supports multiple \"from\"s."
   ([to from] (into to from))
   ([to from & more] (reduce into (into to from) more)))
