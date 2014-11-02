@@ -242,6 +242,9 @@
 
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
+(defn nnil-set [x] (disj (set* x) nil))
+
+(comment (nnil-set [:a :b nil]))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
