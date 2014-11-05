@@ -785,21 +785,20 @@
          (keywordize-map {"akey" "aval" "bkey" "bval"}))
 
 (defn as-map "Cross between `hash-map` & `map-kvs`."
-  [coll & [kf vf]]
-  {:pre  [(have? [:or nil? coll?] coll)
+  [kvs & [kf vf]]
+  {:pre  [(have? [:or nil? sequential?] kvs)
           (have? [:or nil? ifn?]  kf vf)]
    :post [(have? [:or nil? map?]  %)]}
-  (when coll
-    (if (empty? coll) {}
-      (let [kf (if-not (kw-identical? kf :keywordize) kf
-                 (fn [k _] (keyword k)))]
-        (loop [m (transient {}) [k v :as s] coll]
-          (let [k (if-not kf k (kf k v))
-                v (if-not vf v (vf k v))
-                new-m (assoc! m k v)]
-            (if-let [n (nnext s)]
-              (recur new-m n)
-              (persistent! new-m))))))))
+  (if (empty? kvs) {}
+    (let [kf (if-not (kw-identical? kf :keywordize) kf
+               (fn [k _] (keyword k)))]
+      (loop [m (transient {}) [k v :as s] kvs]
+        (let [k (if-not kf k (kf k v))
+              v (if-not vf v (vf k v))
+              new-m (assoc! m k v)]
+          (if-let [n (nnext s)]
+            (recur new-m n)
+            (persistent! new-m)))))))
 
 (comment
   (as-map nil)
