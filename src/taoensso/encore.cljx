@@ -1314,7 +1314,8 @@
 (def nano-time
   #+clj (fn [] (System/nanoTime)) ; Since Unix Epoch
   #+cljs ; Since window context, etc., Ref. http://goo.gl/mWZWnR
-  (if-let [perf (aget js/window "performance")]
+  (if-let [perf (and (exists? js/window)
+                     (aget js/window "performance"))]
     ;; Ref. http://goo.gl/fn84us
     (if-let [f (or (aget perf "now")  (aget perf "mozNow") (aget perf "msNow")
                    (aget perf "oNow") (aget perf "webkitNow"))]
