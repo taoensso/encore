@@ -156,8 +156,9 @@
 #+clj (defn exception? [x] (instance? Exception x))
       (defn error?     [x] #+clj  (throwable? x)
                            #+cljs (instance? js/Error x))
-(defn error-data [x]
-  "Returns data map iff `x` is an error of any type on platform."
+
+(defn error-data "Returns data map iff `x` is an error of any type on platform."
+  [x]
   (when-let [data-map (or (ex-data x) ; ExceptionInfo
                           #+clj  (when (instance? Throwable x) {})
                           #+cljs (when (instance? js/Error  x) {}))]
