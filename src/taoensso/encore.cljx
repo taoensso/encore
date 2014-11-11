@@ -142,13 +142,13 @@
 
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
 ;; `keyword-identical?`. This util helps alleviate the pain of writing
-;;  cross-platform code. Ref. http://goo.gl/be8CGP.
+;; cross-platform code. Ref. http://goo.gl/be8CGP.
 #+clj  (def kw-identical? identical?)
 #+cljs (def kw-identical? keyword-identical?)
 
 (defn stringy? [x] (or (keyword? x) (string? x)))
 (defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
-;; (defn- chan? [x]
+;; (defn- chan? [x] ; Commented out to avoid core.async dep
 ;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
 ;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
 
