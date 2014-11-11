@@ -334,12 +334,18 @@
   [& args] `(asserted* ~(:line (meta &form)) (not :truthy) ~@args))
 
 (defmacro ^:also-cljs have-in
-  "Experimental. Like `have` but takes an evaluated, single-form collection arg."
-  ([xs] `(have-in nnil? ~xs))
-  ([pred xs]
-     (if-not *assert* xs
+  "Experimental. Like `have` but takes an evaluated, single-form collection arg/s.
+  No need for `have-in?` variant since result will always be a collection
+  (=> truthy)."
+  ([xcoll] `(have-in nnil? ~xcoll))
+  ([pred xcoll]
+     (if-not *assert* xcoll
        (let [g (gensym "have-in__")] ; Will (necessarily) lose exact form
-         `(mapv (fn [~g] (have ~pred ~g)) ~xs)))))
+         `(mapv (fn [~g] (have ~pred ~g)) ~xcoll))))
+  ([pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
+     (let [xcolls (into [xcoll] more-xcolls)]
+       (if-not *assert* xcolls
+         (mapv (fn [xcoll] `(have-in ~pred ~xcoll)) xcolls)))))
 
 (comment
   (let [x 5]      (have integer? x))
@@ -354,7 +360,9 @@
   (have-in string? ["a" "b"])
   (have-in string? (if true ["a" "b"] [1 2]))
   (have-in string? (mapv str (range 10)))
-  (have-in string? [1 2])
+  (have-in string? ["a" 1])
+  (have-in string? ["a" "b"] ["a" "b"])
+  (have-in string? ["a" "b"] ["a" "b" 1])
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
   (have? [:or nil? string?] "hello")
