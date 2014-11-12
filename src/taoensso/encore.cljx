@@ -566,6 +566,63 @@
 
 ;;;; Collections
 
+(defn- translate-signed-idx [signed-idx max-idx]
+  (if (>= signed-idx 0)
+    (min      signed-idx max-idx)
+    (max 0 (+ signed-idx max-idx))))
+
+(comment (translate-signed-idx -3 5))
+
+(defn sub-indexes
+  "Returns [<inclusive-start-idx*> <exclusive-end-idx*>] for counted 0-indexed
+  input (str, vec, etc.) with support for:
+    * Clamping of indexes beyond limits.
+    * Max-length -> end-index.
+    * -ive indexes (as +ive indexes but work from back of input):
+      (+0) (+1) (+2) (+3) (+4)  ; inclusive +ive indexes
+        h    e    l    l    o   ; 5 count
+      (-5) (-4) (-3) (-2) (-1)  ; inclusive -ive indexes"
+  [x start-idx & {:keys [max-len end-idx]}]
+  {:pre  [(have? [:or nil? nneg-int?] max-len)]
+   ;; Common out-of-bounds conds:
+   ;; :post [(have? (fn [[s e]] (>= e s)) %)
+   ;;        (have? (fn [[s e]] (>= s 0)) %)
+   ;;        (have? (fn [[s e]] (<= e (count x))) %)]
+   }
+  (let [xlen       (count x) ; also = max-exclusive-end-idx
+        start-idx* (translate-signed-idx start-idx xlen)
+        end-idx*   (cond
+                     max-len (min (+ start-idx* max-len) xlen)
+                     end-idx (inc ; Want exclusive
+                               (translate-signed-idx end-idx xlen))
+                     :else   xlen)]
+    (if (> start-idx* end-idx*)
+      ;; [end-idx* start-idx*] ; Allow wrapping
+      [0 0] ; Disallow wrapping
+      [start-idx* end-idx*])))
+
+(comment
+  (sub-indexes "hello"  0 :max-len 5)  ; hello
+  (sub-indexes "hello"  0 :max-len 9)  ; hello
+  (sub-indexes "hello" -4 :max-len 5)  ; _ello
+  (sub-indexes "hello"  2 :max-len 2)  ; __ll_
+  (sub-indexes "hello" -2 :max-len 2)  ; ___lo
+  (sub-indexes "hello" -2)             ; ___lo
+  (sub-indexes "hello"  2)             ; __llo
+  (sub-indexes "hello"  8)             ; _____
+  (sub-indexes "hello"  9 :max-len 9)  ; _____
+  (sub-indexes "hello"  0 :max-len 0)  ; _____
+  (sub-indexes "hello"  3 :end-idx  1) ; _____
+  (sub-indexes "hello"  3 :end-idx -1) ; ___lo
+  )
+
+(defn subvec* "Like `subvec` but uses `sub-indexes`."
+  [v start-idx & [?max-len]]
+  (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
+    (subvec v start-idx* end-idx*)))
+
+(comment (subvec* [:a :b :c :d :e] -1))
+
 (defrecord Swapped [new-val return-val])
 (defn      swapped [new-val return-val] (Swapped. new-val return-val))
 (defn-    swapped* [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
@@ -970,39 +1027,15 @@
     [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
 
 (defn substr
-  "Gives a consistent, flexible, cross-platform substring API with support for:
-    * Clamping of indexes beyond string limits.
-    * Negative indexes: [   0   |   1   |  ...  |  n-1  |   n   ) or
-                        [  -n   | -n+1  |  ...  |  -1   |   0   ).
-                        (start index inclusive, end index exclusive).
-
-  Note that `max-len` was chosen over `end-idx` since it's less ambiguous and
-  easier to reason about - esp. when accepting negative indexes."
-  [s start-idx & [max-len]]
-  {:pre [(have? [:or nil? nneg-int?] max-len)]}
-  (let [;; s       (str   s)
-        slen       (count s)
-        start-idx* (if (>= start-idx 0)
-                     (min start-idx slen)
-                     (max 0 (dec (+ slen start-idx))))
-        end-idx*   (if-not max-len slen
-                     (min (+ start-idx* max-len) slen))]
-    ;; (println [start-idx* end-idx*])
+  "Gives a consistent, flexible, cross-platform substring API built on
+  `sub-indexes`."
+  [s start-idx & [?max-len]]
+  (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
     #+clj  (.substring ^String s start-idx* end-idx*)
     ;; Could also use .substr:
     #+cljs (.substring         s start-idx* end-idx*)))
 
-(comment
-  (substr "Hello"  0 5) ; "Hello"
-  (substr "Hello"  0 9) ; "Hello"
-  (substr "Hello" -4 5) ; "Hello"
-  (substr "Hello"  2 2) ; "ll"
-  (substr "Hello" -2 2) ; "ll"
-  (substr "Hello" -2)   ; "llo"
-  (substr "Hello"  2)   ; "llo"
-  (substr "Hello"  9 9) ; ""
-  (substr "Hello"  0 0) ; ""
-  )
+(comment (substr "hello" -1 1))
 
 (defn str-contains? [s substr]
   #+clj  (.contains ^String s ^String substr)
