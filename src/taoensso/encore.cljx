@@ -1118,6 +1118,17 @@
 ;;;; IO
 
 #+clj
+(defn slurp-resource
+  "Slurps named resource on classpath, returns nil when resource not found."
+  [n]
+  (when-let [r (io/resource n)]
+    (try (slurp (io/reader r))
+         (catch Exception e
+           (throw (ex-info (format "Failed to slurp resource: %s" n) {:n n} e))))))
+
+(comment (slurp-resource "foo.txt"))
+
+#+clj
 (do
   (defn- file-resource-last-modified
     "Returns last-modified time for file backing given named resource, or nil if
