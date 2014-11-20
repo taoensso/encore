@@ -617,7 +617,7 @@
   )
 
 (defn subvec* "Like `subvec` but uses `sub-indexes`."
-  [v start-idx & [?max-len]]
+  [v start-idx & [?max-len]] {:pre [(have? vector? v)]}
   (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
     (subvec v start-idx* end-idx*)))
 
@@ -1029,7 +1029,7 @@
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
   `sub-indexes`."
-  [s start-idx & [?max-len]]
+  [s start-idx & [?max-len]] {:pre [(have? string? s)]}
   (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
     #+clj  (.substring ^String s start-idx* end-idx*)
     ;; Could also use .substr:
