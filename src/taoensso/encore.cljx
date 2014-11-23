@@ -909,6 +909,8 @@
 
 (comment (interleave-all [:a :b :c] [:A :B :C :D :E] [:1 :2]))
 
+(defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll))))
+
 (defn distinctv "Prefer `set` when order doesn't matter (much faster)."
   ([coll] ; `distinctv`
      (-> (reduce (fn [[v seen] in]
