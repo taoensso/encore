@@ -1098,7 +1098,7 @@
   [s] (str/replace (str s) #"\s+" \space))
 
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
-(count-words "Hello this is a    test")
+(comment (count-words "Hello this is a    test"))
 
 (defn uuid-str
   "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\",
