@@ -768,6 +768,7 @@
   (if (empty? ks)
     (apply dissoc m dissoc-ks)
     (apply update-in m ks dissoc dissoc-ks)))
+
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
 (comment (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)

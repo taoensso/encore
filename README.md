@@ -2,7 +2,7 @@
 
 # Cross-platform Clojure utils library
 
-  * See the [source][] to see what's available.
+  * See the [source][] to see what's available (no docs on this one, sorry).
   * Used as a shared support library for the [taoensso Clojure libs][].
 
 ## Contact & contributing
