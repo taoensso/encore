@@ -1,5 +1,7 @@
 **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing)
 
+> This is a library intended for my own use, and for advanced users who are comfortable reading the source code to see what's available + how to use it.
+
 # Cross-platform Clojure utils library
 
   * See the [source][] to see what's available (no docs on this one, sorry).
