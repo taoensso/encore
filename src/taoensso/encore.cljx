@@ -1317,6 +1317,27 @@
   (let [f4 (memoize* 2 5000 (fn [] (Thread/sleep 5) (println "compute1")))]
     (dotimes [_ 10] (future (f4)))))
 
+(defn memoize-1
+  "A particularly cheap+simple single-val memoize. Useful for Reactjs render op
+  caching on mobile devices, etc."
+  [f]
+  (let [cache_ (atom {})] ; Single {<args> <delay-val>}
+    (fn [& args]
+      (if-let [dv_ (get @cache_ args)]
+        @dv_
+        (let [cache (swap! cache_
+                      (fn [cache]
+                        (if-let [dv_ (get cache args)]
+                          cache
+                          {args (delay (apply f args))})))
+              dv_ (get cache args)]
+          @dv_)))))
+
+(comment
+  (def fm1a (memoize   (fn [x] (Thread/sleep 3000) x)))
+  (def fm1b (memoize-1 (fn [x] (Thread/sleep 3000) x)))
+  (qb 1000 (fm1a "foo") (fm1b "foo")))
+
 (defn rate-limiter
   "Returns a `(fn [& [id]])` that returns either `nil` (limit okay) or number of
   msecs until next rate limit window (rate limited)."
