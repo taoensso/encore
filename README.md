@@ -26,5 +26,6 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [Twitter]: <https://twitter.com/ptaoussanis>
 [issues page]: <https://github.com/ptaoussanis/encore/issues>
 [taoensso.com]: <https://www.taoensso.com>
+[Cider]: <https://github.com/clojure-emacs/cider>
 [Eclipse Public License]: <https://raw2.github.com/ptaoussanis/encore/master/LICENSE>
 [source]: <https://github.com/ptaoussanis/encore/blob/master/src/taoensso/encore.cljx>
