@@ -817,7 +817,7 @@
     (let [kf (if-not (kw-identical? kf :keywordize) kf (fn [k _] (keyword k)))
           vf (if-not (kw-identical? vf :keywordize) vf (fn [_ v] (keyword v)))]
       (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k v) k)
-                                                   (if vf (vf v v) v)))
+                                                   (if vf (vf k v) v)))
                               (transient {}) m)))))
 
 (defn map-keys [f m] (map-kvs     (fn [k _] (f k)) nil m))
