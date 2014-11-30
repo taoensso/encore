@@ -32,7 +32,7 @@
 
 ;;;; Core
 
-(defmacro ^:also-cljs if-cljs
+(defmacro if-cljs
   "Executes `then` clause iff generating ClojureScript code.
   Useful for writing macros that can produce different Clj/Cljs code (this isn't
   something Cljx currently provides support for). Stolen from Prismatic code,
@@ -56,7 +56,7 @@
     attr (if (meta name) (conj (meta name) attr)     attr)]
     [(with-meta name attr) macro-args]))
 
-(defmacro ^:also-cljs defonce*
+(defmacro defonce*
   "Like `clojure.core/defonce` but supports optional docstring and attributes
   map for name symbol."
   {:arglists '([name expr])}
@@ -87,7 +87,7 @@
                      (when-let [doc# ~doc] {:doc doc#})))
      (var ~name)))
 
-(defmacro ^:also-cljs cond-throw
+(defmacro cond-throw
   "Like `cond` but throws on no-match like `case`, `condp`."
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
@@ -103,7 +103,7 @@
        ~@(map pstep (partition 2 clauses))
        ~g)))
 
-(defmacro ^:also-cljs case-eval
+(defmacro case-eval
   "Like `case` but evaluates test constants for their compile-time value."
   [e & clauses]
   (let [;; Don't evaluate default expression!
@@ -114,7 +114,7 @@
                       clauses)
        ~(when default default))))
 
-(defmacro ^:also-cljs if-lets
+(defmacro if-lets
   "Like `if-let` but binds multiple values iff all tests are true."
   ([bindings then] `(if-lets ~bindings ~then nil))
   ([bindings then else]
@@ -128,7 +128,7 @@
          (if-lets [a :a b :b]  [a b])
          (if-lets [a :a b nil] [a b]))
 
-(defmacro ^:also-cljs when-lets
+(defmacro when-lets
   "Like `when-let` but binds multiple values iff all tests are true."
   [bindings & body]
   (let [[b1 b2 & bnext] bindings]
@@ -176,7 +176,7 @@
          (error-data (Exception. "foo"))
          (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro ^:also-cljs catch-errors
+(defmacro catch-errors
   "Experimental. Returns [<?result> <?error>]."
   [& body]
   (if-cljs
@@ -303,7 +303,7 @@
          ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
          )
 
-(defmacro ^:also-cljs asserted* "Implementation detail."
+(defmacro asserted* "Implementation detail."
   ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
   ([line truthy? pred x]
      (if-not *assert* (or truthy? x)
@@ -321,7 +321,7 @@
          ;; Truthy when nothing throws + allows [] destructuring:
          (mapv (fn [x] `(asserted* ~line ~truthy? ~pred ~x)) xs)))))
 
-(defmacro ^:also-cljs have?
+(defmacro have?
   "Experimental. Like `assert` but:
     * Takes a pred and x/s.
     * Returns true on success for convenient use in pre/post conds.
@@ -329,11 +329,11 @@
     * Provides better messages on failure!"
   [& args] `(asserted* ~(:line (meta &form)) (boolean :truthy) ~@args))
 
-(defmacro ^:also-cljs have
+(defmacro have
   "Experimental. Like `have?` but returns input/s on success for use in bindings."
   [& args] `(asserted* ~(:line (meta &form)) (not :truthy) ~@args))
 
-(defmacro ^:also-cljs have-in
+(defmacro have-in
   "Experimental. Like `have` but takes an evaluated, single-form collection arg/s.
   No need for `have-in?` variant since result will always be a collection
   (=> truthy)."
@@ -368,7 +368,7 @@
   (have? [:or nil? string?] "hello")
   (qb 10000 (have? "a") (have string? "a" "b" "c") (have? [:or nil? string?] "a" "b" "c")))
 
-(defmacro ^:also-cljs check-some
+(defmacro check-some
   "Experimental. Returns first logical false/throwing expression (id/form), or nil."
   ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
   ([test]
@@ -376,7 +376,7 @@
        `(let [[test# err#] (catch-errors ~test)]
           (when-not test# (or ~error-id '~test :check/falsey))))))
 
-(defmacro ^:also-cljs check-all
+(defmacro check-all
   "Experimental. Returns all logical false/throwing expressions (ids/forms), or nil."
   ([test] `(check-some ~test))
   ([test & more]
@@ -1003,7 +1003,7 @@
 
 (comment (repeatedly-into [] 10 rand))
 
-(defmacro ^:also-cljs repeatedly-into*
+(defmacro repeatedly-into*
   [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
@@ -1401,14 +1401,14 @@
       (fn [] (* 1e6 (now-udt))))
     (fn [] (* 1e6 (now-udt)))))
 
-(defmacro ^:also-cljs time-ms
+(defmacro time-ms
   "Returns number of milliseconds it takes to execute body."
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
 
-(defmacro ^:also-cljs time-ns "Returns number of nanoseconds it takes to execute body."
+(defmacro time-ns "Returns number of nanoseconds it takes to execute body."
   [& body] `(let [t0# (nano-time)] ~@body (- (nano-time) t0#)))
 
-(defmacro ^:also-cljs qbench
+(defmacro qbench
   "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
   ([nlaps form]
      `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# (have integer? ~nlaps)]
@@ -1683,7 +1683,7 @@
 ;;;; DEPRECATED
 
 ;; Used by Carmine <= v2.7.0
-(defmacro ^:also-cljs repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+(defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
 
 ;; Used by Sente <= v1.1.0
 #+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
