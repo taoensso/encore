@@ -1173,7 +1173,8 @@
 ;; * Consider implementing a self-gc'ing hashmap for use here & elsewhere?
 ;; * Invalidating memoize* cache doesn't scale horizontally; could easily build
 ;;   a Redis-backed distributed version with pttl, though it'd be slower.
-;; * Consider a timer-wheel for cheaper ttl gc.
+;; * Consider a timer-wheel for cheaper ttl gc. UPD: core.async timeouts
+;;   are actually faster.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn swap-val! ; Public since it can be useful for custom memoization utils
