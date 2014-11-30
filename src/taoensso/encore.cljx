@@ -32,6 +32,18 @@
 
 ;;;; Core
 
+(defmacro compile-if
+  "Evaluates `test` and if it returns logical true and doesn't error, expands to
+  `then`. Else expand to `else`. Stolen from `clojure.core.reducers`.
+
+  (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
+    (do-cool-stuff-with-fork-join)
+    (fall-back-to-executor-services))"
+  [test then else]
+  (if (try (eval test) (catch Throwable _ false))
+    `(do ~then)
+    `(do ~else)))
+
 (defmacro if-cljs
   "Executes `then` clause iff generating ClojureScript code.
   Useful for writing macros that can produce different Clj/Cljs code (this isn't
