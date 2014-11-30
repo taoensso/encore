@@ -1388,16 +1388,18 @@
 ;;;; Benchmarking
 
 (def nano-time
+  ;; 1ms = 10^6ns
   #+clj (fn [] (System/nanoTime)) ; Since Unix Epoch
-  #+cljs ; Since window context, etc., Ref. http://goo.gl/mWZWnR
+  #+cljs ; Since **window context**, not epoch!, etc., Ref. http://goo.gl/mWZWnR
   (if-let [perf (and (exists? js/window)
                      (aget js/window "performance"))]
     ;; Ref. http://goo.gl/fn84us
     (if-let [f (or (aget perf "now")  (aget perf "mozNow") (aget perf "msNow")
                    (aget perf "oNow") (aget perf "webkitNow"))]
-      (fn [] (long (* 1000 (.call f perf))))
-      (fn [] (* 1000 (now-udt))))
-    (fn [] (* 1000 (now-udt)))))
+      ;; JS call returns millisecs double, accurate to 1/1000th of a ms:
+      (fn [] (long (* 1e6 (.call f perf))))
+      (fn [] (* 1e6 (now-udt))))
+    (fn [] (* 1e6 (now-udt)))))
 
 (defmacro ^:also-cljs time-ms
   "Returns number of milliseconds it takes to execute body."
@@ -1411,7 +1413,7 @@
   ([nlaps form]
      `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# (have integer? ~nlaps)]
                                                 (do ~form))))]
-        (round2 (/ (apply min times#) 1000000.0))))
+        (round2 (/ (apply min times#) 1e6))))
   ([nlaps form & more]
      (mapv (fn [form] `(qbench ~nlaps ~form)) (cons form more))))
 
@@ -1437,7 +1439,7 @@
                     (doall)
                     (map deref)
                     (dorun)))))]
-      (if as-ns? nanosecs (Math/round (/ nanosecs 1000000.0))))
+      (if as-ns? nanosecs (Math/round (/ nanosecs 1e6))))
     (catch Throwable t (format "DNF: %s" (.getMessage t)))))
 
 (defmacro bench [nlaps bench*-opts & body]
