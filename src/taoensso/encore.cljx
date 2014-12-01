@@ -28,7 +28,7 @@
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
   #+cljs (:require-macros [taoensso.encore :as encore-macros :refer
-                           (catch-errors have? have have-in)]))
+                           (catch-errors have? have have-in compile-if)]))
 
 ;;;; Core
 
@@ -160,9 +160,13 @@
 
 (defn stringy? [x] (or (keyword? x) (string? x)))
 (defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
-;; (defn- chan? [x] ; Commented out to avoid core.async dep
-;;   #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-;;   #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
+(compile-if ; Have core.async?
+  (Class/forName "clojure.core.async.impl.channels.ManyToManyChannel")
+  (defn chan? [x]
+    #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
+    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+  nil)
 
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
