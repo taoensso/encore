@@ -1,5 +1,5 @@
 (ns taoensso.encore
-  "Subset of the commonest Ensso utils w/o external dependencies."
+  "Some tools I use often, w/o external deps."
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
@@ -51,12 +51,12 @@
   Ref. http://goo.gl/DhhhSN,
        https://groups.google.com/d/msg/clojurescript/iBY5HaQda4A/w1lAQi9_AwsJ."
   [then else]
-  (if (:ns &env) ; nil in Clojure, nnil in ClojureScript
+  (if (:ns &env) ; nil when compiling for Clojure, nnil for ClojureScript
     then else))
 
 (defn name-with-attrs
-  "Stolen from `clojure.tools.macro`.
-  Handles optional docstrings & attr maps for a macro def's name."
+  "Handles optional docstrings & attr maps for a macro def's name.
+  Stolen from `clojure.tools.macro`."
   [name macro-args]
   (let [[docstring macro-args] (if (string? (first macro-args))
                                  [(first macro-args) (next macro-args)]
@@ -1526,8 +1526,7 @@
 #+cljs
 (defn- get-pooled-xhr!
   "Returns an immediately available XhrIo instance, or nil. The instance must be
-  released back to pool manually. Use core.async to wait for an available
-  instance, etc."
+  released back to pool manually."
   []
   (let [result (.getObject @xhr-pool_)]
     (when-not (undefined? result) result)))
