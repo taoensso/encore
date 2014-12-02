@@ -1698,10 +1698,10 @@
   #+clj  [s & [encoding]]
   #+cljs [s]
   (when s
-    #+clj  (-> (java.net.URLEncoder/encode (str s) (or encoding "UTF-8"))
+    #+clj  (-> (java.net.URLEncoder/encode s (or encoding "UTF-8"))
                (str/replace "*" "%2A")
                (str/replace "+" "%2B"))
-    #+cljs (-> (js/encodeURIComponent (str s))
+    #+cljs (-> (js/encodeURIComponent s)
                (str/replace "*" "%2A")
                (str/replace "'" "%27"))))
 
@@ -1719,7 +1719,7 @@
     (when-not (empty? m)
       (join (for [[k v] m]
               (if (sequential? v)
-                (join (map (partial param k) (or (seq v) [""])))
+                (join (mapv (partial param k) (or (seq v) [""])))
                 (param k v)))))))
 
 (comment
