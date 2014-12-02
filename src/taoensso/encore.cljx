@@ -1696,6 +1696,80 @@
 
 (comment (redirect-resp :temp "/foo" "boo!"))
 
+(defn url-encode "Stolen from http://goo.gl/99NSR1."
+  #+clj  [s & [encoding]]
+  #+cljs [s]
+  (when s
+    #+clj  (-> (java.net.URLEncoder/encode (str s) (or encoding "UTF-8"))
+               (str/replace "*" "%2A")
+               (str/replace "+" "%2B"))
+    #+cljs (-> (js/encodeURIComponent (str s))
+               (str/replace "*" "%2A")
+               (str/replace "'" "%27"))))
+
+(defn url-decode "Stolen from http://goo.gl/99NSR1."
+  [s & [encoding]]
+  (when s
+    #+clj  (java.net.URLDecoder/decode s (or encoding "UTF-8"))
+    #+cljs (js/decodeURIComponent s)))
+
+(comment (url-decode (url-encode "Hello there~*+")))
+
+(defn format-query-string [m]
+  (let [param (fn [k v]  (str (url-encode (name k)) "=" (url-encode v)))
+        join  (fn [strs] (str/join "&" strs))]
+    (when-not (empty? m)
+      (join (for [[k v] m]
+              (if (sequential? v)
+                (join (map (partial param k) (or (seq v) [""])))
+                (param k v)))))))
+
+(comment
+  (format-query-string {})
+  (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b" 7] :k5 []}))
+
+(defn- assoc-conj [m k v]
+  (assoc m k (if-let [cur (get m k)] (if (vector? cur) (conj cur v) [cur v]) v)))
+
+(comment (assoc-conj {:a "a"} :a "b"))
+
+(defn parse-query-params "Based on `ring-codec/form-decode`."
+  [s & [keywordize? encoding]] {:post [(have? map? %)]}
+  (if (str/blank? s) {}
+    (let [;; For convenience (e.g. JavaScript win-loc :search)
+          s (if (str-starts-with? s "?") (substr s 1) s)]
+      (if-not (str-contains? s "=") {}
+        (let [m (reduce
+                  (fn [m param]
+                    (if-let [[k v] (str/split param #"=" 2)]
+                      (assoc-conj m (url-decode k encoding) (url-decode v encoding))
+                      m))
+                  {}
+                  (str/split s #"&"))]
+          (if-not keywordize? m
+            (keywordize-map m)))))))
+
+(comment
+  (parse-query-params nil)
+  (parse-query-params "?foo=bar" :keywordize)
+  (-> {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b"] :k5 []}
+      (format-query-string)
+      (parse-query-params)))
+
+(defn merge-url-with-query-string [url m]
+  (let [[url ?qstr] (str/split (str url) #"\?" 2)
+        qmap (merge
+               (when ?qstr (keywordize-map (parse-query-params ?qstr)))
+               (keywordize-map m))]
+    (str url (when-let [qstr (format-query-string qmap)] (str "?" qstr)))))
+
+(comment
+  (merge-url-with-query-string "/" nil)
+  (merge-url-with-query-string "/?foo=bar" nil)
+  (merge-url-with-query-string "/?foo=bar" {"foo" "overwrite"})
+  (merge-url-with-query-string "/?foo=bar" {:foo  "overwrite"})
+  (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
+
 ;;;; DEPRECATED
 
 ;; Used by Carmine <= v2.7.0
