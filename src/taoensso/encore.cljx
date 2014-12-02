@@ -39,10 +39,10 @@
   (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
     (do-cool-stuff-with-fork-join)
     (fall-back-to-executor-services))"
-  [test then else]
+  [test then & [?else]]
   (if (try (eval test) (catch Throwable _ false))
     `(do ~then)
-    `(do ~else)))
+    `(do ~?else)))
 
 (defmacro if-cljs
   "Executes `then` clause iff generating ClojureScript code.
@@ -161,12 +161,10 @@
 (defn stringy? [x] (or (keyword? x) (string? x)))
 (defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
 
-(compile-if ; Have core.async?
-  (Class/forName "clojure.core.async.impl.channels.ManyToManyChannel")
+(compile-if (do (require 'clojure.core.async) true)
   (defn chan? [x]
     #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
-  nil)
+    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x)))
 
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
