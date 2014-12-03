@@ -8,7 +8,9 @@
             :comments "Same as Clojure"}
   :min-lein-version "2.3.3"
   :global-vars {*warn-on-reflection* true
-                *assert* true}
+                *assert*             true
+                ;; *unchecked-math*  :warn-on-boxed
+                }
 
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
