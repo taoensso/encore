@@ -1746,12 +1746,16 @@
   #+clj  [s & [encoding]]
   #+cljs [s]
   (when s
-    #+clj  (-> (java.net.URLEncoder/encode s (or encoding "UTF-8"))
+    #+clj  (-> (str s)
+               (java.net.URLEncoder/encode (or encoding "UTF-8"))
                (str/replace "*" "%2A")
                (str/replace "+" "%2B"))
-    #+cljs (-> (js/encodeURIComponent s)
+    #+cljs (-> (str s)
+               (js/encodeURIComponent s)
                (str/replace "*" "%2A")
                (str/replace "'" "%27"))))
+
+(comment (mapv url-encode ["foo+bar" 47]))
 
 (defn url-decode "Stolen from http://goo.gl/99NSR1."
   [s & [encoding]]
@@ -1798,7 +1802,7 @@
 (comment
   (parse-query-params nil)
   (parse-query-params "?foo=bar" :keywordize)
-  (-> {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b"] :k5 []}
+  (-> {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b"] :k5 [] :k6 47}
       (format-query-string)
       (parse-query-params)))
 
