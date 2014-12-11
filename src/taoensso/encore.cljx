@@ -1670,7 +1670,10 @@
                      :?error
                      (or
                        (if ?http-status
-                         (when-not (<= 200 ?http-status 299) ?http-status)
+                         ;; TODO `let` here is temporary workaround to suppress
+                         ;; spurious Cljs warnings:
+                         (let [^number n ?http-status]
+                           (when-not (<= 200 n 299) ?http-status))
                          (get { ;; goog.net.ErrorCode/NO_ERROR nil
                                goog.net.ErrorCode/EXCEPTION  :exception
                                goog.net.ErrorCode/HTTP_ERROR :http-error
