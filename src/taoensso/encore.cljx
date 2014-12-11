@@ -106,7 +106,7 @@
 (comment (cond false "false") (cond-throw false "false"))
 
 (defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`."
-  [[name x] & clauses]
+  [[name x] & clauses] ; TODO [x name & clauses] would be much less confusing
   (assert (even? (count clauses)))
   (let [g (gensym)
         pstep (fn [[test-expr step]] `(when-let [~name ~test-expr]
