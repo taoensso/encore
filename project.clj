@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "1.18.3"
+(defproject com.taoensso/encore "1.18.2"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Shared support utils for taoensso.com Clojure libs"
   :url "https://github.com/ptaoussanis/encore"
@@ -15,7 +15,7 @@
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
-   [org.clojure/tools.reader "0.8.12"]]
+   [org.clojure/tools.reader "0.8.13"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -35,7 +35,7 @@
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
-      [com.keminglabs/cljx             "0.4.0"]
+      [com.keminglabs/cljx             "0.5.0"]
       [lein-cljsbuild                  "1.0.3"]
       ;;
       [lein-pprint                     "1.1.1"]
@@ -62,10 +62,7 @@
                     :pretty-print false}}]}
 
   :test-paths ["test" "src"]
-  ;;:hooks      [cljx.hooks leiningen.cljsbuild]
-  ;;:prep-tasks [["cljx" "once"] "javac" "compile"]
-  :prep-tasks   [["with-profile" "+dev" ; Workaround for :dev cljx
-                  "cljx" "once"] "javac" "compile"]
+  :prep-tasks [["cljx" "once"] "javac" "compile"]
   :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
           :sources  ["target/classes"]
           :src-linenum-anchor-prefix "L"
