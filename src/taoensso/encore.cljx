@@ -257,7 +257,8 @@
 
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
-(defn nnil-set [x] (disj (set* x) nil))
+(defn nnil-set  [x] (disj (set* x) nil))
+(defn conj-some [coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
 
 (comment (nnil-set [:a :b nil]))
 
