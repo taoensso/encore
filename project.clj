@@ -1,6 +1,6 @@
 (defproject com.taoensso/encore "1.18.3"
   :author "Peter Taoussanis <https://www.taoensso.com>"
-  :description "Shared support utils for taoensso.com Clojure libs"
+  :description "Shared support utils for taoensso.com Clojure/Script libs"
   :url "https://github.com/ptaoussanis/encore"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"
