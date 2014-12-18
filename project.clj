@@ -24,7 +24,7 @@
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}
    :test {:dependencies [[expectations              "2.0.13"]
-                         [org.clojure/test.check    "0.6.1"]
+                         [org.clojure/test.check    "0.6.2"]
                          ;; [com.cemerick/double-check "0.5.7"]
                          ]}
    :dev
