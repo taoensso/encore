@@ -489,9 +489,13 @@
       )))
 
 (def round* round) ; Alias for ns refers
-(defn round2 "Optimized common case."
-  #+clj ^double [^double n]
-  #+cljs [n]
+
+(defn round1 "Optimized common case."
+  #+clj ^double [^double n] #+cljs [n]
+  (/ (double (Math/round (* n 10.0))) 10.0))
+
+  (defn round2 "Optimized common case."
+  #+clj ^double [^double n] #+cljs [n]
   (/ (double (Math/round (* n 100.0))) 100.0))
 
 (comment
