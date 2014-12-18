@@ -993,25 +993,36 @@
 
 (defn rcompare "Reverse comparator." [x y] (compare y x))
 
-(defn merge-deep-with ; From clojure.contrib.map-utils
-  "Like `merge-with` but merges maps recursively, applying the given fn
-  only when there's a non-map at a particular level.
+(defn nested-merge-with [f & maps]
+  (when (some identity maps)
+    (let [merge-entry
+          (fn [m e]
+            (let [k (key e) rv (val e)]
+              (if-not (contains? m k) ; No lv
+                (assoc m k rv)
+                (let [lv (get m k)]
+                  (if (and (map? lv) (map? rv)
+                        #_(or (map? rv) (nil? rv)))
+                    ;; Stack limited (don't nest too deaply):
+                    (assoc m k (nested-merge-with f lv rv))
+                    (assoc m k (f lv rv)))))))
+          merge2 (fn [m1 m2] (reduce merge-entry (or m1 {}) (seq m2)))]
+      (reduce merge2 maps))))
 
-  (merge-deep-with + {:a {:b {:c 1 :d {:x 1 :y 2}} :e 3} :f 4}
-                    {:a {:b {:c 2 :d {:z 9} :z 3} :e 100}})
-  => {:a {:b {:z 3, :c 3, :d {:z 9, :x 1, :y 2}}, :e 103}, :f 4}"
-  [f & maps]
-  (apply
-   (fn m [& maps]
-     (if (every? map? maps)
-       (apply merge-with m maps)
-       (apply f maps)))
-   maps))
+(def nested-merge
+  (partial nested-merge-with #_(fn [x y] y)
+    ;; We'll mimic `merge` behaviour re: nils against maps:
+    (fn [x y] (if (and (map? x) (nil? y)) x y))))
 
-(def merge-deep (partial merge-deep-with (fn [x y] y)))
-
-(comment (merge-deep {:a {:b {:c {:d :D :e :E}}}}
-                     {:a {:b {:g :G :c {:c {:f :F}}}}}))
+(comment
+  (nested-merge
+    {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3}}}
+    {        :b1 :B1* :c1 {        :b2 {        :b3 :B3*}}}
+    {                 :c1 nil}
+    {                 :c1 {}}
+    nil
+    {}) ; =>
+  {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
 
 (defn greatest "Returns the 'greatest' element in coll in O(n) time."
   [coll & [?comparator]]
@@ -1846,3 +1857,6 @@
 (defn as-bool  [x] (when x (have (as-?bool  x))))
 (defn as-int   [x] (when x (have (as-?int   x))))
 (defn as-float [x] (when x (have (as-?float x))))
+
+(def merge-deep-with nested-merge-with)
+(def merge-deep      nested-merge)
