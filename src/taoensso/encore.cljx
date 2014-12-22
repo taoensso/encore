@@ -1074,12 +1074,42 @@
 
 ;;;; Strings
 
-#+clj (def format clojure.core/format) ; For easier encore/format portability
+(defn- fstr [x]
+  #+clj  (if (nil? x) "nil" x)
+  #+cljs (if (or (undefined? x) (nil? x)) "nil" x))
+(defn- sprint-str [xs] (str/join " " (mapv fstr xs)))
+
+(defn format
+  "Like `clojure.core/format` but:
+    * Returns \"\" when fmt is nil rather than throwing an NPE.
+    * Formats nil as \"nil\" rather than \"null\".
+    * Provides ClojureScript support via goog.string.format (this has fewer
+      formatting options!)."
+  #+clj ^String [fmt & args]
+  #+cljs        [fmt & args]
+  ;; when fmt ; Another alternative to prevent NPE?
+  (let [fmt  (or fmt "") ; Prevent NPE
+        args (mapv fstr args)]
+    #+clj  (String/format fmt (to-array args))
+    ;; Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj:
+    #+cljs (apply gstr/format fmt args)))
+
 #+cljs
-(do
-  (defn- undefined->nil [x] (if (undefined? x) nil x))
-  (defn format "Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj"
-    [fmt & args] (apply gstr/format fmt (map undefined->nil args))))
+(def log->console
+  (if (exists? js/console)
+    (fn [x] (.log js/console x) nil)
+    (fn [x] nil)))
+
+(defn sprintln "Cross-platform atomic `str-println`."
+  ([]  #+clj  (println      "")
+       #+cljs (log->console ""))
+  ([x] #+clj  (println           x)
+       #+cljs (log->console (str x)))
+  ([x & more]
+   (let [xs (cons x more)
+         s  (sprint-str xs)]
+     #+clj  (println      s)
+     #+cljs (log->console s))))
 
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
@@ -1529,17 +1559,11 @@
 #+cljs
 (do ; Logging stuff
 
-  (defn log [x]
-    ;; (undefined? (aget "console" js/window))
-    (if (js* "typeof console != 'undefined'")
-      (.log js/console x)
-      (js/print x))
-    nil)
-
-  (defn sayp [& xs]     (js/alert (str/join " " xs)))
+  (def  log  log->console)
+  (defn sayp [& xs]     (js/alert (sprint-str xs)))
+  (defn logp [& xs]     (log      (sprint-str xs)))
   (defn sayf [fmt & xs] (js/alert (apply format fmt xs)))
-  (defn logp [& xs]     (log (str/join " " xs)))
-  (defn logf [fmt & xs] (log (apply format fmt xs)))
+  (defn logf [fmt & xs] (log      (apply format fmt xs)))
 
   ;;; Simplified logging stuff borrowed from Timbre
   (def logging-level "Log only >= <this-level> calls" (atom :debug))
