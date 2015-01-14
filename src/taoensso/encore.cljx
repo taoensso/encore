@@ -255,8 +255,11 @@
 
 (comment (nnil= :foo :foo nil))
 
+;;; `vec*`, `set*` functionality added to clojure.core as of Clojure 1.7-alpha5.
+;;; Keeping these around for compatibility or use with older versions of Clojure.
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
+
 (defn nnil-set  [x] (disj (set* x) nil))
 (defn conj-some [coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
 
@@ -494,7 +497,7 @@
   #+clj ^double [^double n] #+cljs [n]
   (/ (double (Math/round (* n 10.0))) 10.0))
 
-  (defn round2 "Optimized common case."
+(defn round2 "Optimized common case."
   #+clj ^double [^double n] #+cljs [n]
   (/ (double (Math/round (* n 100.0))) 100.0))
 
@@ -549,8 +552,8 @@
       (if ms              ms                           0))))
 
 (def secs (comp ms->secs ms))
-(comment (ms   :years 88 :months 3 :days 33)
-         (secs :years 88 :months 3 :days 33))
+(comment #=(ms   :years 88 :months 3 :days 33)
+         #=(secs :years 88 :months 3 :days 33))
 
 (defmacro thread-local-proxy
   "Thread-safe proxy wrapper, Ref. http://goo.gl/CEBJnQ (instant.clj)."
@@ -670,6 +673,8 @@
                            [x x]))
 
 (comment ; TODO Debug, Ref. http://dev.clojure.org/jira/browse/CLJ-979
+  ;; Appears (?) to be fixed as of Clojure 1.7-alpha5,
+  ;; Ref. http://dev.clojure.org/jira/browse/CLJ-979
   (defrecord Foo1 [x])
   (instance? Foo1 (Foo1.  "bar"))
   (instance? Foo1 (->Foo1 "bar"))
