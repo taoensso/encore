@@ -191,8 +191,7 @@
          (error-data (Exception. "foo"))
          (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro catch-errors
-  "Experimental. Returns [<?result> <?error>]."
+(defmacro catch-errors "Experimental. Returns [<?result> <?error>]."
   [& body]
   (if-cljs
     `(try [(do ~@body)] (catch :default  e# [nil e#]))
@@ -207,7 +206,7 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(defn     nnil? [x] (not (nil? x))) ; some?
+(defn     nnil? [x] (not (nil? x))) ; As `some?`
 (defn   nblank? [x] (not (str/blank? x)))
 (defn     nneg? [x] (not (neg? x)))
 (defn  pos-int? [x] (and (integer? x) (pos? x)))
