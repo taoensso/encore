@@ -278,18 +278,34 @@
   (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
   (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
-;;;; Validation ; Experimental!!
-;; * `have?`   - pred form assertion/s; on success returns true.
-;; * `have`    - pred form assertion/s; on success returns input/s.
-;; * `have-in` - pred coll assertion/s; on success returns input/s.
+;;;; Conditionals ; Experimental!!
+;; We take an approach here that:
+;;   - Allows flexible, adhoc conditions (cmp. core.typed).
+;;   - Plays well with bindings, pre/post conds.
+;;   - Offers `RuntimeException`, `AssertionError` variants.
+;;
+;; * `have?`   - pred form cond/s; returns true    or throws AssertionError.
+;; * `have`    - pred form cond/s; returns input/s or throws AssertionError.
+;; * `have-in` - pred coll cond/s; returns input/s or throws AssertionError.
+;; * `!` variants throw `RuntimeException`s rather than `AssertionError`s and
+;;   are not subject to `*assert*` value.
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [ns-str line form val]
+(defn hthrow "Implementation detail." [ns-str line form val & [ex?]]
   ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
-  (let [pattern "Assert failed in `%s:%s` [pred-form,val]: [%s,%s]"]
-    (throw (assertion-error (format pattern ns-str (or line "?")
-                              (pr-str form) (pr-str val))))))
+  (let [pattern "Condition failed in `%s:%s` [pred-form,val]: [%s,%s]"
+        line-str (or line "?")
+        form-str (pr-str form)
+        val-str  (pr-str val)
+        msg      (format pattern ns-str line-str form-str val-str)]
+    (throw
+      (if-not ex?
+        (assertion-error msg)
+        (ex-info msg {:ns    ns-str
+                      :?line line
+                      :form  form-str
+                      :val   val-str})))))
 
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail." [pred-form]
@@ -321,23 +337,25 @@
          ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
          )
 
-(defmacro asserted* "Implementation detail."
-  ([line truthy? x] `(asserted* ~line ~truthy? nnil? ~x))
-  ([line truthy? pred x]
-     (if-not *assert* (or truthy? x)
-       `(let [[[x# pass?# have-x?#] err#]
-              (catch-errors
-                (let [pred# ~pred
-                      x#    ~x]
-                  [x# ((hpred pred#) x#) true]))]
-          (if pass?# (or ~truthy? x#)
-            (hthrow ~(str *ns*) ~line (list '~pred '~x)
-              (if have-x?# x# err#))))))
-  ([line truthy? pred x & more]
+(defmacro hcond "Implementation detail."
+  ([ex? truthy? line x] `(hcond ~ex? ~truthy? ~line nnil? ~x))
+  ([ex? truthy? line pred x]
+   (if-not (or ex? *assert*)
+     (or truthy? x)
+     `(let [[[x# pass?# have-x?#] err#]
+            (catch-errors
+              (let [pred# ~pred
+                    x#    ~x]
+                [x# ((hpred pred#) x#) true]))]
+        (if pass?# (or ~truthy? x#)
+          (hthrow ~(str *ns*) ~line (list '~pred '~x)
+            (if have-x?# x# err#) ~ex?)))))
+  ([ex? truthy? line pred x & more]
      (let [xs (into [x] more)]
-       (if-not *assert* (or truthy? xs)
+       (if-not (or ex? *assert*)
+         (or truthy? xs)
          ;; Truthy when nothing throws + allows [] destructuring:
-         (mapv (fn [x] `(asserted* ~line ~truthy? ~pred ~x)) xs)))))
+         (mapv (fn [x] `(hcond ~ex? ~truthy? ~line ~pred ~x)) xs)))))
 
 (defmacro have?
   "Experimental. Like `assert` but:
@@ -345,25 +363,38 @@
     * Returns true on success for convenient use in pre/post conds.
     * Traps errors.
     * Provides better messages on failure!"
-  [& args] `(asserted* ~(:line (meta &form)) (boolean :truthy) ~@args))
+  [& args] `(hcond false true ~(:line (meta &form)) ~@args))
 
 (defmacro have
   "Experimental. Like `have?` but returns input/s on success for use in bindings."
-  [& args] `(asserted* ~(:line (meta &form)) (not :truthy) ~@args))
+  [& args] `(hcond false false ~(:line (meta &form)) ~@args))
+
+;;; Exception variants - rarer, useful for security conds, etc.
+;; NB Don't use `have!?` in pre/post conds; these are subject to `*assert*` val!
+(defmacro have!? [& args] `(hcond true true  ~(:line (meta &form)) ~@args))
+(defmacro have!  [& args] `(hcond true false ~(:line (meta &form)) ~@args))
+
+(defmacro hcond-in "Implementation detail."
+  ([ex? xcoll] `(hcond-in ~ex? nnil? ~xcoll))
+  ([ex? pred xcoll]
+   (if-not (or ex? *assert*)
+     xcoll ; Always truthy (coll)
+     (let [g (gensym "hcond-in__")] ; Will (necessarily) lose exact form
+       (if ex?
+         `(mapv (fn [~g] (have! ~pred ~g)) ~xcoll)
+         `(mapv (fn [~g] (have  ~pred ~g)) ~xcoll)))))
+  ([ex? pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
+   (let [xcolls (into [xcoll] more-xcolls)]
+     (if-not (or ex? *assert*)
+       xcolls ; Always truthy (coll)
+       (mapv (fn [xcoll] `(hcond-in ~ex? ~pred ~xcoll)) xcolls)))))
 
 (defmacro have-in
   "Experimental. Like `have` but takes an evaluated, single-form collection arg/s.
-  No need for `have-in?` variant since result will always be a collection
-  (=> truthy)."
-  ([xcoll] `(have-in nnil? ~xcoll))
-  ([pred xcoll]
-     (if-not *assert* xcoll
-       (let [g (gensym "have-in__")] ; Will (necessarily) lose exact form
-         `(mapv (fn [~g] (have ~pred ~g)) ~xcoll))))
-  ([pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
-     (let [xcolls (into [xcoll] more-xcolls)]
-       (if-not *assert* xcolls
-         (mapv (fn [xcoll] `(have-in ~pred ~xcoll)) xcolls)))))
+  No need for `have-in?` variant since result will always be a coll (=> truthy)."
+  [& args] `(hcond-in false ~@args))
+
+(defmacro have-in! [& args] `(hcond-in true ~@args))
 
 (comment
   (let [x 5]      (have integer? x))
