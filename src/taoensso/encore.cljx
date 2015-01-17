@@ -176,15 +176,16 @@
   (when-let [data-map (or (ex-data x) ; ExceptionInfo
                           #+clj  (when (instance? Throwable x) {})
                           #+cljs (when (instance? js/Error  x) {}))]
-    (merge data-map
+    (merge
       #+clj  (let [^Throwable t x] ; (catch Throwable t <...>)
-               {:type*    (type        t)
-                :message* (.getMessage t)
-                :cause*   (.getCause   t)})
+               {:err-type   (type        t)
+                :err-msg    (.getMessage t)
+                :err-cause  (.getCause   t)})
       #+cljs (let [err x] ; (catch :default t <...)
-               {:type*    (type        err)
-                :message* (.-message   err)
-                :cause*   (.-cause     err)}))))
+               {:err-type  (type      err)
+                :err-msg   (.-message err)
+                :err-cause (.-cause   err)})
+      data-map)))
 
 (comment (error-data (Throwable. "foo"))
          (error-data (Exception. "foo"))
