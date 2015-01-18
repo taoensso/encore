@@ -292,20 +292,24 @@
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [ns-str line form val & [ex?]]
+(defn hthrow "Implementation detail." [ex? ns-str ?line form val & [?err]]
   ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
-  (let [pattern "Condition failed in `%s:%s` [pred-form,val]: [%s,%s]"
-        line-str (or line "?")
+  (let [;; Cider unfortunately doesn't seem to print newlines in errors...
+        pattern "Condition failed in `%s:%s` [pred-form, val]: [%s, %s]"
+        line-str (or ?line "?")
         form-str (pr-str form)
         val-str  (pr-str val)
-        msg      (format pattern ns-str line-str form-str val-str)]
+        ?err-str (when-let [e ?err] (pr-str ?err))
+        msg      (let [m (format pattern ns-str line-str form-str val-str)]
+                   (if-not ?err-str m (str m "\nPredicate error: " ?err-str)))]
     (throw
       (if-not ex?
         (assertion-error msg)
         (ex-info msg {:ns    ns-str
-                      :?line line
-                      :form  form-str
-                      :val   val-str})))))
+                      :?line ?line
+                      :form  form
+                      :val   val
+                      :?err  ?err})))))
 
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail." [pred-form]
@@ -342,14 +346,12 @@
   ([ex? truthy? line pred x]
    (if-not (or ex? *assert*)
      (or truthy? x)
-     `(let [[[x# pass?# have-x?#] err#]
-            (catch-errors
-              (let [pred# ~pred
-                    x#    ~x]
-                [x# ((hpred pred#) x#) true]))]
+     `(let [[x# ?x-err#]        (catch-errors ~x)
+            have-x?#            (nil? ?x-err#)
+            [pass?# ?pred-err#] (when have-x?# (catch-errors ((hpred ~pred) x#)))]
         (if pass?# (or ~truthy? x#)
-          (hthrow ~(str *ns*) ~line (list '~pred '~x)
-            (if have-x?# x# err#) ~ex?)))))
+          (hthrow ~ex? ~(str *ns*) ~line (list '~pred '~x)
+            (if have-x?# x# ?x-err#) ?pred-err#)))))
   ([ex? truthy? line pred x & more]
      (let [xs (into [x] more)]
        (if-not (or ex? *assert*)
@@ -370,7 +372,7 @@
   [& args] `(hcond false false ~(:line (meta &form)) ~@args))
 
 ;;; Exception variants - rarer, useful for security conds, etc.
-;; NB Don't use `have!?` in pre/post conds; these are subject to `*assert*` val!
+;; NB Don't use `have!?` in pre/post conds (they're subject to `*assert*` val)!
 (defmacro have!? [& args] `(hcond true true  ~(:line (meta &form)) ~@args))
 (defmacro have!  [& args] `(hcond true false ~(:line (meta &form)) ~@args))
 
@@ -415,7 +417,8 @@
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
   (have? [:or nil? string?] "hello")
-  (qb 10000 (have? "a") (have string? "a" "b" "c") (have? [:or nil? string?] "a" "b" "c")))
+  (qb 10000 (have? "a") (have string? "a" "b" "c") (have? [:or nil? string?] "a" "b" "c")) ; [5.59 26.48 45.82]
+  )
 
 (defmacro check-some
   "Experimental. Returns first logical false/throwing expression (id/form), or nil."
