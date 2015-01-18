@@ -1485,6 +1485,7 @@
   (def fm1b (memoize-1 (fn [x] (Thread/sleep 3000) x)))
   (qb 1000 (fm1a "foo") (fm1b "foo")))
 
+;; TODO Would be nice if one limiter could take multiple limit-window pairs
 (defn rate-limiter
   "Returns a `(fn [& [id]])` that returns either `nil` (limit okay) or number of
   msecs until next rate limit window (rate limited)."
