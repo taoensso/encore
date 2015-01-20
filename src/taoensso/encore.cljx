@@ -1749,7 +1749,8 @@
             (when-not (str/blank? s) s)))]
     (case method
       :get  [(if ?pstr (str uri "?" ?pstr) uri) nil]
-      :post [uri ?pstr])))
+      :post [uri ?pstr]
+      :put  [uri ?pstr])))
 
 #+cljs
 (defn ajax-lite
@@ -1777,7 +1778,7 @@
   (if-let [xhr (get-pooled-xhr!)]
     (try
       (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
-            method*    (case method :get "GET" :post "POST")
+            method*    (case method :get "GET" :post "POST" :put "PUT")
             params     (map-keys name params)
             headers    (merge {"X-Requested-With" "XMLHTTPRequest"}
                          (map-keys name headers))
