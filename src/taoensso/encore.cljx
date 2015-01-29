@@ -521,8 +521,8 @@
           :trunc (long n*)       ; Round up/down toward zero
           (throw (ex-info "Unknown round type" {:type type})))]
     (if-not modifier
-      rounded                       ; Returns integer
-      (/ (double rounded) modifier) ; Returns float
+      (long rounded)                ; Returns long
+      (/ (double rounded) modifier) ; Returns double
       )))
 
 (def round* round) ; Alias for ns refers
