@@ -30,6 +30,10 @@
   #+cljs (:require-macros [taoensso.encore :as encore-macros :refer
                            (catch-errors have? have have-in compile-if)]))
 
+;;;; TODO
+;; * Further boxed math optimizations.
+;; * Ajax file params support.
+
 ;;;; Core
 
 (defmacro compile-if
