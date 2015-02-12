@@ -43,7 +43,7 @@
     (throw
       (ex-info
         (format
-          "Insufficient com.taoensso/encore version: %s < %s. You may have a Leiningen dependency conflict (check `lein deps :tree`)."
+          "Insufficient com.taoensso/encore version: %s < %s. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution)."
           encore-version min-version)
         {:min-version  min-version
          :this-version encore-version}))))
