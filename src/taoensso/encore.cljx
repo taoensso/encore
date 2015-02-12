@@ -34,6 +34,22 @@
 ;; * Further boxed math optimizations.
 ;; * Ajax file params support.
 
+;;;; Version check
+
+(declare format)
+(def  encore-version "Used for lib-consumer version assertions" 1.21)
+(defn assert-min-encore-version [min-version]
+  (when (< encore-version min-version)
+    (throw
+      (ex-info
+        (format
+          "Insufficient com.taoensso/encore version: %s < %s. You may have a Leiningen dependency conflict (check `lein deps :tree`)."
+          encore-version min-version)
+        {:min-version  min-version
+         :this-version encore-version}))))
+
+(comment (assert-min-encore-version 1.3))
+
 ;;;; Core
 
 (defmacro compile-if
