@@ -14,7 +14,9 @@ Open your Leiningen `project.clj` file and look at your `:dependencies` section.
                ]
 ```
 
-If library A and B both pull in an Encore dependency and they're requesting different versions, Leiningen will choose the version requested by the **library listed first**.
+If library A and B both pull in an Encore dependency and they're requesting different versions, Leiningen will choose the version requested by the **library listed first**. What we _actually_ want is just the **newest** version, always [1].
+
+> [1] Unfortunately there isn't currently any reliable way of instructing Leiningen to just prefer the newest version in the event of a dep conflict, which is why we need to resolve this manually.
 
 You can resolve the conflict in two ways:
 
@@ -39,7 +41,7 @@ Or you can place an explicit Encore dependency near the top of your `:dependenci
                ]
 ```
 
-For this method ou'll be responsible for always making sure that you're using the [latest version](https://clojars.org/com.taoensso/encore) of Encore though. So if you do go this route, you may find [lein-ancient](https://github.com/xsc/lein-ancient) handy.
+For this method you'll be responsible for always making sure that you're using the [latest version](https://clojars.org/com.taoensso/encore) of Encore though. So if you do go this route, you may find [lein-ancient](https://github.com/xsc/lein-ancient) handy.
 
 ## Step 3 of 3: CLEAN YOUR BROKEN BUILD ARTIFACTS
 
