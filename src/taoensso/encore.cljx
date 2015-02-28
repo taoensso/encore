@@ -184,7 +184,10 @@
 (compile-if (do (require 'clojure.core.async) true)
   (defn chan? [x]
     #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x)))
+    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
+  ;; Nb nil rather than false to help distinguish from negative `instance?` test:
+  (defn chan? [x] nil))
 
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
