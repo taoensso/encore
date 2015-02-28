@@ -15,7 +15,7 @@
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
-   [org.clojure/tools.reader "0.8.13"]]
+   [org.clojure/tools.reader "0.8.15"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -23,7 +23,7 @@
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}
-   :test {:dependencies [[expectations              "2.0.13"]
+   :test {:dependencies [[expectations              "2.0.16"]
                          [org.clojure/test.check    "0.7.0"]
                          ;; [com.cemerick/double-check "0.5.7"]
                          ]}
