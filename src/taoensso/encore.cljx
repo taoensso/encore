@@ -1,5 +1,4 @@
-(ns taoensso.encore
-  "Some tools I use often, w/o external deps."
+(ns taoensso.encore "Some tools I use often, w/o any external deps."
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
@@ -155,10 +154,11 @@
          `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
          `(if-let [~b1 ~b2] ~then ~else)))))
 
-(comment (if-lets [a :a]  a)
-         (if-lets [a nil] a)
-         (if-lets [a :a b :b]  [a b])
-         (if-lets [a :a b nil] [a b]))
+(comment
+  (if-lets [a :a]  a)
+  (if-lets [a nil] a)
+  (if-lets [a :a b :b]  [a b])
+  (if-lets [a :a b nil] [a b]))
 
 (defmacro when-lets
   "Like `when-let` but binds multiple values iff all tests are true."
@@ -210,9 +210,10 @@
                 :err-cause (.-cause   err)})
       data-map)))
 
-(comment (error-data (Throwable. "foo"))
-         (error-data (Exception. "foo"))
-         (error-data (ex-info    "foo" {:bar :baz})))
+(comment
+  (error-data (Throwable. "foo"))
+  (error-data (Exception. "foo"))
+  (error-data (ex-info    "foo" {:bar :baz})))
 
 (defmacro catch-errors "Experimental. Returns [<?result> <?error>]."
   [& body]
@@ -253,6 +254,7 @@
                        (or (true? x) (false? x)) x
                        (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
                        (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
+
 (defn as-?int [x]
   (cond (nil?    x) nil
         (number? x) (long x)
@@ -262,6 +264,7 @@
                     (catch NumberFormatException _
                       (try (long (Float/parseFloat x))
                            (catch NumberFormatException _ nil))))))
+
 (defn as-?float [x]
   (cond (nil?    x) nil
         (number? x) (double x)
@@ -359,10 +362,11 @@
         :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
                       (every? #(% x) more)))))))
 
-(comment ((hpred [:or nil? string?]) "foo")
-         ((hpred [:or [:and integer? neg?] string?]) 5)
-         ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
-         )
+(comment
+  ((hpred [:or nil? string?]) "foo")
+  ((hpred [:or [:and integer? neg?] string?]) 5)
+  ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
+  )
 
 (defmacro hcond "Implementation detail."
   ([ex? truthy? line x] `(hcond ~ex? ~truthy? ~line nnil? ~x))
@@ -460,8 +464,9 @@
                                 (cons test more))))]
         (when-not (empty? errors#) errors#))))
 
-(comment (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
-         (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
+(comment
+  (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
+  (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
 ;;;; Keywords
 
@@ -484,12 +489,13 @@
           (keyword (when-not (empty? ppop) (str/join "." ppop))
                    (peek parts)))))))
 
-(comment (merge-keywords [:foo.bar nil :baz.qux/end nil])
-         (merge-keywords [:foo.bar nil :baz.qux/end nil] true)
-         (merge-keywords [:a.b.c "d.e/k"])
-         (merge-keywords [:a.b.c :d.e/k])
-         (merge-keywords [nil :k])
-         (merge-keywords [nil]))
+(comment
+  (merge-keywords [:foo.bar nil :baz.qux/end nil])
+  (merge-keywords [:foo.bar nil :baz.qux/end nil] true)
+  (merge-keywords [:a.b.c "d.e/k"])
+  (merge-keywords [:a.b.c :d.e/k])
+  (merge-keywords [nil :k])
+  (merge-keywords [nil]))
 
 ;;;; Bytes
 
@@ -874,9 +880,10 @@
 
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
-(comment (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
-         (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
-         (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
+(comment
+  (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
+  (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
+  (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
 
 (defn assoc-some "Assocs each kv iff its value is not nil."
   [m & kvs] {:pre [(have? even? (count kvs))]}
