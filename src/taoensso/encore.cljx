@@ -27,7 +27,7 @@
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
   #+cljs (:require-macros [taoensso.encore :as enc-macros :refer
-                           (catch-errors have? have have-in compile-if)]))
+                           (catch-errors have? have compile-if)]))
 
 ;;;; TODO
 ;; * Further boxed math optimizations.
@@ -304,21 +304,11 @@
   (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
   (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
-;;;; Conditionals ; Experimental!!
-;; We take an approach here that:
-;;   - Allows flexible, adhoc conditions (cmp. core.typed).
-;;   - Plays well with bindings, pre/post conds.
-;;   - Offers `RuntimeException`, `AssertionError` variants.
-;;
-;; * `have?`   - pred form cond/s; returns true    or throws AssertionError.
-;; * `have`    - pred form cond/s; returns input/s or throws AssertionError.
-;; * `have-in` - pred coll cond/s; returns input/s or throws AssertionError.
-;; * `!` variants throw `RuntimeException`s rather than `AssertionError`s and
-;;   are not subject to `*assert*` value.
+;;;; Conditionals (experimental)
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [ex? ns-str ?line form val & [?err]]
+(defn hthrow "Implementation detail." [hard? ns-str ?line form val & [?err]]
   ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
         pattern "Condition failed in `%s:%s` [pred-form, val]: [%s, %s]"
@@ -329,7 +319,7 @@
         msg      (let [m (format pattern ns-str line-str form-str val-str)]
                    (if-not ?err-str m (str m "\nPredicate error: " ?err-str)))]
     (throw
-      (if-not ex?
+      (if-not hard?
         (assertion-error msg)
         (ex-info msg {:ns    ns-str
                       :?line ?line
@@ -341,26 +331,31 @@
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form
-          p1 (when p1 (hpred p1))
-          p2 (when p2 (hpred p2))]
+          ;; p1 (when p1 (hpred p1))
+          ;; p2 (when p2 (hpred p2))
+          ]
       (case type
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
         :ks>=     (fn [x] (ks>=     p1 x))
         :ks-nnil? (fn [x] (ks-nnil? p1 x))
-        :in       (fn [x] (contains? (set* p1) x))
-        :not-in   (fn [x] (not (contains? (set* p1) x)))
+        (:el :in) (fn [x] (contains? (set* p1) x))
+        (:not-el
+         :not-in) (fn [x] (not (contains? (set* p1) x)))
         ;; complement/none-of:
-        :not      (fn [x] (and (if-not p1 true (not (p1 x)))
-                              (if-not p2 true (not (p2 x)))
-                              (every? #(not (% x)) more)))
+        :not      (fn [x] (and (if-not p1 true (not ((hpred p1) x)))
+                              (if-not p2 true (not ((hpred p2) x)))
+                              (every? #(not ((hpred %) x)) more)))
         ;; any-of, (apply some-fn preds):
-        :or  (fn [x] (or (when p1 ((non-throwing p1) x))
-                        (when p2 ((non-throwing p2) x))
-                        (some   #((non-throwing %)  x) more)))
+        :or  (fn [x] (or (when p1 ((non-throwing (hpred p1)) x))
+                        (when p2 ((non-throwing (hpred p2)) x))
+                        (some   #((non-throwing (hpred %))  x) more)))
         ;; all-of, (apply every-pred preds):
-        :and (fn [x] (and (if-not p1 true (p1 x)) (if-not p2 true (p2 x))
-                      (every? #(% x) more)))))))
+        :and (fn [x] (and (if-not p1 true ((hpred p1) x))
+                         (if-not p2 true ((hpred p2) x))
+                         (every? #((hpred %) x) more)))
+        ;; pred-form ; No, rather throw on confusing/ambiguous pred-form (typo?)
+        ))))
 
 (comment
   ((hpred [:or nil? string?]) "foo")
@@ -369,82 +364,107 @@
   )
 
 (defmacro hcond "Implementation detail."
-  ([ex? truthy? line x] `(hcond ~ex? ~truthy? ~line nnil? ~x))
-  ([ex? truthy? line pred x]
-   (if-not (or ex? *assert*)
-     (or truthy? x)
+  ([hard? line x] `(hcond ~hard? ~line nnil? ~x))
+  ([hard? line pred x]
+   (if-not (or hard? *assert*)
+     x
      `(let [[x# ?x-err#]        (catch-errors ~x)
             have-x?#            (nil? ?x-err#)
             [pass?# ?pred-err#] (when have-x?# (catch-errors ((hpred ~pred) x#)))]
-        (if pass?# (or ~truthy? x#)
-          (hthrow ~ex? ~(str *ns*) ~line (list '~pred '~x)
+        (if pass?#
+          x#
+          (hthrow ~hard? ~(str *ns*) ~line (list '~pred '~x)
             (if have-x?# x# ?x-err#) ?pred-err#)))))
-  ([ex? truthy? line pred x & more]
-     (let [xs (into [x] more)]
-       (if-not (or ex? *assert*)
-         (or truthy? xs)
-         ;; Truthy when nothing throws + allows [] destructuring:
-         (mapv (fn [x] `(hcond ~ex? ~truthy? ~line ~pred ~x)) xs)))))
-
-(defmacro have?
-  "Experimental. Like `assert` but:
-    * Takes a pred and x/s.
-    * Returns true on success for convenient use in pre/post conds.
-    * Traps errors.
-    * Provides better messages on failure!"
-  [& args] `(hcond false true ~(:line (meta &form)) ~@args))
-
-(defmacro have
-  "Experimental. Like `have?` but returns input/s on success for use in bindings."
-  [& args] `(hcond false false ~(:line (meta &form)) ~@args))
-
-;;; Exception variants - rarer, useful for security conds, etc.
-;; NB Don't use `have!?` in pre/post conds (they're subject to `*assert*` val)!
-(defmacro have!? [& args] `(hcond true true  ~(:line (meta &form)) ~@args))
-(defmacro have!  [& args] `(hcond true false ~(:line (meta &form)) ~@args))
+  ([hard? line pred x & more]
+   (let [xs (into [x] more)]
+     (if-not (or hard? *assert*)
+       xs
+       ;; Truthy when nothing throws + allows [] destructuring:
+       (mapv (fn [x] `(hcond ~hard? ~line ~pred ~x)) xs)))))
 
 (defmacro hcond-in "Implementation detail."
-  ([ex? xcoll] `(hcond-in ~ex? nnil? ~xcoll))
-  ([ex? pred xcoll]
-   (if-not (or ex? *assert*)
+  ([hard? xcoll] `(hcond-in ~hard? nnil? ~xcoll))
+  ([hard? pred xcoll]
+   (if-not (or hard? *assert*)
      xcoll ; Always truthy (coll)
      (let [g (gensym "hcond-in__")] ; Will (necessarily) lose exact form
-       (if ex?
-         `(mapv (fn [~g] (have! ~pred ~g)) ~xcoll)
-         `(mapv (fn [~g] (have  ~pred ~g)) ~xcoll)))))
-  ([ex? pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
+       (if hard?
+         `(mapv (fn [~g] (have :! ~pred ~g)) ~xcoll)
+         `(mapv (fn [~g] (have    ~pred ~g)) ~xcoll)))))
+  ([hard? pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
    (let [xcolls (into [xcoll] more-xcolls)]
-     (if-not (or ex? *assert*)
+     (if-not (or hard? *assert*)
        xcolls ; Always truthy (coll)
-       (mapv (fn [xcoll] `(hcond-in ~ex? ~pred ~xcoll)) xcolls)))))
+       (mapv (fn [xcoll] `(hcond-in ~hard? ~pred ~xcoll)) xcolls)))))
 
-(defmacro have-in
-  "Experimental. Like `have` but takes an evaluated, single-form collection arg/s.
-  No need for `have-in?` variant since result will always be a coll (=> truthy)."
-  [& args] `(hcond-in false ~@args))
+(defmacro have ; For inline-use/bindings
+  "EXPERIMENTAL. Takes a pred and one or more xs. Tests pred against each x,
+  trapping errors. If any pred test fails, throws a detailed error. Otherwise
+  returns input x/xs for convenient inline-use/binding.
 
-(defmacro have-in! [& args] `(hcond-in true ~@args))
+  Options:
+    * By default throws `AssertionError`s subject to `*assert*` value (useful
+      for catching errors during dev). Use a `:!` first arg to instead throw
+      `RuntimeException`s irrespective of `*assert*` value (useful for important
+      conditions in production).
+    * Use an `:in` arg after pred to treat x/xs as evaluated coll/colls.
+    * See `hpred` for various convenient pred modifier forms.
+
+  Provides a small, simple, deeply flexible alternative to heavier tools like
+  core.typed, Prismatic/schema.
+
+    (fn square    [x]    (let [x     (have integer? x)]   (* x x)))
+    (fn mult      [x y]  (let [[x y] (have integer? x y)] (* x y)))
+    (fn mult-many [& xs] (reduce * (have :! [:or integer? float?] :in xs)))"
+  {:arglists '([(:!) x] [(:!) pred (:in) x] [(:!) pred (:in) x & more-xs])}
+  [& args]
+  (let [hard? (= (first args) :!)
+        args  (if hard? (next args) args)
+        in?   (= (second args) :in)
+        args  (if in? (cons (first args) (nnext args)) args)]
+    (if in?
+      `(hcond-in ~hard?                       ~@args)
+      `(hcond    ~hard? ~(:line (meta &form)) ~@args))))
+
+(defmacro have? ; For :pre/:post conds, etc.
+  "EXPERIMENTAL. Like `have` but returns true rather than input on success
+  (convenient for use in :pre/:post conds).
+
+  **NB** Be cautious using `:!` tests in :pre/:post conds since :pre/:post conds
+  are themselves subject to `*assert*` val.
+
+    (fn square  [x]   {:pre [(have? integer? x)]}   (* x x))
+    (fn mult    [x y] {:pre [(have? integer? x y)]} (* x y))"
+  {:arglists '([(:!) x] [(:!) pred (:in) x] [(:!) pred (:in) x & more-xs])}
+  [& args] `(do (have ~@args) true))
 
 (comment
-  (let [x 5]      (have integer? x))
-  (let [x 5]      (have string?  x))
-  (let [x 5 y  6] (have odd?     x x x y x))
-  (let [x 0 y :a] (have zero?    x x x y x))
+  (let [x 5]      (have    integer? x))
+  (let [x 5]      (have    string?  x))
+  (let [x 5]      (have :! string?  x))
+  (let [x 5 y  6] (have odd?  x x x y x))
+  (let [x 0 y :a] (have zero? x x x y x))
   (have string? (do (println "eval1") "foo")
                 (do (println "eval2") "bar"))
-  (have number? (do (println "eval1") "foo")
-                (do (println "eval2") "bar"))
+  (have number? (do (println "eval1") 5)
+                (do (println "eval2") "bar")
+                (do (println "eval3") 10))
   (have nil? false)
-  (have-in string? ["a" "b"])
-  (have-in string? (if true ["a" "b"] [1 2]))
-  (have-in string? (mapv str (range 10)))
-  (have-in string? ["a" 1])
-  (have-in string? ["a" "b"] ["a" "b"])
-  (have-in string? ["a" "b"] ["a" "b" 1])
+  (have string? :in ["a" "b"])
+  (have string? :in (if true ["a" "b"] [1 2]))
+  (have string? :in (mapv str (range 10)))
+  (have string? :in ["a" 1])
+  (have string? :in ["a" "b"] ["a" "b"])
+  (have string? :in ["a" "b"] ["a" "b" 1])
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
   (have? [:or nil? string?] "hello")
-  (qb 10000 (have? "a") (have string? "a" "b" "c") (have? [:or nil? string?] "a" "b" "c")) ; [5.59 26.48 45.82]
+
+  ;; HotSpot is great with these:
+  (qb 10000
+    (have? "a")
+    (have string? "a" "b" "c")
+    (have? [:or nil? string?] "a" "b" "c")) ; [5.59 26.48 45.82]
   )
 
 (defmacro check-some
@@ -601,8 +621,8 @@
                             ^long days  ^long hours  ^long mins
                             ^long secs  ^long msecs  ^long ms]
       #+cljs [years months weeks days hours mins secs msecs ms]}]
-  {:pre [(have-in #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
-           (keys opts))]}
+  {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
+           :in (keys opts))]}
   (round
    (+ (if years        (* years  1000 60 60 24 365)    0)
       (if months (long (* months 1000 60 60 24 29.53)) 0)
@@ -1962,6 +1982,11 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
 
 ;;;; DEPRECATED
+
+(defmacro have-in  [a1 & an] `(have ~a1 :in ~@an))
+(defmacro have!?   [& args]  `(have?   :! ~@args))
+(defmacro have!    [& args]  `(have    :! ~@args))
+(defmacro have-in! [& args]  `(have-in :! ~@args))
 
 ;; Used by Sente <= v1.4.0-alpha2
 (def logging-level (atom :debug)) ; Just ignoring this now
