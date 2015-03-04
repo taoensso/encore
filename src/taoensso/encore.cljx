@@ -915,12 +915,16 @@
 
 (comment (assoc-some {:a :A} :b nil :c :C :d nil :e :E))
 
-#+clj (defn queue? [x] (instance? clojure.lang.PersistentQueue x))
-#+clj
-(defn queue "Returns a PersistentQueue containing the args."
-  [& items]
-  (if-not items clojure.lang.PersistentQueue/EMPTY
-    (into clojure.lang.PersistentQueue/EMPTY items)))
+(defn queue? [x]
+  #+clj  (instance? clojure.lang.PersistentQueue x)
+  #+cljs (instance? cljs.core.PersistentQueue    x))
+
+(defn queue "Returns a PersistentQueue."
+  ([] #+clj  clojure.lang.PersistentQueue/EMPTY
+      #+cljs cljs.core.PersistentQueue.EMPTY)
+  ([coll] (into (queue) coll)))
+
+(defn queue* [& items] (queue items))
 
 (def seq-kvs
   "(seq     {:a :A}) => ([:a :A])
