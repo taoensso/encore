@@ -1796,6 +1796,7 @@
           (gevents/listenOnce goog.net.EventType/COMPLETE
             (fn wrapped-callback [resp]
               (let [status        (.getStatus xhr) ; -1 when no resp
+                    success       (.isSuccess xhr)
                     ?http-status  (when (not= status -1) status)
                     ?content-type (when ?http-status
                                     (.getResponseHeader xhr "Content-Type"))
@@ -1826,6 +1827,7 @@
                      :raw-resp resp
                      :xhr      xhr ; = (.-target resp)
                      ;;;
+                     :success success
                      :?content-type (when ?http-status ?content-type)
                      :?content ?content
                      :?status  ?http-status
