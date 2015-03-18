@@ -1766,10 +1766,10 @@
      :resp-type  :text
      :timeout-ms 7000}
     (fn async-callback [resp-map]
-      (let [{:keys [?status ?error ?content ?content-type]} resp-map]
-        ;; ?status - 200, 404, ..., or nil on no response
-        ;; ?error  - e/o #{:xhr-pool-depleted :exception :http-error :abort
-        ;;                 :timeout <http-error-status> nil}
+      (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
+        ;; ?status  - 200, 404, ..., or nil on no response
+        ;; ?error   - e/o #{:xhr-pool-depleted :exception :http-error :abort
+        ;;                  :timeout <http-error-status> nil}
         (js/alert (str \"Ajax response: \" resp-map)))))"
   [uri {:keys [method params headers timeout-ms resp-type] :as opts
         :or   {method :get timeout-ms 10000 resp-type :auto}}
@@ -1797,6 +1797,9 @@
           (gevents/listenOnce goog.net.EventType/COMPLETE
             (fn wrapped-callback [resp]
               (let [status        (.getStatus xhr) ; -1 when no resp
+                    ;; e/o #{200 201 202 204 206 304 1223},
+                    ;; Ref. http://goo.gl/6qcVp0:
+                    success?      (.isSuccess xhr)
                     ?http-status  (when (not= status -1) status)
                     ?content-type (when ?http-status
                                     (.getResponseHeader xhr "Content-Type"))
@@ -1827,6 +1830,7 @@
                      :raw-resp resp
                      :xhr      xhr ; = (.-target resp)
                      ;;;
+                     :success? success?
                      :?content-type (when ?http-status ?content-type)
                      :?content ?content
                      :?status  ?http-status
@@ -1836,7 +1840,8 @@
                          ;; TODO `let` here is temporary workaround to suppress
                          ;; spurious Cljs warnings:
                          (let [^number n ?http-status]
-                           (when-not (<= 200 n 299) ?http-status))
+                           (when-not success? ; (<= 200 n 299)
+                             ?http-status))
                          (get { ;; goog.net.ErrorCode/NO_ERROR nil
                                goog.net.ErrorCode/EXCEPTION  :exception
                                goog.net.ErrorCode/HTTP_ERROR :http-error
