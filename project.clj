@@ -23,12 +23,13 @@
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}
-   :test {:dependencies [[com.taoensso.forks/expectations "2.1.0"]
-                         [com.cemerick/double-check       "0.6.1"]]}
+   :test {:dependencies [[expectations              "2.1.0"]
+                         [com.cemerick/double-check "0.6.1"]]}
    :dev
    [:1.7 :test
     {:dependencies
      [[org.clojure/clojurescript "0.0-2261"]
+      ;; [org.clojure/clojurescript "0.0-3126"] ; Issues with Austin
       [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
 
      :plugins
@@ -41,26 +42,43 @@
       [com.cemerick/austin             "0.1.4"]
       [lein-expectations               "0.0.8"]
       [lein-autoexpect                 "1.2.2"]
-      [com.cemerick/clojurescript.test "0.3.1"]
       [codox                           "0.8.10"]]}]}
+
+  ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
+
+  :source-paths ["src" "target/classes"]
+  :test-paths   ["src" "test" "target/test-classes"]
 
   :cljx
   {:builds
-   [{:source-paths ["src" "test"] :rules :clj  :output-path "target/classes"}
-    {:source-paths ["src" "test"] :rules :cljs :output-path "target/classes"}]}
+   [{:source-paths ["src"]        :rules :clj  :output-path "target/classes"}
+    {:source-paths ["src"]        :rules :cljs :output-path "target/classes"}
+    {:source-paths ["src" "test"] :rules :clj  :output-path "target/test-classes"}
+    {:source-paths ["src" "test"] :rules :cljs :output-path "target/test-classes"}]}
 
   :cljsbuild
-  {:test-commands {"node"    ["node" :node-runner "target/main.js"]
-                   "phantom" ["phantomjs" :runner "target/main.js"]}
+  {:test-commands {"node"       ["node" :node-runner "target/tests.js"]
+                   ;; "phantom" ["phantomjs" :runner "target/tests.js"]
+                   }
    :builds
-   [{:id :main
-     :source-paths ["src" "test" "target/classes"]
-     :compiler     {:output-to "target/main.js"
-                    :optimizations :advanced
-                    :pretty-print false}}]}
+   [{:id "main"
+     :source-paths   ["src" "target/classes"]
+     ;; :notify-command ["terminal-notifier" "-title" "cljsbuild" "-m"]
+     :compiler       {:output-to "target/main.js"
+                      :optimizations :advanced
+                      :pretty-print false}}
+    {:id "tests"
+     :source-paths   ["src" "target/classes" "test" "target/test-classes"]
+     :notify-command ["node" "target/tests.js"]
+     :compiler       {:output-to "target/tests.js"
+                      :optimizations :simple ; Necessary for node.js
+                      :pretty-print true
+                      :target :nodejs
+                      :main   "taoensso.encore.tests"}}]}
 
-  :test-paths ["test" "src"]
+  :auto-clean false
   :prep-tasks [["cljx" "once"] "javac" "compile"]
+
   :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
           :sources  ["target/classes"]
           :src-linenum-anchor-prefix "L"
@@ -69,10 +87,11 @@
                             #(.replaceFirst (str %) "(.cljs$|.clj$)" ".cljx")}}
 
   :aliases
-  {"test-all"   ["with-profile" "default:+1.5:+1.6:+1.7" "expectations"]
-   ;; "test-all"   ["with-profile" "default:+1.6:+1.7" "expectations"]
+  {"test-all"   ["do" "clean," "cljx" "once,"
+                 "with-profile" "default:+1.5:+1.6:+1.7" "expectations,"
+                 "with-profile" "+test" "cljsbuild" "test"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
-   "build-once" ["do" "cljx" "once," "cljsbuild" "once"]
+   "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
 
