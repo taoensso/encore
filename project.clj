@@ -28,9 +28,9 @@
    :dev
    [:1.7 :test
     {:dependencies
-     [[org.clojure/clojurescript "0.0-2261"]
-      ;; [org.clojure/clojurescript "0.0-3126"] ; Issues with Austin
-      [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
+     [[org.clojure/clojurescript    "0.0-3126"]
+      ;; [org.clojure/clojurescript "0.0-2261"]
+      [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
@@ -39,9 +39,9 @@
       ;;
       [lein-pprint                     "1.1.1"]
       [lein-ancient                    "0.5.5"]
-      [com.cemerick/austin             "0.1.4"]
       [lein-expectations               "0.0.8"]
       [lein-autoexpect                 "1.2.2"]
+      ;; [com.cemerick/austin          "0.1.4"]
       [codox                           "0.8.10"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
@@ -79,7 +79,7 @@
   :auto-clean false
   :prep-tasks [["cljx" "once"] "javac" "compile"]
 
-  :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
+  :codox {:language :clojure ; [:clojure :clojurescript] cljsbuild  ; No support?
           :sources  ["target/classes"]
           :src-linenum-anchor-prefix "L"
           :src-dir-uri "http://github.com/ptaoussanis/encore/blob/master/src/"
