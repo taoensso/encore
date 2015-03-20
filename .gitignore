@@ -1,5 +1,6 @@
 /target/
 /lib/
+/node_modules
 /classes/
 /checkouts/
 /logs/
@@ -11,3 +12,6 @@
 /pom.xml*
 /.env
 .DS_Store
+/.idea
+/*.iml
+/*-init.clj
