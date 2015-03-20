@@ -1771,7 +1771,10 @@
         ;; ?error   - e/o #{:xhr-pool-depleted :exception :http-error :abort
         ;;                  :timeout :no-content <http-error-status> nil}
         (js/alert (str \"Ajax response: \" resp-map)))))"
-  [uri {:keys [method params headers timeout-ms resp-type] :as opts
+
+  [uri {:keys [method params headers timeout-ms resp-type
+               progress-fn ; Undocumented, experimental
+               ] :as opts
         :or   {method :get timeout-ms 10000 resp-type :auto}}
    callback]
   {:pre [(have? [:or nil? nneg-int?] timeout-ms)]}
@@ -1852,8 +1855,26 @@
                                   (not (#{204 1223} ?http-status)))
                          ;; Seems reasonable?:
                          :no-content))}]
-                (callback cb-arg))))
+                (callback cb-arg)))))
 
+        ;; Experimental
+        (when-let [pf progress-fn]
+          (gevents/listen xhr goog.net.EventType/PROGRESS
+            (fn [ev]
+              (let [length-computable? (.-lengthComputable ev)
+                    loaded (.-loaded ev)
+                    total  (.-total  ev)
+                    ?ratio (when (and length-computable?
+                                      (not= total 0))
+                             (/ loaded total))]
+                (pf
+                  {:?ratio ?ratio
+                   :length-computable? length-computable?
+                   :loaded loaded
+                   :total  total
+                   :ev     ev})))))
+
+        (doto xhr
           (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
           (.send uri* method* post-content* headers*))
 
