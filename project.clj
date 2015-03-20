@@ -42,6 +42,7 @@
       [lein-expectations               "0.0.8"]
       [lein-autoexpect                 "1.2.2"]
       ;; [com.cemerick/austin          "0.1.4"]
+      [com.cemerick/clojurescript.test "0.3.3"]
       [codox                           "0.8.10"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]

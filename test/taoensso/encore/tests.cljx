@@ -2,9 +2,9 @@
   #+clj
   (:require
    [expectations :as expect :refer (expect)]
-   [clojure.test.check            :as dc]
-   [clojure.test.check.generators :as dc-gen]
-   [clojure.test.check.properties :as dc-prop]
+   ;; [clojure.test.check            :as dc]
+   ;; [clojure.test.check.generators :as dc-gen]
+   ;; [clojure.test.check.properties :as dc-prop]
    [taoensso.encore :as encore :refer ()])
 
   #+cljs
@@ -14,9 +14,9 @@
   #+cljs
   (:require
    [expectations :as expect :refer-macros (expect)]
-   [clojure.test.check            :as dc]
-   [clojure.test.check.generators :as dc-gen]
-   [clojure.test.check.properties :as dc-prop :include-macros true]
+   ;; [clojure.test.check            :as dc]
+   ;; [clojure.test.check.generators :as dc-gen]
+   ;; [clojure.test.check.properties :as dc-prop :include-macros true]
    [taoensso.encore :as encore :refer ()]))
 
 (comment (test/run-tests '[taoensso.encore.tests]))
