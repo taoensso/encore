@@ -13,13 +13,13 @@
                 }
 
   :dependencies
-  [[org.clojure/clojure      "1.4.0"]
+  [[org.clojure/clojure      "1.6.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
    [org.clojure/tools.reader "0.8.16"]]
 
   :plugins
   [[lein-pprint                     "1.1.2"]
-   [lein-ancient                    "0.6.4"] ; 0.6.5 seems broken?
+   [lein-ancient                    "0.6.5"] ; seems working
    [lein-expectations               "0.0.8"]
    [lein-autoexpect                 "1.4.2"]
    ;; [com.cemerick/austin          "0.1.6"]
@@ -31,13 +31,13 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha5"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
    [:1.7 :test
     {:dependencies
-     [[org.clojure/clojurescript    "0.0-3126"]
+     [[org.clojure/clojurescript    "0.0-2985"] ; later releases cause expectations to choke on macros
       ;; [org.clojure/clojurescript "0.0-2261"]
       [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
@@ -69,11 +69,14 @@
      :compiler       {:output-to "target/main.js"
                       :optimizations :advanced
                       :pretty-print false}}
-    {:id "tests"
-     :source-paths   ["src" "target/classes" "test" "target/test-classes"]
-     :notify-command ["node" "target/tests.js"]
-     :compiler       {:output-to "target/tests.js"
-                      :optimizations :simple ; Necessary for node.js
+    {:id "tests"                                              ; optimized for build speed and debugging
+     :source-paths   ["target/classes" "target/test-classes"]
+     :notify-command ["node" "target/tests-out/tests.js"]
+     :compiler       {:output-to "target/tests-out/tests.js"
+                      :output-dir "target/tests-out"
+                      :optimizations :none
+                      :cache-analysis true
+                      :source-map     true
                       :pretty-print true
                       :target :nodejs
                       :main   "taoensso.encore.tests"}}]}
