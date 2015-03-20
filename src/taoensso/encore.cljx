@@ -1769,7 +1769,7 @@
       (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
         ;; ?status  - 200, 404, ..., or nil on no response
         ;; ?error   - e/o #{:xhr-pool-depleted :exception :http-error :abort
-        ;;                  :timeout <http-error-status> nil}
+        ;;                  :timeout :no-content <http-error-status> nil}
         (js/alert (str \"Ajax response: \" resp-map)))))"
   [uri {:keys [method params headers timeout-ms resp-type] :as opts
         :or   {method :get timeout-ms 10000 resp-type :auto}}
@@ -1848,7 +1848,10 @@
                                goog.net.ErrorCode/ABORT      :abort
                                goog.net.ErrorCode/TIMEOUT    :timeout}
                            (.getLastErrorCode xhr) :unknown))
-                       (when (nil? ?content) :no-content))}]
+                       (when (and (nil? ?content)
+                                  (not (#{204 1223} ?http-status)))
+                         ;; Seems reasonable?:
+                         :no-content))}]
                 (callback cb-arg))))
 
           (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
