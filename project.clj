@@ -17,6 +17,15 @@
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
    [org.clojure/tools.reader "0.8.16"]]
 
+  :plugins
+  [[lein-pprint                     "1.1.2"]
+   [lein-ancient                    "0.6.4"] ; 0.6.5 seems broken?
+   [lein-expectations               "0.0.8"]
+   [lein-autoexpect                 "1.4.2"]
+   ;; [com.cemerick/austin          "0.1.6"]
+   [com.cemerick/clojurescript.test "0.3.3"]
+   [codox                           "0.8.11"]]
+
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
@@ -34,16 +43,8 @@
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
-      [com.keminglabs/cljx             "0.5.0"]
-      [lein-cljsbuild                  "1.0.3"]
-      ;;
-      [lein-pprint                     "1.1.1"]
-      [lein-ancient                    "0.5.5"]
-      [lein-expectations               "0.0.8"]
-      [lein-autoexpect                 "1.2.2"]
-      ;; [com.cemerick/austin          "0.1.4"]
-      [com.cemerick/clojurescript.test "0.3.3"]
-      [codox                           "0.8.10"]]}]}
+      [com.keminglabs/cljx             "0.6.0"]
+      [lein-cljsbuild                  "1.0.5"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
 
