@@ -13,13 +13,14 @@
 
   #+cljs
   (:require
+   [cemerick.cljs.test] ; Necessary for `lein cljsbuild test` calls
    [expectations :as expect :refer-macros (expect)]
    ;; [clojure.test.check            :as dc]
    ;; [clojure.test.check.generators :as dc-gen]
    ;; [clojure.test.check.properties :as dc-prop :include-macros true]
    [taoensso.encore :as encore :refer ()]))
 
-(comment (test/run-tests '[taoensso.encore.tests]))
+(comment (expect/run-tests '[taoensso.encore.tests]))
 
 #+cljs
 (do

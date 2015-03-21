@@ -37,8 +37,10 @@
    :dev
    [:1.7 :test
     {:dependencies
-     [[org.clojure/clojurescript    "0.0-3126"]
-      ;; [org.clojure/clojurescript "0.0-2261"]
+     [;; Currently the latest release that doesn't cause Expectations v2.1.0 to
+      ;; choke on macros, Ref. http://goo.gl/jJbLCm:
+      ;; [org.clojure/clojurescript "0.0-2985"]
+      [org.clojure/clojurescript    "0.0-3126"]
       [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
      :plugins
@@ -63,6 +65,8 @@
                    ;; "phantom" ["phantomjs" :runner "target/tests.js"]
                    }
    :builds
+   ;; TODO Parallel builds currently cause issues with Expectations v2.1.0,
+   ;; Ref. http://goo.gl/8LDHe5
    [{:id "main"
      :source-paths   ["src" "target/classes"]
      ;; :notify-command ["terminal-notifier" "-title" "cljsbuild" "-m"]
@@ -76,7 +80,8 @@
                       :optimizations :simple ; Necessary for node.js
                       :pretty-print true
                       :target :nodejs
-                      :main   "taoensso.encore.tests"}}]}
+                      :hashbang false ; Ref. http://goo.gl/vrtNDR
+                      :main "taoensso.encore.tests"}}]}
 
   :auto-clean false
   :prep-tasks [["cljx" "once"] "javac" "compile"]
