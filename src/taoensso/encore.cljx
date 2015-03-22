@@ -31,7 +31,6 @@
 
 ;;;; TODO
 ;; * Further boxed math optimizations.
-;; * Ajax file params support.
 
 ;;;; Version check
 
@@ -230,7 +229,7 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(defn     nnil? [x] (not (nil? x))) ; As `some?`
+(defn     nnil? [x] (not (nil? x))) ; Same as `some?` in Clojure v1.6+
 (defn   nblank? [x] (not (str/blank? x)))
 (defn     nneg? [x] (not (neg? x)))
 (defn  pos-int? [x] (and (integer? x) (pos? x)))
@@ -490,7 +489,8 @@
 
 ;;;; Keywords
 
-(defn fq-name "Like `name` but includes namespace in string when present."
+(defn fq-name
+  "Like `name` but fully qualified: includes namespace in string when present."
   [x] (if (string? x) x
           (let [n (name x)]
             (if-let [ns (namespace x)] (str ns "/" n) n))))
@@ -500,10 +500,10 @@
 (defn explode-keyword [k] (str/split (fq-name k) #"[\./]"))
 (comment (explode-keyword :foo.bar/baz))
 
-(defn merge-keywords [ks & [as-ns?]]
+(defn merge-keywords [ks & [no-slash?]]
   (let [parts (->> ks (filterv identity) (mapv explode-keyword) (reduce into []))]
     (when-not (empty? parts)
-      (if as-ns? ; Don't terminate with /
+      (if no-slash?
         (keyword (str/join "." parts))
         (let [ppop (pop parts)]
           (keyword (when-not (empty? ppop) (str/join "." ppop))
@@ -511,7 +511,7 @@
 
 (comment
   (merge-keywords [:foo.bar nil :baz.qux/end nil])
-  (merge-keywords [:foo.bar nil :baz.qux/end nil] true)
+  (merge-keywords [:foo.bar nil :baz.qux/end nil] :no-slash)
   (merge-keywords [:a.b.c "d.e/k"])
   (merge-keywords [:a.b.c :d.e/k])
   (merge-keywords [nil :k])
@@ -598,6 +598,8 @@
                 time (if max' (min max' time) time)]
             time))))
 
+(comment (exp-backoff 4))
+
 ;;;; Date & time
 
 (defn  now-dt [] #+clj (java.util.Date.) #+cljs (js/Date.))
@@ -615,8 +617,7 @@
 
 (defn secs->ms #+clj ^long [^long secs] #+cljs [secs] (*    secs  1000))
 (defn ms->secs #+clj ^long [^long ms]   #+cljs [ms]   (quot ms    1000))
-(defn ms
-  "Returns number of milliseconds in period defined by given args."
+(defn ms "Returns number of milliseconds in period defined by given args."
   [& {:as opts :keys #+clj [^long years ^long months ^long weeks
                             ^long days  ^long hours  ^long mins
                             ^long secs  ^long msecs  ^long ms]
@@ -1006,7 +1007,7 @@
   (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
     (fn [k v] (case k (:a :b) (str "boo-" v) v))))
 
-(defn fzipmap "Faster `zipmap`." [ks vs]
+(defn fzipmap "Faster `zipmap` using transients." [ks vs]
   (loop [m  (transient {})
          ks (seq ks)
          vs (seq vs)]
@@ -1021,9 +1022,7 @@
   ([to from] (into to from))
   ([to from & more] (reduce into (into to from) more)))
 
-(defn interleave-all
-  "Greedy version of `interleave`.
-  Ref. https://groups.google.com/d/msg/clojure/o4Hg0s_1Avs/rPn3P4Ig6MsJ"
+(defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb."
   ([]   '())
   ([c1] (lazy-seq c1))
   ([c1 c2]
@@ -1593,8 +1592,7 @@
       (fn [] (* 1e6 (now-udt))))
     (fn [] (* 1e6 (now-udt)))))
 
-(defmacro time-ms
-  "Returns number of milliseconds it takes to execute body."
+(defmacro time-ms "Returns number of milliseconds it takes to execute body."
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
 
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
@@ -1752,6 +1750,7 @@
       :post [uri ?pstr]
       :put  [uri ?pstr])))
 
+;; TODO Ajax file params support
 #+cljs
 (defn ajax-lite
   "Alpha - subject to change.
@@ -1895,7 +1894,8 @@
 #+clj
 (defn session-swap
   "Small util to help correctly manage (modify) funtional sessions. Please use
-  this when writing Ring middleware!"
+  this when writing Ring middleware! It's *so* easy to get this wrong and end up
+  with subtle, tough-to-diagnose issues."
   [req resp f & args]
   (when resp
     (if (contains? resp :session) ; Use response session (may be nil)
