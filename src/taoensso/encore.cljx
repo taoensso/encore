@@ -334,6 +334,9 @@
           ;; p2 (when p2 (hpred p2))
           ]
       (case type
+        :=        (fn [x] (=        p1 x))
+        :not=     (fn [x] (not=     p1 x))
+        ;;
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
         :ks>=     (fn [x] (ks>=     p1 x))
