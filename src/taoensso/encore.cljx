@@ -51,8 +51,8 @@
 ;;;; Core
 
 (defmacro compile-if
-  "Evaluates `test` and if it returns logical true and doesn't error, expands to
-  `then`. Else expand to `else`. Stolen from `clojure.core.reducers`.
+  "Evaluates `test`. If it doesn't error and returns logical true, expands to
+  `then`, otherwise expands to `else`. Stolen from `clojure.core.reducers`.
 
   (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
     (do-cool-stuff-with-fork-join)
