@@ -754,10 +754,10 @@
 
 (comment (subvec* [:a :b :c :d :e] -1))
 
-(defrecord Swapped [new-val return-val])
-(defn      swapped [new-val return-val] (Swapped. new-val return-val))
-(defn-    swapped* [x] (if (instance? Swapped x) [(:new-val x) (:return-val x)]
-                           [x x]))
+(defrecord Swapped  [new-val return-val])
+(defn      swapped  [new-val return-val] (Swapped. new-val return-val))
+(defn      swapped? [x] (instance? Swapped x))
+(defn      swapped* [x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
 
 (comment ; TODO Debug, Ref. http://dev.clojure.org/jira/browse/CLJ-979
   ;; Appears (?) to be fixed as of Clojure 1.7-alpha5,
