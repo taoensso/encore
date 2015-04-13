@@ -15,11 +15,11 @@
   :dependencies
   [[org.clojure/clojure      "1.4.0"]
    ;; [org.clojure/clojure   "1.5.1"] ; Soon...
-   [org.clojure/tools.reader "0.8.16"]]
+   [org.clojure/tools.reader "0.9.1"]]
 
   :plugins
   [[lein-pprint                     "1.1.2"]
-   [lein-ancient                    "0.6.4"] ; 0.6.5 seems broken?
+   [lein-ancient                    "0.6.4"] ; 0.6.5+ seem broken?
    [lein-expectations               "0.0.8"]
    [lein-autoexpect                 "1.4.2"]
    ;; [com.cemerick/austin          "0.1.6"]
@@ -31,7 +31,7 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-alpha5"]]}
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-beta1"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
