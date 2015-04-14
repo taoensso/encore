@@ -1565,53 +1565,89 @@
   (def fm1b (memoize-1 (fn [x] (Thread/sleep 3000) x)))
   (qb 1000 (fm1a "foo") (fm1b "foo")))
 
-;; TODO Would be nice if one limiter could take multiple limit-window pairs
-(defn rate-limiter
-  "Returns a `(fn [& [id]])` that returns either `nil` (limit okay) or number of
-  msecs until next rate limit window (rate limited)."
-  [ncalls-limit window-ms]
-  (let [state (atom [nil {}])] ; [<pull> {<id> {[udt-window-start ncalls]}}]
-    (fn [& [id]]
+(defn get-rate-limiter
+  "Takes one or more rate specs of form [nreqs-limit window-ms ?spec-id] and
+  returns a (fn [& [req-id])) that returns `nil` (=> all rate limits passed), or
+  [<ms-wait> <worst-offending-spec-id>] / <ms-wait>"
+  ([spec]
+   (let [state_ (atom {}) ; {<req-id> [nreqs udt-window-start]} ; nb nreqs not ncalls
+         [nreqs-limit win-ms ?spec-id] spec]
 
-      (when (gc-now?)
-        (let [instant (now-udt)]
-          (swap! state
-            (fn [[_ m]]
-              [nil (reduce-kv
-                    (fn [m* id [udt-window-start ncalls]]
-                      (if (> (- instant udt-window-start) window-ms) m*
-                          (assoc m* id [udt-window-start ncalls]))) {}
-                          (clj1098 m))]))))
-
-      (->
+     (fn check-rate-limits [& [req-id]]
        (let [instant (now-udt)]
-         (swap! state
-           (fn [[_ m]]
-             (if-let [[udt-window-start ncalls] (m id)]
-               (if (> (- instant udt-window-start) window-ms)
-                 [nil (assoc m id [instant 1])]
-                 (if (< ncalls ncalls-limit)
-                   [nil (assoc m id [udt-window-start (inc ncalls)])]
-                   [(- (+ udt-window-start window-ms) instant) m]))
-               [nil (assoc m id [instant 1])]))))
-       (nth 0)))))
+
+         (when (gc-now?)
+           (swap-in! state_ []
+             (fn [m]
+               (let [m (clj1098 m)]
+                 (reduce-kv
+                   (fn [m* req-id [nreqs udt-win-start :as v]]
+                     (if (> (- instant udt-win-start) win-ms)
+                       (dissoc m* req-id)
+                       m*))
+                   m m)))))
+
+         (swap-in! state_ [req-id]
+           (fn [?v]
+             (if-let [[nreqs udt-win-start :as v] ?v]
+               (if (> (- instant udt-win-start) win-ms)
+                 (swapped [1 instant] nil)
+                 (if (< nreqs nreqs-limit)
+                   (swapped [(inc nreqs) udt-win-start] nil)
+                   (let [ms-wait (- (+ udt-win-start win-ms) instant)
+                         result  (if (nil? ?spec-id) ms-wait [ms-wait ?spec-id])]
+                     (swapped v result))))
+               (swapped [1 instant] nil))))))))
+
+  ;; Multiple nreqs-window pairs:
+  ;; We're using the simplest (+ most conservative) possible strategy here:
+  ;; running every limiter _every_ time (no short-circuiting). This is often a
+  ;; reasonable approximation (we're counting attempted reqs, not successful
+  ;; reqs) - and much simpler+faster (no atomic sync needed).
+  ([spec & more-specs]
+   (let [specs       (into [spec] more-specs)
+         limiters    (mapv get-rate-limiter specs)
+
+         nspecs      (count specs)
+         nid-specs   (count (filterv (fn [[_ _ id]] id) specs))
+         _           (assert (or (zero? nid-specs) (= nid-specs nspecs)))
+         return-ids? (not (zero? nid-specs))]
+
+     (fn [& [req-id]]
+       (let [[?max-ms-till-next-win ?spec-id :as ?acc]
+             (reduce
+               (fn [[?max-ms-till-next-win _ :as ?acc] in-limiter-f]
+                 (if-let [limiter-resp (in-limiter-f req-id)]
+                   (let [limiter-vresp (if return-ids? limiter-resp [limiter-resp])
+                         [ms-till-next-win offending-?spec-id] limiter-vresp]
+                     (if (or (nil? ?max-ms-till-next-win)
+                             (> ms-till-next-win ?max-ms-till-next-win))
+                       limiter-vresp
+                       ?acc))
+                   ?acc))
+               nil
+               limiters)]
+         (if return-ids? ?acc ?max-ms-till-next-win))))))
 
 (comment
-  (def rl (rate-limiter 10 10000))
-  (repeatedly 10 #(rl (rand-nth [:a :b :c])))
-  (rl :a)
-  (rl :b)
-  (rl :c))
+  (def rl (get-rate-limiter [2 5000 :5s] [10 10000 :10s]))
+  (def rl (get-rate-limiter [2 5000 :5s]))
+  (def rl (get-rate-limiter [2 5000    ] [10 10000     ]))
+  (repeatedly 5 rl)
+  (rl :call-id-1)
+  (rl :call-id-2)
+  (qb 10000 (rl)))
 
-(defn rate-limited "Wraps fn so that it returns {:result _ :backoff-ms _}."
-  [ncalls-limit window-ms f]
-  (let [rl (rate-limiter ncalls-limit window-ms)]
-    (fn [& args] (if-let [backoff-ms (rl)]
-                  {:backoff-ms backoff-ms}
-                  {:result     (f)}))))
+(defn rate-limited [ncalls-limit window-ms f]
+  (let [rl (get-rate-limiter [ncalls-limit window-ms])]
+    (fn [& args]
+      (if-let [backoff-ms (rl)]
+        {:backoff-ms backoff-ms}
+        {:result     (f)}))))
 
-(comment (def compute (rate-limited 3 5000 (fn [] "Compute!")))
-         (compute))
+(comment
+  (def compute (rate-limited 3 5000 (fn [] "Compute!")))
+  (compute))
 
 ;;;; Benchmarking
 
@@ -2070,7 +2106,7 @@
 #+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
          (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
 
-;; Arg order changed for easier partials
+;;; Arg order changed for easier partials
 (defn keys=      [m ks] (ks=      ks m))
 (defn keys<=     [m ks] (ks<=     ks m))
 (defn keys>=     [m ks] (ks>=     ks m))
@@ -2086,3 +2122,121 @@
 
 (def merge-deep-with nested-merge-with)
 (def merge-deep      nested-merge)
+
+;; API changed for greater flexibility:
+(defn rate-limiter [ncalls-limit window-ms]
+  (let [limiter (get-rate-limiter [ncalls-limit window-ms :no-id])]
+    (fn [& [id]] ; Unwrap [<ms> <?spec-id>]:
+      (when-let [[ms] (limiter id)] ms))))
+
+;;;; TODO Rate limiter wip
+
+(defn get-rate-limiter
+  "Takes one or more rate specs of form [ncalls-limit window-ms ?spec-id] and
+  returns a (fn [& [req-id])) that returns `nil` (=> all rate limits passed), or
+  [<ms-wait> <worst-offending-spec-id>] / <ms-wait>."
+  [spec & more-specs]
+  (let [vspecs      (into [spec] more-specs)
+        vstates_    (atom {}) ; {<req-id> [[ncalls udt-window-start] <...>]}
+        max-win-ms  (reduce max 0 (mapv (fn [[_ win-ms _ :as spec]] win-ms) vspecs))
+
+        nspecs      (count vspecs)
+        nid-specs   (count (filterv (fn [[_ _ id]] id) vspecs))
+        _           (assert (or (zero? nid-specs) (= nid-specs nspecs)))
+        return-ids? (not (zero? nid-specs))]
+
+    (fn check-rate-limits [& [req-id]]
+      (let [instant (now-udt)]
+
+        (when (and req-id (gc-now?))
+          (swap-in! vstates_ []
+            (fn gc [m]
+              (let [m (clj1098 m)]
+                (reduce-kv
+                  (fn [m* req-id vstate]
+                    (let [max-udt-win-start (reduce (fn [acc [_ udt _]] (max acc udt))
+                                              0 vstate)
+                          min-win-ms-elapsed (- instant max-udt-win-start)]
+                      (if (> min-win-ms-elapsed max-win-ms)
+                        (dissoc m* req-id)
+                        m*)))
+                  m m)))))
+
+        (swap-in! vstates_ [req-id]
+          (fn [?vstate]
+            (if-not ?vstate
+              (swapped (vec (repeat nspecs [1 instant])) nil)
+              (let [[vstate-with-resets ?worst-limit-offence]
+                    (loop [in-vspecs  vspecs
+                           in-vstate  ?vstate
+                           out-vstate []
+                           ?worst-limit-offence nil]
+                      (let [[[ncalls-limit win-ms ?spec-id] & next-in-vspecs] in-vspecs
+                            [[ncalls udt-win-start]         & next-in-vstate] in-vstate
+                            win-ms-elapsed (- instant udt-win-start)
+                            reset-due?     (>= win-ms-elapsed win-ms)
+                            rate-limited?  (and (not reset-due?)
+                                                (>= ncalls ncalls-limit))
+                            new-out-vstate ; No ncall increments yet
+                            (conj out-vstate
+                              (if reset-due? [0 instant] [ncalls udt-win-start]))
+
+                            new-?worst-limit-offence
+                            (if-not rate-limited?
+                              ?worst-limit-offence
+                              (let [ms-wait (- win-ms win-ms-elapsed)]
+                                (if (or (nil? ?worst-limit-offence)
+                                        (let [[max-ms-wait _] ?worst-limit-offence]
+                                          (> ms-wait max-ms-wait)))
+                                  [ms-wait ?spec-id]
+                                  ?worst-limit-offence)))]
+
+                        (if-not next-in-vspecs
+                          [new-out-vstate new-?worst-limit-offence]
+                          (recur next-in-vspecs next-in-vstate new-out-vstate
+                                 new-?worst-limit-offence))))
+
+                    all-limits-pass? (nil? ?worst-limit-offence)
+                    new-vstate (if-not all-limits-pass?
+                                 vstate-with-resets
+                                 (mapv (fn [[ncalls udt-win-start]]
+                                         [(inc ncalls) udt-win-start])
+                                   vstate-with-resets))
+
+                    result (when-let [wlo ?worst-limit-offence]
+                             (if return-ids? wlo (let [[ms-wait _] wlo] ms-wait)))]
+
+                (swapped new-vstate result)))))))))
+
+(comment ; Optimized common (single-spec) case, not worth the extra code
+  ;; Unoptimized 10k calls: ~18ms
+  ;; Optimized   10k calls: ~12ms
+  ([spec] ; Optimized common case
+   (let [vstates_ (atom {}) ; {<req-id> [ncalls udt-window-start]}
+         [ncalls-limit win-ms ?spec-id] spec]
+
+     (fn check-rate-limits [& [req-id]]
+       (let [instant (now-udt)]
+
+         (when (and req-id (gc-now?))
+           (swap-in! vstates_ []
+             (fn [m]
+               (let [m (clj1098 m)]
+                 (reduce-kv
+                   (fn [m* req-id [_ udt-win-start :as vstate]]
+                     (if (> (- instant udt-win-start) win-ms)
+                       (dissoc m* req-id)
+                       m*))
+                   m m)))))
+
+         (swap-in! vstates_ [req-id]
+           (fn [?vstate]
+             (if-let [[ncalls udt-win-start :as vstate] ?vstate]
+               (if (> (- instant udt-win-start) win-ms)
+                 (swapped [1 instant] nil)
+                 (if (< ncalls ncalls-limit)
+                   (swapped [(inc ncalls) udt-win-start] nil)
+                   (let [ms-wait (- (+ udt-win-start win-ms) instant)
+                         result  (if (nil? ?spec-id) ms-wait [ms-wait ?spec-id])]
+                     (swapped vstate result))))
+               (swapped [1 instant] nil)))))))))
