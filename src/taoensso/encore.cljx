@@ -35,7 +35,7 @@
 ;;;; Version check
 
 (declare format)
-(def  encore-version "Used for lib-consumer version assertions" 1.23)
+(def  encore-version "Used for lib-consumer version assertions" 1.24)
 (defn assert-min-encore-version [min-version]
   (when (< encore-version min-version)
     (throw
