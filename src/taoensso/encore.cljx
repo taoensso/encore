@@ -2131,9 +2131,9 @@
 (defn keys=nnil? [m ks] (ks-nnil? ks m))
 
 ;;;; Legacy coercions (used by Carmine <= v2.7.1, at least)
-(def parse-bool  (partial as-?bool))
-(def parse-int   (partial as-?int))
-(def parse-float (partial as-?float))
+(def parse-bool  as-?bool)
+(def parse-int   as-?int)
+(def parse-float as-?float)
 (defn as-bool  [x] (when x (have (as-?bool  x))))
 (defn as-int   [x] (when x (have (as-?int   x))))
 (defn as-float [x] (when x (have (as-?float x))))
