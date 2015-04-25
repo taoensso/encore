@@ -336,6 +336,10 @@
         :=        (fn [x] (=        p1 x)) ; Of dubious value
         :not=     (fn [x] (not=     p1 x)) ; ''
         ;;
+        :set=     (fn [x] (=             (set* p1) (set* x)))
+        :set<=    (fn [x] (set/subset?   (set* x)  (set* p1)))
+        :set>=    (fn [x] (set/superset? (set* x)  (set* p1)))
+        ;;
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
         :ks>=     (fn [x] (ks>=     p1 x))
@@ -460,6 +464,8 @@
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
   (macroexpand '(have? a))
   (have? [:or nil? string?] "hello")
+  (have? [:set>= #{:a :b}]    [:a :b :c])
+  (have? [:set<= [:a :b :c]] #{:a :b})
 
   ;; HotSpot is great with these:
   (qb 10000
