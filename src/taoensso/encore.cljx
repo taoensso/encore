@@ -1,4 +1,5 @@
-(ns taoensso.encore "Some tools I use often, w/o any external deps."
+(ns taoensso.encore
+  "Some tools I use often, w/o any external deps."
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
@@ -53,7 +54,6 @@
 (defmacro compile-if
   "Evaluates `test`. If it doesn't error and returns logical true, expands to
   `then`, otherwise expands to `else`. Stolen from `clojure.core.reducers`.
-
   (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
     (do-cool-stuff-with-fork-join)
     (fall-back-to-executor-services))"
@@ -66,8 +66,7 @@
   "Executes `then` clause iff generating ClojureScript code.
   Useful for writing macros that can produce different Clj/Cljs code (this isn't
   something Cljx currently provides support for). Stolen from Prismatic code,
-  Ref. http://goo.gl/DhhhSN,
-       https://groups.google.com/d/msg/clojurescript/iBY5HaQda4A/w1lAQi9_AwsJ."
+  Ref. http://goo.gl/DhhhSN, http://goo.gl/Bhdyna."
   [then else]
   (if (:ns &env) ; nil when compiling for Clojure, nnil for ClojureScript
     then else))
@@ -112,19 +111,19 @@
   clojure.contrib/def.clj, Ref. http://goo.gl/xpjeH"
   [name target & [doc]]
   `(let [^clojure.lang.Var v# (var ~target)]
-     (alter-meta! (def ~name (.getRawRoot v#))
-                  #(merge % (apply dissoc (meta v#) [:column :line :file :test :name])
-                     (when-let [doc# ~doc] {:doc doc#})))
+     (alter-meta!
+       (def ~name (.getRawRoot v#))
+       #(merge % (dissoc (meta v#) :column :line :file :test :name)
+          (when-let [doc# ~doc] {:doc doc#})))
      (var ~name)))
 
-(defmacro cond-throw
-  "Like `cond` but throws on no-match like `case`, `condp`."
+(defmacro cond! "Like `cond` but throws on no-match like `case`, `condp`."
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
-(comment (cond false "false") (cond-throw false "false"))
+(comment (cond false "false") (cond! false "false"))
 
 (defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`."
-  [[name x] & clauses] ; TODO [x name & clauses] would be much less confusing
+  [[name x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
         pstep (fn [[test-expr step]] `(when-let [~name ~test-expr]
@@ -334,8 +333,8 @@
           ;; p2 (when p2 (hpred p2))
           ]
       (case type
-        :=        (fn [x] (=        p1 x))
-        :not=     (fn [x] (not=     p1 x))
+        :=        (fn [x] (=        p1 x)) ; Of dubious value
+        :not=     (fn [x] (not=     p1 x)) ; ''
         ;;
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
@@ -1091,6 +1090,7 @@
     (step coll #{})))
 
 (compile-if (do (completing (fn [])) true) ; We have transducers support
+  ;; TODO: Newer versions of cljs now also have volatiles, etc.
   (do
     (defn removev [pred coll] (filterv (complement pred) coll))
     (defn xdistinct "distinctv` transducer."
@@ -1219,7 +1219,7 @@
     * Returns \"\" when fmt is nil rather than throwing an NPE.
     * Formats nil as \"nil\" rather than \"null\".
     * Provides ClojureScript support via goog.string.format (this has fewer
-      formatting options!)."
+      formatting options than Clojure's `format`!)."
   #+clj ^String [fmt & args]
   #+cljs        [fmt & args]
   ;; when fmt ; Another alternative to prevent NPE?
@@ -1729,6 +1729,8 @@
 
 #+cljs
 (do ; Simple client-side logging stuff. Experimental!!
+  ;; TODO Compile-time logging levels to allow logging calls to be compiled
+  ;; entirely out of js
 
   (def ^:private have-console? (exists? js/console))
   (def console-log
@@ -2149,3 +2151,5 @@
       (if-let [backoff-ms (rl)]
         {:backoff-ms backoff-ms}
         {:result     (f)}))))
+
+(defmacro cond-throw [& args] `(cond! ~@args))
