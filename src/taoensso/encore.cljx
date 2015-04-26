@@ -215,9 +215,9 @@
 
 (defmacro catch-errors "Experimental. Returns [<?result> <?error>]."
   [& body]
-  (if-cljs
-    `(try [(do ~@body)] (catch :default  e# [nil e#]))
-    `(try [(do ~@body)] (catch Throwable t# [nil t#]))))
+  `(if-cljs
+     (try [(do ~@body)] (catch :default  e# [nil e#]))
+     (try [(do ~@body)] (catch Throwable t# [nil t#]))))
 
 (comment (catch-errors (zero? "a")))
 
