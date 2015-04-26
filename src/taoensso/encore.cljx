@@ -338,9 +338,9 @@
         :=        (fn [x] (=        p1 x)) ; Of dubious value
         :not=     (fn [x] (not=     p1 x)) ; ''
         ;;
-        :set=     (fn [x] (=             (set* p1) (set* x)))
-        :set<=    (fn [x] (set/subset?   (set* x)  (set* p1)))
-        :set>=    (fn [x] (set/superset? (set* x)  (set* p1)))
+        :set=     (fn [x] (=             (set* x) (set* p1)))
+        :set<=    (fn [x] (set/subset?   (set* x) (set* p1)))
+        :set>=    (fn [x] (set/superset? (set* x) (set* p1)))
         ;;
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
