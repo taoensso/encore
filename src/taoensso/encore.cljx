@@ -309,13 +309,14 @@
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
 (defn hthrow "Implementation detail." [hard? ns-str ?line form val & [?err]]
-  ;; http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers:
+  ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
+  ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
         pattern "Condition failed in `%s:%s` [pred-form, val]: [%s, %s]"
         line-str (or ?line "?")
-        form-str (pr-str form)
-        val-str  (pr-str val)
-        ?err-str (when-let [e ?err] (pr-str ?err))
+        form-str (str form) #_(pr-str form)
+        val-str  (str val)  #_(pr-str val)
+        ?err-str (when-let [e ?err] (str ?err) #_(pr-str ?err))
         msg      (let [m (format pattern ns-str line-str form-str val-str)]
                    (if-not ?err-str m (str m "\nPredicate error: " ?err-str)))]
     (throw
@@ -326,6 +327,8 @@
                       :form  form
                       :val   val
                       :?err  ?err})))))
+
+(comment (try (/ 5 0) (catch Exception e (str e) #_(pr-str e))))
 
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail." [pred-form]
@@ -370,39 +373,20 @@
   ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
   )
 
-(defmacro hcond "Implementation detail."
-  ([hard? line x] `(hcond ~hard? ~line nnil? ~x))
-  ([hard? line pred x]
-   (if-not (or hard? *assert*)
-     x
-     `(let [[x# ?x-err#]        (catch-errors ~x)
-            have-x?#            (nil? ?x-err#)
-            [pass?# ?pred-err#] (when have-x?# (catch-errors ((hpred ~pred) x#)))]
-        (if pass?#
-          x#
-          (hthrow ~hard? ~(str *ns*) ~line (list '~pred '~x)
-            (if have-x?# x# ?x-err#) ?pred-err#)))))
-  ([hard? line pred x & more]
-   (let [xs (into [x] more)]
-     (if-not (or hard? *assert*)
-       xs
-       ;; Truthy when nothing throws + allows [] destructuring:
-       (mapv (fn [x] `(hcond ~hard? ~line ~pred ~x)) xs)))))
+(defn hcond "Implementation detail."
+  [hard? ns-str line x_ x-form pred pred-form]
+  (let [[?x ?x-err]       (catch-errors @x_)
+        have-x?           (nil? ?x-err)
+        [pass? ?pred-err] (when have-x? (catch-errors ((hpred pred) ?x)))]
+    (if pass?
+      ?x
+      (hthrow hard? ns-str line (list pred-form x-form)
+        (if have-x? ?x ?x-err) ?pred-err))))
 
-(defmacro hcond-in "Implementation detail."
-  ([hard? xcoll] `(hcond-in ~hard? nnil? ~xcoll))
-  ([hard? pred xcoll]
-   (if-not (or hard? *assert*)
-     xcoll ; Always truthy (coll)
-     (let [g (gensym "hcond-in__")] ; Will (necessarily) lose exact form
-       (if hard?
-         `(mapv (fn [~g] (have :! ~pred ~g)) ~xcoll)
-         `(mapv (fn [~g] (have    ~pred ~g)) ~xcoll)))))
-  ([hard? pred xcoll & more-xcolls] ; Multiple colls for [[]] destructuring
-   (let [xcolls (into [xcoll] more-xcolls)]
-     (if-not (or hard? *assert*)
-       xcolls ; Always truthy (coll)
-       (mapv (fn [xcoll] `(hcond-in ~hard? ~pred ~xcoll)) xcolls)))))
+(comment
+  (hcond :hard (str *ns*) 112 (delay (/ 5 0)) '(/ 5 0) nnil?   'nnil?)
+  (hcond :hard (str *ns*) 112 (delay "foo")   '"foo"   pos?    'pos?)
+  (hcond :hard (str *ns*) 112 (delay "foo")   '"foo"   string? 'string?))
 
 (defmacro have ; For inline-use/bindings
   "EXPERIMENTAL. Takes a pred and one or more xs. Tests pred against each x,
@@ -425,13 +409,46 @@
     (fn mult-many [& xs] (reduce * (have :! [:or integer? float?] :in xs)))"
   {:arglists '([(:!) x] [(:!) pred (:in) x] [(:!) pred (:in) x & more-xs])}
   [& args]
-  (let [hard? (= (first args) :!)
-        args  (if hard? (next args) args)
-        in?   (= (second args) :in)
-        args  (if in? (cons (first args) (nnext args)) args)]
-    (if in?
-      `(hcond-in ~hard?                       ~@args)
-      `(hcond    ~hard? ~(:line (meta &form)) ~@args))))
+  (let [hard?      (= (first args) :!)
+        elide?     (not (or hard? *assert*))
+        args       (if hard? (next args) args)
+        in?        (= (second args) :in)
+        args       (if in? (cons (first args) (nnext args)) args)
+        auto-pred? (= (count args) 1) ; Unique common case: (have ?x)
+        pred       (if auto-pred? 'taoensso.encore/nnil? (first args))
+        [?x1 ?xs]  (if auto-pred?
+                     [(first args) nil]
+                     (if (nnext args) [nil (next args)] [(second args) nil]))
+        single-x?  (nil? ?xs)
+        h?         hard?]
+
+    (if elide?
+      (if single-x? ?x1 (vec ?xs)) ; Nb compile-time vec for faster destructuring
+
+      (if-not in?
+
+        (if single-x?
+          (let [x ?x1] ; (have pred x) -> x
+            `(hcond ~h? ~(str *ns*) ~(:line (meta &form))
+               (delay ~x) '~x ~pred '~pred))
+
+          (let [xs ?xs] ; (have pred x1 x2 ...) -> [x1 x2 ...]
+            (mapv (fn [x] `(hcond ~h? ~(str *ns*) ~(:line (meta &form))
+                            (delay ~x) '~x ~pred '~pred)) xs)))
+
+        (if single-x?
+          (let [xcoll ?x1 ; (have pred :in xcoll) -> xcoll
+                g (gensym "have-in__") ; Will (necessarily) lose exact form
+                ]
+            `(mapv (fn [~g] (hcond ~h? ~(str *ns*) ~(:line (meta &form))
+                             (delay ~g) '~g ~pred '~pred)) ~xcoll))
+
+          (let [xcolls ?xs] ; (have pred :in xcoll1 xcoll2 ...) -> [xcoll1 ...]
+            (mapv (fn [xcoll]
+                    (let [g (gensym "have-in__")]
+                      `(mapv (fn [~g] (hcond ~h? ~(str *ns*) ~(:line (meta &form))
+                                       (delay ~g) '~g ~pred '~pred)) ~xcoll)))
+              xcolls)))))))
 
 (defmacro have? ; For :pre/:post conds, etc.
   "EXPERIMENTAL. Like `have` but returns true rather than input on success
@@ -464,7 +481,7 @@
   (have string? :in ["a" "b"] ["a" "b"])
   (have string? :in ["a" "b"] ["a" "b" 1])
   ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
-  (macroexpand '(have? a))
+  (macroexpand '(have a))
   (have? [:or nil? string?] "hello")
   (have? [:set>= #{:a :b}]    [:a :b :c])
   (have? [:set<= [:a :b :c]] #{:a :b})
@@ -473,7 +490,9 @@
   (qb 10000
     (have? "a")
     (have string? "a" "b" "c")
-    (have? [:or nil? string?] "a" "b" "c")) ; [5.59 26.48 45.82]
+    (have? [:or nil? string?] "a" "b" "c"))
+  ;; [5.59 26.48 45.82] ; Old macro form
+  ;; [3.31 13.48 36.22] ; New fn form
   )
 
 (defmacro check-some
