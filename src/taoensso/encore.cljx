@@ -216,8 +216,9 @@
 (defmacro catch-errors "Experimental. Returns [<?result> <?error>]."
   [& body]
   `(if-cljs
-     (try [(do ~@body)] (catch :default  e# [nil e#]))
-     (try [(do ~@body)] (catch Throwable t# [nil t#]))))
+     ;; NB Temp workaround for http://goo.gl/UW7773:
+     (try [(do ~@body)] (catch js/Error #_:default e# [nil e#]))
+     (try [(do ~@body)] (catch Throwable           t# [nil t#]))))
 
 (comment (catch-errors (zero? "a")))
 
@@ -1943,7 +1944,8 @@
                             :json (.getResponseJson xhr)
                             :xml  (.getResponseXml  xhr)
                             :edn  (edn/read-string (.getResponseText xhr)))
-                          (catch :default e
+                          ;; NB Temp workaround for http://goo.gl/UW7773:
+                          (catch js/Error #_:default e
                             ;; Undocumented, subject to change:
                             {:ajax/bad-response-type resp-type
                              :ajax/resp-as-text (.getResponseText xhr)}))))
