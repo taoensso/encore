@@ -31,7 +31,7 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-beta1"]]}
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-beta2"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
@@ -40,13 +40,13 @@
      [;; Currently the latest release that doesn't cause Expectations v2.1.0 to
       ;; choke on macros, Ref. http://goo.gl/jJbLCm:
       ;; [org.clojure/clojurescript "0.0-2985"]
-      [org.clojure/clojurescript    "0.0-3126"]
+      [org.clojure/clojurescript    "0.0-3211"]
       [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
-      [com.keminglabs/cljx             "0.6.0"]
-      [lein-cljsbuild                  "1.0.5"]]}]}
+      [com.keminglabs/cljx "0.6.0"]
+      [lein-cljsbuild      "1.0.5"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
 
