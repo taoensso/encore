@@ -239,7 +239,7 @@
 (def udt? nneg-int?)
 (defn vec2? [x] (nvec? 2 x))
 (defn vec3? [x] (nvec? 3 x))
-(defn distinct-elements? [x] (= (count x) (count (set* x))))
+(defn distinct-elements? [x] (or (set? x) (= (count x) (count (set* x)))))
 
 ;;; These are less useful now that `have` traps errors
 (defn nblank-str? [x] (and (string?  x) (not (str/blank? x))))
