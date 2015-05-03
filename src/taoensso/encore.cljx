@@ -645,25 +645,26 @@
 
 (comment (with-redefs [now-udt (now-udt-mock-fn)] (repeatedly 10 now-udt)))
 
-(defn secs->ms #+clj ^long [^long secs] #+cljs [secs] (*    secs  1000))
-(defn ms->secs #+clj ^long [^long ms]   #+cljs [ms]   (quot ms    1000))
+(defn secs->ms #+clj ^long [^double secs] #+cljs [secs] (long (* secs 1000.0)))
+(defn ms->secs #+clj ^long [^long   ms]   #+cljs [ms]   (quot ms 1000))
 (defn ms "Returns number of milliseconds in period defined by given args."
-  [& {:as opts :keys #+clj [^long years ^long months ^long weeks
-                            ^long days  ^long hours  ^long mins
-                            ^long secs  ^long msecs  ^long ms]
+  [& {:as opts :keys #+clj [^double years ^double months ^double weeks
+                            ^double days  ^double hours  ^double mins
+                            ^double secs  ^double msecs  ^double ms]
       #+cljs [years months weeks days hours mins secs msecs ms]}]
   {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
            :in (keys opts))]}
   (round
-   (+ (if years        (* years  1000 60 60 24 365)    0)
-      (if months (long (* months 1000 60 60 24 29.53)) 0)
-      (if weeks        (* weeks  1000 60 60 24 7)      0)
-      (if days         (* days   1000 60 60 24)        0)
-      (if hours        (* hours  1000 60 60)           0)
-      (if mins         (* mins   1000 60)              0)
-      (if secs         (* secs   1000)                 0)
-      (if msecs           msecs                        0)
-      (if ms              ms                           0))))
+    (+
+      (if years  (* years  1000 60 60 24 365)    0.0)
+      (if months (* months 1000 60 60 24 29.53)  0.0)
+      (if weeks  (* weeks  1000 60 60 24 7)      0.0)
+      (if days   (* days   1000 60 60 24)        0.0)
+      (if hours  (* hours  1000 60 60)           0.0)
+      (if mins   (* mins   1000 60)              0.0)
+      (if secs   (* secs   1000)                 0.0)
+      (if msecs     msecs                        0.0)
+      (if ms        ms                           0.0))))
 
 (def secs (comp ms->secs ms))
 (comment #=(ms   :years 88 :months 3 :days 33)
