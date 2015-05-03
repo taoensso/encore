@@ -30,6 +30,10 @@
   #+cljs (:require-macros [taoensso.encore :as enc-macros :refer
                            (catch-errors have? have compile-if)]))
 
+(comment
+  (set! *unchecked-math* :warn-on-boxed)
+  (set! *unchecked-math* false))
+
 ;;;; TODO
 ;; * Further boxed math optimizations.
 
