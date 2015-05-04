@@ -292,9 +292,13 @@
 (defn set* [x] (if (set?    x) x (set x)))
 
 (defn nnil-set  [x] (disj (set* x) nil))
-(defn conj-some [coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
+(defn conj-some
+  ([coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
+  ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
 
-(comment (nnil-set [:a :b nil]))
+(comment
+  (nnil-set [:a :b nil])
+  (conj-some [] :a :b nil :c :d nil :e))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
