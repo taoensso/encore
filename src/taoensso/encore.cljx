@@ -728,6 +728,9 @@
 
 ;;;; Collections
 
+(defn backport-run! "`run!` from Clojure 1.7+"
+  [proc coll] (reduce #(proc %2) nil coll))
+
 (defn- translate-signed-idx
   #+clj  ^long [^long signed-idx ^long max-idx]
   #+cljs       [      signed-idx       max-idx]
