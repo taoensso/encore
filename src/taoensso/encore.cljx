@@ -323,8 +323,8 @@
   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
         pattern "Condition failed in `%s:%s` [pred-form, val]: [%s, %s]"
         line-str (or ?line "?")
-        form-str (str form) #_(pr-str form)
-        val-str  (str val)  #_(pr-str val)
+        form-str (str (or form "<nil>")) #_(pr-str form)
+        val-str  (str (or val  "<nil>")) #_(pr-str val)
         ?err-str (when-let [e ?err] (str ?err) #_(pr-str ?err))
         msg      (let [m (format pattern ns-str line-str form-str val-str)]
                    (if-not ?err-str m (str m "\nPredicate error: " ?err-str)))]
