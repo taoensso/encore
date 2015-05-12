@@ -69,7 +69,7 @@
    ;; Ref. http://goo.gl/8LDHe5
    [{:id "main"
      :source-paths   ["src" "target/classes"]
-     ;; :notify-command ["terminal-notifier" "-title" "cljsbuild" "-m"]
+     ;; :notify-command ["terminal-notifier" "-title" "cljsbuild" "-message"]
      :compiler       {:output-to "target/main.js"
                       :optimizations :advanced
                       :pretty-print false}}
