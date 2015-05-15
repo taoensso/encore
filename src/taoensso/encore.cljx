@@ -728,6 +728,10 @@
 
 ;;;; Collections
 
+(defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
+(defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
+(defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
+
 (defn backport-run! "`run!` from Clojure 1.7+"
   [proc coll] (reduce #(proc %2) nil coll))
 
@@ -1363,38 +1367,51 @@
 
 #+clj
 (defn slurp-resource
-  "Slurps named resource on classpath, returns nil when resource not found."
-  [n]
-  (when-let [r (io/resource n)]
+  "Returns slurped named resource on classpath, or nil when resource not found."
+  [rname]
+  (when-let [r (io/resource rname)]
     (try (slurp (io/reader r))
          (catch Exception e
-           (throw (ex-info (format "Failed to slurp resource: %s" n) {:n n} e))))))
-
-(comment (slurp-resource "foo.txt"))
+           (throw (ex-info (format "Failed to slurp resource: %s" rname)
+                    {:rname rname} e))))))
 
 #+clj
-(do
-  (defn- file-resource-last-modified
-    "Returns last-modified time for file backing given named resource, or nil if
-    file doesn't exist."
-    [resource-name]
-    (when-let [file (try (->> resource-name io/resource io/file)
-                         (catch Exception _))]
-      (.lastModified ^java.io.File file)))
+(defn get-file-resource-?last-modified
+  "Returns last-modified time for file backing given named resource, or nil if
+  file doesn't exist."
+  [rname]
+  (when-let [file (try (->> rname io/resource io/file) (catch Exception _))]
+    (.lastModified ^java.io.File file)))
 
-  (def file-resources-modified?
-    "Returns true iff any files backing the given group of named resources
-    have changed since this function was last called."
-    (let [;; {#{file1A file1B ...#} (time1A time1A ...),
-          ;;  #{file2A file2B ...#} (time2A time2B ...), ...}
-          group-times (atom {})]
-      (fn [resource-names]
-        (let [file-group (into (sorted-set) resource-names)
-              file-times (map file-resource-last-modified file-group)
-              last-file-times (get @group-times file-group)]
-          (when-not (= file-times last-file-times)
-            (swap! group-times assoc file-group file-times)
-            (boolean last-file-times)))))))
+#+clj
+(def file-resources-modified?
+  "Returns true iff any files backing the given named resources have changed
+  since last call."
+  (let [udts_ (atom {}) ; {<rname-or-rnames> <udt-or-udts>}
+        swap! (fn [ks v] (swap-in! udts_ ks
+                          (fn [?v] (swapped v (when (not= v ?v) v)))))]
+    (fn [rnames & [?id]]
+      (if-let [rn1 (->?singleton rnames)] ; Optimize single-file case:
+        (swap! [?id rn1] (get-file-resource-?last-modified rn1))
+        (let [rgroup (into (sorted-set) rnames)]
+          (swap! [?id rgroup] (mapv get-file-resource-?last-modified rgroup)))))))
+
+#+clj
+(def slurp-file-resource
+  "Like `slurp-resource` but caches slurps against file's last-modified udt."
+  (let [;; {<rname> [<content_> <last-modified-udt>]}
+        cache_ (atom {})]
+    (fn [rname]
+      (when-let [curr-udt (get-file-resource-?last-modified rname)]
+        (force
+          (swap-in! cache_ [rname]
+            (fn [[?prev-content_ ?prev-udt :as ?v]]
+              (if (= curr-udt ?prev-udt)
+                (swapped ?v ?prev-content_)
+                (let [content_ (delay (slurp-resource rname))]
+                  (swapped [content_ curr-udt] content_))))))))))
+
+(comment (slurp-file-resource "log4j.properties"))
 
 ;;;; Memoization
 
