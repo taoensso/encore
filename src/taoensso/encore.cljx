@@ -1436,6 +1436,26 @@
       (if (compare-and-set! atom_ old-m new-m) new-v
         (recur)))))
 
+(defn memoize_ "As `clojure.core/memoize` but uses delays to avoid write races."
+  [f]
+  (let [cache_ (atom {})]
+    (fn [& args]
+      @(or (get @cache_ args)
+           (swap-val! cache_ args
+             (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))))
+
+(defn memoize1 "Great for Reactjs render op caching on mobile devices, etc."
+  [f]
+  (let [cache_ (atom {})]
+    (fn [& args]
+      @(or (get @cache_ args)
+           (get (swap! cache_
+                  (fn [cache]
+                    (if (get cache args)
+                      cache ; Replace entire cache:
+                      {args (delay (apply f args))})))
+             args)))))
+
 (defn memoized
   "Like `(memoize* f)` but takes an explicit cache atom (possibly nil)
   and immediately applies memoized f to given arguments."
@@ -1453,18 +1473,20 @@
 
   ;; De-raced, commands
   ([f]
-    (let [cache (atom {})] ; {<args> <delay-val>}
+    (let [cache_ (atom {})] ; {<args> <delay-val>}
       (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
         (if (kw-identical? arg1 :mem/del)
           (do (if (kw-identical? (first argn) :mem/all)
-                (reset! cache {})
-                (swap!  cache dissoc argn))
+                (reset! cache_ {})
+                (swap!  cache_ dissoc argn))
               nil)
           (let [fresh? (kw-identical? arg1 :mem/fresh)
                 args   (if fresh? argn args)]
-            @(swap-val! cache args
-               (fn [?dv] (if (and ?dv (not fresh?)) ?dv
-                           (delay (apply f args))))))))))
+            @(or (get @cache_ args)
+                 (swap-val! cache_ args
+                   (fn [?dv] (if (and ?dv (not fresh?))
+                              ?dv
+                              (delay (apply f args)))))))))))
 
   ;; De-raced, commands, ttl, gc
   ([ttl-ms f]
@@ -1600,27 +1622,6 @@
     (dotimes [_ 500] (future (f1)))) ; NEVER prints >1
   (let [f4 (memoize* 2 5000 (fn [] (Thread/sleep 5) (println "compute1")))]
     (dotimes [_ 10] (future (f4)))))
-
-(defn memoize-1
-  "A particularly cheap+simple single-val memoize. Useful for Reactjs render op
-  caching on mobile devices, etc."
-  [f]
-  (let [cache_ (atom {})] ; Single {<args> <delay-val>}
-    (fn [& args]
-      (if-let [dv_ (get @cache_ args)]
-        @dv_
-        (let [cache (swap! cache_
-                      (fn [cache]
-                        (if-let [dv_ (get cache args)]
-                          cache
-                          {args (delay (apply f args))})))
-              dv_ (get cache args)]
-          @dv_)))))
-
-(comment
-  (def fm1a (memoize   (fn [x] (Thread/sleep 3000) x)))
-  (def fm1b (memoize-1 (fn [x] (Thread/sleep 3000) x)))
-  (qb 1000 (fm1a "foo") (fm1b "foo")))
 
 (defn rate-limiter* ; `rate-limiter` name used by deprecated API
   "Takes one or more rate specs of form [ncalls-limit window-ms ?spec-id] and
@@ -2168,6 +2169,8 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
 
 ;;;; DEPRECATED
+
+(def memoize-1 memoize1)
 
 (defmacro have-in  [a1 & an] `(have ~a1 :in ~@an))
 (defmacro have!?   [& args]  `(have?   :! ~@args))
