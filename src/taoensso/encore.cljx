@@ -55,6 +55,12 @@
 
 ;;;; Core
 
+(defn read-edn
+  #+clj  ([opts s] (clojure.tools.reader.edn/read-string opts s))
+  #+clj  ([s]      (clojure.tools.reader.edn/read-string      s))
+  ;; Unfortunate that cljs doesn't have an [opts s] arity:
+  #+cljs ([s]      (cljs.reader/read-string                   s)))
+
 (defmacro compile-if
   "Evaluates `test`. If it doesn't error and returns logical true, expands to
   `then`, otherwise expands to `else`. Stolen from `clojure.core.reducers`.
@@ -191,6 +197,10 @@
   ;; Nb nil rather than false to help distinguish from negative `instance?` test:
   (defn chan? [x] nil))
 
+(defn re-pattern? [x]
+  #+clj  (instance? java.util.regex.Pattern x)
+  #+cljs (instance? js/RegExp               x))
+
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
       (defn error?     [x] #+clj  (throwable? x)
@@ -290,15 +300,6 @@
 ;;; Keeping these around for compatibility or use with older versions of Clojure.
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
-
-(defn nnil-set  [x] (disj (set* x) nil))
-(defn conj-some
-  ([coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
-  ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
-
-(comment
-  (nnil-set [:a :b nil])
-  (conj-some [] :a :b nil :c :d nil :e))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
@@ -731,6 +732,18 @@
 (defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
 (defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
+
+(defn vsplit-first [v] (let [[v1] v] [v1 (when (> (count v) 1) (subvec v 1))]))
+(comment (vsplit-first [:a :b :c]))
+
+(defn nnil-set  [x] (disj (set* x) nil))
+(defn conj-some
+  ([coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
+  ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
+
+(comment
+  (nnil-set [:a :b nil])
+  (conj-some [] :a :b nil :c :d nil :e))
 
 (defn backport-run! "`run!` from Clojure 1.7+"
   [proc coll] (reduce #(proc %2) nil coll))
