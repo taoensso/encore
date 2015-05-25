@@ -988,7 +988,7 @@
   [f & args]
   (apply f (concat (butlast args) (seq-kvs (last args)))))
 
-(defn- clj1098
+(defn clj1098
   "Workaround for Clojure versions [1.4, 1.5) that blow up on `reduce-kv`s
   against a nil coll, Ref. http://dev.clojure.org/jira/browse/CLJ-1098."
   [x] (or x {}))
