@@ -1258,21 +1258,23 @@
 (defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
 (defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
 
-(defn format
-  "Like `clojure.core/format` but:
-    * Returns \"\" when fmt is nil rather than throwing an NPE.
-    * Formats nil as \"nil\" rather than \"null\".
-    * Provides ClojureScript support via goog.string.format (this has fewer
-      formatting options than Clojure's `format`!)."
-  #+clj ^String [fmt & args]
-  #+cljs        [fmt & args]
-  ;; when fmt ; Another alternative to prevent NPE?
+(defn format*
+  #+clj ^String [fmt args]
+  #+cljs        [fmt args]
   (let [fmt  (or fmt "") ; Prevent NPE
         args (mapv nil->str args)]
     #+clj  (String/format fmt (to-array args))
     ;; Removed from cljs.core 0.0-1885, Ref. http://goo.gl/su7Xkj (pulls in a
     ;; lot of Google Closure that's not v. friendly to dead code elimination):
     #+cljs (apply gstr/format fmt args)))
+
+(defn format
+  "Like `clojure.core/format` but:
+    * Returns \"\" when fmt is nil rather than throwing an NPE.
+    * Formats nil as \"nil\" rather than \"null\".
+    * Provides ClojureScript support via goog.string.format (this has fewer
+      formatting options than Clojure's `format`!)."
+  [fmt & args] (format* fmt args))
 
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
