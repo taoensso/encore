@@ -119,13 +119,15 @@
 (defmacro defalias
   "Defines an alias for a var, preserving metadata. Adapted from
   clojure.contrib/def.clj, Ref. http://goo.gl/xpjeH"
-  [name target & [doc]]
-  `(let [^clojure.lang.Var v# (var ~target)]
-     (alter-meta!
-       (def ~name (.getRawRoot v#))
-       #(merge % (dissoc (meta v#) :column :line :file :test :name)
-          (when-let [doc# ~doc] {:doc doc#})))
-     (var ~name)))
+  ([target] `(defalias ~(symbol (name target)) ~target nil))
+  ([name target] `(defalias ~name ~target nil))
+  ([name target doc]
+   `(let [^clojure.lang.Var v# (var ~target)]
+      (alter-meta!
+        (def ~name (.getRawRoot v#))
+        #(merge % (dissoc (meta v#) :column :line :file :test :name)
+           (when-let [doc# ~doc] {:doc doc#})))
+      (var ~name))))
 
 (defmacro cond! "Like `cond` but throws on no-match like `case`, `condp`."
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
