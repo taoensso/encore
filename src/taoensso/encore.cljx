@@ -1803,80 +1803,17 @@
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
 
 #+cljs
-(do ; Simple client-side logging stuff. Experimental!!
-  ;; TODO Compile-time logging levels to allow logging calls to be compiled
-  ;; entirely out of js
+(do ; Trivial client-side logging stuff
+  (def ^:private console-log
+    (if-not (and (exists? js/console) (.-log js/console))
+      (fn [xs] nil)
+      (fn [xs] (.log js/console (into-array (force xs))) nil)))
 
-  (def ^:private have-console? (exists? js/console))
-  (def console-log
-    (if-let [f (and have-console? (.-log js/console))]
-      ;; (fn [x] (.call f js/console x) nil)
-      (fn [xs] (.apply f js/console (into-array xs)) nil)
-      (fn [xs] nil)))
-  (def console-warn
-    (if-let [f (and have-console? (.-warn js/console))]
-      (fn [xs] (.apply f js/console (into-array xs)) nil)
-      console-log))
-  (def console-error
-    (if-let [f (and have-console? (.-error js/console))]
-      (fn [xs] (.apply f js/console (into-array xs)) nil)
-      console-log))
-
-  (enc-macros/defonce* ^:dynamic *log-level*
-    "Log only logging calls >= <this-level>. Change val with `set!`/`binding`."
-    :debug)
-
-  ;; Note that it's currently difficult (expensive) to check if ClojureScript's
-  ;; core.cljs/*print-fn* is actually un/defined
-  (enc-macros/defonce* ^:dynamic *log-fn*
-    "Experimental. Logger (fn [{:keys [level ?fmt xs msg_]}])->nil with:
-      :level ; e/o #{:trace :debug :info :warn :error :fatal :report}
-      :?fmt  ; Pattern for message formatting (when formatting)
-      :xs    ; Raw logging call arguments (excl. pattern for message formatting)
-      :msg_  ; Delay-wrapped formatted message string
-    Change val with `set!`/`binding`."
-    ^:default ; Helps identify default fn
-    (fn [{:keys [level ?fmt xs msg_]}]
-      (case level
-        :warn  (console-warn  [(str "WARN: "  @msg_)])
-        :error (console-error [(str "ERROR: " @msg_)])
-        :fatal (console-error [(str "FATAL: " @msg_)])
-               (console-log   [               @msg_]))
-      nil))
-
-  ;; Note current lack of macro (compile-time) levels for logging call elision
-  (def ^:private log-level-sufficient?
-    (let [ordered-levels [#_nil :trace :debug :info :warn :error :fatal :report]
-          scored-levels  (zipmap ordered-levels (next (range)))
-          valid-level?   (set ordered-levels)]
-      (fn [level]
-        (let [current-level *log-level*]
-          (>= (scored-levels (enc-macros/have valid-level? level))
-              (scored-levels (enc-macros/have valid-level? current-level)))))))
-
-  (comment (mapv log-level-sufficient? [:debug :invalid]))
-
-  ;; * Note that modern browsers (?) may offer native console.log string
-  ;;   substitution, Ref. http://goo.gl/Ds4neL.
-  ;; * Note current lack of [?throwable fmt & xs] support.
-  (defn log  [    & xs] (console-log xs)) ; Special, logs _raw_ args
-  (defn logp [    & xs] (*log-fn* {          :xs xs :msg_ (delay (spaced-str       xs))}) nil)
-  (defn logf [fmt & xs] (*log-fn* {:?fmt fmt :xs xs :msg_ (delay (apply format fmt xs))}) nil)
-  (defn sayp [    & xs] (js/alert (spaced-str       xs)))
-  (defn sayf [fmt & xs] (js/alert (apply format fmt xs)))
-
-  (let [logf* (fn [level fmt xs]
-                (when (log-level-sufficient? level)
-                  (*log-fn* {:level level :?fmt fmt :xs xs
-                             :msg_ (delay (apply format fmt xs))})
-                  nil))]
-    (defn tracef  [fmt & xs] (logf* :trace  fmt xs))
-    (defn debugf  [fmt & xs] (logf* :debug  fmt xs))
-    (defn infof   [fmt & xs] (logf* :info   fmt xs))
-    (defn warnf   [fmt & xs] (logf* :warn   fmt xs))
-    (defn errorf  [fmt & xs] (logf* :error  fmt xs))
-    (defn fatalf  [fmt & xs] (logf* :fatal  fmt xs))
-    (defn reportf [fmt & xs] (logf* :report fmt xs))))
+  (defn log  [& xs]     (console-log (delay xs))) ; Raw args
+  (defn logp [& xs]     (console-log (delay (spaced-str  xs))))
+  (defn logf [fmt & xs] (console-log (delay (format* fmt xs))))
+  (defn sayp [    & xs] (js/alert (spaced-str  xs)))
+  (defn sayf [fmt & xs] (js/alert (format* fmt xs))))
 
 #+cljs
 (defn get-window-location
@@ -2231,3 +2168,18 @@
         {:result     (f)}))))
 
 (defmacro cond-throw [& args] `(cond! ~@args))
+
+#+cljs
+(do ; Level-based Cljs logging (prefer Timbre v4+)
+  (enc-macros/defonce* ^:dynamic *log-level* "DEPRECATED" :debug)
+  (def ^:private log?
+    (let [->n {:trace 1 :debug 2 :info 3 :warn 4 :error 5 :fatal 6 :report 7}]
+      (fn [level] (>= (->n level) (->n *log-level*)))))
+
+  (defn tracef  [fmt & xs] (when (log? :trace)  (logf fmt xs)))
+  (defn debugf  [fmt & xs] (when (log? :debug)  (logf fmt xs)))
+  (defn infof   [fmt & xs] (when (log? :info)   (logf fmt xs)))
+  (defn warnf   [fmt & xs] (when (log? :warn)   (logf fmt xs)))
+  (defn errorf  [fmt & xs] (when (log? :error)  (logf fmt xs)))
+  (defn fatalf  [fmt & xs] (when (log? :fatal)  (logf fmt xs)))
+  (defn reportf [fmt & xs] (when (log? :report) (logf fmt xs))))
