@@ -1363,19 +1363,20 @@
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
 (comment (count-words "Hello this is a    test"))
 
+(defn uuid []
+  #+clj (java.util.UUID/randomUUID)
+  #+cljs
+  (let [fs (fn [n] (apply str (repeatedly n (fn [] (.toString (rand-int 16) 16)))))
+        g  (fn [] (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 15))) 16))
+        sb (.append (goog.string.StringBuffer.)
+             (fs 8) "-" (fs 4) "-4" (fs 3) "-" (g) (fs 3) "-" (fs 12))]
+    (UUID. (.toString sb))))
+
 (defn uuid-str
   "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\",
   Ref. http://www.ietf.org/rfc/rfc4122.txt,
        https://gist.github.com/franks42/4159427"
-  ([]
-     #+clj (str (java.util.UUID/randomUUID))
-     #+cljs
-     (let [fs (fn [n] (apply str (repeatedly n (fn [] (.toString (rand-int 16) 16)))))
-           g  (fn [] (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 15))) 16))
-           sb (.append (goog.string.StringBuffer.)
-                (fs 8) "-" (fs 4) "-4" (fs 3) "-" (g) (fs 3) "-" (fs 12))]
-       ;;(UUID. sb) ; Equality fails on roundtrips
-       (.toString sb)))
+  ([] (str (uuid)))
   ([max-length] (substr (uuid-str) 0 max-length)))
 
 (comment (uuid-str 5))
