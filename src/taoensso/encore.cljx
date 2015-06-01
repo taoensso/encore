@@ -1891,8 +1891,9 @@
 
   [uri {:keys [method params headers timeout-ms resp-type
                progress-fn ; Undocumented, experimental
-               ] :as opts
-        :or   {method :get timeout-ms 10000 resp-type :auto}}
+               errorf] :as opts
+        :or   {method :get timeout-ms 10000 resp-type :auto
+               errorf logf}}
    callback]
   {:pre [(have? [:or nil? nneg-int?] timeout-ms)]}
   (if-let [xhr (get-pooled-xhr!)]
@@ -2000,7 +2001,7 @@
         xhr)
 
       (catch js/Error e
-        (errorf "`ajax-lite` error: %s" e)
+        ;; (logf "`ajax-lite` error: %s" e)
         (.releaseObject @xhr-pool_ xhr)
         nil))
 
