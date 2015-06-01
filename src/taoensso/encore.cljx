@@ -1317,6 +1317,17 @@
            (when (>= s-len substr-len)
              (not= -1 (.indexOf s substr (- s-len substr-len))))))
 
+(defn str-?index [s substr & [start-idx last?]]
+  (let [start-idx (int (or start-idx 0))
+        result    (int (if last?
+                         #+clj  (.lastIndexOf ^String s ^String substr start-idx)
+                         #+cljs (.lastIndexOf         s         substr start-idx)
+                         #+clj  (.indexOf     ^String s ^String substr start-idx)
+                         #+cljs (.indexOf             s         substr start-idx)))]
+    (when (not= result -1) result)))
+
+(comment (str-?index "hello there" "there"))
+
 (defn join-once
   "Like `clojure.string/join` but ensures no double separators."
   [separator & coll]
