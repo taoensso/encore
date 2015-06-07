@@ -21,7 +21,7 @@
   [[lein-pprint                     "1.1.2"]
    [lein-ancient                    "0.6.7"]
    [lein-expectations               "0.0.8"]
-   [lein-autoexpect                 "1.4.3"]
+   [lein-autoexpect                 "1.5.0"]
    ;; [com.cemerick/austin          "0.1.6"]
    [com.cemerick/clojurescript.test "0.3.3"]
    [codox                           "0.8.12"]]
