@@ -1885,7 +1885,7 @@
      :headers    {\"Foo\" \"Bar\"}
      :resp-type  :text
      :timeout-ms 7000
-     :with-credentials? false ; Enable if using CORS
+     :with-credentials? false ; Enable if using CORS (requires xhr v2+)
     }
     (fn async-callback [resp-map]
       (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
@@ -1998,10 +1998,10 @@
                    :total  total
                    :ev     ev})))))
 
-        (doto xhr
-          (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
-          (.setWithCredentials (boolean with-credentials?))
-          (.send uri* method* post-content* headers*))
+        (enc-macros/doto-cond [x xhr]
+          :always (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
+          with-credentials? (.setWithCredentials true) ; Requires xhr v2+
+          :always (.send uri* method* post-content* headers*))
 
         ;; Allow aborts, etc.:
         xhr)
