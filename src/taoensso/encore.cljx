@@ -1878,8 +1878,6 @@
   Simple+lightweight Ajax via Google Closure. Returns nil, or the xhr instance.
   Ref. https://developers.google.com/closure/library/docs/xhrio.
 
-  If using CORS, :with-credentials should be true to enable cookies (default false)
-
   (ajax-lite \"/my-post-route\"
     {:method     :post
      :params     {:username \"Rich Hickey\"
@@ -1887,7 +1885,8 @@
      :headers    {\"Foo\" \"Bar\"}
      :resp-type  :text
      :timeout-ms 7000
-     :with-credentials false}
+     :with-credentials? false ; Enable if using CORS
+    }
     (fn async-callback [resp-map]
       (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
         ;; ?status  - 200, 404, ..., or nil on no response
@@ -1895,10 +1894,10 @@
         ;;                  :timeout :no-content <http-error-status> nil}
         (js/alert (str \"Ajax response: \" resp-map)))))"
 
-  [uri {:keys [method params headers timeout-ms resp-type with-credentials
+  [uri {:keys [method params headers timeout-ms resp-type with-credentials?
                progress-fn ; Undocumented, experimental
                errorf] :as opts
-        :or   {method :get timeout-ms 10000 resp-type :auto with-credentials false
+        :or   {method :get timeout-ms 10000 resp-type :auto
                errorf logf}}
    callback]
   {:pre [(have? [:or nil? nneg-int?] timeout-ms)]}
@@ -2001,7 +2000,7 @@
 
         (doto xhr
           (.setTimeoutInterval (or timeout-ms 0)) ; nil = 0 = no timeout
-          (.setWithCredentials (true? with-credentials))
+          (.setWithCredentials (boolean with-credentials?))
           (.send uri* method* post-content* headers*))
 
         ;; Allow aborts, etc.:
