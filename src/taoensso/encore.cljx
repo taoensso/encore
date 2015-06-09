@@ -1291,6 +1291,24 @@
       formatting options than Clojure's `format`!)."
   [fmt & args] (format* fmt args))
 
+(defn str-replace
+  "Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
+                  http://dev.clojure.org/jira/browse/CLJS-911."
+  [s match replacement]
+  #+clj (str/replace s match replacement)
+  #+cljs
+  (let [replacement (if-not (fn? replacement) replacement
+                      (fn [& args] (replacement (vec args))))]
+    (cond (string? match)
+      (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
+      ;; (.hasOwnProperty match "source") ; No! Ref. http://goo.gl/8hdqxb
+      (instance? js/RegExp match)
+      ;; (.replace s (js/RegExp. (.-source match) "g") replacement)
+      (let [flags (str "g" (when (.-ignoreCase match) "i")
+                           (when (.-multiline  match) "m"))]
+        (.replace s (js/RegExp. (.-source match) flags) replacement))
+      :else (throw (str "Invalid match arg: " match)))))
+
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
   `sub-indexes`."
