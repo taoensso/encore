@@ -55,20 +55,23 @@
 
 ;;;; Core
 
-(defn read-edn
-  #+clj  ([opts s] (clojure.tools.reader.edn/read-string opts s))
-  #+clj  ([     s] (clojure.tools.reader.edn/read-string      s))
+(defn read-edn-str
+  #+clj  ([opts s] (clojure.tools.reader.edn/read opts   s))
+  #+clj  ([     s] (clojure.tools.reader.edn/read-string s))
   ;; Unfortunate that cljs doesn't have an [opts s] arity:
-  #+cljs ([     s] (cljs.reader/read-string                   s)))
+  #+cljs ([     s] (cljs.reader/read-string              s)))
 
-(defn pr-edn
+(def read-edn read-edn-str) ; Alias
+(defn  pr-edn
   ([     x] (pr-edn nil x))
   ([opts x]
-   ;; These bindings can leak from REPL, etc. & cause confusing errors:
-   (binding [*print-level*  nil
-             *print-length* nil]
-     #+clj  (with-out-str (pr x)) ; Avoid apply
-     #+cljs (pr-str x))))
+   #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
+   #+clj
+   (let [sw (java.io.StringWriter.)]
+     ;; Single parallel binding:
+     (binding [*print-level* nil, *print-length* nil, *out* sw]
+       (pr x) ; Avoid `pr-str`'s `apply` call
+       (str sw)))))
 
 (defmacro compile-if
   "Evaluates `test`. If it doesn't error and returns logical true, expands to
