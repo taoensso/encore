@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "1.37.0"
+(defproject com.taoensso/encore "1.38.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Shared support utils for taoensso.com Clojure/Script libs"
   :url "https://github.com/ptaoussanis/encore"
@@ -31,7 +31,7 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-RC1"]]}
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-RC2"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
