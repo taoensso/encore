@@ -750,7 +750,7 @@
 (defn vsplit-first [v] (let [[v1] v] [v1 (when (> (count v) 1) (subvec v 1))]))
 (comment (vsplit-first [:a :b :c]))
 
-(defn nnil-set  [x] (disj (set* x) nil))
+(defn nnil-set [x] (disj (set* x) nil))
 (defn conj-some
   ([coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
   ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
@@ -761,6 +761,17 @@
 
 (defn backport-run! "`run!` from Clojure 1.7+"
   [proc coll] (reduce #(proc %2) nil coll))
+
+;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
+(defn update-in*
+  "Like `update-in` but faster, more flexible, and simpler (less ambiguous)."
+  [m ks f]
+  (if (empty? ks)
+    (f m) ; Resolve [] = [nil] ambiguity in `update-in`, `assoc-in`, etc.
+    (let [[k & ks] ks]
+      (if ks ; Avoid apply calls:
+        (assoc m k (update-in* (get m k) ks f))
+        (assoc m k (f          (get m k)))))))
 
 (defn- translate-signed-idx
   #+clj  ^long [^long signed-idx ^long max-idx]
@@ -848,9 +859,6 @@
                     (assoc-in  m ks new-val-in))]
       [new-val return-val])))
 
-;; Recall: no `korks` support since it makes `nil` ambiguous (`[]` vs `[nil]`).
-;; This ambiguity extends to (assoc-in {} [] :a), which (along with perf)
-;; is why we special case empty/nil ks.
 (defn- replace-in*
   "Reduces input with
   [<type> <ks> <reset-val-or-swap-fn>] or
@@ -968,9 +976,7 @@
       [:a :d] inc)))
 
 (defn dissoc-in [m ks & dissoc-ks]
-  (if (empty? ks)
-    (apply dissoc m dissoc-ks)
-    (apply update-in m ks dissoc dissoc-ks)))
+  (update-in* m ks (fn [m] (apply dissoc m dissoc-ks))))
 
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
