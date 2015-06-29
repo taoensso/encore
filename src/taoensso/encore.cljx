@@ -747,8 +747,11 @@
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
 (defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
 
+(defn vsplit-last  [v] [(if (= (count v) 0) nil (pop v)) (peek v)])
 (defn vsplit-first [v] (let [[v1] v] [v1 (when (> (count v) 1) (subvec v 1))]))
-(comment (vsplit-first [:a :b :c]))
+(comment
+  (vsplit-first [:a :b :c])
+  (vsplit-last  [:a :b :c]))
 
 (defn nnil-set [x] (disj (set* x) nil))
 (defn conj-some
