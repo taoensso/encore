@@ -610,6 +610,7 @@
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n)) ; #+clj (Math/abs n) reflects
 
+;; TODO [n] [type n] [type nplaces n]
 (defn round [n & [type nplaces]]
   (let [#+clj ^double n        #+cljs n n
         #+clj ^double modifier #+cljs modifier (when nplaces (Math/pow 10.0 nplaces))
