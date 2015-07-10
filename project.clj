@@ -13,8 +13,7 @@
                 }
 
   :dependencies
-  [[org.clojure/clojure      "1.4.0"]
-   ;; [org.clojure/clojure   "1.5.1"] ; Soon...
+  [[org.clojure/clojure      "1.5.1"]
    [org.clojure/tools.reader "0.9.2"]]
 
   :plugins
@@ -29,9 +28,8 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
-   :1.7  {:dependencies [[org.clojure/clojure "1.7.0-RC2"]]}
+   :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
@@ -95,7 +93,7 @@
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
-                 "with-profile" "default:+1.5:+1.6:+1.7" "expectations,"
+                 "with-profile" "default:+1.6:+1.7" "expectations,"
                  "with-profile" "+test" "cljsbuild" "test"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
