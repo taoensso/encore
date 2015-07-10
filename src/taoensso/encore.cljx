@@ -769,6 +769,9 @@
 (defn backport-run! "`run!` from Clojure 1.7+"
   [proc coll] (reduce #(proc %2) nil coll))
 
+(defn rsome "Faster `some` based on `reduce`."
+  [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
+
 ;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
 (defn update-in*
   "Like `update-in` but faster, more flexible, and simpler (less ambiguous)."
