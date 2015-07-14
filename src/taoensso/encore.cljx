@@ -612,29 +612,28 @@
 
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n)) ; #+clj (Math/abs n) reflects
-
-;; TODO [n] [type n] [type nplaces n]
-(defn round [n & [type nplaces]]
-  (let [#+clj ^double n        #+cljs n n
-        #+clj ^double modifier #+cljs modifier (when nplaces (Math/pow 10.0 nplaces))
-        n* (if-not modifier n (* n modifier))
-        rounded
-        (case (or type :round)
-          ;;; Note same API for both #+clj, #+cljs:
-          :round (Math/round n*) ; Round to nearest int or nplaces
-          :floor (Math/floor n*) ; Round down to -inf
-          :ceil  (Math/ceil  n*) ; Round up to +inf
-          :trunc (long n*)       ; Round up/down toward zero
-          (throw (ex-info "Unknown round type" {:type type})))]
-    (if-not modifier
-      (long rounded)                ; Returns long
-      (/ (double rounded) modifier) ; Returns double
-      )))
-
-(def round* round) ; Alias for ns refers
+(defn round*
+  ([             n] (round* :round nil n))
+  ([type         n] (round* type   nil n))
+  ([type nplaces n]
+   (let [#+clj ^double n        #+cljs n n
+         #+clj ^double modifier #+cljs modifier (when nplaces (Math/pow 10.0 nplaces))
+         n* (if-not modifier n (* n modifier))
+         rounded
+         (case type
+           ;;; Note same API for both #+clj, #+cljs:
+           :round (Math/round n*) ; Round to nearest int or nplaces
+           :floor (Math/floor n*) ; Round down to -inf
+           :ceil  (Math/ceil  n*) ; Round up to +inf
+           :trunc (long n*)       ; Round up/down toward zero
+           (throw (ex-info "Unknown round type" {:type type})))]
+     (if-not modifier
+       (long rounded)                ; Returns long
+       (/ (double rounded) modifier) ; Returns double
+       ))))
 
 (defn round1 "Optimized common case."
-  #+clj ^double [^double n] #+cljs [n]
+    #+clj ^double [^double n] #+cljs [n]
   (/ (double (Math/round (* n 10.0))) 10.0))
 
 (defn round2 "Optimized common case."
@@ -642,10 +641,10 @@
   (/ (double (Math/round (* n 100.0))) 100.0))
 
 (comment
-  (round -1.5 :floor)
-  (round -1.5 :trunc)
-  (round 1.1234567 :floor 5)
-  (round 1.1234567 :round 5))
+  (round* :floor -1.5)
+  (round* :trunc -1.5)
+  (round* :floor 5 1.1234567)
+  (round* :round 5 1.1234567 ))
 
 (defn exp-backoff "Returns binary exponential backoff value."
   [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
@@ -681,7 +680,7 @@
       #+cljs [years months weeks days hours mins secs msecs ms]}]
   {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
            :in (keys opts))]}
-  (round
+  (round*
     (+
       (if years  (* years  1000 60 60 24 365)    0.0)
       (if months (* months 1000 60 60 24 29.53)  0.0)
@@ -1860,7 +1859,7 @@
                     (doall)
                     (map deref)
                     (dorun)))))]
-      (if as-ns? nanosecs (Math/round (/ nanosecs 1e6))))
+      (if as-ns? nanosecs (round* (/ nanosecs 1e6))))
     (catch Throwable t (format "DNF: %s" (.getMessage t)))))
 
 (defmacro bench [nlaps bench*-opts & body]
@@ -2191,6 +2190,9 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
 
 ;;;; DEPRECATED
+
+;; Arg order changed for easier partials, etc.:
+(defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
 
 (def memoize-1 memoize1)
 
