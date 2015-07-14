@@ -633,7 +633,7 @@
        ))))
 
 (defn round1 "Optimized common case."
-    #+clj ^double [^double n] #+cljs [n]
+  #+clj ^double [^double n] #+cljs [n]
   (/ (double (Math/round (* n 10.0))) 10.0))
 
 (defn round2 "Optimized common case."
@@ -1113,7 +1113,6 @@
   ([to from] (into to from))
   ([to from & more] (reduce into (into to from) more)))
 
-;; TODO As transducer
 (defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb."
   ([] '())
   ([c1] (lazy-seq c1))
@@ -1135,8 +1134,20 @@
 
 (comment (interleave-all [:a :b :c] [:A :B :C :D :E] [:1 :2]))
 
-(defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll))))
+(defn distinct-by [keyfn coll]
+  (let [step (fn step [xs seen]
+               (lazy-seq
+                ((fn [[v :as xs] seen]
+                   (when-let [s (seq xs)]
+                     (let [v* (keyfn v)]
+                       (if (contains? seen v*)
+                         (recur (rest s) seen)
+                         (cons v (step (rest s) (conj seen v*)))))))
+                 xs seen)))]
+    (step coll #{})))
 
+(defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll))))
+(defn removev [pred coll] (filterv (complement pred) coll))
 (defn distinctv "Prefer `set` when order doesn't matter (much faster)."
   ([coll] ; `distinctv`
      (-> (reduce (fn [[v seen] in]
@@ -1166,34 +1177,11 @@
     (doall (distinct [:a :a :b :c :d :d :e :a :b :c :d]))
     (set             [:a :a :b :c :d :d :e :a :b :c :d])))
 
-(defn distinct-by "Like `sort-by` for distinct. Based on clojure.core/distinct."
-  [keyfn coll]
-  (let [step (fn step [xs seen]
-               (lazy-seq
-                ((fn [[v :as xs] seen]
-                   (when-let [s (seq xs)]
-                     (let [v* (keyfn v)]
-                       (if (contains? seen v*)
-                         (recur (rest s) seen)
-                         (cons v (step (rest s) (conj seen v*)))))))
-                 xs seen)))]
-    (step coll #{})))
-
-(compile-if (do (completing (fn [])) true) ; We have transducers support
+(compile-if
+  (do (completing (fn [])) true) ; We have transducers
   (do
-    (defn removev [pred coll] (filterv (complement pred) coll))
-    (defn xdistinct "distinctv` transducer."
-      ([]
-       (fn [rf]
-         (let [seen_ (volatile! #{})]
-           (fn
-             ([]    (rf))
-             ([acc] (rf acc))
-             ([acc input]
-              (if (contains? @seen_ input)
-                acc
-                (do (vswap! seen_ conj input)
-                    (rf acc input))))))))
+    (defn xdistinct
+      ([] (distinct)) ; clojure.core now has a distinct transducer
       ([keyfn]
        (fn [rf]
          (let [seen_ (volatile! #{})]
@@ -1205,12 +1193,9 @@
                 (if (contains? @seen_ k)
                   acc
                   (do (vswap! seen_ conj k)
-                      (rf acc input)))))))))
+                      (rf acc input))))))))))))
 
-      ;; This arity seems unnecessary:
-      ([keyfn coll] (sequence (xdistinct keyfn) coll)))))
-
-(comment (xdistinct identity [1 2 3 1 4 5 2 6 7 1]))
+(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
 (defn rcompare "Reverse comparator." [x y] (compare y x))
 
