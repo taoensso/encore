@@ -1,5 +1,4 @@
-(ns taoensso.encore
-  "Some tools I use often, w/o any external deps."
+(ns taoensso.encore "Some tools I use often, w/o any external deps."
   {:author "Peter Taoussanis"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
@@ -171,10 +170,10 @@
   "Like `if-let` but binds multiple values iff all tests are true."
   ([bindings then] `(if-lets ~bindings ~then nil))
   ([bindings then else]
-     (let [[b1 b2 & bnext] bindings]
-       (if bnext
-         `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
-         `(if-let [~b1 ~b2] ~then ~else)))))
+   (let [[b1 b2 & bnext] bindings]
+     (if bnext
+       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
+       `(if-let [~b1 ~b2] ~then ~else)))))
 
 (comment
   (if-lets [a :a]  a)
@@ -547,9 +546,10 @@
 
 (defn fq-name
   "Like `name` but fully qualified: includes namespace in string when present."
-  [x] (if (string? x) x
-          (let [n (name x)]
-            (if-let [ns (namespace x)] (str ns "/" n) n))))
+  [x]
+  (if (string? x) x
+    (let [n (name x)]
+      (if-let [ns (namespace x)] (str ns "/" n) n))))
 
 (comment (map fq-name ["foo" :foo :foo.bar/baz]))
 
@@ -557,7 +557,8 @@
 (comment (explode-keyword :foo.bar/baz))
 
 (defn merge-keywords [ks & [no-slash?]]
-  (let [parts (->> ks (filterv identity) (mapv explode-keyword) (reduce into []))]
+  (let [parts (reduce (fn [acc in] (if in (into acc (explode-keyword in)) acc))
+                [] ks)]
     (when-not (empty? parts)
       (if no-slash?
         (keyword (str/join "." parts))
@@ -987,10 +988,9 @@
       [:a :b] :b2
       [:a :d] inc)))
 
+(defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 (defn dissoc-in [m ks & dissoc-ks]
   (update-in* m ks (fn [m] (apply dissoc m dissoc-ks))))
-
-(defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 
 (comment
   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
@@ -1125,9 +1125,8 @@
                                 (interleave-all (rest s1) (rest s2))))
          s1 s1
          s2 s2))))
-
   ([c1 c2 & colls]
-     (lazy-seq
+   (lazy-seq
       (let [ss (filter identity (map seq (conj colls c2 c1)))]
         (concat (map first ss)
                 (apply interleave-all (map rest ss)))))))
@@ -1230,13 +1229,11 @@
     {}) ; =>
   {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
 
-(defn greatest "Returns the 'greatest' element in coll in O(n) time."
-  [coll & [?comparator]]
+(defn greatest [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
 
-(defn least "Returns the 'least' element in coll in O(n) time."
-  [coll & [?comparator]]
+(defn least [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
@@ -1257,8 +1254,7 @@
 
 (comment (repeatedly-into [] 10 rand))
 
-(defmacro repeatedly-into*
-  [coll n & body]
+(defmacro repeatedly-into* [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
      (if #+clj  (instance?   clojure.lang.IEditableCollection coll#)
