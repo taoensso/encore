@@ -1180,25 +1180,23 @@
     (step coll #{})))
 
 (compile-if (do (completing (fn [])) true) ; We have transducers support
-  ;; TODO: Newer versions of cljs now also have volatiles, etc.
   (do
     (defn removev [pred coll] (filterv (complement pred) coll))
     (defn xdistinct "distinctv` transducer."
       ([]
        (fn [rf]
-         (let [seen_ #+clj (volatile! #{}) #+cljs (atom {})]
+         (let [seen_ (volatile! #{})]
            (fn
              ([]    (rf))
              ([acc] (rf acc))
              ([acc input]
               (if (contains? @seen_ input)
                 acc
-                (do #+clj (vswap! seen_ conj input)
-                    #+cljs (swap! seen_ conj input)
+                (do (vswap! seen_ conj input)
                     (rf acc input))))))))
       ([keyfn]
        (fn [rf]
-         (let [seen_ #+clj (volatile! #{}) #+cljs (atom {})]
+         (let [seen_ (volatile! #{})]
            (fn
              ([]    (rf))
              ([acc] (rf acc))
@@ -1206,8 +1204,7 @@
               (let [k (keyfn input)]
                 (if (contains? @seen_ k)
                   acc
-                  (do #+clj (vswap! seen_ conj k)
-                      #+cljs (swap! seen_ conj k)
+                  (do (vswap! seen_ conj k)
                       (rf acc input)))))))))
 
       ;; This arity seems unnecessary:
