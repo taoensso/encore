@@ -1113,8 +1113,9 @@
   ([to from] (into to from))
   ([to from & more] (reduce into (into to from) more)))
 
+;; TODO As transducer
 (defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb."
-  ([]   '())
+  ([] '())
   ([c1] (lazy-seq c1))
   ([c1 c2]
      (lazy-seq
