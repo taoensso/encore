@@ -283,7 +283,6 @@
                        (or (true? x) (false? x)) x
                        (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
                        (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
-
 (defn as-?int [x]
   (cond (nil?    x) nil
         (number? x) (long x)
@@ -293,7 +292,6 @@
                     (catch NumberFormatException _
                       (try (long (Float/parseFloat x))
                            (catch NumberFormatException _ nil))))))
-
 (defn as-?float [x]
   (cond (nil?    x) nil
         (number? x) (double x)
@@ -302,7 +300,12 @@
         #+clj  (try (Double/parseDouble x)
                     (catch NumberFormatException _ nil))))
 
-(comment (have (as-?int "42")))
+;; Uses simple regex to test for basic "x@y.z" form:
+(defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
+(defn as-?nemail [?s] (when-let [email (as-?email ?s)] (str/lower-case email)))
+
+(comment (mapv as-?nemail ["foo" "foo@" "foo@bar" "Foo@BAR.com"
+                           "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"]))
 
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
