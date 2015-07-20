@@ -1807,19 +1807,22 @@
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
   [& body] `(let [t0# (nano-time)] ~@body (- (nano-time) t0#)))
 
-(defn qb-min-times #+clj ^long [times] #+cljs [times] (apply min times))
-(defmacro qbench
-  "Quick bench. Returns fastest of 3 sets of lap times for each form, in msecs."
-  ([nlaps form & more] (mapv (fn [form] `(qbench ~nlaps ~form)) (cons form more)))
+(defmacro quick-bench "Returns fastest of 3 sets of times for each form, in msecs."
+  ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
   ([nlaps form]
-     `(let [times# (for [_# [1 2 3]] (time-ns (dotimes [_# (have integer? ~nlaps)]
-                                                (do ~form))))]
-        (round2 (/ (qb-min-times times#) 1e6)))))
+   `(let [nlaps# ~(long (have number? nlaps))]
+      (round2
+        (/ (long (reduce min
+                   (repeatedly 6 ; 3 warmup sets + 3 working sets
+                     (fn [] (time-ns (dotimes [_# nlaps#] (do ~form)))))))
+          1e6)))))
 
-(defmacro qb [& args] `(qbench ~@args)) ; Alias
+(defmacro qb     [& args] `(quick-bench ~@args)) ; Alias
+(defmacro qbench [& args] `(quick-bench ~@args)) ; Alias (deprecated)
 
-(comment (qb 2     (Thread/sleep 100))
-         (qb 10000 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
+(comment
+  (qb 4   (Thread/sleep 100))
+  (qb 1e5 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
 
 #+clj
 (defn bench*
