@@ -1810,22 +1810,26 @@
 (defmacro quick-bench "Returns fastest of 3 sets of times for each form, in msecs."
   ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
   ([nlaps form]
-   `(let [nlaps# ~(long (have number? nlaps))]
+   `(let [nlaps# ~nlaps
+          ;; 3 warmup sets, 3 working sets:
+          [nlaps# nsets#] (if (vector? nlaps#) nlaps# [nlaps# 6])
+          [nlaps# nsets#] (have pos-num? nlaps# nsets#)]
       (round2
         ;; Note that we avoid (repeatedly _ _ (fn [] _)) here since the fn
         ;; wrapping seems to have subtle effects on JIT inlining (artificially
         ;; _improving_ performance in some circumstances). Still unclear what
         ;; the ideal strategy is; will require some research.
         (/ (long (reduce min
-                   (for [_# (range 6)] ; 3 warmup sets + 3 working sets
-                     (time-ns (dotimes [_# nlaps#] (do ~form))))))
+                   (for [_# (range (long nsets#))]
+                     (time-ns (dotimes [_# (long nlaps#)] (do ~form))))))
           1e6)))))
 
 (defmacro qb     [& args] `(quick-bench ~@args)) ; Alias
 (defmacro qbench [& args] `(quick-bench ~@args)) ; Alias (deprecated)
 
 (comment
-  (qb 4   (Thread/sleep 100))
+  (qb 4      (Thread/sleep 100))
+  (qb [4 10] (Thread/sleep 100))
   (qb 1e5 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
 
 #+clj
