@@ -1812,9 +1812,13 @@
   ([nlaps form]
    `(let [nlaps# ~(long (have number? nlaps))]
       (round2
+        ;; Note that we avoid (repeatedly _ _ (fn [] _)) here since the fn
+        ;; wrapping seems to have subtle effects on JIT inlining (artificially
+        ;; _improving_ performance in some circumstances). Still unclear what
+        ;; the ideal strategy is; will require some research.
         (/ (long (reduce min
-                   (repeatedly 6 ; 3 warmup sets + 3 working sets
-                     (fn [] (time-ns (dotimes [_# nlaps#] (do ~form)))))))
+                   (for [_# (range 6)] ; 3 warmup sets + 3 working sets
+                     (time-ns (dotimes [_# nlaps#] (do ~form))))))
           1e6)))))
 
 (defmacro qb     [& args] `(quick-bench ~@args)) ; Alias
