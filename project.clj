@@ -30,6 +30,7 @@
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
+   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-alpha3"]]}
    :test {:dependencies [[expectations              "2.1.0"]
                          [com.cemerick/double-check "0.6.1"]]}
    :dev
@@ -38,7 +39,7 @@
      [;; Currently the latest release that doesn't cause Expectations v2.1.0 to
       ;; choke on macros, Ref. http://goo.gl/jJbLCm:
       ;; [org.clojure/clojurescript "0.0-2985"]
-      [org.clojure/clojurescript    "0.0-3211"]
+      [org.clojure/clojurescript    "1.7.28"]
       [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
      :plugins
@@ -93,7 +94,7 @@
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
-                 "with-profile" "default:+1.6:+1.7" "expectations,"
+                 "with-profile" "default:+1.6:+1.7:+1.8" "expectations,"
                  "with-profile" "+test" "cljsbuild" "test"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
