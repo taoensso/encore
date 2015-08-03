@@ -762,7 +762,9 @@
 
 (defn nnil-set [x] (disj (set* x) nil))
 (defn conj-some
-  ([coll ?x] (if (nnil? ?x) (conj coll ?x) coll))
+  ([             ] [])
+  ([coll         ] coll)
+  ([coll ?x      ] (if (nnil? ?x) (conj coll ?x) coll))
   ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
 
 (comment
