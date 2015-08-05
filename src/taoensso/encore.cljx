@@ -15,6 +15,7 @@
                    ;; [cljs.core.async  :as async]
                    [cljs.reader         :as edn]
                    ;;[goog.crypt.base64 :as base64]
+                   [goog.object         :as gobj]
                    [goog.string         :as gstr]
                    [goog.string.format]
                    [goog.string.StringBuffer]
@@ -748,13 +749,35 @@
 ;;;; Collections
 
 #+cljs
-(defn ?aget
-  "Like `aget` but returns nil on non-existant array indexes (/ obj keys) rather
-  than throwing."
-  ([m k]          (when m (aget m k)))
-  ;; ([m k1 & ks]) (apply ?aget (?aget m k1) ks)
-  ([m k1 k2]      (when-let [m (?aget m k1)]    (aget m k2)))
-  ([m k1 k2 & ks] (when-let [m (?aget m k1 k2)] (apply ?aget m ks))))
+(defn aget*
+  "Like `aget` but returns nil for missing indexes instead of throwing."
+  ([a i]          (when a (aget a i)))
+  ;; ([a i1 & is]) (apply aget (aget* a i1) is)
+  ([a i1 i2]      (when-let [a (aget* a i1)]    (aget a i2)))
+  ([a i1 i2 & is] (when-let [a (aget* a i1 i2)] (apply aget* a is))))
+
+#+cljs
+(defn js-get "Like `get` for JS objects, Ref. https://goo.gl/eze8hY."
+  ([obj k] (js-get obj k nil))
+  ([obj k not-found]
+   (when (and obj (instance? js/Object obj))
+     (gobj/get obj k not-found))))
+
+#+cljs
+(def js-get-in "Like `get-in` for JS objects, Ref. https://goo.gl/eze8hY."
+  (let [sentinel (js-obj)]
+    (fn
+      ([obj ks] (js-get-in obj ks nil))
+      ([obj ks not-found]
+       (loop [obj obj ks (seq ks)]
+         (if-not ks
+           obj
+           (if-not (and obj (instance? js/Object obj))
+             not-found
+             (let [obj (js-get obj (first ks) sentinel)]
+               (if (identical? obj sentinel)
+                 not-found
+                 (recur obj (next ks)))))))))))
 
 (defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
