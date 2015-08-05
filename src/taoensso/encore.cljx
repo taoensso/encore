@@ -747,6 +747,15 @@
 
 ;;;; Collections
 
+#+cljs
+(defn ?aget
+  "Like `aget` but returns nil on non-existant array indexes (/ obj keys) rather
+  than throwing."
+  ([m k]          (when m (aget m k)))
+  ;; ([m k1 & ks]) (apply ?aget (?aget m k1) ks)
+  ([m k1 k2]      (when-let [m (?aget m k1)]    (aget m k2)))
+  ([m k1 k2 & ks] (when-let [m (?aget m k1 k2)] (apply ?aget m ks))))
+
 (defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
 (defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
