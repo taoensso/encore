@@ -749,14 +749,9 @@
 ;;;; Collections
 
 #+cljs
-(defn aget* "Like `aget` but returns nil for missing indexes instead of throwing."
-  ;; ([a i1 & is]) (apply aget (aget* a i1) is)
-  ([a i]          (when      a                        (aget  a i)))
-  ([a i1 i2]      (when-let [a (aget* a i1)]          (aget  a i2)))
-  ([a i1 i2 & is] (when-let [a (aget* a i1 i2)] (apply aget* a is))))
-
-#+cljs
-(defn oget "Like `aget*` for JS objects, Ref. https://goo.gl/eze8hY."
+(defn oget
+  "Like `aget` for JS objects, Ref. https://goo.gl/eze8hY. Unlike `aget`,
+  returns nil for missing keys instead of throwing."
   ([o k]          (when      o                 (gobj/get o k  nil)))
   ([o k1 k2]      (when-let [o (oget o k1)]    (gobj/get o k2 nil)))
   ([o k1 k2 & ks] (when-let [o (oget o k1 k2)] (apply oget o ks))))
