@@ -757,9 +757,9 @@
 
 #+cljs
 (defn oget "Like `aget*` for JS objects, Ref. https://goo.gl/eze8hY."
-  [o k]          (when (and o (instance? js/Object o)) (gobj/get o k nil))
-  [o k1 k2]      (when-let [o (js-get o k1)]          (js-get o k2))
-  [o k1 k2 & ks] (when-let [o (js-get o k1 k2)] (apply js-get o ks)))
+  ([o k]          (when      o                 (gobj/get o k  nil)))
+  ([o k1 k2]      (when-let [o (oget o k1)]    (gobj/get o k2 nil)))
+  ([o k1 k2 & ks] (when-let [o (oget o k1 k2)] (apply oget o ks))))
 
 (defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
