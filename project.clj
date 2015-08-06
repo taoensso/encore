@@ -39,7 +39,7 @@
      [;; Currently the latest release that doesn't cause Expectations v2.1.0 to
       ;; choke on macros, Ref. http://goo.gl/jJbLCm:
       ;; [org.clojure/clojurescript "0.0-2985"]
-      [org.clojure/clojurescript    "1.7.28"]
+      [org.clojure/clojurescript    "1.7.48"]
       [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
 
      :plugins
