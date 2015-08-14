@@ -2073,14 +2073,9 @@
   with subtle, tough-to-diagnose issues."
   [req resp f & args]
   (when resp
-    (if (contains? resp :session) ; Use response session (may be nil)
-      (assoc resp :session (apply f (:session resp) args))
-      (assoc resp :session (apply f (:session req)  args)))))
-
-(comment
-  (session-swap {:session {:req? true}} {:session nil}           assoc :new-k :new-v)
-  (session-swap {:session {:req? true}} {:session {:resp? true}} assoc :new-k :new-v)
-  (session-swap {:session {:old? true}} {}                       assoc :new-k :new-v))
+    (let [base (if (contains? resp :session) (:session resp) (:session req))
+          new-session (if (empty? args) (f base) (apply f base args))]
+      (assoc resp :session new-session))))
 
 #+clj
 (defn normalize-headers [req-or-resp]
