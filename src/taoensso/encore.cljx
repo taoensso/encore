@@ -895,10 +895,12 @@
         (let [[vf-type ks valf] (if-not ?vf-type ?op (cons ?vf-type ?op))]
           (case vf-type
             :reset (if (empty? ks) valf (assoc-in accum ks valf))
-            :swap  (if (empty? ks)
-                     (valf accum)
-                     ;; Currently ignore possible <return-val>:
-                     (nth (swapped*-in accum ks valf) 0))))))
+            :swap  (if (nil? valf)
+                     accum ; Noop, allows conditional ops
+                     (if (empty? ks)
+                       (valf accum)
+                       ;; Currently ignore possible <return-val>:
+                       (nth (swapped*-in accum ks valf) 0)))))))
     m ops))
 
 (defn replace-in "Experimental. For use with `swap!`, etc."
@@ -918,7 +920,14 @@
       [:reset [:a]    {:b :b1 :c :c1 :d 100}]
       [:swap  [:a :d] inc]
       [:swap  [:a :b] :swap/dissoc]
-      [:swap  [:a :c] (fn [_] :swap/dissoc)])))
+      [:swap  [:a :c] (fn [_] :swap/dissoc)]))
+
+  (let [a_ (atom [0 1 2])]
+    (swap! a_ replace-in
+      [:swap [0] inc]
+      ;; [:swap [5] identity] ; Will throw
+      [:swap [5]] nil ; Noop (no throw)
+      )))
 
 (defn swap-in!
   "More powerful version of `swap!`:
