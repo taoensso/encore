@@ -1,5 +1,5 @@
 (ns taoensso.encore "Some tools I use often, w/o any external deps."
-  {:author "Peter Taoussanis"}
+  {:author "Peter Taoussanis (@ptaoussanis)"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
                    [clojure.set         :as set]
