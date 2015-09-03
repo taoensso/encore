@@ -23,7 +23,7 @@
    [lein-autoexpect                 "1.5.0"]
    ;; [com.cemerick/austin          "0.1.6"]
    [com.cemerick/clojurescript.test "0.3.3"]
-   [codox                           "0.8.12"]]
+   [codox                           "0.8.13"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
