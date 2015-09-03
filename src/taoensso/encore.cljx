@@ -2156,16 +2156,19 @@
   (let [param (fn [k v]  (str (url-encode (qname k)) "="
                              (url-encode (or (as-?qname v) (str v)))))
         join  (fn [strs] (str/join "&" strs))]
-    (when-not (empty? m)
-      (join (for [[k v] m]
+    (if (empty? m)
+      ""
+      (join (for [[k v] m :when (nnil? v)]
               (if (sequential? v)
                 (join (mapv (partial param k) (or (seq v) [""])))
                 (param k v)))))))
 
 (comment
   (format-query-string {})
-  (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b" 7] :k5 []})
-  (format-query-string {:a/b :c/d}))
+  (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 "" :k5 ["v4a" "v4b" 7] :k6 []})
+  (format-query-string {:a/b :c/d})
+  (format-query-string {:k nil}) ; Nb to allow removing pre-existing params, etc.
+  )
 
 (defn- assoc-conj [m k v]
   (assoc m k (if-let [cur (get m k)] (if (vector? cur) (conj cur v) [cur v]) v)))
@@ -2191,23 +2194,25 @@
 (comment
   (parse-query-params nil)
   (parse-query-params "?foo=bar" :keywordize)
-  (-> {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b"] :k5 [] :k6 47}
+  (-> {:k1 "v1" :k2 "v2" :k3 nil :k4 "" :k5 ["v4a" "v4b"] :k6 [] :k7 47}
       (format-query-string)
       (parse-query-params)))
 
 (defn merge-url-with-query-string [url m]
   (let [[url ?qstr] (str/split (str url) #"\?" 2)
-        qmap (merge
-               (when ?qstr (keywordize-map (parse-query-params ?qstr)))
-               (keywordize-map m))]
-    (str url (when-let [qstr (format-query-string qmap)] (str "?" qstr)))))
+        qmap  (merge
+                (when ?qstr (keywordize-map (parse-query-params ?qstr)))
+                (keywordize-map m))
+        ?qstr (as-?nblank (format-query-string qmap))]
+    (if-let [qstr ?qstr] (str url "?" qstr) url)))
 
 (comment
   (merge-url-with-query-string "/" nil)
   (merge-url-with-query-string "/?foo=bar" nil)
   (merge-url-with-query-string "/?foo=bar" {"foo" "overwrite"})
   (merge-url-with-query-string "/?foo=bar" {:foo  "overwrite"})
-  (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
+  (merge-url-with-query-string "/?foo=bar" {:foo  nil})
+  (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
 ;;;; DEPRECATED
 
