@@ -197,7 +197,7 @@
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
 ;; `keyword-identical?`. This util helps alleviate the pain of writing
 ;; cross-platform code. Ref. http://goo.gl/be8CGP.
-#+clj  (def kw-identical? identical?)
+#+clj  (definline kw-identical? [x y] (clojure.lang.Util/identical x y))
 #+cljs (def kw-identical? keyword-identical?)
 
 (defn stringy? [x] (or (keyword? x) (string? x)))
