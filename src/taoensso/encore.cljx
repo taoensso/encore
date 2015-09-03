@@ -276,13 +276,20 @@
 (defn    pos-num? [x] (and (number?  x) (pos? x)))
 (defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
 
-(defn as-?nblank [x] (when (string? x) (if (str/blank? x) nil x)))
-(defn as-?kw     [x] (cond (keyword? x)       x  (string? x) (keyword x)))
-(defn as-?name   [x] (cond (keyword? x) (name x) (string? x)          x))
-(defn as-?bool   [x] (cond (nil?  x) nil
-                       (or (true? x) (false? x)) x
-                       (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
-                       (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
+(defn as-?nblank  [x] (when (string? x) (if (str/blank? x) nil x)))
+(defn as-?kw      [x] (cond (keyword? x)       x  (string? x) (keyword x)))
+(defn as-?name    [x] (cond (keyword? x) (name x) (string? x)          x))
+(defn as-?qname   [x]
+  (cond
+    (keyword? x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
+    (string?  x) x))
+
+(defn as-?bool [x]
+  (cond (nil?  x) nil
+    (or (true? x) (false? x)) x
+    (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
+    (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
+
 (defn as-?int [x]
   (cond (nil?    x) nil
         (number? x) (long x)
@@ -545,14 +552,14 @@
 
 ;;;; Keywords
 
-(defn fq-name
-  "Like `name` but fully qualified: includes namespace in string when present."
-  [x]
-  (if (string? x) x
-    (let [n (name x)]
-      (if-let [ns (namespace x)] (str ns "/" n) n))))
+(defn qname "Like `name` but includes keyword namespaces in name string."
+  #+clj ^String [x]
+  #+cljs        [x]
+  (or (as-?qname x)
+      (throw (ex-info (str "Bad `qname` argument type: " (type x))
+               {:x x :type (type x)}))))
 
-(comment (map fq-name ["foo" :foo :foo.bar/baz]))
+(comment (map qname ["foo" :foo :foo.bar/baz]))
 
 (defn explode-keyword [k] (str/split (fq-name k) #"[\./]"))
 (comment (explode-keyword :foo.bar/baz))
@@ -2140,7 +2147,8 @@
 (comment (url-decode (url-encode "Hello there~*+")))
 
 (defn format-query-string [m]
-  (let [param (fn [k v]  (str (url-encode (name k)) "=" (url-encode v)))
+  (let [param (fn [k v]  (str (url-encode (qname k)) "="
+                             (url-encode (or (as-?qname v) (str v)))))
         join  (fn [strs] (str/join "&" strs))]
     (when-not (empty? m)
       (join (for [[k v] m]
@@ -2150,7 +2158,8 @@
 
 (comment
   (format-query-string {})
-  (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b" 7] :k5 []}))
+  (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 ["v4a" "v4b" 7] :k5 []})
+  (format-query-string {:a/b :c/d}))
 
 (defn- assoc-conj [m k v]
   (assoc m k (if-let [cur (get m k)] (if (vector? cur) (conj cur v) [cur v]) v)))
@@ -2195,6 +2204,8 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5}))
 
 ;;;; DEPRECATED
+
+(def fq-name qname) ; Lots of consumers
 
 ;; Arg order changed for easier partials, etc.:
 (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
