@@ -207,7 +207,7 @@
 (defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
 (defn named?   [x]
   #+clj  (instance?   clojure.lang.Named  x)
-  #+cljs (implements? clojure.lang.INamed x))
+  #+cljs (implements? INamed              x))
 
 (compile-if (do (require 'clojure.core.async) true)
   (defn chan? [x]
