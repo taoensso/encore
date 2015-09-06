@@ -1308,6 +1308,39 @@
 
 ;;;; Strings
 
+(defn str-builder? [x]
+  #+clj  (instance? StringBuilder x)
+  #+cljs (instance? goog.string.StringBuffer x))
+
+(def str-builder "For cross-platform string building."
+  #+clj  (fn (^StringBuilder []       (StringBuilder.))
+            (^StringBuilder [s-init] (StringBuilder. ^String s-init)))
+  #+cljs (fn ([]       (goog.string.StringBuffer.))
+            ([s-init] (goog.string.StringBuffer. s-init))))
+
+(def sb-append "For cross-platform string building."
+  #+clj  (fn ^StringBuilder [^StringBuilder str-builder ^String s]
+           (.append str-builder s))
+  #+cljs (fn [str-builder s] (.append str-builder s)))
+
+(comment (str (sb-append (str-builder "foo") "bar")))
+
+(compile-if
+  (do (completing (fn [])) true) ; We have transducers
+  (do
+  (def xstr-builder "Fast string-builder transducer."
+    (fn
+      ([]     (str-builder))
+      ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
+      ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
+
+  (def xstr "Fast string transducer." (completing xstr-builder str))))
+
+(comment
+  (qb 1000 ; [358.45 34.6]
+         (reduce str          (range 512))
+    (str (reduce xstr-builder (range 512)))))
+
 #+cljs (defn undefined->nil [x] (if (undefined? x) nil x))
 (defn nil->str [x]
   #+clj  (if (nil? x) "nil" x)
