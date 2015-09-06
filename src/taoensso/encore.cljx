@@ -68,7 +68,6 @@
    #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
    #+clj
    (let [sw (java.io.StringWriter.)]
-     ;; Single parallel binding:
      (binding [*print-level* nil, *print-length* nil, *out* sw]
        (pr x) ; Avoid `pr-str`'s `apply` call
        (str sw)))))
