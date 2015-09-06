@@ -799,6 +799,9 @@
 (defn rsome "Faster `some` based on `reduce`."
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
+(defn revery? "Faster `every?` based on `reduce`."
+  [pred coll] (reduce (fn [acc in] (if (pred in) true (reduced false))) true coll))
+
 ;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
 (defn update-in*
   "Like `update-in` but faster, more flexible, and simpler (less ambiguous)."
