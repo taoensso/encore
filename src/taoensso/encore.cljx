@@ -103,7 +103,7 @@
                             [(first macro-args) (next macro-args)]
                             [{} macro-args])
         attr (if docstring   (assoc attr :doc docstring) attr)
-    attr (if (meta name) (conj (meta name) attr)     attr)]
+        attr (if (meta name) (conj (meta name) attr)     attr)]
     [(with-meta name attr) macro-args]))
 
 (defmacro defonce*
@@ -162,8 +162,7 @@
         default (when (odd? (count clauses)) (last clauses))
         clauses (if default (butlast clauses) clauses)]
     `(case ~e
-       ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#))
-                      clauses)
+       ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
        ~(when default default))))
 
 (defmacro if-lets
@@ -1327,13 +1326,13 @@
 (compile-if
   (do (completing (fn [])) true) ; We have transducers
   (do
-  (def xstr-builder "Fast string-builder transducer."
+  (def xstr-builder "Fast str-builder transducer."
     (fn
       ([]     (str-builder))
       ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
       ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
 
-  (def xstr "Fast string transducer." (completing xstr-builder str))))
+  (def xstr "Fast str transducer." (completing xstr-builder str))))
 
 (comment
   (qb 1000 ; [358.45 34.6]
