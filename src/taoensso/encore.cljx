@@ -1275,8 +1275,14 @@
 
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection."
+  ;; Note: `range` is reducible with Clojure v1.7+ (Ref. https://goo.gl/VgkvEa),
+  ;; making `(reduce (fn [acc in] (conj acc (f))) (range n))` slightly faster
+  ;; than looping with v1.7+
   #+clj [coll ^long n f] #+cljs [coll n f]
-  (if (instance? clojure.lang.IEditableCollection coll)
+  (if (and #+clj  (instance?   clojure.lang.IEditableCollection coll)
+           #+cljs (implements? IEditableCollection              coll)
+           ;; (> n 10) ; Worth the fixed transient overhead
+           )
     (loop [v (transient coll) idx 0]
       (if (>= idx n) (persistent! v)
         (recur (conj! v (f))
@@ -1291,8 +1297,10 @@
 (defmacro repeatedly-into* [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
-     (if #+clj  (instance?   clojure.lang.IEditableCollection coll#)
-         #+cljs (implements? IEditableCollection              coll#)
+     (if (and #+clj  (instance?   clojure.lang.IEditableCollection coll#)
+              #+cljs (implements? IEditableCollection              coll#)
+              ;; (> n 10) ; Worth the fixed transient overhead
+              )
        (loop [v# (transient coll#) idx# 0]
          (if (>= idx# n#)
            (persistent! v#)
