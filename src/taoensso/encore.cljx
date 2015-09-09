@@ -1107,22 +1107,29 @@
 (comment (keywordize-map nil)
          (keywordize-map {"akey" "aval" "bkey" "bval"}))
 
+(compile-if
+  (do (completing (fn [])) true) ; We have transducers
+  (defn- as-map* [kf vf kvs]
+    (transduce
+      (partition-all 2)
+      (completing (fn [acc [k v]] (assoc! acc (kf k v) (vf k v))) persistent!)
+      (transient {})
+      kvs))
+  (defn- as-map* [kf vf kvs]
+    (loop [m (transient {}) [k v :as s] kvs]
+      (let [new-m (assoc! m (kf k v) (vf k v))]
+        (if-let [n (nnext s)]
+          (recur new-m n)
+          (persistent! new-m))))))
+
 (defn as-map "Cross between `hash-map` & `map-kvs`."
   [kvs & [kf vf]]
-  ;; {:pre  [(have? [:or nil? sequential?] kvs)
-  ;;         (have? [:or nil? ifn?]  kf vf)]
-  ;;  :post [(have? [:or nil? map?]  %)]}
-  (if (empty? kvs)
-    {}
-    (let [vf (cond (nil? vf) identity :else vf)
-          kf (cond (nil? kf) identity
-                   (kw-identical? kf :keywordize)  (fn [k _] (keyword k))
+  (if (empty? kvs) {}
+    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond (nil? kf) (fn [k _] k)
+                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
                    :else kf)]
-      (loop [m (transient {}) [k v :as s] kvs]
-        (let [new-m (assoc! m (kf k v) (vf k v))]
-          (if-let [n (nnext s)]
-            (recur new-m n)
-            (persistent! new-m)))))))
+      (as-map* kf vf kvs))))
 
 (comment
   (as-map nil)
