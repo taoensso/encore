@@ -318,6 +318,20 @@
 (comment (mapv as-?nemail ["foo" "foo@" "foo@bar" "Foo@BAR.com"
                            "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"]))
 
+(defn- ?as-throw [as-name x]
+  (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
+           {:x x :type (type x)})))
+
+(defn as-nblank [x] (or (as-?nblank x) (?as-throw :nblank x)))
+(defn as-kw     [x] (or (as-?kw     x) (?as-throw :kw     x)))
+(defn as-name   [x] (or (as-?name   x) (?as-throw :name   x)))
+(defn as-qname  [x] (or (as-?qname  x) (?as-throw :qname  x)))
+(defn as-bool   [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (?as-throw :bool x))))
+(defn as-int    [x] (or (as-?int    x) (?as-throw :int    x)))
+(defn as-float  [x] (or (as-?float  x) (?as-throw :float  x)))
+(defn as-email  [x] (or (as-?email  x) (?as-throw :email  x)))
+(defn as-nemail [x] (or (as-?nemail x) (?as-throw :nemail x)))
+
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
   ([x y & more] (and (nnil? x) (apply = x y more))))
@@ -556,13 +570,7 @@
 
 ;;;; Keywords
 
-(defn qname "Like `name` but includes keyword namespaces in name string."
-  #+clj ^String [x]
-  #+cljs        [x]
-  (or (as-?qname x)
-      (throw (ex-info (str "Bad `qname` argument type: " (type x))
-               {:x x :type (type x)}))))
-
+(def qname "Like `name` but includes keyword namespaces in name string." as-qname)
 (comment (map qname ["foo" :foo :foo.bar/baz]))
 
 (defn explode-keyword [k] (str/split (qname k) #"[\./]"))
@@ -2290,9 +2298,9 @@
 (def parse-bool  as-?bool)
 (def parse-int   as-?int)
 (def parse-float as-?float)
-(defn as-bool  [x] (when x (have (as-?bool  x))))
-(defn as-int   [x] (when x (have (as-?int   x))))
-(defn as-float [x] (when x (have (as-?float x))))
+;; (defn as-bool  [x] (when x (have (as-?bool  x))))
+;; (defn as-int   [x] (when x (have (as-?int   x))))
+;; (defn as-float [x] (when x (have (as-?float x))))
 
 (def merge-deep-with nested-merge-with)
 (def merge-deep      nested-merge)
