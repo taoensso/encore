@@ -1109,16 +1109,17 @@
 
 (defn as-map "Cross between `hash-map` & `map-kvs`."
   [kvs & [kf vf]]
-  {:pre  [(have? [:or nil? sequential?] kvs)
-          (have? [:or nil? ifn?]  kf vf)]
-   :post [(have? [:or nil? map?]  %)]}
-  (if (empty? kvs) {}
-    (let [kf (if-not (kw-identical? kf :keywordize) kf
-               (fn [k _] (keyword k)))]
+  ;; {:pre  [(have? [:or nil? sequential?] kvs)
+  ;;         (have? [:or nil? ifn?]  kf vf)]
+  ;;  :post [(have? [:or nil? map?]  %)]}
+  (if (empty? kvs)
+    {}
+    (let [vf (cond (nil? vf) identity :else vf)
+          kf (cond (nil? kf) identity
+                   (kw-identical? kf :keywordize)  (fn [k _] (keyword k))
+                   :else kf)]
       (loop [m (transient {}) [k v :as s] kvs]
-        (let [k (if-not kf k (kf k v))
-              v (if-not vf v (vf k v))
-              new-m (assoc! m k v)]
+        (let [new-m (assoc! m (kf k v) (vf k v))]
           (if-let [n (nnext s)]
             (recur new-m n)
             (persistent! new-m)))))))
