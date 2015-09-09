@@ -34,9 +34,6 @@
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
-;;;; TODO
-;; * Further boxed math optimizations.
-
 ;;;; Version check
 
 (declare format)
@@ -637,9 +634,9 @@
   ([             n] (round* :round nil n))
   ([type         n] (round* type   nil n))
   ([type nplaces n]
-   (let [#+clj ^double n        #+cljs n n
-         #+clj ^double modifier #+cljs modifier (when nplaces (Math/pow 10.0 nplaces))
-         n* (if-not modifier n (* n modifier))
+   (let [n        (double n)
+         modifier (when nplaces (Math/pow 10.0 nplaces))
+         n*       (if-not modifier n (* n ^double modifier))
          rounded
          (case type
            ;;; Note same API for both #+clj, #+cljs:
@@ -649,8 +646,8 @@
            :trunc (long n*)       ; Round up/down toward zero
            (throw (ex-info "Unknown round type" {:type type})))]
      (if-not modifier
-       (long rounded)                ; Returns long
-       (/ (double rounded) modifier) ; Returns double
+       (long rounded)                        ; Returns long
+       (/ (double rounded) ^double modifier) ; Returns double
        ))))
 
 (comment
@@ -660,16 +657,16 @@
   (round* :round 5 1.1234567 ))
 
 ;;; Optimized common cases
-(defn round0 #+clj   ^long [n] #+cljs [n]            (Math/round    (double n)))
-(defn round1 #+clj ^double [n] #+cljs [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
-(defn round2 #+clj ^double [n] #+cljs [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
+(defn round0   ^long [n]            (Math/round    (double n)))
+(defn round1 ^double [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
+(defn round2 ^double [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
 
 (defn exp-backoff "Returns binary exponential backoff value."
   [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
-  (let [binary-exp (Math/pow 2 (dec nattempt))
-        time       (* (+ binary-exp (rand binary-exp)) 0.5 factor)]
-    (long (let [time (if min' (max min' time) time)
-                time (if max' (min max' time) time)]
+  (let [binary-exp (double (Math/pow 2 (dec ^long nattempt)))
+        time       (* (+ binary-exp ^double (rand binary-exp)) 0.5 (double factor))]
+    (long (let [time (if min' (max (long min') (long time)) time)
+                time (if max' (min (long max') (long time)) time)]
             time))))
 
 (comment (exp-backoff 4))
@@ -677,7 +674,7 @@
 ;;;; Date & time
 
 (defn  now-dt [] #+clj (java.util.Date.) #+cljs (js/Date.))
-(defn now-udt #+clj ^long [] #+cljs []
+(defn now-udt ^long []
   #+clj  (System/currentTimeMillis)
   #+cljs (.getTime (js/Date.)))
 
@@ -689,26 +686,23 @@
 
 (comment (with-redefs [now-udt (now-udt-mock-fn)] (repeatedly 10 now-udt)))
 
-(defn secs->ms #+clj ^long [^double secs] #+cljs [secs] (long (* secs 1000.0)))
-(defn ms->secs #+clj ^long [^long   ms]   #+cljs [ms]   (quot ms 1000))
+(defn secs->ms ^long [secs] (* (long secs)  1000))
+(defn ms->secs ^long [ms]   (quot (long ms) 1000))
 (defn ms "Returns number of milliseconds in period defined by given args."
-  [& {:as opts :keys #+clj [^double years ^double months ^double weeks
-                            ^double days  ^double hours  ^double mins
-                            ^double secs  ^double msecs  ^double ms]
-      #+cljs [years months weeks days hours mins secs msecs ms]}]
+  [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}]
   {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
            :in (keys opts))]}
   (round*
     (+
-      (if years  (* years  1000 60 60 24 365)    0.0)
-      (if months (* months 1000 60 60 24 29.53)  0.0)
-      (if weeks  (* weeks  1000 60 60 24 7)      0.0)
-      (if days   (* days   1000 60 60 24)        0.0)
-      (if hours  (* hours  1000 60 60)           0.0)
-      (if mins   (* mins   1000 60)              0.0)
-      (if secs   (* secs   1000)                 0.0)
-      (if msecs     msecs                        0.0)
-      (if ms        ms                           0.0))))
+      (if years  (* (double years)  1000 60 60 24 365)    0.0)
+      (if months (* (double months) 1000 60 60 24 29.53)  0.0)
+      (if weeks  (* (double weeks)  1000 60 60 24 7)      0.0)
+      (if days   (* (double days)   1000 60 60 24)        0.0)
+      (if hours  (* (double hours)  1000 60 60)           0.0)
+      (if mins   (* (double mins)   1000 60)              0.0)
+      (if secs   (* (double secs)   1000)                 0.0)
+      (if msecs     (double msecs)                        0.0)
+      (if ms        (double ms)                           0.0))))
 
 (def secs (comp ms->secs ms))
 (comment #=(ms   :years 88 :months 3 :days 33)
@@ -816,9 +810,7 @@
         (assoc m k (update-in* (get m k) ks f))
         (assoc m k (f          (get m k)))))))
 
-(defn- translate-signed-idx
-  #+clj  ^long [^long signed-idx ^long max-idx]
-  #+cljs       [      signed-idx       max-idx]
+(defn- translate-signed-idx ^long [^long signed-idx ^long max-idx]
   (if (>= signed-idx 0)
     (min      signed-idx max-idx)
     (max 0 (+ signed-idx max-idx))))
@@ -834,24 +826,24 @@
       (+0) (+1) (+2) (+3) (+4)  ; inclusive +ive indexes
         h    e    l    l    o   ; 5 count
       (-5) (-4) (-3) (-2) (-1)  ; inclusive -ive indexes"
-  [x start-idx & {:keys #+clj  [^long max-len ^long end-idx]
-                        #+cljs [      max-len       end-idx]}]
+  [x start-idx & {:keys [^long max-len ^long end-idx]}]
   {:pre  [(have? [:or nil? nneg-int?] max-len)]
    ;; Common out-of-bounds conds:
    ;; :post [(have? (fn [[s e]] (>= e s)) %)
    ;;        (have? (fn [[s e]] (>= s 0)) %)
    ;;        (have? (fn [[s e]] (<= e (count x))) %)]
    }
-  (let [start-idx  #+clj ^long start-idx #+cljs start-idx
+  (let [start-idx  ^long start-idx
         xlen       (count x) ; also = max-exclusive-end-idx
         start-idx* (translate-signed-idx start-idx xlen)
-        end-idx*   (cond
-                     max-len (#+clj min* #+cljs enc-macros/min*
-                               (+ start-idx* max-len) xlen)
-                     end-idx (inc ; Want exclusive
-                               (translate-signed-idx end-idx xlen))
-                     :else   xlen)]
-    (if (> start-idx* #+clj (long end-idx*) #+cljs end-idx*)
+        end-idx*   (long
+                     (cond
+                       max-len (#+clj min* #+cljs enc-macros/min*
+                                 (+ start-idx* max-len) xlen)
+                       end-idx (inc      ; Want exclusive
+                                 (translate-signed-idx end-idx xlen))
+                       :else   xlen))]
+    (if (> start-idx* end-idx*)
       ;; [end-idx* start-idx*] ; Allow wrapping
       [0 0] ; Disallow wrapping
       [start-idx* end-idx*])))
@@ -1283,7 +1275,7 @@
   ;; Note: `range` is reducible with Clojure v1.7+ (Ref. https://goo.gl/VgkvEa),
   ;; making `(reduce (fn [acc in] (conj acc (f))) (range n))` slightly faster
   ;; than looping with v1.7+
-  #+clj [coll ^long n f] #+cljs [coll n f]
+  [coll ^long n f]
   (if (and #+clj  (instance?   clojure.lang.IEditableCollection coll)
            #+cljs (implements? IEditableCollection              coll)
            ;; (> n 10) ; Worth the fixed transient overhead
@@ -1562,7 +1554,7 @@
 ;;   are actually faster.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
-(defn gc-now? [] (<= #+clj ^double (rand) #+cljs (rand) gc-rate))
+(defn gc-now? [] (<= ^double (rand) gc-rate))
 
 (defn swap-val! ; Public since it can be useful for custom memoization utils
   "Swaps associative value at key and returns the new value.
@@ -1644,10 +1636,9 @@
                 (swap! cache
                   (fn [m] (reduce-kv
                            (fn [m* k [dv udt :as cv]]
-                             (if #+clj  (> (- instant ^long udt) ^long ttl-ms)
-                                 #+cljs (> (- instant udt) ttl-ms)
-                                 m*
-                                 (assoc m* k cv))) {} (clj1098 m))))))
+                             (if (> (- instant ^long udt) ^long ttl-ms)
+                               m*
+                               (assoc m* k cv))) {} (clj1098 m))))))
 
             (let [fresh?  (kw-identical? arg1 :mem/fresh)
                   args    (if fresh? argn args)
@@ -1656,8 +1647,7 @@
                             (fn [?cv]
                               (if (and ?cv (not fresh?)
                                     (let [[_dv udt] ?cv]
-                                      #+clj  (< (- instant ^long udt) ^long ttl-ms)
-                                      #+cljs (< (- instant udt) ttl-ms)))
+                                      (< (- instant ^long udt) ^long ttl-ms)))
                                 ?cv
                                 [(delay (apply f args)) instant])))]
               @dv))))))
@@ -1685,23 +1675,19 @@
                           m* (if-not ttl-ms m*
                                (reduce-kv
                                  (fn [m* k [dv udt _ _ :as cv]]
-                                   (if #+clj  (> (- instant ^long udt) ^long ttl-ms)
-                                       #+cljs (> (- instant udt) ttl-ms)
-                                       m*
-                                       (assoc m* k cv)))
+                                   (if (> (- instant ^long udt) ^long ttl-ms)
+                                     m*
+                                     (assoc m* k cv)))
                                  {} (clj1098 m*)))
 
-                          n-to-prune
-                          #+clj  (- (long (count m*)) ^long cache-size)
-                          #+cljs (- (count m*) cache-size)
+                          n-to-prune (- (count m*) ^long cache-size)
 
                           ;; Then prune by descending tick-sum:
                           m* (if-not (pos? n-to-prune) m*
                                (->>
                                 (keys m*)
                                 (mapv (fn [k] (let [[_ _ tick-lru tick-lfu] (m* k)]
-                                               [#+clj  (+ ^long tick-lru ^long tick-lfu)
-                                                #+cljs (+ tick-lru tick-lfu)
+                                               [(+ ^long tick-lru ^long tick-lfu)
                                                 k])))
                                 (sort-by #(nth % 0))
                                 ;; (#(do (println %) %)) ; Debug
@@ -1719,8 +1705,7 @@
                                (if (and ?cv (not fresh?)
                                      (or (nil? ?instant)
                                        (let [[_dv udt] ?cv]
-                                         #+clj  (< (- ^long ?instant ^long udt) ^long ttl-ms)
-                                         #+cljs (< (- ?instant udt) ttl-ms))))
+                                         (< (- ^long ?instant ^long udt) ^long ttl-ms))))
                                  ?cv
                                  [(delay (apply f args)) ?instant tick' 1])))]
 
@@ -1729,9 +1714,8 @@
                 (fn [m]
                   (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
                     (merge m
-                      {:tick (inc #+clj ^long tick' #+cljs tick')
-                       args  [dv ?udt tick'
-                              (inc #+clj ^long tick-lfu #+cljs tick-lfu)]}))))
+                      {:tick (inc ^long tick')
+                       args  [dv ?udt tick' (inc ^long tick-lfu)]}))))
               @dv)))))))
 
 (comment
@@ -1742,7 +1726,7 @@
     (def f3 (memoize* 2 nil  (fn [& xs] (Thread/sleep 600) (rand))))
     (def f4 (memoize* 2 5000 (fn [& xs] (Thread/sleep 600) (rand)))))
 
-  (qb 10000 (f0) (f1) (f2) (f3) (f4)) ; [1.62 2.92 3.87 11.0 13.52]
+  (qb 10000 (f0) (f1) (f2) (f3) (f4)) ; [1.97 1.44 4.82 9.51 10.22]
 
   (f1)
   (f1 :mem/del)
@@ -1771,8 +1755,8 @@
     (constantly nil)
     (let [vspecs      (vec specs)
           vstates_    (atom {}) ; {<req-id> [[ncalls udt-window-start] <...>]}
-          max-win-ms  (reduce max 0 (mapv (fn [[_ win-ms _ :as spec]] win-ms)
-                                      vspecs))
+          max-win-ms  (long (reduce max 0 (mapv (fn [[_ win-ms _ :as spec]] win-ms)
+                                            vspecs)))
           nspecs      (count vspecs)
           nid-specs   (count (filterv (fn [[_ _ id]] id) vspecs))
           _           (assert (or (zero? nid-specs) (= nid-specs nspecs)))
@@ -1787,9 +1771,10 @@
                 (let [m (clj1098 m)]
                   (reduce-kv
                     (fn [m* req-id vstate]
-                      (let [max-udt-win-start (reduce (fn [acc [_ udt _]]
-                                                        (max acc udt))
-                                                0 vstate)
+                      (let [^long max-udt-win-start
+                            (reduce (fn [^long acc [_ ^long udt _]]
+                                      (max acc udt))
+                              0 vstate)
                             min-win-ms-elapsed (- instant max-udt-win-start)]
                         (if (> min-win-ms-elapsed max-win-ms)
                           (dissoc m* req-id)
@@ -1807,8 +1792,11 @@
                              in-vstate  ?vstate
                              out-vstate []
                              ?worst-limit-offence nil]
-                        (let [[[ncalls-limit win-ms ?spec-id] & next-in-vspecs] in-vspecs
-                              [[ncalls udt-win-start]         & next-in-vstate] in-vstate
+                        (let [[[^long ncalls-limit ^long win-ms ?spec-id]
+                               & next-in-vspecs] in-vspecs
+                              [[^long ncalls ^long udt-win-start]
+                               & next-in-vstate] in-vstate
+
                               win-ms-elapsed (- instant udt-win-start)
                               reset-due?     (>= win-ms-elapsed win-ms)
                               rate-limited?  (and (not reset-due?)
@@ -1822,7 +1810,7 @@
                                 ?worst-limit-offence
                                 (let [ms-wait (- win-ms win-ms-elapsed)]
                                   (if (or (nil? ?worst-limit-offence)
-                                          (let [[max-ms-wait _] ?worst-limit-offence]
+                                          (let [[^long max-ms-wait _] ?worst-limit-offence]
                                             (> ms-wait max-ms-wait)))
                                     [ms-wait ?spec-id]
                                     ?worst-limit-offence)))]
@@ -1835,7 +1823,7 @@
                       all-limits-pass? (nil? ?worst-limit-offence)
                       new-vstate (if-not all-limits-pass?
                                    vstate-with-resets
-                                   (mapv (fn [[ncalls udt-win-start]]
+                                   (mapv (fn [[^long ncalls udt-win-start]]
                                            [(inc ncalls) udt-win-start])
                                      vstate-with-resets))
 
@@ -1915,14 +1903,14 @@
 #+clj
 (defn bench*
   "Repeatedly executes fn and returns time taken to complete execution."
-  [nlaps {:keys [nlaps-warmup nthreads as-ns?]
-          :or   {nlaps-warmup 0
-                 nthreads     1}} f]
+  [^long nlaps {:keys [^long nlaps-warmup ^long nthreads as-ns?]
+                :or   {nlaps-warmup 0
+                       nthreads     1}} f]
   (try (dotimes [_ nlaps-warmup] (f))
     (let [nanosecs
           (if (= nthreads 1)
             (time-ns (dotimes [_ nlaps] (f)))
-            (let [nlaps-per-thread (int (/ nlaps nthreads))]
+            (let [nlaps-per-thread (/ nlaps nthreads)]
               (time-ns
                (->> (fn [] (future (dotimes [_ nlaps-per-thread] (f))))
                     (repeatedly nthreads)
