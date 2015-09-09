@@ -653,19 +653,16 @@
        (/ (double rounded) modifier) ; Returns double
        ))))
 
-(defn round1 "Optimized common case."
-  #+clj ^double [^double n] #+cljs [n]
-  (/ (double (Math/round (* n 10.0))) 10.0))
-
-(defn round2 "Optimized common case."
-  #+clj ^double [^double n] #+cljs [n]
-  (/ (double (Math/round (* n 100.0))) 100.0))
-
 (comment
   (round* :floor -1.5)
   (round* :trunc -1.5)
   (round* :floor 5 1.1234567)
   (round* :round 5 1.1234567 ))
+
+;;; Optimized common cases
+(defn round0 #+clj   ^long [n] #+cljs [n]            (Math/round    (double n)))
+(defn round1 #+clj ^double [n] #+cljs [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
+(defn round2 #+clj ^double [n] #+cljs [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
 
 (defn exp-backoff "Returns binary exponential backoff value."
   [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
