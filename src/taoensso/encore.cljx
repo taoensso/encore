@@ -37,17 +37,20 @@
 
 ;;;; Version check
 
-;; Note that non-breaking releases (x.y.Z) should by defn never introduce
-;; breaking changes, hence no need to handle these here:
-(def  encore-version "Used for lib-consumer version assertions" 2.10)
+(declare as-?int)
+(def  encore-version "Used for lib-consumer version assertions" [2 11 0])
 (defn assert-min-encore-version [min-version]
-  (when (< encore-version min-version)
-    (let [m-info {:your-version encore-version :min-version min-version}]
-      (throw
-        (ex-info (str "Insufficient com.taoensso/encore version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution): " m-info)
-          m-info)))))
+  (let [[xc yc zc] encore-version
+        [xm ym zm] (if (vector? min-version) min-version (re-seq #"\d+" (str min-version)))
+        [xm ym zm] (mapv #(or (as-?int %) 0) [xm ym zm])]
 
-(comment (assert-min-encore-version 3.0))
+    (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
+      (throw
+        (ex-info (str "Insufficient com.taoensso/encore version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution).")
+          {:min-version  (str/join "." [xm ym zm])
+           :your-version (str/join "." [xc yc zc])})))))
+
+(comment (assert-min-encore-version 3.10))
 
 ;;;; Core
 
