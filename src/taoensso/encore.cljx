@@ -1676,19 +1676,26 @@
          (do
            (when (and (gc-now?)
                       (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
+             (do;future
+               (let [instant (now-udt)
+                     snapshot @cache ; NON-atomic gc actually preferable
+                     ks-to-gc
+                     (persistent!
+                       (reduce-kv
+                         (fn [acc k [dv udt :as cv]]
+                           (if (> (- instant ^long udt) ^long ttl-ms)
+                             (conj! acc k)
+                             acc))
+                         (transient [])
+                         snapshot))]
 
-             (let [instant (now-udt)]
-               (swap! cache
-                 (fn [m]
-                   (persistent!
-                     (reduce-kv
-                       (fn [m* k [dv udt :as cv]]
-                         (if (> (- instant ^long udt) ^long ttl-ms)
-                           (dissoc! m* k cv)
-                           m*))
-                       (transient m) m)))))
+                 (swap! cache
+                   (fn [m]
+                     (persistent!
+                       (reduce (fn [acc in] (dissoc! acc in))
+                         (transient m) ks-to-gc))))
 
-             (reset! gc-running? false))
+                 (reset! gc-running? false))))
 
            (let [fresh?  (kw-identical? arg1 :mem/fresh)
                  args    (if fresh? argn args)
@@ -1718,39 +1725,59 @@
          (do
            (when (and (gc-now?)
                       (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
-             (let [instant (now-udt)]
 
-               (when ttl-ms
-                 (swap! state ; First prune expired stuff
-                   (fn [m]
-                     (persistent!
-                       (reduce-kv
-                         (fn [m* k [dv udt _ _ :as cv]]
-                           (if (> (- instant ^long udt) ^long ttl-ms)
-                             (dissoc! m* k cv)
-                             m*))
-                         (transient m)
-                         (dissoc m :tick))))))
+             (do;future
+               (let [instant (now-udt)]
 
-               ;; Then prune by ascending (worst) tick-sum:
-               (swap! state
-                 (fn [m]
-                   (let [n-to-prune (- (dec (count m)) ^long cache-size)]
-                     (if-not (> n-to-prune 256)
-                       m
-                       (let [worst-keys
-                             (top n-to-prune
-                               (fn [k]
-                                 (let [[_ _ tick-lru tick-lfu] (m k)]
-                                   (+ ^long tick-lru ^long tick-lfu)))
-                               (keys (dissoc m :tick)))]
+                 (when ttl-ms ; First prune expired stuff
+                   (let [snapshot (dissoc @state :tick)
+                         ks-to-gc
+                         (persistent!
+                           (reduce-kv
+                             (fn [acc k [dv udt _ _ :as cv]]
+                               (if (> (- instant ^long udt) ^long ttl-ms)
+                                 (conj! acc k)
+                                 acc))
+                             (transient [])
+                             snapshot))]
 
-                         ;; (println (str "worst-keys: " worst-keys)) ; Debug
+                     (swap! state
+                       (fn [m]
                          (persistent!
                            (reduce (fn [acc in] (dissoc! acc in))
-                             (transient m) worst-keys)))))))
+                             (transient m) ks-to-gc))))))
 
-               (reset! gc-running? false)))
+                 ;; Then prune by ascending (worst) tick-sum:
+                 (let [snapshot (dissoc @state :tick)
+                       n-to-gc  (- (count snapshot) ^long cache-size)]
+
+                   (when (> n-to-gc 64) ; Tradeoff between sort cost + write contention
+                     (let [ks-to-gc
+                           (top n-to-gc
+                             (fn [k]
+                               (let [[_ _ tick-lru tick-lfu] (snapshot k)]
+                                 (+ ^long tick-lru ^long tick-lfu)))
+                             (keys snapshot))]
+
+                       ;; (println (str "ks-to-gc: " ks-to-gc)) ; Debug
+
+                       ;; Could do batches here to help further minimize contention?:
+                       ;; (transduce
+                       ;;   (partition-all 8)
+                       ;;   (completing
+                       ;;     (fn [_ batch]
+                       ;;       (swap! state
+                       ;;         (fn [m] (reduce (fn [acc in] (dissoc! acc in)) m batch)))
+                       ;;       nil))
+                       ;;   ks-to-gc)
+
+                       (swap! state
+                         (fn [m]
+                           (persistent!
+                             (reduce (fn [acc in] (dissoc! acc in))
+                               (transient m) ks-to-gc)))))))
+
+                 (reset! gc-running? false))))
 
            (let [fresh?   (kw-identical? arg1 :mem/fresh)
                  args     (if fresh? argn args)
@@ -1783,12 +1810,11 @@
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
   (qb 10000
-    ;; (f0) (f1) (f2) (f3) (f4)
-    (f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand)))
-  ;;
-  ;; [13.46 17.86 78.09 101.41 99.98]  ; gc 100
-  ;; [12.09 17.65 19.09  31.42  31.6]  ; no gc
-  ;; [ 1.78  2.36  3.68   9.59  10.76] ; no args
+    (f0) (f1) (f2) (f3) (f4)
+    ;;(f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand))
+    )
+  ;; [ 0.95  1.29  4.13 10.36 11.32] ; w/o args
+  ;; [12.76 18.64 20.10 30.99 36.25] ; with args
 
   (f1)
   (f1 :mem/del)
