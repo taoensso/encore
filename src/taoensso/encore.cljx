@@ -39,7 +39,7 @@
 
 ;; Note that non-breaking releases (x.y.Z) should by defn never introduce
 ;; breaking changes, hence no need to handle these here:
-(def  encore-version "Used for lib-consumer version assertions" 2.9)
+(def  encore-version "Used for lib-consumer version assertions" 2.10)
 (defn assert-min-encore-version [min-version]
   (when (< encore-version min-version)
     (let [m-info {:your-version encore-version :min-version min-version}]
