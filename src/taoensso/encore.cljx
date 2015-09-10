@@ -1,4 +1,5 @@
-(ns taoensso.encore "Some tools I use often, w/o any external deps."
+(ns taoensso.encore
+  "Some tools I use often, w/o any external deps."
   {:author "Peter Taoussanis (@ptaoussanis)"}
   #+clj  (:refer-clojure :exclude [format])
   #+clj  (:require [clojure.string      :as str]
@@ -36,19 +37,17 @@
 
 ;;;; Version check
 
-(declare format)
+;; Note that non-breaking releases (x.y.Z) should by defn never introduce
+;; breaking changes, hence no need to handle these here:
 (def  encore-version "Used for lib-consumer version assertions" 2.9)
 (defn assert-min-encore-version [min-version]
   (when (< encore-version min-version)
-    (throw
-      (ex-info
-        (format
-          "Insufficient com.taoensso/encore version: %s < %s. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution)."
-          encore-version min-version)
-        {:min-version  min-version
-         :this-version encore-version}))))
+    (let [m-info {:your-version encore-version :min-version min-version}]
+      (throw
+        (ex-info (str "Insufficient com.taoensso/encore version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution): " m-info)
+          m-info)))))
 
-(comment (assert-min-encore-version 1.3))
+(comment (assert-min-encore-version 3.0))
 
 ;;;; Core
 
@@ -75,10 +74,10 @@
   (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
     (do-cool-stuff-with-fork-join)
     (fall-back-to-executor-services))"
-  [test then & [?else]]
+  [test then & [else]]
   (if (try (eval test) (catch Throwable _ false))
     `(do ~then)
-    `(do ~?else)))
+    `(do ~else)))
 
 (defmacro if-cljs
   "Executes `then` clause iff generating ClojureScript code.
@@ -171,12 +170,6 @@
        `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
        `(if-let [~b1 ~b2] ~then ~else)))))
 
-(comment
-  (if-lets [a :a]  a)
-  (if-lets [a nil] a)
-  (if-lets [a :a b :b]  [a b])
-  (if-lets [a :a b nil] [a b]))
-
 (defmacro when-lets
   "Like `when-let` but binds multiple values iff all tests are true."
   [bindings & body]
@@ -185,7 +178,10 @@
       `(when-let [~b1 ~b2] (when-lets ~(vec bnext) ~@body))
       `(when-let [~b1 ~b2] ~@body))))
 
-(comment (when-lets [a :a b nil] "foo"))
+(comment
+  (if-lets   [a :a b (= a :a)] [a b] "else")
+  (if-lets   [a :a b (= a :b)] [a b] "else")
+  (when-lets [a :a b nil] "true"))
 
 ;;;; Types
 
@@ -272,9 +268,9 @@
 (defn distinct-elements? [x] (or (set? x) (= (count x) (count (set* x)))))
 
 ;;; These are less useful now that `have` traps errors
-(defn nblank-str? [x] (and (string?  x) (not (str/blank? x))))
-(defn   nneg-num? [x] (and (number?  x) (not (neg? x))))
-(defn    pos-num? [x] (and (number?  x) (pos? x)))
+(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
+(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
+(defn    pos-num? [x] (and (number? x) (pos? x)))
 (defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
 
 (defn as-?nblank  [x] (when (string?  x) (if (str/blank? x) nil x)))
@@ -285,12 +281,6 @@
     (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
     (string? x) x))
 
-(defn as-?bool [x]
-  (cond (nil?  x) nil
-    (or (true? x) (false? x)) x
-    (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
-    (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
-
 (defn as-?int [x]
   (cond (nil?    x) nil
         (number? x) (long x)
@@ -300,6 +290,7 @@
                     (catch NumberFormatException _
                       (try (long (Float/parseFloat x))
                            (catch NumberFormatException _ nil))))))
+
 (defn as-?float [x]
   (cond (nil?    x) nil
         (number? x) (double x)
@@ -307,6 +298,12 @@
         #+cljs (let [x (js/parseFloat x)] (when-not (js/isNan x) x))
         #+clj  (try (Double/parseDouble x)
                     (catch NumberFormatException _ nil))))
+
+(defn as-?bool [x]
+  (cond (nil?  x) nil
+    (or (true? x) (false? x)) x
+    (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
+    (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
 
 ;; Uses simple regex to test for basic "x@y.z" form:
 (defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
@@ -379,6 +376,8 @@
 
 (comment (try (/ 5 0) (catch Exception e (str e) #_(pr-str e))))
 
+(declare rsome revery?)
+
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail." [pred-form]
   (if-not (vector? pred-form) pred-form
@@ -408,11 +407,11 @@
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (hpred p1)) x))
                         (when p2 ((non-throwing (hpred p2)) x))
-                        (some   #((non-throwing (hpred %))  x) more)))
+                        (rsome  #((non-throwing (hpred %))  x) more)))
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((hpred p1) x))
                          (if-not p2 true ((hpred p2) x))
-                         (every? #((hpred %) x) more)))
+                         (revery? #((hpred %) x) more)))
         ;; pred-form ; No, rather throw on confusing/ambiguous pred-form (typo?)
         ))))
 
@@ -581,7 +580,7 @@
         (keyword (str/join "." parts))
         (let [ppop (pop parts)]
           (keyword (when-not (empty? ppop) (str/join "." ppop))
-                   (peek parts)))))))
+            (peek parts)))))))
 
 (comment
   (merge-keywords [:foo.bar nil :baz.qux/end nil])
@@ -673,10 +672,8 @@
 
 ;;;; Date & time
 
-(defn  now-dt [] #+clj (java.util.Date.) #+cljs (js/Date.))
-(defn now-udt ^long []
-  #+clj  (System/currentTimeMillis)
-  #+cljs (.getTime (js/Date.)))
+(defn  now-dt       [] #+clj (java.util.Date.) #+cljs (js/Date.))
+(defn now-udt ^long [] #+clj (System/currentTimeMillis) #+cljs (.getTime (js/Date.)))
 
 (defn now-udt-mock-fn "Useful for testing."
   [& [mock-udts]]
@@ -840,7 +837,7 @@
                      (cond
                        max-len (#+clj min* #+cljs enc-macros/min*
                                  (+ start-idx* max-len) xlen)
-                       end-idx (inc      ; Want exclusive
+                       end-idx (inc ; Want exclusive
                                  (translate-signed-idx end-idx xlen))
                        :else   xlen))]
     (if (> start-idx* end-idx*)
@@ -1148,8 +1145,7 @@
 (comment (keywordize-map nil)
          (keywordize-map {"akey" "aval" "bkey" "bval"}))
 
-(compile-if
-  (do (completing (fn [])) true) ; We have transducers
+(compile-if (do (completing (fn [])) true) ; We have transducers
   (defn- as-map* [kf vf kvs]
     (transduce
       (partition-all 2)
@@ -1256,8 +1252,7 @@
     (doall (distinct [:a :a :b :c :d :d :e :a :b :c :d]))
     (set             [:a :a :b :c :d :d :e :a :b :c :d])))
 
-(compile-if
-  (do (completing (fn [])) true) ; We have transducers
+(compile-if (do (completing (fn [])) true) ; We have transducers
   (do
     (defn xdistinct
       ([] (distinct)) ; clojure.core now has a distinct transducer
@@ -1309,16 +1304,6 @@
     {}) ; =>
   {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
 
-(defn greatest [coll & [?comparator]]
-  (let [comparator (or ?comparator rcompare)]
-    (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
-
-(defn least [coll & [?comparator]]
-  (let [comparator (or ?comparator rcompare)]
-    (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
-
-(comment (greatest ["a" "e" "c" "b" "d"]))
-
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection."
   ;; Note: `range` is reducible with Clojure v1.7+ (Ref. https://goo.gl/VgkvEa),
@@ -1331,12 +1316,10 @@
            )
     (loop [v (transient coll) idx 0]
       (if (>= idx n) (persistent! v)
-        (recur (conj! v (f))
-               (inc idx))))
+        (recur (conj! v (f)) (inc idx))))
     (loop [v coll idx 0]
       (if (>= idx n) v
-        (recur (conj v (f))
-               (inc idx))))))
+        (recur (conj v (f)) (inc idx))))))
 
 (comment (repeatedly-into [] 10 rand))
 
@@ -1348,15 +1331,11 @@
               ;; (> n 10) ; Worth the fixed transient overhead
               )
        (loop [v# (transient coll#) idx# 0]
-         (if (>= idx# n#)
-           (persistent! v#)
-           (recur (conj! v# ~@body)
-                  (inc idx#))))
-       (loop [v#   coll#
-              idx# 0]
+         (if (>= idx# n#) (persistent! v#)
+           (recur (conj! v# ~@body) (inc idx#))))
+       (loop [v# coll# idx# 0]
          (if (>= idx# n#) v#
-           (recur (conj v# ~@body)
-                  (inc idx#)))))))
+           (recur (conj v# ~@body) (inc idx#)))))))
 
 ;;;; Strings
 
@@ -1377,16 +1356,15 @@
 
 (comment (str (sb-append (str-builder "foo") "bar")))
 
-(compile-if
-  (do (completing (fn [])) true) ; We have transducers
+(compile-if (do (completing (fn [])) true) ; We have transducers
   (do
-  (def xstr-builder "Fast str-builder transducer."
-    (fn
-      ([]     (str-builder))
-      ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
-      ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
+    (def xstr-builder "Fast str-builder transducer."
+      (fn
+        ([]     (str-builder))
+        ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
+        ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
 
-  (def xstr "Fast str transducer." (completing xstr-builder str))))
+    (def xstr "Fast str transducer." (completing xstr-builder str))))
 
 (comment
   (qb 1000 ; [358.45 34.6]
@@ -1476,8 +1454,7 @@
 
 (comment (str-?index "hello there" "there"))
 
-(defn join-once
-  "Like `clojure.string/join` but ensures no double separators."
+(defn join-once "Like `clojure.string/join` but ensures no double separators."
   [separator & coll]
   (reduce
    (fn [s1 s2]
@@ -1989,8 +1966,7 @@
   (qb 1e5 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
 
 #+clj
-(defn bench*
-  "Repeatedly executes fn and returns time taken to complete execution."
+(defn bench* "Repeatedly executes fn and returns time taken to complete execution."
   [^long nlaps {:keys [^long nlaps-warmup ^long nthreads as-ns?]
                 :or   {nlaps-warmup 0
                        nthreads     1}} f]
@@ -2000,11 +1976,9 @@
             (time-ns (dotimes [_ nlaps] (f)))
             (let [nlaps-per-thread (/ nlaps nthreads)]
               (time-ns
-               (->> (fn [] (future (dotimes [_ nlaps-per-thread] (f))))
-                    (repeatedly nthreads)
-                    (doall)
-                    (map deref)
-                    (dorun)))))]
+                (let [futures (repeatedly-into [] nthreads
+                                (fn [] (future (dotimes [_ nlaps-per-thread] (f)))))]
+                  (mapv deref futures)))))]
       (if as-ns? nanosecs (round* (/ nanosecs 1e6))))
     (catch Throwable t (format "DNF: %s" (.getMessage t)))))
 
@@ -2403,3 +2377,13 @@
   (defn errorf  [fmt & xs] (when (log? :error)  (apply logf (str "ERROR: " fmt) xs)))
   (defn fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
   (defn reportf [fmt & xs] (when (log? :report) (apply logf fmt xs))))
+
+(defn greatest "Deprecated." [coll & [?comparator]]
+  (let [comparator (or ?comparator rcompare)]
+    (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
+
+(defn least "Deprecated." [coll & [?comparator]]
+  (let [comparator (or ?comparator rcompare)]
+    (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
+
+(comment (greatest ["a" "e" "c" "b" "d"]))
