@@ -1737,17 +1737,6 @@
                              (keys snapshot))]
 
                        ;; (println (str "ks-to-gc: " ks-to-gc)) ; Debug
-
-                       ;; Could do batches here to help further minimize contention?:
-                       ;; (transduce
-                       ;;   (partition-all 8)
-                       ;;   (completing
-                       ;;     (fn [_ batch]
-                       ;;       (swap! state
-                       ;;         (fn [m] (reduce (fn [acc in] (dissoc! acc in)) m batch)))
-                       ;;       nil))
-                       ;;   ks-to-gc)
-
                        (swap! state
                          (fn [m]
                            (persistent!
