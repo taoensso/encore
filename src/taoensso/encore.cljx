@@ -870,6 +870,47 @@
 
 (comment (subvec* [:a :b :c :d :e] -1))
 
+#+clj
+(do
+  (def ^:private sentinel (Object.))
+  (defn- sentinel? [x] (identical? x sentinel))
+  (defn- >nil-sentinel [x] (if (nil? x) sentinel x))
+  (defn- <nil-sentinel [x] (if (sentinel? x) nil x)))
+
+(declare repeatedly-into)
+(defn top
+  "Returns a sorted vector of the top n items from coll of N items in O(N.logn)
+  time. (take n (sort-by ...)) is O(N.logN) time, so much slower when n << N.
+  Ref. http://stevehanov.ca/blog/index.php?id=122"
+  ([n           coll] (top n identity compare coll))
+  ([n keyfn     coll] (top n keyfn    compare coll))
+  ([n keyfn cmp coll]
+   ;; TODO Real cljs impl:
+   #+cljs (into [] (take n) (sort-by keyfn cmp coll)) ; Requires transducers
+   #+clj
+   (let [coll-size   (count coll)
+         result-size (min coll-size n)]
+     (if-not (pos? result-size) []
+       (let [^java.util.PriorityQueue pq
+             (java.util.PriorityQueue. coll-size
+               (if (= keyfn identity)
+                 (fn [x y] (cmp (<nil-sentinel x) (<nil-sentinel y)))
+                 (fn [x y] (cmp
+                            (keyfn (<nil-sentinel x))
+                            (keyfn (<nil-sentinel y))))))]
+
+         (backport-run! #(.add pq (>nil-sentinel %)) coll)
+         (repeatedly-into [] result-size #(<nil-sentinel (.poll pq))))))))
+
+(comment
+  (top 0 [])
+  (top 3 [])
+  (top 20 [2 3 5 3 88 nil])
+  (sort   [2 3 5 3 88 nil])
+  (top 20 - [2 3 5 3 88])
+  (let [c (repeatedly 5000 rand)]
+    (qb 100 (into [] (take 2) (sort-by - c)) (top 2 - c))))
+
 (defrecord Swapped  [new-val return-val])
 (defn      swapped  [new-val return-val] (Swapped. new-val return-val))
 (defn      swapped? [x] (instance? Swapped x))
