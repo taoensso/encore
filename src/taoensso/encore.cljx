@@ -1595,13 +1595,6 @@
 
 ;;;; Memoization
 
-;;; TODO
-;; * Consider implementing a self-gc'ing hashmap for use here & elsewhere?
-;; * Invalidating memoize* cache doesn't scale horizontally; could easily build
-;;   a Redis-backed distributed version with pttl, though it'd be slower.
-;; * Consider a timer-wheel for cheaper ttl gc. UPD: core.async timeouts
-;;   are actually faster.
-
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn gc-now? [] (<= ^double (rand) gc-rate))
 
@@ -1653,129 +1646,149 @@
 
   ;; De-raced, commands
   ([f]
-    (let [cache_ (atom {})] ; {<args> <delay-val>}
-      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (kw-identical? arg1 :mem/del)
-          (do (if (kw-identical? (first argn) :mem/all)
-                (reset! cache_ {})
-                (swap!  cache_ dissoc argn))
-              nil)
-          (let [fresh? (kw-identical? arg1 :mem/fresh)
-                args   (if fresh? argn args)]
-            @(or (get @cache_ args)
-                 (swap-val! cache_ args
-                   (fn [?dv] (if (and ?dv (not fresh?))
-                              ?dv
-                              (delay (apply f args)))))))))))
+   (let [cache_ (atom {})] ; {<args> <delay-val>}
+     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+       (if (kw-identical? arg1 :mem/del)
+         (do (if (kw-identical? (first argn) :mem/all)
+               (reset! cache_ {})
+               (swap!  cache_ dissoc argn))
+             nil)
+         (let [fresh? (kw-identical? arg1 :mem/fresh)
+               args   (if fresh? argn args)]
+           @(or (get @cache_ args)
+                (swap-val! cache_ args
+                  (fn [?dv] (if (and ?dv (not fresh?))
+                             ?dv
+                             (delay (apply f args)))))))))))
 
   ;; De-raced, commands, ttl, gc
   ([ttl-ms f]
-     (have? [:or nil? pos-int?] ttl-ms)
-     (let [cache (atom {})] ; {<args> <[delay-val udt :as cache-val]>}
-      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (kw-identical? arg1 :mem/del)
-          (do (if (kw-identical? (first argn) :mem/all)
-                (reset! cache {})
-                (swap!  cache dissoc argn))
-              nil)
+   (have? [:or nil? pos-int?] ttl-ms)
+   (let [cache       (atom {}) ; {<args> <[delay-val udt :as cache-val]>}
+         gc-running? (atom false)]
+     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+       (if (kw-identical? arg1 :mem/del)
+         (do (if (kw-identical? (first argn) :mem/all)
+               (reset! cache {})
+               (swap!  cache dissoc argn))
+             nil)
 
-          (do
-            (when (gc-now?)
-              (let [instant (now-udt)]
-                (swap! cache
-                  (fn [m] (reduce-kv
-                           (fn [m* k [dv udt :as cv]]
-                             (if (> (- instant ^long udt) ^long ttl-ms)
-                               m*
-                               (assoc m* k cv))) {} (clj1098 m))))))
+         (do
+           (when (and (gc-now?)
+                      (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
 
-            (let [fresh?  (kw-identical? arg1 :mem/fresh)
-                  args    (if fresh? argn args)
-                  instant (now-udt)
-                  [dv]    (swap-val! cache args
-                            (fn [?cv]
-                              (if (and ?cv (not fresh?)
-                                    (let [[_dv udt] ?cv]
-                                      (< (- instant ^long udt) ^long ttl-ms)))
-                                ?cv
-                                [(delay (apply f args)) instant])))]
-              @dv))))))
+             (let [instant (now-udt)]
+               (swap! cache
+                 (fn [m]
+                   (persistent!
+                     (reduce-kv
+                       (fn [m* k [dv udt :as cv]]
+                         (if (> (- instant ^long udt) ^long ttl-ms)
+                           (dissoc! m* k cv)
+                           m*))
+                       (transient m) m)))))
+
+             (reset! gc-running? false))
+
+           (let [fresh?  (kw-identical? arg1 :mem/fresh)
+                 args    (if fresh? argn args)
+                 instant (now-udt)
+                 [dv]    (swap-val! cache args
+                           (fn [?cv]
+                             (if (and ?cv (not fresh?)
+                                   (let [[_dv udt] ?cv]
+                                     (< (- instant ^long udt) ^long ttl-ms)))
+                               ?cv
+                               [(delay (apply f args)) instant])))]
+             @dv))))))
 
   ;; De-raced, commands, ttl, gc, max-size
   ([cache-size ttl-ms f]
-    (have? [:or nil? pos-int?] ttl-ms)
-    (have? pos-int? cache-size)
-    (let [state (atom {:tick 0})] ; {:tick _
-                                  ;  <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
-      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-        (if (kw-identical? arg1 :mem/del)
-          (do (if (kw-identical? (first argn) :mem/all)
-                (reset! state {:tick 0})
-                (swap!  state dissoc argn))
-              nil)
+   (have? [:or nil? pos-int?] ttl-ms)
+   (have? pos-int? cache-size)
+   (let [state       (atom {:tick 0}) ; {:tick _ <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
+         gc-running? (atom false)]
+     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+       (if (kw-identical? arg1 :mem/del)
+         (do (if (kw-identical? (first argn) :mem/all)
+               (reset! state {:tick 0})
+               (swap!  state dissoc argn))
+             nil)
 
-          (do
-            (when (gc-now?)
-              (let [instant (now-udt)]
-                (swap! state
-                  (fn [m]
-                    (let [m* (dissoc m :tick)
-                          ;; First prune expired stuff:
-                          m* (if-not ttl-ms m*
-                               (reduce-kv
-                                 (fn [m* k [dv udt _ _ :as cv]]
-                                   (if (> (- instant ^long udt) ^long ttl-ms)
-                                     m*
-                                     (assoc m* k cv)))
-                                 {} (clj1098 m*)))
+         (do
+           (when (and (gc-now?)
+                      (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
+             (let [instant (now-udt)]
 
-                          n-to-prune (- (count m*) ^long cache-size)
+               (when ttl-ms
+                 (swap! state ; First prune expired stuff
+                   (fn [m]
+                     (persistent!
+                       (reduce-kv
+                         (fn [m* k [dv udt _ _ :as cv]]
+                           (if (> (- instant ^long udt) ^long ttl-ms)
+                             (dissoc! m* k cv)
+                             m*))
+                         (transient m)
+                         (dissoc m :tick))))))
 
-                          ;; Then prune by descending tick-sum:
-                          m* (if-not (pos? n-to-prune) m*
-                               (->>
-                                (keys m*)
-                                (mapv (fn [k] (let [[_ _ tick-lru tick-lfu] (m* k)]
-                                               [(+ ^long tick-lru ^long tick-lfu)
-                                                k])))
-                                (sort-by #(nth % 0))
-                                ;; (#(do (println %) %)) ; Debug
-                                (take    n-to-prune)
-                                (mapv    #(nth % 1))
-                                (apply dissoc m*)))]
-                      (assoc m* :tick (:tick m)))))))
+               ;; Then prune by ascending (worst) tick-sum:
+               (swap! state
+                 (fn [m]
+                   (let [n-to-prune (- (dec (count m)) ^long cache-size)]
+                     (if-not (> n-to-prune 256)
+                       m
+                       (let [worst-keys
+                             (top n-to-prune
+                               (fn [k]
+                                 (let [[_ _ tick-lru tick-lfu] (m k)]
+                                   (+ ^long tick-lru ^long tick-lfu)))
+                               (keys (dissoc m :tick)))]
 
-            (let [fresh?   (kw-identical? arg1 :mem/fresh)
-                  args     (if fresh? argn args)
-                  ?instant (when ttl-ms (now-udt))
-                  tick'    (:tick @state) ; Accuracy/sync irrelevant
-                  [dv]     (swap-val! state args
-                             (fn [?cv]
-                               (if (and ?cv (not fresh?)
-                                     (or (nil? ?instant)
-                                       (let [[_dv udt] ?cv]
-                                         (< (- ^long ?instant ^long udt) ^long ttl-ms))))
-                                 ?cv
-                                 [(delay (apply f args)) ?instant tick' 1])))]
+                         ;; (println (str "worst-keys: " worst-keys)) ; Debug
+                         (persistent!
+                           (reduce (fn [acc in] (dissoc! acc in))
+                             (transient m) worst-keys)))))))
 
-              ;; We always adjust counters, even on reads:
-              (swap! state
-                (fn [m]
-                  (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
-                    (merge m
-                      {:tick (inc ^long tick')
-                       args  [dv ?udt tick' (inc ^long tick-lfu)]}))))
-              @dv)))))))
+               (reset! gc-running? false)))
+
+           (let [fresh?   (kw-identical? arg1 :mem/fresh)
+                 args     (if fresh? argn args)
+                 ?instant (when ttl-ms (now-udt))
+                 tick'    (:tick @state) ; Accuracy/sync irrelevant
+                 [dv]     (swap-val! state args
+                            (fn [?cv]
+                              (if (and ?cv (not fresh?)
+                                    (or (nil? ?instant)
+                                      (let [[_dv udt] ?cv]
+                                        (< (- ^long ?instant ^long udt) ^long ttl-ms))))
+                                ?cv
+                                [(delay (apply f args)) ?instant tick' 1])))]
+
+             ;; We always adjust counters, even on reads:
+             (swap! state
+               (fn [m]
+                 (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
+                   (merge m
+                     {:tick (inc ^long tick')
+                      args  [dv ?udt tick' (inc ^long tick-lfu)]}))))
+             @dv)))))))
 
 (comment
   (do
-    (def f0 (memoize         (fn [& xs] (Thread/sleep 600) (rand))))
-    (def f1 (memoize*        (fn [& xs] (Thread/sleep 600) (rand))))
-    (def f2 (memoize* 5000   (fn [& xs] (Thread/sleep 600) (rand))))
-    (def f3 (memoize* 2 nil  (fn [& xs] (Thread/sleep 600) (rand))))
-    (def f4 (memoize* 2 5000 (fn [& xs] (Thread/sleep 600) (rand)))))
+    (def f0 (memoize         (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f1 (memoize*        (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f2 (memoize* 5000   (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f3 (memoize* 2 nil  (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
-  (qb 10000 (f0) (f1) (f2) (f3) (f4)) ; [1.97 1.44 4.82 9.51 10.22]
+  (qb 10000
+    ;; (f0) (f1) (f2) (f3) (f4)
+    (f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand)))
+  ;;
+  ;; [13.46 17.86 78.09 101.41 99.98]  ; gc 100
+  ;; [12.09 17.65 19.09  31.42  31.6]  ; no gc
+  ;; [ 1.78  2.36  3.68   9.59  10.76] ; no args
 
   (f1)
   (f1 :mem/del)
