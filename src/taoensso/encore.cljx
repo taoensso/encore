@@ -1224,55 +1224,44 @@
                  xs seen)))]
     (step coll #{})))
 
-(defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll))))
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn xdistinct
+    ([] (distinct)) ; clojure.core now has a distinct transducer
+    ([keyfn]
+     (fn [rf]
+       (let [seen_ (volatile! #{})]
+         (fn
+           ([]    (rf))
+           ([acc] (rf acc))
+           ([acc input]
+            (let [k (keyfn input)]
+              (if (contains? @seen_ k)
+                acc
+                (do (vswap! seen_ conj k)
+                    (rf acc input)))))))))))
+
+(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
+
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
+  (defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
+
 (defn removev [pred coll] (filterv (complement pred) coll))
-(defn distinctv "Prefer `set` when order doesn't matter (much faster)."
-  ([coll] ; `distinctv`
-     (-> (reduce (fn [[v seen] in]
-                   (if-not (contains? seen in)
-                     [(conj! v in) (conj seen in)]
-                     [v seen]))
-                 [(transient []) #{}]
-                 coll)
-         (nth 0)
-         persistent!))
-  ([keyfn coll] ; `distinctv-by`
-     (-> (reduce (fn [[v seen] in]
-                   (let [in* (keyfn in)]
-                     (if-not (contains? seen in*)
-                       [(conj! v in) (conj seen in*)]
-                       [v seen])))
-                 [(transient []) #{}]
-                 coll)
-         (nth 0)
-         persistent!)))
+(defn distinctv
+  ([      coll] (distinctv identity coll))
+  ([keyfn coll]
+   (let [tr (reduce (fn [[v seen] in]
+                      (let [in* (keyfn in)]
+                        (if-not (contains? seen in*)
+                          [(conj! v in) (conj seen in*)]
+                          [v seen])))
+              [(transient []) #{}]
+              coll)]
+     (persistent! (nth tr 0)))))
 
 (comment
   (distinctv        [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
-  (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
-  (qb 10000
-    (distinctv       [:a :a :b :c :d :d :e :a :b :c :d])
-    (doall (distinct [:a :a :b :c :d :d :e :a :b :c :d]))
-    (set             [:a :a :b :c :d :d :e :a :b :c :d])))
-
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (do
-    (defn xdistinct
-      ([] (distinct)) ; clojure.core now has a distinct transducer
-      ([keyfn]
-       (fn [rf]
-         (let [seen_ (volatile! #{})]
-           (fn
-             ([]    (rf))
-             ([acc] (rf acc))
-             ([acc input]
-              (let [k (keyfn input)]
-                (if (contains? @seen_ k)
-                  acc
-                  (do (vswap! seen_ conj k)
-                      (rf acc input))))))))))))
-
-(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
+  (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]]))
 
 (defn rcompare "Reverse comparator." [x y] (compare y x))
 
