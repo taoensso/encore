@@ -17,22 +17,20 @@
    [org.clojure/tools.reader "0.9.2"]]
 
   :plugins
-  [[lein-pprint                     "1.1.2"]
-   [lein-ancient                    "0.6.7"]
-   [lein-expectations               "0.0.8"]
-   [lein-autoexpect                 "1.5.0"]
-   ;; [com.cemerick/austin          "0.1.6"]
-   [com.cemerick/clojurescript.test "0.3.3"]
-   [codox                           "0.8.13"]]
+  [[lein-pprint              "1.1.2"]
+   [lein-ancient             "0.6.7"]
+   [lein-expectations        "0.0.8"]
+   [lein-autoexpect          "1.5.0"]
+   [codox                    "0.8.13"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
-   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-alpha3"]]}
-   :test {:dependencies [[expectations              "2.1.0"]
-                         [com.cemerick/double-check "0.6.1"]]}
+   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-alpha5"]]}
+   :test {:dependencies [[org.clojure/test.check "0.8.2"]
+                         [expectations           "2.1.0"]]}
    :dev
    [:1.7 :test
     {:dependencies

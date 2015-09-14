@@ -139,12 +139,13 @@
            (when-let [doc# ~doc] {:doc doc#})))
       (var ~name))))
 
-(defmacro cond! "Like `cond` but throws on no-match like `case`, `condp`."
+(defmacro cond! "Like `cond` but throws on no-match like `case`, `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
 (comment (cond false "false") (cond! false "false"))
 
-(defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`."
+(defmacro doto-cond
+  "Diabolical cross between `doto`, `cond->` and `as->`"
   [[name x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
@@ -155,7 +156,7 @@
        ~g)))
 
 (defmacro case-eval
-  "Like `case` but evaluates test constants for their compile-time value."
+  "Like `case` but evals test constants for their compile-time value"
   [e & clauses]
   (let [;; Don't evaluate default expression!
         default (when (odd? (count clauses)) (last clauses))
@@ -165,7 +166,7 @@
        ~(when default default))))
 
 (defmacro if-lets
-  "Like `if-let` but binds multiple values iff all tests are true."
+  "Like `if-let` but binds multiple values iff all tests are true"
   ([bindings then] `(if-lets ~bindings ~then nil))
   ([bindings then else]
    (let [[b1 b2 & bnext] bindings]
@@ -174,7 +175,7 @@
        `(if-let [~b1 ~b2] ~then ~else)))))
 
 (defmacro when-lets
-  "Like `when-let` but binds multiple values iff all tests are true."
+  "Like `when-let` but binds multiple values iff all tests are true"
   [bindings & body]
   (let [[b1 b2 & bnext] bindings]
     (if bnext
@@ -200,15 +201,15 @@
 (defn stringy? [x] (or (keyword? x) (string? x)))
 (defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
 (defn named?   [x]
-  #+clj  (instance?   clojure.lang.Named  x)
-  #+cljs (implements? INamed              x))
+  #+clj  (instance?   clojure.lang.Named x)
+  #+cljs (implements? INamed             x))
 
 (compile-if (do (require 'clojure.core.async) true)
   (defn chan? [x]
     #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
     #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
 
-  ;; Nb nil rather than false to help distinguish from negative `instance?` test:
+  ;; Nb nil to help distinguish from negative (false) `instance?` test:
   (defn chan? [x] nil))
 
 (defn re-pattern? [x]
@@ -220,7 +221,8 @@
       (defn error?     [x] #+clj  (throwable? x)
                            #+cljs (instance? js/Error x))
 
-(defn error-data "Returns data map iff `x` is an error of any type on platform."
+(defn error-data
+  "Returns data map iff `x` is an error of any type on platform"
   [x]
   (when-let [data-map (or (ex-data x) ; ExceptionInfo
                           #+clj  (when (instance? Throwable x) {})
@@ -241,7 +243,7 @@
   (error-data (Exception. "foo"))
   (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro catch-errors "Experimental. Returns [<?result> <?error>]."
+(defmacro catch-errors "Returns [<?result> <?error>]"
   [& body]
   `(if-cljs
      ;; NB Temp workaround for http://goo.gl/UW7773:
@@ -250,7 +252,7 @@
 
 (comment (catch-errors (zero? "a")))
 
-(defmacro caught-error-data "Handy for error-throwing unit tests."
+(defmacro caught-error-data "Handy for error-throwing unit tests"
   [& body]
   `(let [[result# err#] (catch-errors ~@body)]
      (when err# (error-data err#))))
@@ -357,7 +359,7 @@
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail." [hard? ns-str ?line form val & [?err]]
+(defn hthrow "Implementation detail" [hard? ns-str ?line form val & [?err]]
   ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
   ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
@@ -382,7 +384,7 @@
 (declare rsome revery?)
 
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
-(defn hpred "Implementation detail." [pred-form]
+(defn hpred "Implementation detail" [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form
           ;; p1 (when p1 (hpred p1))
@@ -424,7 +426,7 @@
   ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
   )
 
-(defn hcond "Implementation detail."
+(defn hcond "Implementation detail"
   [hard? ns-str line x_ x-form pred pred-form]
   (let [[?x ?x-err]       (catch-errors @x_)
         have-x?           (nil? ?x-err)
@@ -547,21 +549,20 @@
   )
 
 (defmacro check-some
-  "Experimental. Returns first logical false/throwing expression (id/form), or nil."
+  "Returns first logical false/throwing expression (id/form), or nil"
   ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
   ([test]
-     (let [[error-id test] (if (vector? test) test [nil test])]
-       `(let [[test# err#] (catch-errors ~test)]
-          (when-not test# (or ~error-id '~test :check/falsey))))))
+   (let [[error-id test] (if (vector? test) test [nil test])]
+     `(let [[test# err#] (catch-errors ~test)]
+        (when-not test# (or ~error-id '~test :check/falsey))))))
 
 (defmacro check-all
-  "Experimental. Returns all logical false/throwing expressions (ids/forms), or nil."
+  "Returns all logical false/throwing expressions (ids/forms), or nil"
   ([test] `(check-some ~test))
   ([test & more]
-     `(let [errors# (filter identity
-                      (list ~@(map (fn [test] `(check-some ~test))
-                                (cons test more))))]
-        (when-not (empty? errors#) errors#))))
+   `(let [errors# (filterv identity
+                    [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
+      (not-empty errors#))))
 
 (comment
   (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
@@ -569,7 +570,7 @@
 
 ;;;; Keywords
 
-(def qname "Like `name` but includes keyword namespaces in name string." as-qname)
+(def qname "Like `name` but includes keyword namespaces in name string" as-qname)
 (comment (map qname ["foo" :foo :foo.bar/baz]))
 
 (defn explode-keyword [k] (str/split (qname k) #"[\./]"))
@@ -610,14 +611,16 @@
       out))
 
   (defn ba-split [^bytes ba ^long idx]
-    (let [s (alength ba)]
-      (when (> s idx)
-        [(java.util.Arrays/copyOf      ba idx)
-         (java.util.Arrays/copyOfRange ba idx s)])))
+    (if (zero? idx)
+      [nil ba]
+      (let [s (alength ba)]
+        (when (> s idx)
+          [(java.util.Arrays/copyOf      ba idx)
+           (java.util.Arrays/copyOfRange ba idx s)]))))
 
-  (comment (String. (ba-concat (.getBytes "foo") (.getBytes "bar")))
-           (let [[x y] (ba-split (.getBytes "foobar") 5)]
-             [(String. x) (String. y)])))
+  (comment
+    (String. (ba-concat (.getBytes "foo") (.getBytes "bar")))
+    (let [[x y] (ba-split (.getBytes "foobar") 5)] [(String. x) (String. y)])))
 
 ;;;; Math
 
@@ -679,20 +682,11 @@
 
 ;;;; Date & time
 
-(defn  now-dt       [] #+clj (java.util.Date.) #+cljs (js/Date.))
-(defn now-udt ^long [] #+clj (System/currentTimeMillis) #+cljs (.getTime (js/Date.)))
-
-(defn now-udt-mock-fn "Useful for testing."
-  [& [mock-udts]]
-  (let [mock-udts (or mock-udts (range))
-        idx       (atom -1)]
-    (fn [] (nth mock-udts (swap! idx inc)))))
-
-(comment (with-redefs [now-udt (now-udt-mock-fn)] (repeatedly 10 now-udt)))
-
+(defn   now-dt       [] #+clj (java.util.Date.) #+cljs (js/Date.))
+(defn  now-udt ^long [] #+clj (System/currentTimeMillis) #+cljs (.getTime (js/Date.)))
 (defn secs->ms ^long [secs] (* (long secs)  1000))
 (defn ms->secs ^long [ms]   (quot (long ms) 1000))
-(defn ms "Returns number of milliseconds in period defined by given args."
+(defn ms "Returns number of milliseconds in period defined by given args"
   [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}]
   {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
            :in (keys opts))]}
@@ -712,27 +706,12 @@
 (comment #=(ms   :years 88 :months 3 :days 33)
          #=(secs :years 88 :months 3 :days 33))
 
-(defmacro thread-local-proxy
-  "Thread-safe proxy wrapper, Ref. http://goo.gl/CEBJnQ (instant.clj)."
+(defmacro thread-local-proxy "Ref. http://goo.gl/CEBJnQ (instant.clj)"
   [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
-
-(comment
-  (.get (thread-local-proxy (println "Foo")))
-  (let [p (thread-local-proxy (println "Foo"))]
-    (println "---")
-    (dotimes [_ 100] (.get p))) ; Prints once
-
-  (let [p (thread-local-proxy (println "Foo"))]
-    (println "---")
-    (.get p)
-    (.get p)
-    (future (.get p))
-    (.get p)) ; Prints twice (2 threads)
-  )
 
 #+clj
 (def ^:private simple-date-format*
-  "Returns a SimpleDateFormat ThreadLocal proxy."
+  "Returns a SimpleDateFormat ThreadLocal proxy"
   (memoize
    (fn [^String pattern & [{:keys [^Locale locale ^TimeZone timezone]}]]
      (thread-local-proxy
@@ -764,8 +743,8 @@
 
 #+cljs
 (defn oget
-  "Like `aget` for JS objects, Ref. https://goo.gl/eze8hY. Unlike `aget`,
-  returns nil for missing keys instead of throwing."
+  "Like `aget` for JS objects, Ref. https://goo.gl/eze8hY.
+  Unlike `aget`, returns nil for missing keys instead of throwing."
   ([o k]          (when      o                 (gobj/get o k  nil)))
   ([o k1 k2]      (when-let [o (oget o k1)]    (gobj/get o k2 nil)))
   ([o k1 k2 & ks] (when-let [o (oget o k1 k2)] (apply oget o ks))))
@@ -797,15 +776,15 @@
 (defn backport-run! "`run!` from Clojure 1.7+"
   [proc coll] (reduce #(proc %2) nil coll) nil)
 
-(defn rsome "Faster `some` based on `reduce`."
+(defn rsome "Faster `some` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
-(defn revery? "Faster `every?` based on `reduce`."
+(defn revery? "Faster `every?` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (if (pred in) true (reduced false))) true coll))
 
 ;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
 (defn update-in*
-  "Like `update-in` but faster, more flexible, and simpler (less ambiguous)."
+  "Like `update-in` but faster, more flexible, and simpler (less ambiguous)"
   [m ks f]
   (if (empty? ks)
     (f m) ; Resolve [] = [nil] ambiguity in `update-in`, `assoc-in`, etc.
@@ -867,7 +846,7 @@
   (sub-indexes "hello"  3 :end-idx -1) ; ___lo
   )
 
-(defn subvec* "Like `subvec` but uses `sub-indexes`."
+(defn subvec* "Like `subvec` but uses `sub-indexes`"
   [v start-idx & [?max-len]] {:pre [(have? vector? v)]}
   (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
     (subvec v start-idx* end-idx*)))
@@ -942,7 +921,7 @@
 (defn- replace-in*
   "Reduces input with
   [<type> <ks> <reset-val-or-swap-fn>] or
-         [<ks> <reset-val-or-swap-fn>] ops."
+         [<ks> <reset-val-or-swap-fn>] ops"
   [?vf-type m ops]
   (reduce
     (fn [accum ?op]
@@ -965,9 +944,9 @@
 (comment
   (replace-in {}
     [:reset [:a] {:b :B :c 100}]
-    (when false [:reset [:a :b] :B2]) ; conditionals okay
+    (when false [:reset [:a :b] :B2]) ; Conditionals okay
     (do (assert true)
-        [:reset [:a :b] :B3]) ; side-effects okay
+        [:reset [:a :b] :B3]) ; Side-effects okay
     (let [my-swap-fn inc] ; `let`s okay
       [:swap [:a :c] my-swap-fn]))
 
@@ -1006,7 +985,6 @@
              (recur)
              return-val)))))
 
-  ;; Experimental:
   ([atom_ ks f & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks f]] (partition 2 more))]
        (loop []
@@ -1016,22 +994,21 @@
              (recur)
              {:old old-val :new new-val}))))))
 
-(defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`."
+(defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
   ([atom_ ks new-val]
-     (if (empty? ks)
-       (reset! atom_ new-val)
-       ;; Actually need swap! (CAS) to preserve other keys:
-       (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
+   (if (empty? ks)
+     (reset! atom_ new-val)
+     ;; Actually need swap! (CAS) to preserve other keys:
+     (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
 
-  ;; Experimental:
   ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
-     (let [pairs (into [[ks new-val]] (partition 2 more))]
-       (loop []
-         (let [old-val @atom_
-               new-val (replace-in* :reset old-val pairs)]
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur)
-             {:old old-val :new new-val}))))))
+   (let [pairs (into [[ks new-val]] (partition 2 more))]
+     (loop []
+       (let [old-val @atom_
+             new-val (replace-in* :reset old-val pairs)]
+         (if-not (compare-and-set! atom_ old-val new-val)
+           (recur)
+           {:old old-val :new new-val}))))))
 
 (comment
   ;;; update-in, `swapped`
@@ -1073,11 +1050,11 @@
   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
 
-(defn assoc-some "Assocs each kv iff its value is not nil."
+(defn assoc-some "Assocs each kv iff its value is not nil"
   [m & kvs] {:pre [(have? even? (count kvs))]}
   (into (or m {}) (for [[k v] (partition 2 kvs) :when (not (nil? v))] [k v])))
 
-(defn assoc-when "Assocs each kv iff its val is truthy."
+(defn assoc-when "Assocs each kv iff its val is truthy"
   [m & kvs] {:pre [(have? even? (count kvs))]}
   (into (or m {}) (for [[k v] (partition 2 kvs) :when v] [k v])))
 
@@ -1087,10 +1064,10 @@
   #+clj  (instance? clojure.lang.PersistentQueue x)
   #+cljs (instance? cljs.core.PersistentQueue    x))
 
-(defn queue "Returns a PersistentQueue."
+(defn queue "Returns a PersistentQueue"
+  ([coll] (into (queue) coll))
   ([] #+clj  clojure.lang.PersistentQueue/EMPTY
-      #+cljs cljs.core.PersistentQueue.EMPTY)
-  ([coll] (into (queue) coll)))
+      #+cljs cljs.core.PersistentQueue.EMPTY))
 
 (defn queue* [& items] (queue items))
 
@@ -1166,7 +1143,7 @@
           (recur new-m n)
           (persistent! new-m))))))
 
-(defn as-map "Cross between `hash-map` & `map-kvs`."
+(defn as-map "Cross between `hash-map` & `map-kvs`"
   [kvs & [kf vf]]
   (if (empty? kvs) {}
     (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
@@ -1181,7 +1158,7 @@
   (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
     (fn [k v] (case k (:a :b) (str "boo-" v) v))))
 
-(defn fzipmap "Faster `zipmap` using transients." [ks vs]
+(defn fzipmap "Faster `zipmap` using transients" [ks vs]
   (loop [m  (transient {})
          ks (seq ks)
          vs (seq vs)]
@@ -1192,11 +1169,11 @@
 
 (comment (let [kvs (range 100)] (qb 100 (zipmap kvs kvs) (fzipmap kvs kvs))))
 
-(defn into-all "Like `into` but supports multiple \"from\"s."
-  ([to from] (into to from))
+(defn into-all "Like `into` but supports multiple \"from\"s"
+  ([to from       ] (into to from))
   ([to from & more] (reduce into (into to from) more)))
 
-(defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb."
+(defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb"
   ([] '())
   ([c1] (lazy-seq c1))
   ([c1 c2]
@@ -1247,8 +1224,8 @@
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
 (compile-if (do (completing (fn [])) true) ; We have transducers
-  (defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
-  (defn takev      [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
+  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
+  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
 
 (defn removev [pred coll] (filterv (complement pred) coll))
 (defn distinctv
@@ -1267,7 +1244,10 @@
   (distinctv        [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
   (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]]))
 
-(defn rcompare "Reverse comparator." [x y] (compare y x))
+#+cljs (defn rcompare "Reverse comparator" [x y] (compare y x))
+#+clj  (defn rcompare "Reverse comparator"
+         {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))}
+         [x y] (compare y x))
 
 (defn nested-merge-with [f & maps]
   (when (some identity maps)
@@ -1301,7 +1281,7 @@
   {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
 
 (defn repeatedly-into
-  "Like `repeatedly` but faster and `conj`s items into given collection."
+  "Like `repeatedly` but faster and `conj`s items into given collection"
   ;; Note: `range` is reducible with Clojure v1.7+ (Ref. https://goo.gl/VgkvEa),
   ;; making `(reduce (fn [acc in] (conj acc (f))) (range n))` slightly faster
   ;; than looping with v1.7+
@@ -1339,13 +1319,13 @@
   #+clj  (instance? StringBuilder x)
   #+cljs (instance? goog.string.StringBuffer x))
 
-(def str-builder "For cross-platform string building."
+(def str-builder "For cross-platform string building"
   #+clj  (fn (^StringBuilder []       (StringBuilder.))
             (^StringBuilder [s-init] (StringBuilder. ^String s-init)))
   #+cljs (fn ([]       (goog.string.StringBuffer.))
             ([s-init] (goog.string.StringBuffer. s-init))))
 
-(def sb-append "For cross-platform string building."
+(def sb-append "For cross-platform string building"
   #+clj  (fn ^StringBuilder [^StringBuilder str-builder ^String s]
            (.append str-builder s))
   #+cljs (fn [str-builder s] (.append str-builder s)))
@@ -1354,13 +1334,13 @@
 
 (compile-if (do (completing (fn [])) true) ; We have transducers
   (do
-    (def xstr-builder "Fast str-builder transducer."
+    (def xstr-builder "Fast str-builder transducer"
       (fn
         ([]     (str-builder))
         ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
         ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
 
-    (def xstr "Fast str transducer." (completing xstr-builder str))))
+    (def xstr "Fast str transducer" (completing xstr-builder str))))
 
 (comment
   (qb 1000 ; [358.45 34.6]
@@ -1397,7 +1377,7 @@
 
 (defn str-replace
   "Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
-                  http://dev.clojure.org/jira/browse/CLJS-911."
+                  http://dev.clojure.org/jira/browse/CLJS-911"
   [s match replacement]
   #+clj (str/replace s match replacement)
   #+cljs
@@ -1415,7 +1395,7 @@
 
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
-  `sub-indexes`."
+  `sub-indexes`"
   [s start-idx & [?max-len]] {:pre [(have? string? s)]}
   (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
     #+clj  (.substring ^String s start-idx* end-idx*)
@@ -1450,7 +1430,7 @@
 
 (comment (str-?index "hello there" "there"))
 
-(defn join-once "Like `clojure.string/join` but ensures no double separators."
+(defn join-once "Like `clojure.string/join` but ensures no double separators"
   [separator & coll]
   (reduce
    (fn [s1 s2]
@@ -1469,7 +1449,7 @@
 
 (defn path
   "Joins string paths (URLs, file paths, etc.) ensuring correct \"/\"
-  interposition."
+  interposition"
   [& parts] (apply join-once "/" parts))
 
 (comment (path "foo/"  "/bar" "baz/" "/qux/")
@@ -1489,7 +1469,7 @@
 
 (defn norm-word-breaks
   "Converts all word breaks of any form and length (including line breaks of any
-  form, tabs, spaces, etc.) to a single regular space."
+  form, tabs, spaces, etc.) to a single regular space"
   [s] (str/replace (str s) #"\s+" \space))
 
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
@@ -1520,7 +1500,7 @@
 
 #+clj
 (defn slurp-resource
-  "Returns slurped named resource on classpath, or nil when resource not found."
+  "Returns slurped named resource on classpath, or nil when resource not found"
   [rname]
   (when-let [r (io/resource rname)]
     (try (slurp (io/reader r))
@@ -1531,7 +1511,7 @@
 #+clj
 (defn get-file-resource-?last-modified
   "Returns last-modified time for file backing given named resource, or nil if
-  file doesn't exist."
+  file doesn't exist"
   [rname]
   (when-let [file (try (->> rname io/resource io/file) (catch Exception _))]
     (.lastModified ^java.io.File file)))
@@ -1539,7 +1519,7 @@
 #+clj
 (def file-resources-modified?
   "Returns true iff any files backing the given named resources have changed
-  since last call."
+  since last call"
   (let [udts_ (atom {}) ; {<rname-or-rnames> <udt-or-udts>}
         swap! (fn [ks v] (swap-in! udts_ ks
                           (fn [?v] (swapped v (when (not= v ?v) v)))))]
@@ -1551,7 +1531,7 @@
 
 #+clj
 (def slurp-file-resource
-  "Like `slurp-resource` but caches slurps against file's last-modified udt."
+  "Like `slurp-resource` but caches slurps against file's last-modified udt"
   (let [;; {<rname> [<content_> <last-modified-udt>]}
         cache_ (atom {})]
     (fn [rname]
@@ -1572,8 +1552,8 @@
 (defn gc-now? [] (<= ^double (rand) gc-rate))
 
 (defn swap-val! ; Public since it can be useful for custom memoization utils
-  "Swaps associative value at key and returns the new value.
-  Specialized, fast `swap-in!` for use mostly by memoization utils."
+  "Swaps associative value at key and returns the new value. Specialized, fast
+  `swap-in!` for use mostly by memoization utils."
   [atom_ k f]
   (loop []
     (let [old-m @atom_
@@ -1582,7 +1562,8 @@
       (if (compare-and-set! atom_ old-m new-m) new-v
         (recur)))))
 
-(defn memoize_ "As `clojure.core/memoize` but uses delays to avoid write races."
+(defn memoize_
+  "Like `clojure.core/memoize` but uses delays to avoid write races"
   [f]
   (let [cache_ (atom {})]
     (fn [& args]
@@ -1590,7 +1571,8 @@
            (swap-val! cache_ args
              (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))))
 
-(defn memoize1 "Great for Reactjs render op caching on mobile devices, etc."
+(defn memoize1
+  "Great for Reactjs render op caching on mobile devices, etc."
   [f]
   (let [cache_ (atom {})]
     (fn [& args]
@@ -1604,7 +1586,7 @@
 
 (defn memoized
   "Like `(memoize* f)` but takes an explicit cache atom (possibly nil)
-  and immediately applies memoized f to given arguments."
+  and immediately applies memoized f to given arguments"
   [cache f & args]
   (if-not cache ; {<args> <delay-val>}
     (apply f args)
@@ -1796,7 +1778,7 @@
   (let [f4 (memoize* 2 5000 (fn [] (Thread/sleep 5) (println "compute1")))]
     (dotimes [_ 10] (future (f4)))))
 
-(defn rate-limiter* ; `rate-limiter` name used by deprecated API
+(defn rate-limiter* ; `rate-limiter` name taken by deprecated API
   "Takes one or more rate specs of form [ncalls-limit window-ms ?spec-id] and
   returns a (fn [& [req-id])) that returns `nil` (=> all rate limits passed), or
   [<ms-wait> <worst-offending-spec-id>] / <ms-wait>."
@@ -1919,13 +1901,13 @@
       (fn [] (* 1e6 (now-udt))))
     (fn [] (* 1e6 (now-udt)))))
 
-(defmacro time-ms "Returns number of milliseconds it takes to execute body."
+(defmacro time-ms "Returns number of milliseconds it takes to execute body"
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
 
-(defmacro time-ns "Returns number of nanoseconds it takes to execute body."
+(defmacro time-ns "Returns number of nanoseconds it takes to execute body"
   [& body] `(let [t0# (nano-time)] ~@body (- (nano-time) t0#)))
 
-(defmacro quick-bench "Returns fastest of 3 sets of times for each form, in msecs."
+(defmacro quick-bench "Returns fastest of 3 sets of times for each form, in msecs"
   ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
   ([nlaps form]
    `(let [nlaps# ~nlaps
@@ -1951,7 +1933,7 @@
   (qb 1e5 (first [1 2 3 4 5]) (nth [1 2 3 4 5] 0)))
 
 #+clj
-(defn bench* "Repeatedly executes fn and returns time taken to complete execution."
+(defn bench* "Repeatedly executes fn and returns time taken to complete execution"
   [^long nlaps {:keys [^long nlaps-warmup ^long nthreads as-ns?]
                 :or   {nlaps-warmup 0
                        nthreads     1}} f]
@@ -1985,7 +1967,7 @@
 
 #+cljs
 (defn get-window-location
-  "Returns browser window's current location. Forgeable."
+  "Returns browser window's current location. These details can be forged!"
   []
   (let [loc* (.-location js/window)
         loc
@@ -2211,7 +2193,7 @@
 
 (comment (redirect-resp :temp "/foo" "boo!"))
 
-(defn url-encode "Stolen from http://goo.gl/99NSR1."
+(defn url-encode "Stolen from http://goo.gl/99NSR1"
   #+clj  [s & [encoding]]
   #+cljs [s]
   (when s
@@ -2226,7 +2208,7 @@
 
 (comment (mapv url-encode ["foo+bar" 47]))
 
-(defn url-decode "Stolen from http://goo.gl/99NSR1."
+(defn url-decode "Stolen from http://goo.gl/99NSR1"
   [s & [encoding]]
   (when s
     #+clj  (java.net.URLDecoder/decode s (or encoding "UTF-8"))
@@ -2257,7 +2239,7 @@
 
 (comment (assoc-conj {:a "a"} :a "b"))
 
-(defn parse-query-params "Based on `ring-codec/form-decode`."
+(defn parse-query-params "Based on `ring-codec/form-decode`"
   [s & [keywordize? encoding]] {:post [(have? map? %)]}
   (if (str/blank? s) {}
     (let [;; For convenience (e.g. JavaScript win-loc :search)
@@ -2363,11 +2345,11 @@
   (defn fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
   (defn reportf [fmt & xs] (when (log? :report) (apply logf fmt xs))))
 
-(defn greatest "Deprecated." [coll & [?comparator]]
+(defn greatest "Deprecated" [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
 
-(defn least "Deprecated." [coll & [?comparator]]
+(defn least "Deprecated" [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
