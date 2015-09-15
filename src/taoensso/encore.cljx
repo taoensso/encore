@@ -1093,14 +1093,17 @@
 
 (defn map-kvs [kf vf m]
   (if-not m {} ; Note also clj1098-safe
-    (let [kf (if-not (kw-identical? kf :keywordize) kf (fn [k _] (keyword k)))
-          vf (if-not (kw-identical? vf :keywordize) vf (fn [_ v] (keyword v)))]
-      (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k v) k)
-                                                   (if vf (vf k v) v)))
-                              (transient {}) m)))))
+    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond (nil? kf) (fn [k _] k)
+                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                   :else kf)]
+      (persistent!
+        (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
+          (transient {}) m)))))
 
-(defn map-keys [f m] (map-kvs     (fn [k _] (f k)) nil m))
 (defn map-vals [f m] (map-kvs nil (fn [_ v] (f v)) m))
+(defn map-keys [f m] (map-kvs (if (kw-identical? f :keywordize) :keywordize (fn [k _] (f k)))
+                       nil m))
 
 (defn filter-kvs [predk predv m]
   (if-not m {} ; Note also clj1098-safe
