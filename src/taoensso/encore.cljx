@@ -1335,26 +1335,21 @@
             ([s-init] (goog.string.StringBuffer. s-init))))
 
 (def sb-append "For cross-platform string building"
-  #+clj  (fn ^StringBuilder [^StringBuilder str-builder ^String s]
-           (.append str-builder s))
-  #+cljs (fn [str-builder s] (.append str-builder s)))
+  #+clj  (fn ^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
+  #+cljs (fn                [               str-builder         s] (.append str-builder s)))
 
 (comment (str (sb-append (str-builder "foo") "bar")))
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (do
-    (def xstr-builder "Fast str-builder transducer"
-      (fn
-        ([]     (str-builder))
-        ([sb]              (if (str-builder? sb) sb (str-builder (str sb)))) ; cf
-        ([sb x] (sb-append (if (str-builder? sb) sb (str-builder (str sb))) (str x)))))
-
-    (def xstr "Fast str transducer" (completing xstr-builder str))))
+(def str-rf "String builder reducing fn"
+  (fn
+    ([]       (str-builder))
+    ([acc]               (if (str-builder? acc) acc (str-builder (str acc)))) ; cf
+    ([acc in] (sb-append (if (str-builder? acc) acc (str-builder (str acc))) (str in)))))
 
 (comment
   (qb 1000 ; [358.45 34.6]
-         (reduce str          (range 512))
-    (str (reduce xstr-builder (range 512)))))
+         (reduce str    (range 512))
+    (str (reduce str-rf (range 512)))))
 
 #+cljs (defn undefined->nil [x] (if (undefined? x) nil x))
 (defn nil->str [x]
