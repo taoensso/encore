@@ -853,6 +853,12 @@
 
 (comment (subvec* [:a :b :c :d :e] -1))
 
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn into!
+       ([to       from] (reduce          conj! to from))
+       ([to xform from] (transduce xform conj! to from)))
+  (defn into! [to from] (reduce          conj! to from)))
+
 #+clj
 (do
   (def ^:private sentinel (Object.))
