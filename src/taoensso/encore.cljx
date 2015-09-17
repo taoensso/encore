@@ -1092,13 +1092,8 @@
   [f & args]
   (apply f (concat (butlast args) (seq-kvs (last args)))))
 
-(defn clj1098
-  "Workaround for Clojure versions [1.4, 1.5) that blow up on `reduce-kv`s
-  against a nil coll, Ref. http://dev.clojure.org/jira/browse/CLJ-1098."
-  [x] (or x {}))
-
 (defn map-kvs [kf vf m]
-  (if-not m {} ; Note also clj1098-safe
+  (if-not m {}
     (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
           kf (cond (nil? kf) (fn [k _] k)
                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
@@ -1112,7 +1107,7 @@
                        nil m))
 
 (defn filter-kvs [predk predv m]
-  (if-not m {} ; Note also clj1098-safe
+  (if-not m {}
     (reduce-kv (fn [m k v] (if (and (predk k) (predv v)) m (dissoc m k))) m m)))
 
 (defn filter-keys [pred m] (filter-kvs pred (constantly true) m))
@@ -1125,14 +1120,14 @@
   pred when constructing maps: {:foo (when _ <...>) :bar (when _ <...>)} in a
   way that preservers :or semantics."
   [pred m]
-  (if-not m {} ; Note also clj1098-safe
+  (if-not m {}
     (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m)))
 
 (comment (remove-vals nil? {:a :A :b false :c nil :d :D}))
 
 ;; (def keywordize-map #(map-kvs :keywordize nil %))
 (defn keywordize-map [m]
-  (if-not m {} ; Note also clj1098-safe
+  (if-not m {}
     (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m)))
 
 (comment (keywordize-map nil)
@@ -1804,18 +1799,17 @@
           (when (and req-id (gc-now?))
             (swap-in! vstates_ []
               (fn gc [m]
-                (let [m (clj1098 m)]
-                  (reduce-kv
-                    (fn [m* req-id vstate]
-                      (let [^long max-udt-win-start
-                            (reduce (fn [^long acc [_ ^long udt _]]
-                                      (max acc udt))
-                              0 vstate)
-                            min-win-ms-elapsed (- instant max-udt-win-start)]
-                        (if (> min-win-ms-elapsed max-win-ms)
-                          (dissoc m* req-id)
-                          m*)))
-                    m m)))))
+                (reduce-kv
+                  (fn [m* req-id vstate]
+                    (let [^long max-udt-win-start
+                          (reduce (fn [^long acc [_ ^long udt _]]
+                                    (max acc udt))
+                            0 vstate)
+                          min-win-ms-elapsed (- instant max-udt-win-start)]
+                      (if (> min-win-ms-elapsed max-win-ms)
+                        (dissoc m* req-id)
+                        m*)))
+                  m m))))
 
           (swap-in! vstates_ [req-id]
             (fn [?vstate]
@@ -2358,3 +2352,5 @@
     (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
 (comment (greatest ["a" "e" "c" "b" "d"]))
+
+(defn clj1098 [x] (or x {})) ; Ref. http://dev.clojure.org/jira/browse/CLJ-1098
