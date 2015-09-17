@@ -773,8 +773,8 @@
   (nnil-set [:a :b nil])
   (conj-some [] :a :b nil :c :d nil :e))
 
-(defn backport-run! "`run!` from Clojure 1.7+"
-  [proc coll] (reduce #(proc %2) nil coll) nil)
+(defn run-kv! [proc    m] (reduce-kv #(proc %2 %3) nil    m) nil)
+(defn run!*   [proc coll] (reduce    #(proc %2)    nil coll) nil)
 
 (defn rsome "Faster `some` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
@@ -888,7 +888,7 @@
                             (keyfn (<nil-sentinel x))
                             (keyfn (<nil-sentinel y))))))]
 
-         (backport-run! #(.add pq (>nil-sentinel %)) coll)
+         (run!* #(.add pq (>nil-sentinel %)) coll)
          (repeatedly-into [] result-size #(<nil-sentinel (.poll pq))))))))
 
 (comment
@@ -2277,6 +2277,8 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
 ;;;; DEPRECATED
+
+(def backport-run! run!*)
 
 (def fq-name qname) ; Lots of consumers
 
