@@ -1290,32 +1290,32 @@
   ;; making `(reduce (fn [acc in] (conj acc (f))) (range n))` slightly faster
   ;; than looping with v1.7+
   [coll ^long n f]
-  (if (and #+clj  (instance?   clojure.lang.IEditableCollection coll)
-           #+cljs (implements? IEditableCollection              coll)
-           ;; (> n 10) ; Worth the fixed transient overhead
-           )
+  (if (and (> n 10) ; Worth the fixed transient overhead
+           #+clj  (instance?   clojure.lang.IEditableCollection coll)
+           #+cljs (implements? IEditableCollection              coll))
     (loop [v (transient coll) idx 0]
-      (if (>= idx n) (persistent! v)
-        (recur (conj! v (f)) (inc idx))))
+      (if (== idx n)
+        (persistent! v)
+        (recur (conj! v (f)) (unchecked-inc idx))))
     (loop [v coll idx 0]
-      (if (>= idx n) v
-        (recur (conj v (f)) (inc idx))))))
-
-(comment (repeatedly-into [] 10 rand))
+      (if (== idx n)
+        v
+        (recur (conj v (f)) (unchecked-inc idx))))))
 
 (defmacro repeatedly-into* [coll n & body]
   `(let [coll# ~coll
          n#    ~n]
-     (if (and #+clj  (instance?   clojure.lang.IEditableCollection coll#)
-              #+cljs (implements? IEditableCollection              coll#)
-              ;; (> n 10) ; Worth the fixed transient overhead
-              )
+     (if (and (> n 10) ; Worth the fixed transient overhead
+              #+clj  (instance?   clojure.lang.IEditableCollection coll#)
+              #+cljs (implements? IEditableCollection              coll#))
        (loop [v# (transient coll#) idx# 0]
-         (if (>= idx# n#) (persistent! v#)
-           (recur (conj! v# ~@body) (inc idx#))))
+         (if (== idx# n#)
+           (persistent! v#)
+           (recur (conj! v# ~@body) (unchecked-inc idx#))))
        (loop [v# coll# idx# 0]
-         (if (>= idx# n#) v#
-           (recur (conj v# ~@body) (inc idx#)))))))
+         (if (== idx# n#)
+           v#
+           (recur (conj v# ~@body) (unchecked-inc idx#)))))))
 
 ;;;; Strings
 
