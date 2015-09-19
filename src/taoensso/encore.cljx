@@ -1286,9 +1286,6 @@
 
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection"
-  ;; Note: `range` is reducible with Clojure v1.7+ (Ref. https://goo.gl/VgkvEa),
-  ;; making `(reduce (fn [acc in] (conj acc (f))) (range n))` slightly faster
-  ;; than looping with v1.7+
   [coll ^long n f]
   (if (and (> n 10) ; Worth the fixed transient overhead
            #+clj  (instance?   clojure.lang.IEditableCollection coll)
@@ -1301,21 +1298,6 @@
       (if (== idx n)
         v
         (recur (conj v (f)) (unchecked-inc idx))))))
-
-(defmacro repeatedly-into* [coll n & body]
-  `(let [coll# ~coll
-         n#    ~n]
-     (if (and (> n 10) ; Worth the fixed transient overhead
-              #+clj  (instance?   clojure.lang.IEditableCollection coll#)
-              #+cljs (implements? IEditableCollection              coll#))
-       (loop [v# (transient coll#) idx# 0]
-         (if (== idx# n#)
-           (persistent! v#)
-           (recur (conj! v# ~@body) (unchecked-inc idx#))))
-       (loop [v# coll# idx# 0]
-         (if (== idx# n#)
-           v#
-           (recur (conj v# ~@body) (unchecked-inc idx#)))))))
 
 ;;;; Strings
 
@@ -2297,6 +2279,8 @@
 
 ;; Used by Carmine <= v2.7.0
 (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+(defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
+  [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
 
 ;; Used by Sente <= v1.1.0
 #+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
