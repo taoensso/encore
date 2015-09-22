@@ -862,8 +862,8 @@
 (do
   (def sentinel #+clj (Object.) #+cljs (js-obj))
   (defn     sentinel? [x] (identical? x sentinel))
-  (defn >nil-sentinel [x] (if (nil? x) sentinel x))
-  (defn <nil-sentinel [x] (if (sentinel? x) nil x)))
+  (defn nil->sentinel [x] (if (nil? x) sentinel x))
+  (defn sentinel->nil [x] (if (sentinel? x) nil x)))
 
 (declare repeatedly-into)
 (defn top
@@ -876,19 +876,20 @@
    ;; TODO Real cljs impl:
    #+cljs (into [] (take n) (sort-by keyfn cmp coll)) ; Requires transducers
    #+clj
-   (let [coll-size   (count coll)
-         result-size (min coll-size n)]
-     (if-not (pos? result-size) []
+   (let [coll-size (count coll)
+         n         (long (min coll-size (long n)))]
+     (if-not (pos? n)
+       []
        (let [^java.util.PriorityQueue pq
              (java.util.PriorityQueue. coll-size
                (if (= keyfn identity)
-                 (fn [x y] (cmp (<nil-sentinel x) (<nil-sentinel y)))
+                 (fn [x y] (cmp (sentinel->nil x) (sentinel->nil y)))
                  (fn [x y] (cmp
-                            (keyfn (<nil-sentinel x))
-                            (keyfn (<nil-sentinel y))))))]
+                            (keyfn (sentinel->nil x))
+                            (keyfn (sentinel->nil y))))))]
 
-         (run!* #(.add pq (>nil-sentinel %)) coll)
-         (repeatedly-into [] result-size #(<nil-sentinel (.poll pq))))))))
+         (run!* #(.add pq (nil->sentinel %)) coll)
+         (repeatedly-into [] n #(sentinel->nil (.poll pq))))))))
 
 (comment
   (top 0 [])
