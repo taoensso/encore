@@ -859,12 +859,11 @@
        ([to xform from] (transduce xform conj! to from)))
   (defn into! [to from] (reduce          conj! to from)))
 
-#+clj
 (do
-  (def ^:private sentinel (Object.))
-  (defn- sentinel? [x] (identical? x sentinel))
-  (defn- >nil-sentinel [x] (if (nil? x) sentinel x))
-  (defn- <nil-sentinel [x] (if (sentinel? x) nil x)))
+  (def sentinel #+clj (Object.) #+cljs (js-obj))
+  (defn     sentinel? [x] (identical? x sentinel))
+  (defn >nil-sentinel [x] (if (nil? x) sentinel x))
+  (defn <nil-sentinel [x] (if (sentinel? x) nil x)))
 
 (declare repeatedly-into)
 (defn top
