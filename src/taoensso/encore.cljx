@@ -773,6 +773,14 @@
   (nnil-set [:a :b nil])
   (conj-some [] :a :b nil :c :d nil :e))
 
+(defn preserve-reduced "As `clojure.core/preserving-reduced`"
+  [rf]
+  (fn [acc in]
+    (let [result (rf acc in)]
+      (if (reduced? result)
+        (reduced result)
+        result))))
+
 (defn run-kv! [proc    m] (reduce-kv #(proc %2 %3) nil    m) nil)
 (defn run!*   [proc coll] (reduce    #(proc %2)    nil coll) nil)
 
