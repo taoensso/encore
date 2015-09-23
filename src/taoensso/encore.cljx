@@ -778,8 +778,23 @@
   (fn [acc in]
     (let [result (rf acc in)]
       (if (reduced? result)
-        (reduced result)
+        (reduced result) ; Double wrap (could also do this manually)
         result))))
+
+(comment
+  (reduce
+    (fn [acc in]
+      (println "outer-fn: " in)
+      (reduce
+        (preserve-reduced
+          (fn [acc in]
+            (println "inner-fn: " in)
+            (if (= in 2)
+              (reduced "found a 2") ; or (reduced (reduced "found a 2"))
+              acc)))
+        acc in))
+    nil
+    [[1 2 3] [1 2 3]]))
 
 (defn run-kv! [proc    m] (reduce-kv #(proc %2 %3) nil    m) nil)
 (defn run!*   [proc coll] (reduce    #(proc %2)    nil coll) nil)
