@@ -1557,8 +1557,19 @@
   (let [cache_ (atom {})]
     (fn [& args]
       @(or (get @cache_ args)
-           (swap-val! cache_ args
-             (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))))
+           (swap-val! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))))
+
+(defn a0-memoize_ "Fastest possible 0-arg `memoize_`" [f]
+  (let [cache_ (atom nil)]
+    (fn [] @(or @cache_ (swap! cache_ (fn [?dv] (if ?dv ?dv (delay (f)))))))))
+
+(defn a1-memoize_ "Fastest possible 0/1-arg `memoize_`" [f]
+  (let [cache_ (atom {})]
+    (fn
+      ([ ] @(or (get @cache_ sentinel)
+                (swap-val! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
+      ([x] @(or (get @cache_ x)
+                (swap-val! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x))))))))))
 
 (defn memoize1
   "Great for Reactjs render op caching on mobile devices, etc."
@@ -1579,7 +1590,7 @@
   [cache f & args]
   (if-not cache ; {<args> <delay-val>}
     (apply f args)
-    @(swap-val! cache args #(if % % (delay (apply f args))))))
+    @(swap-val! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
 
 (defn memoize*
   "Like `clojure.core/memoize` but:
@@ -1743,7 +1754,7 @@
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
   (qb 10000
-    (f0) (f1) (f2) (f3) (f4)
+    (f0) (f1) (f2) (f3) (f4) (f5)
     ;;(f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand))
     )
   ;; [ 0.95  1.29  4.13 10.36 11.32] ; w/o args
