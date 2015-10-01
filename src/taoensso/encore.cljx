@@ -686,21 +686,21 @@
 (defn  now-udt ^long [] #+clj (System/currentTimeMillis) #+cljs (.getTime (js/Date.)))
 (defn secs->ms ^long [secs] (* (long secs)  1000))
 (defn ms->secs ^long [ms]   (quot (long ms) 1000))
-(defn ms "Returns number of milliseconds in period defined by given args"
+(defn ms "Returns ~number of milliseconds in period defined by given args"
   [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}]
   {:pre [(have #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
            :in (keys opts))]}
   (round*
     (+
-      (if years  (* (double years)  1000 60 60 24 365)    0.0)
-      (if months (* (double months) 1000 60 60 24 29.53)  0.0)
-      (if weeks  (* (double weeks)  1000 60 60 24 7)      0.0)
-      (if days   (* (double days)   1000 60 60 24)        0.0)
-      (if hours  (* (double hours)  1000 60 60)           0.0)
-      (if mins   (* (double mins)   1000 60)              0.0)
-      (if secs   (* (double secs)   1000)                 0.0)
-      (if msecs     (double msecs)                        0.0)
-      (if ms        (double ms)                           0.0))))
+      (if years  (* (double years)  #=(* 1000 60 60 24 365))    0.0)
+      (if months (* (double months) #=(* 1000 60 60 24 29.53))  0.0)
+      (if weeks  (* (double weeks)  #=(* 1000 60 60 24 7))      0.0)
+      (if days   (* (double days)   #=(* 1000 60 60 24))        0.0)
+      (if hours  (* (double hours)  #=(* 1000 60 60))           0.0)
+      (if mins   (* (double mins)   #=(* 1000 60))              0.0)
+      (if secs   (* (double secs)   1000)                       0.0)
+      (if msecs     (double msecs)                              0.0)
+      (if ms        (double ms)                                 0.0))))
 
 (def secs (comp ms->secs ms))
 (comment #=(ms   :years 88 :months 3 :days 33)
