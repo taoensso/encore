@@ -14,14 +14,14 @@
 
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
-   [org.clojure/tools.reader "0.9.2"]]
+   [org.clojure/tools.reader "0.10.0"]]
 
   :plugins
   [[lein-pprint              "1.1.2"]
    [lein-ancient             "0.6.7"]
    [lein-expectations        "0.0.8"]
    [lein-autoexpect          "1.5.0"]
-   [codox                    "0.8.13"]]
+   [codox                    "0.8.15"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
