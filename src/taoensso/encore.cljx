@@ -187,6 +187,10 @@
   (if-lets   [a :a b (= a :b)] [a b] "else")
   (when-lets [a :a b nil] "true"))
 
+(defmacro do-nil   [& body] `(do ~@body nil))
+(defmacro do-false [& body] `(do ~@body false))
+(defmacro do-true  [& body] `(do ~@body true))
+
 ;;;; Types
 
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
