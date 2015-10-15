@@ -390,39 +390,32 @@
 (defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
 (defn hpred "Implementation detail" [pred-form]
   (if-not (vector? pred-form) pred-form
-    (let [[type p1 p2 & more] pred-form
-          ;; p1 (when p1 (hpred p1))
-          ;; p2 (when p2 (hpred p2))
-          ]
+    (let [[type p1 p2 & more] pred-form]
       (case type
-        :=        (fn [x] (=        p1 x)) ; Of dubious value
-        :not=     (fn [x] (not=     p1 x)) ; ''
-        ;;
         :set=     (fn [x] (=             (set* x) (set* p1)))
         :set<=    (fn [x] (set/subset?   (set* x) (set* p1)))
         :set>=    (fn [x] (set/superset? (set* x) (set* p1)))
-        ;;
         :ks=      (fn [x] (ks=      p1 x))
         :ks<=     (fn [x] (ks<=     p1 x))
         :ks>=     (fn [x] (ks>=     p1 x))
         :ks-nnil? (fn [x] (ks-nnil? p1 x))
-        (:el :in) (fn [x] (contains? (set* p1) x))
-        (:not-el
-         :not-in) (fn [x] (not (contains? (set* p1) x)))
+        (:el :in)         (fn [x]      (contains? (set* p1) x))
+        (:not-el :not-in) (fn [x] (not (contains? (set* p1) x)))
+
         ;; complement/none-of:
-        :not      (fn [x] (and (if-not p1 true (not ((hpred p1) x)))
-                              (if-not p2 true (not ((hpred p2) x)))
-                              (every? #(not ((hpred %) x)) more)))
+        :not (fn [x] (and (if-not p1 true (not ((hpred p1) x)))
+                         (if-not p2 true (not ((hpred p2) x)))
+                         (revery?       #(not ((hpred  %) x)) more)))
+
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (hpred p1)) x))
                         (when p2 ((non-throwing (hpred p2)) x))
-                        (rsome  #((non-throwing (hpred %))  x) more)))
+                        (rsome  #((non-throwing (hpred  %)) x) more)))
+
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((hpred p1) x))
                          (if-not p2 true ((hpred p2) x))
-                         (revery? #((hpred %) x) more)))
-        ;; pred-form ; No, rather throw on confusing/ambiguous pred-form (typo?)
-        ))))
+                         (revery?       #((hpred  %) x) more)))))))
 
 (comment
   ((hpred [:or nil? string?]) "foo")
