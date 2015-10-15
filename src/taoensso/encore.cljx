@@ -1377,6 +1377,12 @@
 (defn str-replace
   "Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
                   http://dev.clojure.org/jira/browse/CLJS-911"
+
+  ;; TODO Seems there was a breaking API change in ClojureScript 1.7.145 to fix
+  ;; CLJS-911, Ref. https://goo.gl/bk5hcT. Will need to implement a
+  ;; back+forward compatible workaround here.
+  ;; Note that CLJS-911 still seems to be unresolved.
+
   [s match replacement]
   #+clj (str/replace s match replacement)
   #+cljs
