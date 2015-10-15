@@ -1,34 +1,27 @@
 (ns taoensso.encore.tests
   #+clj
   (:require
-   [expectations :as expect :refer (expect)]
-   ;; [clojure.test.check            :as dc]
-   ;; [clojure.test.check.generators :as dc-gen]
-   ;; [clojure.test.check.properties :as dc-prop]
-   [taoensso.encore :as encore :refer ()])
-
-  #+cljs
-  (:require-macros
-   [expectations.cljs :as expect-cljs])
+   [clojure.test :as test :refer (is are deftest run-tests)]
+   [clojure.test.check            :as tc]
+   [clojure.test.check.generators :as tc-gen]
+   [clojure.test.check.properties :as tc-prop]
+   [taoensso.encore :as enc :refer ()])
 
   #+cljs
   (:require
-   [cemerick.cljs.test] ; Necessary for `lein cljsbuild test` calls
-   [expectations :as expect :refer-macros (expect)]
-   ;; [clojure.test.check            :as dc]
-   ;; [clojure.test.check.generators :as dc-gen]
-   ;; [clojure.test.check.properties :as dc-prop :include-macros true]
-   [taoensso.encore :as encore :refer ()]))
+   [cljs.test :as test :refer-macros (is are deftest run-tests)]
+   [clojure.test.check            :as tc]
+   [clojure.test.check.generators :as tc-gen]
+   [clojure.test.check.properties :as tc-prop :include-macros true]
+   [taoensso.encore :as enc :refer ()]))
 
-(comment (expect/run-tests '[taoensso.encore.tests]))
+(comment (run-tests '[taoensso.encore.tests]))
 
 #+cljs
 (do
   (enable-console-print!)
-  ;; TODO expct-cljs/run-all-tests appears to choke on macros?:
-  (set! *main-cli-fn* (fn -main [] (expect-cljs/run-all-tests))))
+  ;; (set! *main-cli-fn* (fn -main [] (test/run-tests)))
+  )
 
-(defn- before-run {:expectations-options :before-run} [])
-(defn- after-run  {:expectations-options :after-run}  [])
-
-(expect true)
+(deftest foo
+  (is (= 1 1)))

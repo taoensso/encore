@@ -17,11 +17,9 @@
    [org.clojure/tools.reader "0.10.0"]]
 
   :plugins
-  [[lein-pprint              "1.1.2"]
-   [lein-ancient             "0.6.7"]
-   [lein-expectations        "0.0.8"]
-   [lein-autoexpect          "1.5.0"]
-   [codox                    "0.8.15"]]
+  [[lein-pprint  "1.1.2"]
+   [lein-ancient "0.6.7"]
+   [codox        "0.8.15"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -29,17 +27,13 @@
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
-   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-alpha5"]]}
-   :test {:dependencies [[org.clojure/test.check "0.8.2"]
-                         [expectations           "2.1.0"]]}
+   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-beta1"]]}
+   :test {:dependencies [[org.clojure/test.check "0.8.2"]]}
    :dev
    [:1.7 :test
     {:dependencies
-     [;; Currently the latest release that doesn't cause Expectations v2.1.0 to
-      ;; choke on macros, Ref. http://goo.gl/jJbLCm:
-      ;; [org.clojure/clojurescript "0.0-2985"]
-      [org.clojure/clojurescript    "1.7.48"]
-      [org.clojure/core.async       "0.1.303.0-886421-alpha"]]
+     [[org.clojure/clojurescript "1.7.48"]
+      [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
@@ -59,12 +53,8 @@
     {:source-paths ["src" "test"] :rules :cljs :output-path "target/test-classes"}]}
 
   :cljsbuild
-  {:test-commands {"node"       ["node" :node-runner "target/tests.js"]
-                   ;; "phantom" ["phantomjs" :runner "target/tests.js"]
-                   }
+  {:test-commands {}
    :builds
-   ;; TODO Parallel builds currently cause issues with Expectations v2.1.0,
-   ;; Ref. http://goo.gl/8LDHe5
    [{:id "main"
      :source-paths   ["src" "target/classes"]
      ;; :notify-command ["terminal-notifier" "-title" "cljsbuild" "-message"]
@@ -73,18 +63,16 @@
                       :pretty-print false}}
     {:id "tests"
      :source-paths   ["src" "target/classes" "test" "target/test-classes"]
-     :notify-command ["node" "target/tests.js"]
+     ;; :notify-command []
      :compiler       {:output-to "target/tests.js"
-                      :optimizations :simple ; Necessary for node.js
+                      :optimizations :whitespace
                       :pretty-print true
-                      :target :nodejs
-                      :hashbang false ; Ref. http://goo.gl/vrtNDR
                       :main "taoensso.encore.tests"}}]}
 
   :auto-clean false
   :prep-tasks [["cljx" "once"] "javac" "compile"]
 
-  :codox {:language :clojure ; [:clojure :clojurescript] cljsbuild  ; No support?
+  :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
           :sources  ["target/classes"]
           :src-linenum-anchor-prefix "L"
           :src-dir-uri "http://github.com/ptaoussanis/encore/blob/master/src/"
@@ -93,9 +81,9 @@
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
-                 "with-profile" "+1.5:+1.6:+1.7:+1.8" "expectations,"
-                 "with-profile" "+test" "cljsbuild" "test"]
-   "test-auto"  ["with-profile" "+test" "autoexpect"]
+                 "with-profile" "+1.5:+1.6:+1.7:+1.8" "test,"
+                 ;; "with-profile" "+test" "cljsbuild" "test"
+                 ]
    "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
