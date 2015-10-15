@@ -545,6 +545,19 @@
   ;; [3.31 13.48 36.22] ; New fn form
   )
 
+(defn is
+  "Experimental. Cheaper `have!` alt that provides less diagnostic info."
+  [pred x]
+  (if
+      #+clj  (try (pred x) (catch Throwable           _ false))
+      ;; NB Temp workaround for http://goo.gl/UW7773:
+      #+cljs (try (pred x) (catch js/Error #_:default _ false))
+      x
+      (throw (ex-info (str "`is` " (str pred) " failure against arg: " (pr-str x))
+               {:arg x :type (type x)}))))
+
+(comment (qb 100000 (have string? "foo") (is string? "foo")))
+
 (defmacro check-some
   "Returns first logical false/throwing expression (id/form), or nil"
   ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
