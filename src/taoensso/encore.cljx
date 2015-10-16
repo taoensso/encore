@@ -545,18 +545,24 @@
   ;; [3.31 13.48 36.22] ; New fn form
   )
 
-(defn is
-  "Experimental. Cheaper `have!` alt that provides less diagnostic info."
-  [pred x]
-  (if
-      #+clj  (try (pred x) (catch Throwable           _ false))
-      ;; NB Temp workaround for http://goo.gl/UW7773:
-      #+cljs (try (pred x) (catch js/Error #_:default _ false))
-      x
-      (throw (ex-info (str "`is` " (str pred) " failure against arg: " (pr-str x))
-               {:arg x :type (type x)}))))
+(defn- try-pred [pred x]
+  #+clj  (try (pred x) (catch Throwable           _ false))
+  ;; NB Temp workaround for http://goo.gl/UW7773:
+  #+cljs (try (pred x) (catch js/Error #_:default _ false)))
 
-(comment (qb 100000 (have string? "foo") (is string? "foo")))
+(defn is "Experimental. Cheaper `have!` alt that provides less diagnostic info."
+  [pred x]
+  (if (try-pred pred x)
+    x
+    (throw (ex-info (str "`is` " (str pred) " failure against arg: " (pr-str x))
+             {:arg x :type (type x)}))))
+
+(defn when? "Experimental. For use with `if-let`s, `when-let`s, etc."
+  [pred x] (when (try-pred pred x) x))
+
+(comment
+  (qb 100000 (have string? "foo") (is string? "foo"))
+  (when-let [x (when? pos? 37)] x))
 
 (defmacro check-some
   "Returns first logical false/throwing expression (id/form), or nil"
