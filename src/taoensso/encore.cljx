@@ -14,7 +14,8 @@
   #+cljs (:require [clojure.string      :as str]
                    [clojure.set         :as set]
                    ;; [cljs.core.async  :as async]
-                   [cljs.reader         :as edn]
+                   ;; [cljs.reader      :as edn]
+                   [cljs.tools.reader.edn :as edn]
                    ;;[goog.crypt.base64 :as base64]
                    [goog.object         :as gobj]
                    [goog.string         :as gstr]
@@ -54,13 +55,10 @@
 
 ;;;; Core
 
-(defn read-edn-str
-  #+clj  ([opts s] (clojure.tools.reader.edn/read opts   s))
-  #+clj  ([     s] (clojure.tools.reader.edn/read-string s))
-  ;; Unfortunate that cljs doesn't have an [opts s] arity:
-  #+cljs ([     s] (cljs.reader/read-string              s)))
+(defn read-edn
+  ([s]           (edn/read-string s))
+  ([opts reader] (edn/read opts reader)))
 
-(def read-edn read-edn-str) ; Alias
 (defn  pr-edn
   ([     x] (pr-edn nil x))
   ([opts x]
@@ -2101,7 +2099,7 @@
                             :text (.getResponseText xhr)
                             :json (.getResponseJson xhr)
                             :xml  (.getResponseXml  xhr)
-                            :edn  (edn/read-string (.getResponseText xhr)))
+                            :edn  (read-edn (.getResponseText xhr)))
                           ;; NB Temp workaround for http://goo.gl/UW7773:
                           (catch js/Error #_:default e
                             ;; Undocumented, subject to change:
