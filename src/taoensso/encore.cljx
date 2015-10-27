@@ -357,7 +357,7 @@
   (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
   (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
-;;;; Conditionals (experimental)
+;;;; Invariants (experimental)
 
 (declare format)
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
@@ -365,7 +365,7 @@
   ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
   ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
-        pattern "Condition failed in `%s:%s` [pred-form, val]: [%s, %s]"
+        pattern "Invariant failure in `%s:%s` [pred-form, val]: [%s, %s]"
         line-str (or ?line "?")
         form-str (str (or form "<nil>")) #_(pr-str form)
         val-str  (str (or val  "<nil>")) #_(pr-str val)
