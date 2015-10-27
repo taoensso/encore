@@ -1623,11 +1623,14 @@
   ([f]
    (let [cache_ (atom {})] ; {<args> <delay-val>}
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-       (if (kw-identical? arg1 :mem/del)
+       (cond
+         (kw-identical? arg1 :mem/get) @cache_ ; Support debugging
+         (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
                (swap!  cache_ dissoc argn))
              nil)
+         :else
          (let [fresh? (kw-identical? arg1 :mem/fresh)
                args   (if fresh? argn args)]
            @(or (get @cache_ args)
@@ -1638,48 +1641,53 @@
 
   ;; De-raced, commands, ttl, gc
   ([ttl-ms f]
-   (have? [:or nil? pos-int?] ttl-ms)
-   (let [cache       (atom {}) ; {<args> <[delay-val udt :as cache-val]>}
-         gc-running? (atom false)]
-     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-       (if (kw-identical? arg1 :mem/del)
-         (do (if (kw-identical? (first argn) :mem/all)
-               (reset! cache {})
-               (swap!  cache dissoc argn))
-             nil)
-
-         (do
+   (have? pos-int? ttl-ms)
+   (let [cache_       (atom {}) ; {<args> <[delay-val udt :as cache-val]>}
+         gc-running?_ (atom false)
+         ttl-ms       (long ttl-ms)
+         gc-fn
+         (fn []
            (when (and (gc-now?)
-                      (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
-             (do;future
-               (let [instant (now-udt)
-                     snapshot @cache ; NON-atomic gc actually preferable
-                     ks-to-gc
-                     (persistent!
-                       (reduce-kv
-                         (fn [acc k [dv udt :as cv]]
-                           (if (> (- instant ^long udt) ^long ttl-ms)
-                             (conj! acc k)
-                             acc))
-                         (transient [])
-                         snapshot))]
+                      (swap-in! gc-running?_ [] (fn [b] (swapped true (not b)))))
+             (let [instant (now-udt)
+                   snapshot @cache_ ; NON-atomic gc actually preferable
+                   ks-to-gc
+                   (persistent!
+                     (reduce-kv
+                       (fn [acc k [dv ^long udt :as cv]]
+                         (if (> (- instant udt) ttl-ms)
+                           (conj! acc k)
+                           acc))
+                       (transient [])
+                       snapshot))]
 
-                 (swap! cache
-                   (fn [m]
-                     (persistent!
-                       (reduce (fn [acc in] (dissoc! acc in))
-                         (transient m) ks-to-gc))))
+               (swap! cache_
+                 (fn [m]
+                   (persistent!
+                     (reduce (fn [acc in] (dissoc! acc in))
+                       (transient m) ks-to-gc))))
 
-                 (reset! gc-running? false))))
+               (reset! gc-running?_ false))))]
 
+     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+       (cond
+         (kw-identical? arg1 :mem/get) @cache_
+         (kw-identical? arg1 :mem/del)
+         (do (if (kw-identical? (first argn) :mem/all)
+               (reset! cache_ {})
+               (swap!  cache_ dissoc argn))
+             nil)
+         :else
+         (do
+           (gc-fn)
            (let [fresh?  (kw-identical? arg1 :mem/fresh)
                  args    (if fresh? argn args)
                  instant (now-udt)
-                 [dv]    (swap-val! cache args
+                 [dv]    (swap-val! cache_ args
                            (fn [?cv]
                              (if (and ?cv (not fresh?)
-                                   (let [[_dv udt] ?cv]
-                                     (< (- instant ^long udt) ^long ttl-ms)))
+                                   (let [[_dv ^long udt] ?cv]
+                                     (< (- instant udt) ttl-ms)))
                                ?cv
                                [(delay (apply f args)) instant])))]
              @dv))))))
@@ -1688,81 +1696,123 @@
   ([cache-size ttl-ms f]
    (have? [:or nil? pos-int?] ttl-ms)
    (have? pos-int? cache-size)
-   (let [state       (atom {:tick 0}) ; {:tick _ <args> <[dval ?udt tick-lru tick-lfu :as cval]>}
-         gc-running? (atom false)]
-     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-       (if (kw-identical? arg1 :mem/del)
-         (do (if (kw-identical? (first argn) :mem/all)
-               (reset! state {:tick 0})
-               (swap!  state dissoc argn))
-             nil)
-
-         (do
+   (let [;; {:tick _ <args> <[dval ?udt tick-lru tick-lfu :as cval]>}:
+         state_       (atom {:tick 0})
+         gc-running?_ (atom false)
+         ttl-ms?      (not (nil? ttl-ms))
+         ttl-ms       (long (or ttl-ms 0))
+         cache-size   (long cache-size)
+         gc-fn
+         (fn []
            (when (and (gc-now?)
-                      (swap-in! gc-running? [] (fn [b] (swapped true (not b)))))
+                      (swap-in! gc-running?_ [] (fn [b] (swapped true (not b)))))
 
-             (do;future
-               (let [instant (now-udt)]
+             (let [instant (now-udt)]
 
-                 (when ttl-ms ; First prune expired stuff
-                   (let [snapshot (dissoc @state :tick)
-                         ks-to-gc
-                         (persistent!
-                           (reduce-kv
-                             (fn [acc k [dv udt _ _ :as cv]]
-                               (if (> (- instant ^long udt) ^long ttl-ms)
-                                 (conj! acc k)
-                                 acc))
-                             (transient [])
-                             snapshot))]
+               (when ttl-ms? ; First prune expired stuff
+                 (let [snapshot (dissoc @state_ :tick)
+                       ks-to-gc
+                       (persistent!
+                         (reduce-kv
+                           (fn [acc k [dv ^long udt _ _ :as cv]]
+                             (if (> (- instant udt) ttl-ms)
+                               (conj! acc k)
+                               acc))
+                           (transient [])
+                           snapshot))]
 
-                     (swap! state
+                   (swap! state_
+                     (fn [m]
+                       (persistent!
+                         (reduce (fn [acc in] (dissoc! acc in))
+                           (transient m) ks-to-gc))))))
+
+               ;; Then prune by ascending (worst) tick-sum:
+               (let [snapshot (dissoc @state_ :tick)
+                     n-to-gc  (- (count snapshot) cache-size)]
+
+                 (when (> n-to-gc 64) ; Tradeoff between sort cost + write contention
+                   (let [ks-to-gc
+                         (top n-to-gc
+                           (fn [k]
+                             (let [[_ _ ^long tick-lru ^long tick-lfu] (snapshot k)]
+                               (+ tick-lru tick-lfu)))
+                           (keys snapshot))]
+
+                     ;; (println (str "ks-to-gc: " ks-to-gc)) ; Debug
+                     (swap! state_
                        (fn [m]
                          (persistent!
                            (reduce (fn [acc in] (dissoc! acc in))
-                             (transient m) ks-to-gc))))))
+                             (transient m) ks-to-gc)))))))
 
-                 ;; Then prune by ascending (worst) tick-sum:
-                 (let [snapshot (dissoc @state :tick)
-                       n-to-gc  (- (count snapshot) ^long cache-size)]
+               (reset! gc-running?_ false))))
 
-                   (when (> n-to-gc 64) ; Tradeoff between sort cost + write contention
-                     (let [ks-to-gc
-                           (top n-to-gc
-                             (fn [k]
-                               (let [[_ _ tick-lru tick-lfu] (snapshot k)]
-                                 (+ ^long tick-lru ^long tick-lfu)))
-                             (keys snapshot))]
+         cv-fn
+         (if-not ttl-ms?
+           (fn [args fresh? tick]
+             (swap-val! state_ args
+               (fn [?cv]
+                 (if (and ?cv (not fresh?))
+                   ?cv
+                   [(delay (apply f args)) nil tick 1]))))
 
-                       ;; (println (str "ks-to-gc: " ks-to-gc)) ; Debug
-                       (swap! state
-                         (fn [m]
-                           (persistent!
-                             (reduce (fn [acc in] (dissoc! acc in))
-                               (transient m) ks-to-gc)))))))
+           (fn [args fresh? tick]
+             (let [instant (now-udt)]
+               (swap-val! state_ args
+                 (fn [?cv]
+                   (if (and ?cv (not fresh?)
+                         (let [[_dv ^long udt] ?cv]
+                           (when-not udt ; TODO Temp debug
+                             (throw
+                               (ex-info "memoize* invariant violation"
+                                 {:?cv ?cv
+                                  :?cv-type (type ?cv)
+                                  :udt udt
+                                  :udt-type (type udt)
+                                  :state10 (into {} (take 10) @state_)})))
+                           (< (- instant udt) ttl-ms)))
+                     ?cv
+                     [(delay (apply f args)) instant tick 1]))))))]
 
-                 (reset! gc-running? false))))
+     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+       (cond
+         (kw-identical? arg1 :mem/get) @state_
+         (kw-identical? arg1 :mem/del)
+         (do (if (kw-identical? (first argn) :mem/all)
+               (reset! state_ {:tick 0})
+               (swap!  state_ dissoc argn))
+             nil)
+         :else
+         (do
+           (gc-fn)
+           (let [fresh?     (kw-identical? arg1 :mem/fresh)
+                 args       (if fresh? argn args)
+                 ^long tick (:tick @state_) ; Accuracy/sync irrelevant
+                 [dv]       (cv-fn args fresh? tick)]
 
-           (let [fresh?   (kw-identical? arg1 :mem/fresh)
-                 args     (if fresh? argn args)
-                 ?instant (when ttl-ms (now-udt))
-                 tick'    (:tick @state) ; Accuracy/sync irrelevant
-                 [dv]     (swap-val! state args
-                            (fn [?cv]
-                              (if (and ?cv (not fresh?)
-                                    (or (nil? ?instant)
-                                      (let [[_dv udt] ?cv]
-                                        (< (- ^long ?instant ^long udt) ^long ttl-ms))))
-                                ?cv
-                                [(delay (apply f args)) ?instant tick' 1])))]
+             (when-not tick ; TODO Temp debug
+               (throw
+                 (ex-info "memoize* invariant violation"
+                   {:tick tick
+                    :tick-type (type tick)
+                    :state10 (into {} (take 10) @state_)})))
 
              ;; We always adjust counters, even on reads:
-             (swap! state
+             (swap! state_
                (fn [m]
-                 (when-let [[dv ?udt tick-lru tick-lfu :as cv] (get m args)]
+                 (when-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
+
+                   (when-not tick-lfu ; TODO Temp debug
+                     (throw
+                       (ex-info "memoize* invariant violation"
+                         {:tick-lfu tick-lfu
+                          :tick-lfu-type (type tick-lfu)
+                          :state10 (into {} (take 10) m)})))
+
                    (merge m
-                     {:tick (inc ^long tick')
-                      args  [dv ?udt tick' (inc ^long tick-lfu)]}))))
+                     {:tick (inc tick)
+                      args  [dv ?udt tick (inc tick-lfu)]}))))
              @dv)))))))
 
 (comment
@@ -1774,7 +1824,7 @@
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
   (qb 10000
-    (f0) (f1) (f2) (f3) (f4) (f5)
+    (f0) (f1) (f2) (f3) (f4) ; (f5)
     ;;(f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand))
     )
   ;; [ 0.95  1.29  4.13 10.36 11.32] ; w/o args
