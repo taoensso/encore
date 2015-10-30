@@ -29,8 +29,10 @@
                    [goog.structs        :as gstructs]
                    [goog.net.EventType]
                    [goog.net.ErrorCode])
-  #+cljs (:require-macros [taoensso.encore :as enc-macros :refer
-                           (catch-errors have? have compile-if)]))
+
+  #+cljs (:require-macros
+          [taoensso.encore :as enc-macros :refer
+           (catch-errors* catch-errors have have? compile-if)]))
 
 (comment
   (set! *unchecked-math* :warn-on-boxed)
@@ -245,14 +247,26 @@
   (error-data (Exception. "foo"))
   (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro catch-errors "Returns [<?result> <?error>]"
-  [& body]
-  `(if-cljs
-     ;; NB Temp workaround for http://goo.gl/UW7773:
-     (try [(do ~@body)] (catch js/Error #_:default e# [nil e#]))
-     (try [(do ~@body)] (catch Throwable           t# [nil t#]))))
+(defmacro catch-errors* "Experimental!"
+  ;; Badly need something like http://dev.clojure.org/jira/browse/CLJ-1293
+  ;; Note js/Error instead of :default as workaround for http://goo.gl/UW7773
+  ([try-form error-sym error-form]
+   `(if-cljs
+      (try ~try-form (catch js/Error  ~error-sym ~error-form))
+      (try ~try-form (catch Throwable ~error-sym ~error-form))))
+  ([try-form error-sym error-form finally-form]
+   `(if-cljs
+      (try ~try-form (catch js/Error  ~error-sym ~error-form) (finally ~finally-form))
+      (try ~try-form (catch Throwable ~error-sym ~error-form) (finally ~finally-form)))))
 
-(comment (catch-errors (zero? "a")))
+(defmacro catch-errors "Returns [<?result> <?error>]"
+  [& body] `(catch-errors* [(do ~@body) nil] e# [nil e#]))
+
+(comment
+  (catch-errors (zero? "9"))
+  (macroexpand '(catch-errors* (do "foo") e e (println "finally")))
+  (catch-errors* (do "foo") e e)
+  (catch-errors* (/ 5 0)    e e))
 
 (defmacro caught-error-data "Handy for error-throwing unit tests"
   [& body]
@@ -359,34 +373,10 @@
 
 ;;;; Invariants (experimental)
 
-(declare format)
-(defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
-(defn hthrow "Implementation detail" [hard? ns-str ?line form val & [?err]]
-  ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
-  ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
-  (let [;; Cider unfortunately doesn't seem to print newlines in errors...
-        pattern "Invariant failure in `%s:%s` [pred-form, val]: [%s, %s]"
-        line-str (or ?line "?")
-        form-str (str (or form "<nil>")) #_(pr-str form)
-        val-str  (str (or val  "<nil>")) #_(pr-str val)
-        ?err-str (when-let [e ?err] (str ?err) #_(pr-str ?err))
-        msg      (let [m (format pattern ns-str line-str form-str val-str)]
-                   (if-not ?err-str m (str m "\nPredicate error: " ?err-str)))]
-    (throw
-      (if-not hard?
-        (assertion-error msg)
-        (ex-info msg {:ns    ns-str
-                      :?line ?line
-                      :form  form
-                      :val   val
-                      :?err  ?err})))))
-
-(comment (try (/ 5 0) (catch Exception e (str e) #_(pr-str e))))
-
 (declare rsome revery?)
 
-(defn- non-throwing [pred] (fn [x] (let [[?r _] (catch-errors (pred x))] ?r)))
-(defn hpred "Implementation detail" [pred-form]
+(defn- non-throwing [pred] (fn [x] (catch-errors* (pred x) _ nil)))
+(defn -invar-pred [pred-form]
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form]
       (case type
@@ -401,114 +391,172 @@
         (:not-el :not-in) (fn [x] (not (contains? (set* p1) x)))
 
         ;; complement/none-of:
-        :not (fn [x] (and (if-not p1 true (not ((hpred p1) x)))
-                         (if-not p2 true (not ((hpred p2) x)))
-                         (revery?       #(not ((hpred  %) x)) more)))
+        :not (fn [x] (and (if-not p1 true (not ((-invar-pred p1) x)))
+                         (if-not p2 true (not ((-invar-pred p2) x)))
+                         (revery?       #(not ((-invar-pred  %) x)) more)))
 
         ;; any-of, (apply some-fn preds):
-        :or  (fn [x] (or (when p1 ((non-throwing (hpred p1)) x))
-                        (when p2 ((non-throwing (hpred p2)) x))
-                        (rsome  #((non-throwing (hpred  %)) x) more)))
+        :or  (fn [x] (or (when p1 ((non-throwing (-invar-pred p1)) x))
+                        (when p2 ((non-throwing (-invar-pred p2)) x))
+                        (rsome  #((non-throwing (-invar-pred  %)) x) more)))
 
         ;; all-of, (apply every-pred preds):
-        :and (fn [x] (and (if-not p1 true ((hpred p1) x))
-                         (if-not p2 true ((hpred p2) x))
-                         (revery?       #((hpred  %) x) more)))))))
+        :and (fn [x] (and (if-not p1 true ((-invar-pred p1) x))
+                         (if-not p2 true ((-invar-pred p2) x))
+                         (revery?       #((-invar-pred  %) x) more)))))))
 
 (comment
-  ((hpred [:or nil? string?]) "foo")
-  ((hpred [:or [:and integer? neg?] string?]) 5)
-  ((hpred [:or zero? nil?]) nil) ; (zero? nil) throws
+  ((-invar-pred [:or nil? string?]) "foo")
+  ((-invar-pred [:or [:and integer? neg?] string?]) 5)
+  ((-invar-pred [:or zero? nil?]) nil) ; (zero? nil) throws
   )
 
-(defn hcond "Implementation detail"
-  [hard? ns-str line x_ x-form pred pred-form]
-  (let [[?x ?x-err]       (catch-errors @x_)
-        have-x?           (nil? ?x-err)
-        [pass? ?pred-err] (when have-x? (catch-errors ((hpred pred) ?x)))]
-    (if pass?
-      ?x
-      (hthrow hard? ns-str line (list pred-form x-form)
-        (if have-x? ?x ?x-err) ?pred-err))))
+(declare format now-udt)
+(defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
+(def  -invar-undefined-val :invariant/undefined-val)
+(defn -invar-violation!
+  ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
+  ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
+  ([] (throw (ex-info "Invariant violation" {:invariant-violation? true})))
+  ([assertion? ns-str ?line form val ?err]
+   (let [;; Cider unfortunately doesn't seem to print newlines in errors...
+         pattern     "Invariant violation in `%s:%s` [pred-form, val]:\n [%s, %s]"
+         line-str    (or ?line "?")
+         form-str    (str form)
+         undefn-val? (= val -invar-undefined-val)
+         val-str     (if undefn-val? "<undefined>" (str (or val "<nil>")) #_(pr-str val))
+         dummy-err?  (:invariant-violation? (ex-data ?err))
+         ?err        (when-not dummy-err? ?err)
+         ?err-str    (when-let [e ?err] (str ?err) #_(pr-str ?err))
+         msg         (let [msg (format pattern ns-str line-str form-str val-str)]
+                       (cond
+                         (not ?err)       msg
+                         undefn-val? (str msg       "\n`val` error: " ?err-str)
+                         :else       (str msg "\n`pred-form` error: " ?err-str)))]
+     (throw
+       (if false #_assertion? ; Let's rather just always throw `ex-info`'s
+         (assertion-error msg)
+         (ex-info msg
+           {:instant  (now-udt)
+            :ns       ns-str
+            :?line    ?line
+            :?form    (when-not (string? form) form)
+            :form-str form-str
+            :val      (if undefn-val? 'undefined/threw-error val)
+            :val-type (if undefn-val? 'undefined/threw-error (type val))
+            :?err     ?err
+            :*assert* *assert*
+            :elidable? assertion?}))))))
+
+(defmacro -invariant1
+  "Implementation detail. Written to maximize performance and to minimize post
+  Closure+gzip Cljs size."
+  [assertion? truthy? line pred x]
+  (let [;; form     (list pred x)
+        form        (str (list pred x)) ; Better expansion gzipping
+        pred*       (if (vector? pred) (list 'taoensso.encore/-invar-pred pred) pred)
+        pass-result (if truthy? true '__x)]
+    ;; `(if-cljs` ; Could expand differently to trade perf for expansion size
+    `(let [~'__x ; ~x ; Faster, smaller expansion, but less protection
+           (catch-errors* ~x ~'t
+             (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
+               -invar-undefined-val ~'t))]
+       (catch-errors*
+         (if (~pred* ~'__x) ~pass-result (-invar-violation!))
+         ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t)))))
 
 (comment
-  (hcond :hard (str *ns*) 112 (delay (/ 5 0)) '(/ 5 0) nnil?   'nnil?)
-  (hcond :hard (str *ns*) 112 (delay "foo")   '"foo"   pos?    'pos?)
-  (hcond :hard (str *ns*) 112 (delay "foo")   '"foo"   string? 'string?))
+  (macroexpand              '(-invariant1 true false 1 #(string? %) "foo"))
+  (macroexpand              '(-invariant1 true false 1 string? "foo"))
+  (macroexpand              '(-invariant1 true false 1 [:or string?] "foo"))
+  ;; About 3-4x the cost of the absolute cheapest possible pred check; most of
+  ;; the cost is incurred by `try` blocks:
+  (qb 100000 (string? "foo") (-invariant1 true false 1 string? "foo"))
 
-(defmacro have ; For inline-use/bindings
-  "EXPERIMENTAL. Takes a pred and one or more xs. Tests pred against each x,
-  trapping errors. If any pred test fails, throws a detailed error. Otherwise
-  returns input x/xs for convenient inline-use/binding.
+  (-invariant1 false false 1 integer? "foo")   ; Pred failure example
+  (-invariant1 false false 1 zero?    "foo")   ; Pred error example
+  (-invariant1 false false 1 zero?    (/ 5 0)) ; Form error example
+  )
 
-  Options:
-    * By default throws `AssertionError`s subject to `*assert*` value (useful
-      for catching errors during dev). Use a `:!` first arg to instead throw
-      `RuntimeException`s irrespective of `*assert*` value (useful for important
-      conditions in production).
-    * Use an `:in` arg after pred to treat x/xs as evaluated coll/colls.
-    * See `hpred` for various convenient pred modifier forms.
-
-  Provides a small, simple, deeply flexible alternative to heavier tools like
-  core.typed, Prismatic/schema.
-
-    (fn square    [x]    (let [x     (have integer? x)]   (* x x)))
-    (fn mult      [x y]  (let [[x y] (have integer? x y)] (* x y)))
-    (fn mult-many [& xs] (reduce * (have :! [:or integer? float?] :in xs)))"
-  {:arglists '([(:!) x] [(:!) pred (:in) x] [(:!) pred (:in) x & more-xs])}
-  [& args]
-  (let [hard?      (= (first args) :!)
-        elide?     (not (or hard? *assert*))
-        args       (if hard? (next args) args)
-        in?        (= (second args) :in)
-        args       (if in? (cons (first args) (nnext args)) args)
-        auto-pred? (= (count args) 1) ; Unique common case: (have ?x)
-        pred       (if auto-pred? 'taoensso.encore/nnil? (first args))
+(defmacro -invariant [assertion? truthy? line & sigs]
+  (let [bang?      (= (first sigs) :!) ; For back compatibility, undocumented
+        assertion? (and assertion? (not bang?))
+        elide?     (and assertion? (not *assert*))
+        sigs       (if bang? (next sigs) sigs)
+        in?        (= (second sigs) :in) ; (have pred :in xs1 xs2 ...)
+        sigs       (if in? (cons (first sigs) (nnext sigs)) sigs)
+        auto-pred? (= (count sigs) 1) ; Unique common case: (have ?x)
+        pred       (if auto-pred? 'taoensso.encore/nnil? (first sigs))
         [?x1 ?xs]  (if auto-pred?
-                     [(first args) nil]
-                     (if (nnext args) [nil (next args)] [(second args) nil]))
+                     [(first sigs) nil]
+                     (if (nnext sigs) [nil (next sigs)] [(second sigs) nil]))
         single-x?  (nil? ?xs)
-        h?         hard?]
+        map-fn     (if truthy? 'taoensso.encore/revery? 'clojure.core/mapv)]
 
     (if elide?
-      (if single-x? ?x1 (vec ?xs)) ; Nb compile-time vec for faster destructuring
+      (if single-x? ?x1 (vec ?xs))
 
       (if-not in?
 
         (if single-x?
-          (let [x ?x1] ; (have pred x) -> x
-            `(hcond ~h? ~(str *ns*) ~(:line (meta &form))
-               (delay ~x) '~x ~pred '~pred))
+          ;; (have pred x) -> x
+          `(-invariant1 ~assertion? ~truthy? ~line ~pred ~?x1)
 
-          (let [xs ?xs] ; (have pred x1 x2 ...) -> [x1 x2 ...]
-            (mapv (fn [x] `(hcond ~h? ~(str *ns*) ~(:line (meta &form))
-                            (delay ~x) '~x ~pred '~pred)) xs)))
+          ;; (have pred x1 x2 ...) -> [x1 x2 ...]
+          (mapv (fn [x] `(-invariant1 ~assertion? ~truthy? ~line ~pred ~x)) ?xs))
 
         (if single-x?
-          (let [xcoll ?x1 ; (have pred :in xcoll) -> xcoll
-                g (gensym "have-in__") ; Will (necessarily) lose exact form
-                ]
-            `(mapv (fn [~g] (hcond ~h? ~(str *ns*) ~(:line (meta &form))
-                             (delay ~g) '~g ~pred '~pred)) ~xcoll))
+          ;; (have  pred :in xs) -> xs
+          ;; (have? pred :in xs) -> bool
+          `(~map-fn
+             (fn [~'__in] ; Will (necessarily) lose exact form
+               (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in)) ~?x1)
 
-          (let [xcolls ?xs] ; (have pred :in xcoll1 xcoll2 ...) -> [xcoll1 ...]
-            (mapv (fn [xcoll]
-                    (let [g (gensym "have-in__")]
-                      `(mapv (fn [~g] (hcond ~h? ~(str *ns*) ~(:line (meta &form))
-                                       (delay ~g) '~g ~pred '~pred)) ~xcoll)))
-              xcolls)))))))
+          ;; (have  pred :in xs1 xs2 ...) -> [xs1   ...]
+          ;; (have? pred :in xs1 xs2 ...) -> [bool1 ...]
+          (mapv
+            (fn [xs]
+              `(~map-fn
+                 (fn [~'__in] (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in))
+                 ~xs))
+            ?xs))))))
 
-(defmacro have? ; For :pre/:post conds, etc.
-  "EXPERIMENTAL. Like `have` but returns true rather than input on success
-  (convenient for use in :pre/:post conds).
+(comment
+  (qb 10000
+    (have  string? :in ["foo" "bar" "baz"])
+    (have? string? :in ["foo" "bar" "baz"])))
 
-  **NB** Be cautious using `:!` tests in :pre/:post conds since :pre/:post conds
-  are themselves subject to `*assert*` val.
+(defmacro have
+  "EXPERIMENTAL. Takes a pred and one or more vals. Tests pred against each val,
+  trapping errors. If any pred test fails, throws a detailed assertion error.
+  Otherwise returns input val/vals for convenient inline-use/binding.
 
-    (fn square  [x]   {:pre [(have? integer? x)]}   (* x x))
-    (fn mult    [x y] {:pre [(have? integer? x y)]} (* x y))"
-  {:arglists '([(:!) x] [(:!) pred (:in) x] [(:!) pred (:in) x & more-xs])}
-  [& args] `(do (have ~@args) true))
+  Respects *assert* value so tests can be elided from production for zero
+  runtime costs.
+
+  Provides a small, simple, deeply flexible alternative to heavier tools like
+  core.typed, Prismatic/schema, etc.
+
+    ;; Will throw a detailed, helpful error message on invariant violation:
+    (fn my-fn [x] (str/trim (have string? x)))
+
+  See also `have?`, `have!`."
+  {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
+  [& sigs] `(-invariant :assertion nil ~(:line (meta &form)) ~@sigs))
+
+(defmacro have?
+  "Like `have` but returns `true` on successful tests. This can be handy for use
+  with :pre/:post conditions. Compare:
+    (fn my-fn [x] {:post [(have  nil? %)]} nil) ; {:post [nil]} FAILS
+    (fn my-fn [x] {:post [(have? nil? %)]} nil) ; {:post [true]} passes as intended"
+  {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
+  [& sigs] `(-invariant :assertion :truthy ~(:line (meta &form)) ~@sigs))
+
+(defmacro have!
+  "Like `have` but ignores *assert* value (so can never be elided). Useful for
+  important conditions in production (e.g. security checks)."
+  {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
+  [& sigs] `(-invariant nil nil ~(:line (meta &form)) ~@sigs))
 
 (comment
   (let [x 5]      (have    integer? x))
@@ -522,45 +570,54 @@
                 (do (println "eval2") "bar")
                 (do (println "eval3") 10))
   (have nil? false)
+  (have nil)
+  (have false)
   (have string? :in ["a" "b"])
-  (have string? :in (if true ["a" "b"] [1 2]))
+  (have string? :in (if true  ["a" "b"] [1 2]))
+  (have string? :in (if false ["a" "b"] [1 2]))
   (have string? :in (mapv str (range 10)))
   (have string? :in ["a" 1])
   (have string? :in ["a" "b"] ["a" "b"])
   (have string? :in ["a" "b"] ["a" "b" 1])
-  ((fn foo [x] {:pre [(have integer? x)]} (* x x)) "foo")
+  ((fn foo [x] {:pre [(have? integer? x)]} (* x x)) "foo")
   (macroexpand '(have a))
   (have? [:or nil? string?] "hello")
+  (macroexpand '(have? [:or nil? string?] "hello"))
   (have? [:set>= #{:a :b}]    [:a :b :c])
   (have? [:set<= [:a :b :c]] #{:a :b})
 
   ;; HotSpot is great with these:
   (qb 10000
+    (string? "a")
     (have? "a")
     (have string? "a" "b" "c")
     (have? [:or nil? string?] "a" "b" "c"))
-  ;; [5.59 26.48 45.82] ; Old macro form
-  ;; [3.31 13.48 36.22] ; New fn form
+  ;; [     5.59 26.48 45.82] ; 1st gen (macro form)
+  ;; [     3.31 13.48 36.22] ; 2nd gen (fn form)
+  ;; [0.82 1.75  7.57 27.05] ; 3rd gen (lean macro form)
   )
 
-(defn- try-pred [pred x]
-  #+clj  (try (pred x) (catch Throwable           _ false))
-  ;; NB Temp workaround for http://goo.gl/UW7773:
-  #+cljs (try (pred x) (catch js/Error #_:default _ false)))
+(defn- try-pred [pred x] (catch-errors* (pred x) _ false))
 
-(defn is "Experimental. Cheaper `have!` alt that provides less diagnostic info."
-  [pred x]
-  (if (try-pred pred x)
-    x
-    (throw (ex-info (str "`is` " (str pred) " failure against arg: " (pr-str x))
-             {:arg x :type (type x)}))))
+(defn is! "Experimental. Cheaper `have!` alt that provides less diagnostic info."
+  ([     x] (if x x (is! identity x))) ; Nb different to single-arg `have`
+  ([pred x]
+   (if (try-pred pred x) ; `try` perf impact is infinitesimal here
+     x
+     (throw (ex-info (str "`is!` " (str pred) " failure against arg: " (pr-str x))
+              {:arg x :arg-type (type x)})))))
+
+(comment (is! false))
 
 (defn when? "Experimental. For use with `if-let`s, `when-let`s, etc."
   [pred x] (when (try-pred pred x) x))
 
 (comment
-  (qb 100000 (have string? "foo") (is string? "foo"))
-  (when-let [x (when? pos? 37)] x))
+  (when-let [x (when? pos? 37)] x)
+  (qb 100000 ; [7.85 12.66 24.24]
+    (     string? "foo") ; Lower limit
+    (is!  string? "foo")
+    (have string? "foo")))
 
 (defmacro check-some
   "Returns first logical false/throwing expression (id/form), or nil"
@@ -2366,10 +2423,9 @@
 
 (def memoize-1 memoize1)
 
-(defmacro have-in  [a1 & an] `(have ~a1 :in ~@an))
-(defmacro have!?   [& args]  `(have?   :! ~@args))
-(defmacro have!    [& args]  `(have    :! ~@args))
-(defmacro have-in! [& args]  `(have-in :! ~@args))
+(defmacro have-in  "Deprecated" [s1 & sn] `(have ~s1 :in ~@sn))
+(defmacro have!?   "Deprecated" [& sigs]  `(have?   :! ~@sigs))
+(defmacro have-in! "Deprecated" [& sigs]  `(have-in :! ~@sigs))
 
 ;; Used by Sente <= v1.4.0-alpha2
 (def logging-level (atom :debug)) ; Just ignoring this now
