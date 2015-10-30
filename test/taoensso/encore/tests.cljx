@@ -15,7 +15,7 @@
    [clojure.test.check.properties :as tc-prop :include-macros true]
    [taoensso.encore :as enc :refer ()]))
 
-(comment (run-tests '[taoensso.encore.tests]))
+(comment (run-tests))
 
 #+cljs
 (do

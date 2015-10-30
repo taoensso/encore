@@ -1617,7 +1617,9 @@
     * Uses delays to prevent race conditions on writes.
     * Supports auto invalidation & gc with `ttl-ms` option.
     * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`.
-    * Supports cache size limit & gc with `cache-size` option."
+    * Supports cache size limit & gc with `cache-size` option.
+
+  Much faster than `clojure.core.memoize`."
 
   ;; De-raced, commands
   ([f]
@@ -2347,6 +2349,12 @@
   (merge-url-with-query-string "/?foo=bar" {:foo  nil})
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
+;;;; Testing utils
+
+;; TODO `deftest` with auto name prefixing
+;; TODO `expect` macro, utils to pave over differences in clojure.test,
+;; cljs.test (e.g. for `use-fixtures`)
+
 ;;;; DEPRECATED
 
 (def backport-run! run!*)
@@ -2385,9 +2393,6 @@
 (def parse-bool  as-?bool)
 (def parse-int   as-?int)
 (def parse-float as-?float)
-;; (defn as-bool  [x] (when x (have (as-?bool  x))))
-;; (defn as-int   [x] (when x (have (as-?int   x))))
-;; (defn as-float [x] (when x (have (as-?float x))))
 
 (def merge-deep-with nested-merge-with)
 (def merge-deep      nested-merge)
