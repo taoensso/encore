@@ -1437,27 +1437,35 @@
 
 (defn str-replace
   "Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
-                  http://dev.clojure.org/jira/browse/CLJS-911"
+                  http://dev.clojure.org/jira/browse/CLJS-911.
 
-  ;; TODO Seems there was a breaking API change in ClojureScript 1.7.145 to fix
-  ;; CLJS-911, Ref. https://goo.gl/bk5hcT. Will need to implement a
-  ;; back+forward compatible workaround here.
-  ;; Note that CLJS-911 still seems to be unresolved.
+  Note that ClojureScript 1.7.145 technically introduced a breaking \"fix\" for
+  CLJS-911 (Ref. https://goo.gl/bk5hcT) but it's a mess in an attempt to keep
+  some compatibility with the previous broken behaviour. The merged CLJS-911 fix
+  provides only inconsistent (single-match) and error-prone compatibility with
+  Clojure's `str/replace`. CLJS-794 is also still unresolved.
+
+  This util provides proper consistent Clojure/Script replace behaviour."
 
   [s match replacement]
   #+clj (str/replace s match replacement)
   #+cljs
-  (let [replacement (if-not (fn? replacement) replacement
-                      (fn [& args] (replacement (vec args))))]
-    (cond (string? match)
-      (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
-      ;; (.hasOwnProperty match "source") ; No! Ref. http://goo.gl/8hdqxb
-      (instance? js/RegExp match)
-      ;; (.replace s (js/RegExp. (.-source match) "g") replacement)
-      (let [flags (str "g" (when (.-ignoreCase match) "i")
-                           (when (.-multiline  match) "m"))]
-        (.replace s (js/RegExp. (.-source match) flags) replacement))
-      :else (throw (str "Invalid match arg: " match)))))
+  (cond
+    (string? match) ; string -> string replacement
+    (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
+    ;; (.hasOwnProperty match "source") ; No! Ref. http://goo.gl/8hdqxb
+
+    (instance? js/RegExp match) ; pattern -> string/fn replacement
+    (let [flags (str "g" (when (.-ignoreCase match) "i")
+                         (when (.-multiline  match) "m")) ; Fix CLJS-794
+          replacement ; Fix CLJS-911
+          (if (string? replacement)
+            replacement
+            ;; Note that the merged CLJS-911 fix actually tries to vary
+            ;; behaviour here based on the number of matches(!)
+            (fn [& args] (replacement (vec args))))]
+      (.replace s (js/RegExp. (.-source match) flags) replacement))
+    :else (throw (str "Invalid match arg: " match))))
 
 (defn substr
   "Gives a consistent, flexible, cross-platform substring API built on
