@@ -41,7 +41,7 @@
 ;;;; Version check
 
 (declare as-?int)
-(def  encore-version "Used for lib-consumer version assertions" [2 22 0])
+(def  encore-version "Used for lib-consumer version assertions" [2 23 0])
 (defn assert-min-encore-version [min-version]
   (let [[xc yc zc] encore-version
         [xm ym zm] (if (vector? min-version) min-version (re-seq #"\d+" (str min-version)))
