@@ -558,6 +558,21 @@
   {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
   [& sigs] `(-invariant nil nil ~(:line (meta &form)) ~@sigs))
 
+(defmacro have!?
+  "A cross between `have?` and `have!`. Not used often but can be handy for
+  semantic clarification and/or to improve multi-val performance when the return
+  vals aren't necessary.
+
+  **WARNING**: Resist the temptation to use these in :pre/:post conds (which are
+  themselves subject to *assert*)."
+  {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
+  [& sigs] `(-invariant :assertion :truthy ~(:line (meta &form)) ~@sigs))
+
+(comment
+  (qb 10000
+    (have!  string? :in ["a" "b" "c"])
+    (have!? string? :in ["a" "b" "c"])))
+
 (comment
   (let [x 5]      (have    integer? x))
   (let [x 5]      (have    string?  x))
@@ -2408,9 +2423,8 @@
 
 (def memoize-1 memoize1)
 
-(defmacro have-in  "Deprecated" [s1 & sn] `(have ~s1 :in ~@sn))
-(defmacro have!?   "Deprecated" [& sigs]  `(have?   :! ~@sigs))
-(defmacro have-in! "Deprecated" [& sigs]  `(have-in :! ~@sigs))
+(defmacro have-in  "Deprecated" [s1 & sn] `(have  ~s1 :in ~@sn))
+(defmacro have-in! "Deprecated" [s1 & sn] `(have! ~s1 :in ~@sn))
 
 ;; Used by Sente <= v1.4.0-alpha2
 (def logging-level (atom :debug)) ; Just ignoring this now
