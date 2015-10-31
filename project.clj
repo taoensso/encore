@@ -32,7 +32,7 @@
    :dev
    [:1.7 :test
     {:dependencies
-     [[org.clojure/clojurescript "1.7.48"]
+     [[org.clojure/clojurescript "1.7.145"]
       [org.clojure/core.async    "0.1.303.0-886421-alpha"]]
 
      :plugins
