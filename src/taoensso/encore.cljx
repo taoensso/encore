@@ -1822,14 +1822,6 @@
                  (fn [?cv]
                    (if (and ?cv (not fresh?)
                          (let [[_dv ^long udt] ?cv]
-                           (when-not udt ; TODO Temp debug
-                             (throw
-                               (ex-info "memoize* invariant violation"
-                                 {:?cv ?cv
-                                  :?cv-type (type ?cv)
-                                  :udt udt
-                                  :udt-type (type udt)
-                                  :state10 (into {} (take 10) @state_)})))
                            (< (- instant udt) ttl-ms)))
                      ?cv
                      [(delay (apply f args)) instant tick 1]))))))]
@@ -1847,31 +1839,16 @@
            (gc-fn)
            (let [fresh?     (kw-identical? arg1 :mem/fresh)
                  args       (if fresh? argn args)
-                 ^long tick (:tick @state_) ; Accuracy/sync irrelevant
+                 ^long tick (:tick @state_) ; Atomic sync unimportant
                  [dv]       (cv-fn args fresh? tick)]
-
-             (when-not tick ; TODO Temp debug
-               (throw
-                 (ex-info "memoize* invariant violation"
-                   {:tick tick
-                    :tick-type (type tick)
-                    :state10 (into {} (take 10) @state_)})))
 
              ;; We always adjust counters, even on reads:
              (swap! state_
                (fn [m]
-                 (when-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
-
-                   (when-not tick-lfu ; TODO Temp debug
-                     (throw
-                       (ex-info "memoize* invariant violation"
-                         {:tick-lfu tick-lfu
-                          :tick-lfu-type (type tick-lfu)
-                          :state10 (into {} (take 10) m)})))
-
-                   (merge m
-                     {:tick (inc tick)
-                      args  [dv ?udt tick (inc tick-lfu)]}))))
+                 (if-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
+                   (merge m {:tick (inc tick)
+                             args  [dv ?udt tick (inc tick-lfu)]})
+                   (merge m {:tick (inc tick)}))))
              @dv)))))))
 
 (comment
