@@ -19,7 +19,7 @@
   :plugins
   [[lein-pprint  "1.1.2"]
    [lein-ancient "0.6.7"]
-   [codox        "0.8.15"]]
+   [lein-codox   "0.9.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -72,12 +72,14 @@
   :auto-clean false
   :prep-tasks [["cljx" "once"] "javac" "compile"]
 
-  :codox {:language :clojure ; [:clojure :clojurescript] ; No support?
-          :sources  ["target/classes"]
-          :src-linenum-anchor-prefix "L"
-          :src-dir-uri "http://github.com/ptaoussanis/encore/blob/master/src/"
-          :src-uri-mapping {#"target/classes"
-                            #(.replaceFirst (str %) "(.cljs$|.clj$)" ".cljx")}}
+  :codox
+  {:language :clojure ; [:clojure :clojurescript] ; No support?
+   :source-paths ["target/classes"]
+   :source-uri
+   {#"target/classes"
+    "https://github.com/ptaoussanis/encore/blob/master/src/{classpath}x#L{line}"
+    #".*"
+    "https://github.com/ptaoussanis/encore/blob/master/{filepath}#L{line}"}}
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
