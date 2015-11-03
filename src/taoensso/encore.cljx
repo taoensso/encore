@@ -14,8 +14,9 @@
   #+cljs (:require [clojure.string      :as str]
                    [clojure.set         :as set]
                    ;; [cljs.core.async  :as async]
-                   [cljs.reader         :as edn]
-                   ;; [cljs.tools.reader.edn :as edn] ; TODO Maybe later?
+                   [cljs.reader]
+                   ;; [cljs.reader      :as edn]
+                   [cljs.tools.reader.edn :as edn]
                    ;;[goog.crypt.base64 :as base64]
                    [goog.object         :as gobj]
                    [goog.string         :as gstr]
@@ -55,92 +56,7 @@
 
 (comment (assert-min-encore-version 3.10))
 
-;;;; Core
-
-;; [cljs.tools.reader.edn :as edn]
-;; (defn read-edn
-;;   ([s]           (edn/read-string s))
-;;   ([opts reader] (edn/read opts reader)))
-
-;;; clojure.core
-;; *data-readers* {sym parser-var} dynamic, init'd from data_readers.clj
-(read [] [stream] [opts stream]) ; incl. :read-cond, uses data-readers?
-(read-string [s] [opts s])
-
-;;; clojure.edn
-(read [] [stream] [opts stream]) ; uses *data-readers* or :readers
-(read-string [s] [opts s])
-
-;; (clojure.core/read-string nil) ; Ex
-;; (clojure.core/read-string "")  ; Ex
-;; (clojure.core/read-string [])  ; Ex
-;; (clojure.edn/read-string nil)  ; nil
-;; (clojure.edn/read-string "")   ; nil
-;; (clojure.edn/read-string [])   ; Ex
-;; (clojure.tools.reader.edn/read-string nil) ; nil
-;; (clojure.tools.reader.edn/read-string "")  ; nil
-;; (clojure.tools.reader.edn/read-string [])  ; nil
-;; (cljs.tools.reader.edn/read-string nil) ; nil
-;; (cljs.tools.reader.edn/read-string "") ; nil
-;; (cljs.tools.reader.edn/read-string []) ; nil?
-;; (cljs.reader/read-string nil) ; Ex
-;; (cljs.reader/read-string "") ; ?
-;; (cljs.reader/read-string ) ; Ex
-
-
-;;; clojure.tools.reader.edn
-(clojure.tools.reader.edn)
-
-(read [] [reader] [opts reader]) ; ignores *data-readers*, uses :readers
-(read-string [s] [opts s])
-
-;;; cljs.tools.reader
-(read [reader] [opts reader]) ; ignores *data-readers*, uses :readers
-(read-string [s] [opts s])
-
-;;; cljs.reader
-
-;; Also, Ref. http://stackoverflow.com/a/25712675
-(read [reader _ _ _]) ; No [opts reader] API
-(read-string [s]) ; No opts API
-
-
-
-
-
-(defn read-edn
-  
-  
-
-  
-  #+clj  ([          s] (edn/read-string s))
-  #+clj  ([opts reader] (edn/read opts   reader))
-
-  ;; 
-
-  ;; Unfortunate that cljs doesn't have an [opts s] arity:
-  #+cljs ([     s] (cljs.reader/read-string              s)))
-
-(defn read-edn
-  ([          s] (edn/read-string s))
-  ([opts reader] (edn/read opts   reader))
-
-  ;; 
-
-  ;; Unfortunate that cljs doesn't have an [opts s] arity:
-  #+cljs ([     s] (cljs.reader/read-string              s)))
-
-
-
-(defn  pr-edn
-  ([     x] (pr-edn nil x))
-  ([opts x]
-   #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
-   #+clj
-   (let [sw (java.io.StringWriter.)]
-     (binding [*print-level* nil, *print-length* nil, *out* sw]
-       (pr x) ; Avoid `pr-str`'s `apply` call
-       (str sw)))))
+;;;; Core macros
 
 (defmacro compile-if
   "Evaluates `test`. If it doesn't error and returns logical true, expands to
@@ -261,6 +177,58 @@
 (defmacro do-nil   [& body] `(do ~@body nil))
 (defmacro do-false [& body] `(do ~@body false))
 (defmacro do-true  [& body] `(do ~@body true))
+
+;;;; Edn
+
+(declare map-keys)
+
+(defn read-edn
+  "Experimental. Attempts to pave over differences in:
+    `clojure.edn/read-string`, `clojure.tools.edn/read-string`,
+    `cljs.reader/read-string`, `cljs.tools.reader/read-string`.
+   The cljs.reader reader in particular can be a pain."
+
+  ([     s] (read-edn nil s))
+  ([opts s]
+   ;; First normalize behaviour for unexpected inputs:
+   (if (or (nil? s) (identical? s ""))
+     nil
+     (if-not (string? s)
+       (throw (ex-info "`read-edn` attempt against non-nil, non-string arg"
+                {:arg s :type (type s)}))
+
+       (let [readers (get opts :readers ::dynamic)
+             default (get opts :default ::dynamic)
+
+             ;; Nb we ignore as implementation detail:
+             ;;  *.tools.reader/*data-readers*,
+             ;;  *.tools.reader/default-data-reader-fn*
+
+             readers (if-not (identical? readers ::dynamic)
+                       readers
+                       #+clj  clojure.core/*data-readers*
+                       #+cljs (map-keys symbol @cljs.reader/*tag-table*))
+
+             default (if-not (identical? default ::dynamic)
+                       default
+                       #+clj  clojure.core/*default-data-reader-fn*
+                       #+cljs @cljs.reader/*default-data-reader-fn*)
+
+             opts    (merge opts {:readers readers
+                                  :default default})]
+
+         #+clj  (clojure.tools.reader.edn/read-string opts s)
+         #+cljs (cljs.tools.reader.edn/read-string    opts s))))))
+
+(defn  pr-edn
+  ([     x] (pr-edn nil x))
+  ([opts x] ; Opts currently unused
+   #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
+   #+clj
+   (let [sw (java.io.StringWriter.)]
+     (binding [*print-level* nil, *print-length* nil, *out* sw]
+       (pr x) ; Avoid `pr-str`'s `apply` call
+       (str sw)))))
 
 ;;;; Types
 
@@ -406,7 +374,7 @@
 
 (defn- ?as-throw [as-name x]
   (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
-           {:x x :type (type x)})))
+           {:arg x :type (type x)})))
 
 (defn as-nblank [x] (or (as-?nblank x) (?as-throw :nblank x)))
 (defn as-kw     [x] (or (as-?kw     x) (?as-throw :kw     x)))
