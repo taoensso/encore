@@ -14,8 +14,8 @@
   #+cljs (:require [clojure.string      :as str]
                    [clojure.set         :as set]
                    ;; [cljs.core.async  :as async]
-                   ;; [cljs.reader      :as edn]
-                   [cljs.tools.reader.edn :as edn]
+                   [cljs.reader         :as edn]
+                   ;; [cljs.tools.reader.edn :as edn] ; TODO Maybe later?
                    ;;[goog.crypt.base64 :as base64]
                    [goog.object         :as gobj]
                    [goog.string         :as gstr]
@@ -57,9 +57,80 @@
 
 ;;;; Core
 
+;; [cljs.tools.reader.edn :as edn]
+;; (defn read-edn
+;;   ([s]           (edn/read-string s))
+;;   ([opts reader] (edn/read opts reader)))
+
+;;; clojure.core
+;; *data-readers* {sym parser-var} dynamic, init'd from data_readers.clj
+(read [] [stream] [opts stream]) ; incl. :read-cond, uses data-readers?
+(read-string [s] [opts s])
+
+;;; clojure.edn
+(read [] [stream] [opts stream]) ; uses *data-readers* or :readers
+(read-string [s] [opts s])
+
+;; (clojure.core/read-string nil) ; Ex
+;; (clojure.core/read-string "")  ; Ex
+;; (clojure.core/read-string [])  ; Ex
+;; (clojure.edn/read-string nil)  ; nil
+;; (clojure.edn/read-string "")   ; nil
+;; (clojure.edn/read-string [])   ; Ex
+;; (clojure.tools.reader.edn/read-string nil) ; nil
+;; (clojure.tools.reader.edn/read-string "")  ; nil
+;; (clojure.tools.reader.edn/read-string [])  ; nil
+;; (cljs.tools.reader.edn/read-string nil) ; nil
+;; (cljs.tools.reader.edn/read-string "") ; nil
+;; (cljs.tools.reader.edn/read-string []) ; nil?
+;; (cljs.reader/read-string nil) ; Ex
+;; (cljs.reader/read-string "") ; ?
+;; (cljs.reader/read-string ) ; Ex
+
+
+;;; clojure.tools.reader.edn
+(clojure.tools.reader.edn)
+
+(read [] [reader] [opts reader]) ; ignores *data-readers*, uses :readers
+(read-string [s] [opts s])
+
+;;; cljs.tools.reader
+(read [reader] [opts reader]) ; ignores *data-readers*, uses :readers
+(read-string [s] [opts s])
+
+;;; cljs.reader
+
+;; Also, Ref. http://stackoverflow.com/a/25712675
+(read [reader _ _ _]) ; No [opts reader] API
+(read-string [s]) ; No opts API
+
+
+
+
+
 (defn read-edn
-  ([s]           (edn/read-string s))
-  ([opts reader] (edn/read opts reader)))
+  
+  
+
+  
+  #+clj  ([          s] (edn/read-string s))
+  #+clj  ([opts reader] (edn/read opts   reader))
+
+  ;; 
+
+  ;; Unfortunate that cljs doesn't have an [opts s] arity:
+  #+cljs ([     s] (cljs.reader/read-string              s)))
+
+(defn read-edn
+  ([          s] (edn/read-string s))
+  ([opts reader] (edn/read opts   reader))
+
+  ;; 
+
+  ;; Unfortunate that cljs doesn't have an [opts s] arity:
+  #+cljs ([     s] (cljs.reader/read-string              s)))
+
+
 
 (defn  pr-edn
   ([     x] (pr-edn nil x))
