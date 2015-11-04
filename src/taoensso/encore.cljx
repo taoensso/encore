@@ -2052,6 +2052,52 @@
   (def compute (rate-limit [[3 5000 :5s]] (fn [] "Compute!")))
   (compute))
 
+;;;; Async
+
+#+clj
+(defn future-pool
+  "Experimental. Returns a fixed-size future pool:
+    (fn
+      [f] - Blocks to acquire a future, then executes (f) on that future.
+      []  - Blocks to acquire all futures, then immediately releases them.
+            Useful for blocking till all outstanding work completes.
+  Timeout variants are also provided."
+  [^long n]
+  (let [s    (java.util.concurrent.Semaphore. n)
+        msecs java.util.concurrent.TimeUnit/MILLISECONDS
+        fp-call
+        (fn [f]
+          (when-not (fn? f) (.release s) (throw (ex-info "Not an ifn" {:arg f})))
+          (future
+            (try
+              (f)
+              (catch Throwable _ nil)
+              (finally (.release s))))
+          true)]
+
+    (fn fp
+      ([ ] (.acquire s n) (.release s n) true)
+      ([f] (.acquire s) (fp-call f))
+
+      ([^long timeout-ms timeout-val]
+       (if (.tryAcquire s n timeout-ms msecs)
+         (do (.release s n) true)
+         timeout-val))
+
+      ([^long timeout-ms timeout-val f]
+       (if (.tryAcquire s timeout-ms msecs)
+         (fp-call f)
+         timeout-val)))))
+
+(comment
+  (time
+    (let [fp (future-pool 2)]
+      [(fp (fn [] (Thread/sleep 2000) (println "2000")))
+       (fp (fn [] (Thread/sleep 500)  (println "500")))
+       (fp 200 "timeout" (fn [] (Thread/sleep 900) (println "900")))
+       (fp (fn [] (Thread/sleep 3000) (println "3000")))
+       (fp)])))
+
 ;;;; Benchmarking
 
 #+clj (defn nano-time ^long [] (System/nanoTime))
