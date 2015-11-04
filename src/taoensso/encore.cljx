@@ -207,6 +207,7 @@
              readers (if-not (identical? readers ::dynamic)
                        readers
                        #+clj  clojure.core/*data-readers*
+                       ;; Unfortunate, but faster than gc caching in most cases:
                        #+cljs (map-keys symbol @cljs.reader/*tag-table*))
 
              default (if-not (identical? default ::dynamic)
