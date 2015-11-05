@@ -1612,8 +1612,8 @@
   ([]
    #+clj (str (java.util.UUID/randomUUID))
    #+cljs
-   (let [hex  (fn [] (.toString (rand-int 15) 16))
-         rhex (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 14))) 16)]
+   (let [hex  (fn [] (.toString (rand-int 16) 16))
+         rhex (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 16))) 16)]
      (str (hex) (hex) (hex) (hex)
           (hex) (hex) (hex) (hex) "-"
           (hex) (hex) (hex) (hex) "-"
