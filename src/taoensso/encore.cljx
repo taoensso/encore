@@ -839,14 +839,25 @@
 (def ^:private simple-date-format*
   "Returns a SimpleDateFormat ThreadLocal proxy"
   (memoize
-   (fn [^String pattern & [{:keys [^Locale locale ^TimeZone timezone]}]]
-     (thread-local-proxy
-      (let [^SimpleDateFormat sdformat
-            (if locale
-              (SimpleDateFormat. pattern locale)
-              (SimpleDateFormat. pattern))]
-        (when timezone (.setTimeZone sdformat timezone))
-        sdformat)))))
+    (fn [^String pattern & [{:keys [locale timezone]}]]
+      (let [^Locale locale
+            (case locale
+              :jvm-default (Locale/getDefault)
+              locale)
+
+            ^TimeZone timezone
+            (case timezone
+              :jvm-default (TimeZone/getDefault)
+              :utc         (TimeZone/getTimeZone "UTC")
+              timezone)]
+
+        (thread-local-proxy
+          (let [^SimpleDateFormat sdformat
+                (if locale
+                  (SimpleDateFormat. pattern locale)
+                  (SimpleDateFormat. pattern))]
+            (when timezone (.setTimeZone sdformat timezone))
+            sdformat))))))
 
 #+clj
 (defn simple-date-format
@@ -861,7 +872,12 @@
   restrictive SimpleDateFormat)."
   ;; Note fully qualified type hint!
   ^java.text.SimpleDateFormat [pattern & [{:keys [locale timezone] :as opts}]]
-  (.get ^ThreadLocal (simple-date-format* pattern opts)))
+  (let [pattern
+        (case pattern
+          :iso8601 "yyyy-MM-dd HH:mm:ss.SSSZ"
+          :rss2 "EEE, dd MMM yyyy HH:mm:ss z"
+          pattern)]
+    (.get ^ThreadLocal (simple-date-format* pattern opts))))
 
 (comment (qb 10000 (.format (simple-date-format "yyyy-MMM-dd") (Date.))))
 
