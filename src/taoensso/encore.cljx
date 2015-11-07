@@ -180,7 +180,7 @@
 
 ;;;; Edn
 
-(declare map-keys)
+(declare map-keys kw-identical?)
 
 (defn read-edn
   "Experimental. Attempts to pave over differences in:
@@ -204,13 +204,13 @@
              ;;  *.tools.reader/*data-readers*,
              ;;  *.tools.reader/default-data-reader-fn*
 
-             readers (if-not (identical? readers ::dynamic)
+             readers (if-not (kw-identical? readers ::dynamic)
                        readers
                        #+clj  clojure.core/*data-readers*
                        ;; Unfortunate, but faster than gc caching in most cases:
                        #+cljs (map-keys symbol @cljs.reader/*tag-table*))
 
-             default (if-not (identical? default ::dynamic)
+             default (if-not (kw-identical? default ::dynamic)
                        default
                        #+clj  clojure.core/*default-data-reader-fn*
                        #+cljs @cljs.reader/*default-data-reader-fn*)
