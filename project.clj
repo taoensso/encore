@@ -27,18 +27,18 @@
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
-   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-beta1"]]}
-   :test {:dependencies [[org.clojure/test.check "0.8.2"]]}
+   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-RC2"]]}
+   :test {:dependencies [[org.clojure/test.check "0.9.0"]]}
    :dev
    [:1.7 :test
     {:dependencies
      [[org.clojure/clojurescript "1.7.145"]
-      [org.clojure/core.async    "0.2.371"]]
+      [org.clojure/core.async    "0.2.374"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
       [com.keminglabs/cljx "0.6.0"]
-      [lein-cljsbuild      "1.0.5"]]}]}
+      [lein-cljsbuild      "1.1.1"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
 
