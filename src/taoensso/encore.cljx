@@ -2177,7 +2177,9 @@
                                 (fn [] (future (dotimes [_ nlaps-per-thread] (f)))))]
                   (mapv deref futures)))))]
       (if as-ns? nanosecs (round* (/ nanosecs 1e6))))
-    (catch Throwable t (format "DNF: %s" (.getMessage t)))))
+    (catch Throwable t
+      (println (str "Bench failure: " (.getMessage t)))
+      -1)))
 
 (defmacro bench [nlaps bench*-opts & body]
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
