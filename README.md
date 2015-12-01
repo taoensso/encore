@@ -1,11 +1,11 @@
-**[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing)
+**[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing)
 
-> This is a library intended for my own use, and **for advanced users** who are comfortable reading the source code to see what's available + how to use it.
+# Clojure/Script cross-platform core utils library
 
-# Cross-platform Clojure utils library
+> **Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it - **Peter Taoussanis**
 
-  * See the [source][] to see what's available (no docs on this one, sorry).
-  * Used as a shared support library for the [taoensso Clojure libs][].
+  * See the [source][] to see what's available (few docs on this one, sorry)
+  * Used by all [my other Clojure libs][]
 
 ## Contact & contributing
 
@@ -30,10 +30,8 @@ Copyright &copy; 2012-2015 Peter Taoussanis. Distributed under the [Eclipse Publ
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
 [Leiningen]: http://leiningen.org/
 [Cider]: https://github.com/clojure-emacs/cider
-[CDS]: http://clojure-doc.org/
-[ClojureWerkz]: http://clojurewerkz.org/
 [Eclipse Public License]: https://raw2.github.com/ptaoussanis/encore/master/LICENSE
 
 [CHANGELOG]: https://github.com/ptaoussanis/encore/commits/master
-[taoensso Clojure libs]: https://www.taoensso.com/clojure
+[my other Clojure libs]: https://www.taoensso.com/clojure
 [source]: https://github.com/ptaoussanis/encore/blob/master/src/taoensso/encore.cljx
