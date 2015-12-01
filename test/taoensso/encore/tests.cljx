@@ -3,16 +3,16 @@
   (:require
    [clojure.test :as test :refer (is are deftest run-tests)]
    [clojure.test.check            :as tc]
-   [clojure.test.check.generators :as tc-gen]
-   [clojure.test.check.properties :as tc-prop]
+   [clojure.test.check.generators :as tc-gens]
+   [clojure.test.check.properties :as tc-props]
    [taoensso.encore :as enc :refer ()])
 
   #+cljs
   (:require
    [cljs.test :as test :refer-macros (is are deftest run-tests)]
    [clojure.test.check            :as tc]
-   [clojure.test.check.generators :as tc-gen]
-   [clojure.test.check.properties :as tc-prop :include-macros true]
+   [clojure.test.check.generators :as tc-gens]
+   [clojure.test.check.properties :as tc-props :include-macros true]
    [taoensso.encore :as enc :refer ()]))
 
 (comment (run-tests))

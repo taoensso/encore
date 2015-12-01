@@ -186,7 +186,7 @@
   "Experimental. Attempts to pave over differences in:
     `clojure.edn/read-string`, `clojure.tools.edn/read-string`,
     `cljs.reader/read-string`, `cljs.tools.reader/read-string`.
-   The cljs.reader reader in particular can be a pain."
+   `cljs.reader` in particular can be a bit of a pain."
 
   ([     s] (read-edn nil s))
   ([opts s]
@@ -200,15 +200,19 @@
        (let [readers (get opts :readers ::dynamic)
              default (get opts :default ::dynamic)
 
-             ;; Nb we ignore as implementation detail:
+             ;; Nb we ignore as implementation[1] detail:
              ;;  *.tools.reader/*data-readers*,
              ;;  *.tools.reader/default-data-reader-fn*
+             ;;
+             ;; [1] Lib consumer doesn't care that we've standardized to using
+             ;;     tools.reader under the covers
 
-             readers (if-not (kw-identical? readers ::dynamic)
-                       readers
-                       #+clj  clojure.core/*data-readers*
-                       ;; Unfortunate, but faster than gc caching in most cases:
-                       #+cljs (map-keys symbol @cljs.reader/*tag-table*))
+             readers
+             (if-not (kw-identical? readers ::dynamic)
+               readers
+               #+clj  clojure.core/*data-readers*
+               ;; Unfortunate (slow), but faster than gc caching in most cases:
+               #+cljs (map-keys symbol @cljs.reader/*tag-table*))
 
              default (if-not (kw-identical? default ::dynamic)
                        default
@@ -222,8 +226,8 @@
          #+cljs (cljs.tools.reader.edn/read-string    opts s))))))
 
 (defn  pr-edn
-  ([     x] (pr-edn nil x))
-  ([opts x] ; Opts currently unused
+  ([      x] (pr-edn nil x))
+  ([_opts x] ; Opts currently unused
    #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
    #+clj
    (let [sw (java.io.StringWriter.)]
