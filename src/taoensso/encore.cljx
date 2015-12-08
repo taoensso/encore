@@ -500,22 +500,32 @@
         form        (str (list pred x)) ; Better expansion gzipping
         pred*       (if (vector? pred) (list 'taoensso.encore/-invar-pred pred) pred)
         pass-result (if truthy? true '__x)]
-    ;; `(if-cljs` ; Could expand differently to trade perf for expansion size
-    `(let [~'__x ; ~x ; Faster, smaller expansion, but less protection
-           (catch-errors* ~x ~'t
-             (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
-               -invar-undefined-val ~'t))]
-       (catch-errors*
-         (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-         ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t)))))
+
+    (if (list? x) ; x is a form; might throw on evaluation
+      `(let [~'__x
+             (catch-errors* ~x ~'t
+               (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
+                 -invar-undefined-val ~'t))]
+
+         (catch-errors*
+           (if (~pred* ~'__x) ~pass-result (-invar-violation!))
+           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t)))
+
+      ;; x is pre-evaluated (common case); no need to wrap for possible throws
+      `(let [~'__x ~x]
+         (catch-errors*
+           (if (~pred* ~'__x) ~pass-result (-invar-violation!))
+           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t))))))
 
 (comment
   (macroexpand              '(-invariant1 true false 1 #(string? %) "foo"))
   (macroexpand              '(-invariant1 true false 1 string? "foo"))
   (macroexpand              '(-invariant1 true false 1 [:or string?] "foo"))
-  ;; About 3-4x the cost of the absolute cheapest possible pred check; most of
-  ;; the cost is incurred by `try` blocks:
-  (qb 100000 (string? "foo") (-invariant1 true false 1 string? "foo"))
+  (qb 100000
+    (string? "foo")
+    (-invariant1 true false 1 string? "foo") ; ~1.2x cheapest possible pred cost
+    (-invariant1 true false 1 string? (str "foo" "bar")) ; ~3.5x ''
+    )
 
   (-invariant1 false false 1 integer? "foo")   ; Pred failure example
   (-invariant1 false false 1 zero?    "foo")   ; Pred error example
