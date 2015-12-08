@@ -1706,6 +1706,8 @@
 (comment (slurp-file-resource "log4j.properties"))
 
 ;;;; Memoization
+;; TODO Further ConcurrentHashMap optimizations? Remaining cases would be a lot
+;; of code for relatively little benefit.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn gc-now? [] (<= ^double (rand) gc-rate))
@@ -1722,24 +1724,39 @@
         (recur)))))
 
 (defn memoize_
-  "Like `clojure.core/memoize` but uses delays to avoid write races"
+  "Like `clojure.core/memoize` but faster, uses delays to avoid write races"
   [f]
+  #+cljs
   (let [cache_ (atom {})]
     (fn [& args]
       @(or (get @cache_ args)
-           (swap-val! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))))
+           (swap-val! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args))))))))
+
+  #+clj ; Minor extra optimization possible here using ConcurrentHashMap
+  (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
+    (fn [& args]
+      @(or (.get cache_ args)
+           (let [dv (delay (apply f args))] (or (.putIfAbsent cache_ args dv) dv))))))
 
 (defn a0-memoize_ "Fastest possible 0-arg `memoize_`" [f]
   (let [cache_ (atom nil)]
     (fn [] @(or @cache_ (swap! cache_ (fn [?dv] (if ?dv ?dv (delay (f)))))))))
 
 (defn a1-memoize_ "Fastest possible 0/1-arg `memoize_`" [f]
+  #+cljs
   (let [cache_ (atom {})]
     (fn
       ([ ] @(or (get @cache_ sentinel)
                 (swap-val! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
       ([x] @(or (get @cache_ x)
-                (swap-val! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x))))))))))
+                (swap-val! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))))
+  #+clj
+  (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
+    (fn
+      ([ ] @(or (.get cache_ sentinel)
+                (let [dv (delay (f))] (or (.putIfAbsent cache_ sentinel dv) dv))))
+      ([x] @(or (.get cache_ x)
+                (let [dv (delay (f x))] (or (.putIfAbsent cache_ x dv) dv)))))))
 
 (defn memoize1
   "Great for Reactjs render op caching on mobile devices, etc."
