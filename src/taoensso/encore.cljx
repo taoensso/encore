@@ -1706,8 +1706,6 @@
 (comment (slurp-file-resource "log4j.properties"))
 
 ;;;; Memoization
-;; TODO Further ConcurrentHashMap optimizations? Remaining cases would be a lot
-;; of code for relatively little benefit.
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn gc-now? [] (<= ^double (rand) gc-rate))
