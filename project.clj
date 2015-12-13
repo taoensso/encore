@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "2.27.0"
+(defproject com.taoensso/encore "2.28.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure/Script cross-platform core utils library"
   :url "https://github.com/ptaoussanis/encore"
@@ -27,10 +27,10 @@
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
-   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-RC2"]]}
+   :1.8  {:dependencies [[org.clojure/clojure "1.8.0-RC3"]]}
    :test {:dependencies [[org.clojure/test.check "0.9.0"]]}
    :dev
-   [:1.7 :test
+   [:1.8 :test
     {:dependencies
      [[org.clojure/clojurescript "1.7.145"]
       [org.clojure/core.async    "0.2.374"]]
@@ -76,10 +76,8 @@
   {:language :clojure ; [:clojure :clojurescript] ; No support?
    :source-paths ["target/classes"]
    :source-uri
-   {#"target/classes"
-    "https://github.com/ptaoussanis/encore/blob/master/src/{classpath}x#L{line}"
-    #".*"
-    "https://github.com/ptaoussanis/encore/blob/master/{filepath}#L{line}"}}
+   {#"target/classes" "https://github.com/ptaoussanis/encore/blob/master/src/{classpath}x#L{line}"
+    #".*"             "https://github.com/ptaoussanis/encore/blob/master/{filepath}#L{line}"}}
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
@@ -90,5 +88,4 @@
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
 
-  :repositories {"sonatype-oss-public"
-                 "https://oss.sonatype.org/content/groups/public/"})
+  :repositories {"sonatype-oss-public" "https://oss.sonatype.org/content/groups/public/"})
