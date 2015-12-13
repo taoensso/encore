@@ -402,11 +402,13 @@
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
 
+(declare rsome every)
+
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
 (defn ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
 (defn ks>=     [ks m] (set/superset? (set (keys m)) (set* ks)))
-(defn ks-nnil? [ks m] (every? #(nnil? (get m %)) ks))
+(defn ks-nnil? [ks m] (every #(nnil? (get m %)) ks))
 
 (comment
   (ks=      {:a :A :b :B  :c :C}  #{:a :b})
@@ -416,8 +418,6 @@
   (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
 
 ;;;; Invariants (experimental)
-
-(declare rsome every)
 
 (defn- non-throwing [pred] (fn [x] (catch-errors* (pred x) _ nil)))
 (defn -invar-pred [pred-form]
@@ -943,11 +943,14 @@
 (defn rsome "Faster `some` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
-(defn every "Faster `every?` (based on `reduce`) that returns input coll or nil"
+(defn every
+  "Faster `every?` (based on `reduce`) that returns input coll instead of `true`"
   [pred coll]
-  (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll))
+  (if (nil? coll)
+    [] ; Match (every? even? nil) = (every? even? []) => true
+    (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll)))
 
-(comment [(every? even? []) (every even? [])])
+(comment [(every? even? []) (every  even? [])])
 
 ;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
 (defn update-in*
