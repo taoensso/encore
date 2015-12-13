@@ -402,13 +402,13 @@
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
 
-(declare rsome every)
+(declare rsome revery?)
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
 (defn ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
 (defn ks>=     [ks m] (set/superset? (set (keys m)) (set* ks)))
-(defn ks-nnil? [ks m] (every #(nnil? (get m %)) ks))
+(defn ks-nnil? [ks m] (revery?     #(nnil? (get m %))     ks))
 
 (comment
   (ks=      {:a :A :b :B  :c :C}  #{:a :b})
@@ -437,7 +437,7 @@
         ;; complement/none-of:
         :not (fn [x] (and (if-not p1 true (not ((-invar-pred p1) x)))
                          (if-not p2 true (not ((-invar-pred p2) x)))
-                         (every         #(not ((-invar-pred  %) x)) more)))
+                         (revery?       #(not ((-invar-pred  %) x)) more)))
 
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (-invar-pred p1)) x))
@@ -447,7 +447,7 @@
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((-invar-pred p1) x))
                          (if-not p2 true ((-invar-pred p2) x))
-                         (every         #((-invar-pred  %) x) more)))))))
+                         (revery?       #((-invar-pred  %) x) more)))))))
 
 (comment
   ((-invar-pred [:or nil? string?]) "foo")
@@ -545,7 +545,7 @@
                      [(first sigs) nil]
                      (if (nnext sigs) [nil (next sigs)] [(second sigs) nil]))
         single-x?  (nil? ?xs)
-        map-fn     (if truthy? 'taoensso.encore/every 'clojure.core/mapv)]
+        map-fn     (if truthy? 'taoensso.encore/revery? 'clojure.core/mapv)]
 
     (if elide?
       (if single-x? ?x1 (vec ?xs))
@@ -943,12 +943,15 @@
 (defn rsome "Faster `some` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
-(defn every
-  "Faster `every?` (based on `reduce`) that returns input coll instead of `true`"
+(defn revery? "Faster `every?` based on `reduce`"
   [pred coll]
-  (if (nil? coll)
-    [] ; Match (every? even? nil) = (every? even? []) => true
-    (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll)))
+  (reduce (fn [acc in] (if (pred in) true (reduced nil))) true coll))
+
+;; Experimental
+;; (defn every [pred coll]
+;;   (if (nil? coll)
+;;     [] ; Match (every? even? nil) = (every? even? []) => true
+;;     (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll)))
 
 (comment [(every? even? []) (every  even? [])])
 
@@ -2553,7 +2556,6 @@
 
 ;;;; DEPRECATED
 
-(def revery? every)
 (def backport-run! run!*)
 (def fq-name qname) ; Lots of consumers
 (def memoize-1 memoize1)
