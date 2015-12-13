@@ -417,7 +417,7 @@
 
 ;;;; Invariants (experimental)
 
-(declare rsome revery?)
+(declare rsome every)
 
 (defn- non-throwing [pred] (fn [x] (catch-errors* (pred x) _ nil)))
 (defn -invar-pred [pred-form]
@@ -437,7 +437,7 @@
         ;; complement/none-of:
         :not (fn [x] (and (if-not p1 true (not ((-invar-pred p1) x)))
                          (if-not p2 true (not ((-invar-pred p2) x)))
-                         (revery?       #(not ((-invar-pred  %) x)) more)))
+                         (every         #(not ((-invar-pred  %) x)) more)))
 
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (-invar-pred p1)) x))
@@ -447,7 +447,7 @@
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((-invar-pred p1) x))
                          (if-not p2 true ((-invar-pred p2) x))
-                         (revery?       #((-invar-pred  %) x) more)))))))
+                         (every         #((-invar-pred  %) x) more)))))))
 
 (comment
   ((-invar-pred [:or nil? string?]) "foo")
@@ -545,7 +545,7 @@
                      [(first sigs) nil]
                      (if (nnext sigs) [nil (next sigs)] [(second sigs) nil]))
         single-x?  (nil? ?xs)
-        map-fn     (if truthy? 'taoensso.encore/revery? 'clojure.core/mapv)]
+        map-fn     (if truthy? 'taoensso.encore/every 'clojure.core/mapv)]
 
     (if elide?
       (if single-x? ?x1 (vec ?xs))
@@ -943,8 +943,11 @@
 (defn rsome "Faster `some` based on `reduce`"
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
-(defn revery? "Faster `every?` based on `reduce`"
-  [pred coll] (reduce (fn [acc in] (if (pred in) true (reduced false))) true coll))
+(defn every "Faster `every?` (based on `reduce`) that returns input coll or nil"
+  [pred coll]
+  (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll))
+
+(comment [(every? even? []) (every even? [])])
 
 ;; Recall: no `korks` support due to inherent ambiguous nil ([] vs [nil])
 (defn update-in*
@@ -2547,14 +2550,13 @@
 
 ;;;; DEPRECATED
 
+(def revery? every)
 (def backport-run! run!*)
-
 (def fq-name qname) ; Lots of consumers
+(def memoize-1 memoize1)
 
 ;; Arg order changed for easier partials, etc.:
 (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
-
-(def memoize-1 memoize1)
 
 (defmacro have-in  "Deprecated" [s1 & sn] `(have  ~s1 :in ~@sn))
 (defmacro have-in! "Deprecated" [s1 & sn] `(have! ~s1 :in ~@sn))
