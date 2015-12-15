@@ -1506,10 +1506,29 @@
   #+clj  (if (nil? x) "nil" x)
   #+cljs (if (or (undefined? x) (nil? x)) "nil" x))
 
-;;; Handy for atomic printing, etc.
-;;; Note [xs] instead of [& xs] args for common-case perf:
-(defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
-(defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn str-join
+    "Transducer-based generalization of `clojure.string/join` that is faster + has
+    `xform` support"
+    ([                coll] (str-join nil       nil coll))
+    ([separator       coll] (str-join separator nil coll))
+    ([separator xform coll]
+     (if-not (str/blank? separator)
+       (let [sep-xform (interpose separator)
+             str-rf*   (completing str-rf str)]
+         (if xform
+           (transduce (comp xform sep-xform) str-rf* coll)
+           (transduce             sep-xform  str-rf* coll)))
+       (if xform
+         (transduce xform (completing str-rf str) coll)
+         (str (reduce str-rf coll)))))))
+
+(comment
+  (qb 100000
+    (str/join "," ["a" "b" "c" "d"])
+    (str-join "," ["a" "b" "c" "d"])
+    (str-join ""  ["a" "b" "c" "d"])) ; [29.37 23.63 13.34]
+  (str-join "," (comp (filter #{"a" "c"}) (map str/upper-case)) ["a" "b" "c"]))
 
 (defn format*
   #+clj ^String [fmt args]
@@ -2222,6 +2241,8 @@
 (defmacro bench [nlaps bench*-opts & body]
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
 
+(declare spaced-str)
+
 #+cljs
 (do ; Trivial client-side logging stuff
   (def ^:private console-log
@@ -2555,6 +2576,10 @@
 ;; cljs.test (e.g. for `use-fixtures`)
 
 ;;;; DEPRECATED
+
+;;; Prefer `str-join` when possible (needs Clojure 1.7+)
+(defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
+(defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
 
 (def backport-run! run!*)
 (def fq-name qname) ; Lots of consumers
