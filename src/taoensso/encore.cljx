@@ -2241,7 +2241,7 @@
 (defmacro bench [nlaps bench*-opts & body]
   `(bench* ~nlaps ~bench*-opts (fn [] ~@body)))
 
-(declare spaced-str)
+(declare spaced-str-with-nils)
 
 #+cljs
 (do ; Trivial client-side logging stuff
@@ -2251,9 +2251,9 @@
       (fn [xs] nil)))
 
   (defn log  [& xs]     (console-log xs)) ; Raw args
-  (defn logp [& xs]     (console-log [(spaced-str  xs)]))
+  (defn logp [& xs]     (console-log [(spaced-str-with-nils xs)]))
   (defn logf [fmt & xs] (console-log [(format* fmt xs)]))
-  (defn sayp [    & xs] (js/alert (spaced-str  xs)))
+  (defn sayp [    & xs] (js/alert (spaced-str-with-nils  xs)))
   (defn sayf [fmt & xs] (js/alert (format* fmt xs))))
 
 #+cljs
