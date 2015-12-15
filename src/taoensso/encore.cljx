@@ -1513,7 +1513,7 @@
     ([                coll] (str-join nil       nil coll))
     ([separator       coll] (str-join separator nil coll))
     ([separator xform coll]
-     (if-not (str/blank? separator)
+     (if (and separator (not= separator ""))
        (let [sep-xform (interpose separator)
              str-rf*   (completing str-rf str)]
          (if xform
