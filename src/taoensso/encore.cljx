@@ -260,6 +260,10 @@
   ;; Nb nil to help distinguish from negative (false) `instance?` test:
   (defn chan? [x] nil))
 
+(defn lazy-seq? [x]
+  #+clj  (instance? clojure.lang.LazySeq x)
+  #+cljs (instance? LazySeq              x))
+
 (defn re-pattern? [x]
   #+clj  (instance? java.util.regex.Pattern x)
   #+cljs (instance? js/RegExp               x))
