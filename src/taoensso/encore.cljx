@@ -1512,8 +1512,8 @@
 
 (compile-if (do (completing (fn [])) true) ; We have transducers
   (defn str-join
-    "Transducer-based generalization of `clojure.string/join` that is faster + has
-    `xform` support"
+    "Faster, transducer-based generalization of `clojure.string/join` with `xform`
+    support"
     ([                coll] (str-join nil       nil coll))
     ([separator       coll] (str-join separator nil coll))
     ([separator xform coll]
