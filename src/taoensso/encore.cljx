@@ -466,7 +466,7 @@
   ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
   ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   ([] (throw (ex-info "Invariant violation" {:invariant-violation? true})))
-  ([assertion? ns-str ?line form val ?err]
+  ([assertion? ns-str ?line form val ?err ?data-fn]
    (let [;; Cider unfortunately doesn't seem to print newlines in errors...
          pattern     "Invariant violation in `%s:%s` [pred-form, val]:\n [%s, %s]"
          line-str    (or ?line "?")
@@ -480,7 +480,9 @@
                        (cond
                          (not ?err)       msg
                          undefn-val? (str msg       "\n`val` error: " ?err-str)
-                         :else       (str msg "\n`pred-form` error: " ?err-str)))]
+                         :else       (str msg "\n`pred-form` error: " ?err-str)))
+         ?data       (when-let [data-fn ?data-fn]
+                       (catch-errors* (data-fn) e {:data-error e}))]
      (throw
        (if false #_assertion? ; Let's rather just always throw `ex-info`'s
          (assertion-error msg)
@@ -492,6 +494,7 @@
             :form-str form-str
             :val      (if undefn-val? 'undefined/threw-error val)
             :val-type (if undefn-val? 'undefined/threw-error (type val))
+            :?data    ?data ; Arbitrary user data, handy for debugging
             :?err     ?err
             :*assert* *assert*
             :elidable? assertion?}))))))
@@ -499,7 +502,7 @@
 (defmacro -invariant1
   "Implementation detail. Written to maximize performance and to minimize post
   Closure+gzip Cljs size."
-  [assertion? truthy? line pred x]
+  [assertion? truthy? line pred x ?data-fn]
   (let [;; form     (list pred x)
         form        (str (list pred x)) ; Better expansion gzipping
         pred*       (if (vector? pred) (list 'taoensso.encore/-invar-pred pred) pred)
@@ -509,31 +512,33 @@
       `(let [~'__x
              (catch-errors* ~x ~'t
                (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
-                 -invar-undefined-val ~'t))]
+                 -invar-undefined-val ~'t ~?data-fn))]
 
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t)))
+           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t
+                 ~?data-fn)))
 
       ;; x is pre-evaluated (common case); no need to wrap for possible throws
       `(let [~'__x ~x]
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t))))))
+           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t
+                 ~?data-fn))))))
 
 (comment
-  (macroexpand              '(-invariant1 true false 1 #(string? %) "foo"))
-  (macroexpand              '(-invariant1 true false 1 string? "foo"))
-  (macroexpand              '(-invariant1 true false 1 [:or string?] "foo"))
+  (macroexpand '(-invariant1 true false 1    #(string? %) "foo" nil))
+  (macroexpand '(-invariant1 true false 1      string?    "foo" nil))
+  (macroexpand '(-invariant1 true false 1 [:or string?]   "foo" nil))
   (qb 100000
     (string? "foo")
-    (-invariant1 true false 1 string? "foo") ; ~1.2x cheapest possible pred cost
-    (-invariant1 true false 1 string? (str "foo" "bar")) ; ~3.5x ''
+    (-invariant1 true false 1 string? "foo" nil) ; ~1.2x cheapest possible pred cost
+    (-invariant1 true false 1 string? (str "foo" "bar") nil) ; ~3.5x ''
     )
 
-  (-invariant1 false false 1 integer? "foo")   ; Pred failure example
-  (-invariant1 false false 1 zero?    "foo")   ; Pred error example
-  (-invariant1 false false 1 zero?    (/ 5 0)) ; Form error example
+  (-invariant1 false false 1 integer? "foo"   nil) ; Pred failure example
+  (-invariant1 false false 1 zero?    "foo"   nil) ; Pred error example
+  (-invariant1 false false 1 zero?    (/ 5 0) nil) ; Form error example
   )
 
 (defmacro -invariant [assertion? truthy? line & sigs]
@@ -543,6 +548,12 @@
         sigs       (if bang? (next sigs) sigs)
         in?        (= (second sigs) :in) ; (have pred :in xs1 xs2 ...)
         sigs       (if in? (cons (first sigs) (nnext sigs)) sigs)
+
+        data?      (and (> (count sigs) 2) ; Distinguish from `:data` pred
+                        (= (last (butlast sigs)) :data))
+        ?data-fn   (when data? (list 'fn '[] (last sigs)))
+        sigs       (if data? (butlast (butlast sigs)) sigs)
+
         auto-pred? (= (count sigs) 1) ; Unique common case: (have ?x)
         pred       (if auto-pred? 'taoensso.encore/nnil? (first sigs))
         [?x1 ?xs]  (if auto-pred?
@@ -558,31 +569,42 @@
 
         (if single-x?
           ;; (have pred x) -> x
-          `(-invariant1 ~assertion? ~truthy? ~line ~pred ~?x1)
+          `(-invariant1 ~assertion? ~truthy? ~line ~pred ~?x1 ~?data-fn)
 
           ;; (have pred x1 x2 ...) -> [x1 x2 ...]
-          (mapv (fn [x] `(-invariant1 ~assertion? ~truthy? ~line ~pred ~x)) ?xs))
+          (mapv (fn [x] `(-invariant1 ~assertion? ~truthy? ~line ~pred ~x ~?data-fn)) ?xs))
 
         (if single-x?
           ;; (have  pred :in xs) -> xs
           ;; (have? pred :in xs) -> bool
           `(~map-fn
              (fn [~'__in] ; Will (necessarily) lose exact form
-               (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in)) ~?x1)
+               (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in ~?data-fn)) ~?x1)
 
           ;; (have  pred :in xs1 xs2 ...) -> [xs1   ...]
           ;; (have? pred :in xs1 xs2 ...) -> [bool1 ...]
           (mapv
             (fn [xs]
               `(~map-fn
-                 (fn [~'__in] (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in))
+                 (fn [~'__in] (-invariant1 ~assertion? ~truthy? ~line ~pred ~'__in ~?data-fn))
                  ~xs))
             ?xs))))))
 
 (comment
   (qb 10000
     (have  string? :in ["foo" "bar" "baz"])
-    (have? string? :in ["foo" "bar" "baz"])))
+    (have? string? :in ["foo" "bar" "baz"]))
+
+  (macroexpand '(have string? 5))
+  (macroexpand '(have string? 5 :data "foo"))
+
+  (have string? 5)
+  (have string? 5 :data {:a "a"})
+  (have string? 5 :data {:a (/ 5 0)})
+
+  (qb 10000
+    (have string? "foo")
+    (have string? "foo" :data "bar")))
 
 (defmacro have
   "EXPERIMENTAL. Takes a pred and one or more vals. Tests pred against each val,
