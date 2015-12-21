@@ -440,18 +440,18 @@
 
         ;; complement/none-of:
         :not (fn [x] (and (if-not p1 true (not ((-invar-pred p1) x)))
-                         (if-not p2 true (not ((-invar-pred p2) x)))
-                         (revery?       #(not ((-invar-pred  %) x)) more)))
+                          (if-not p2 true (not ((-invar-pred p2) x)))
+                          (revery?       #(not ((-invar-pred  %) x)) more)))
 
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (-invar-pred p1)) x))
-                        (when p2 ((non-throwing (-invar-pred p2)) x))
-                        (rsome  #((non-throwing (-invar-pred  %)) x) more)))
+                         (when p2 ((non-throwing (-invar-pred p2)) x))
+                         (rsome  #((non-throwing (-invar-pred  %)) x) more)))
 
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((-invar-pred p1) x))
-                         (if-not p2 true ((-invar-pred p2) x))
-                         (revery?       #((-invar-pred  %) x) more)))))))
+                          (if-not p2 true ((-invar-pred p2) x))
+                          (revery?       #((-invar-pred  %) x) more)))))))
 
 (comment
   ((-invar-pred [:or nil? string?]) "foo")
