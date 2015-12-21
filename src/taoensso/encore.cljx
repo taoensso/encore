@@ -461,7 +461,16 @@
 
 (declare format now-udt str-starts-with?)
 
-(defmacro get-env [] `(zipmap '~(keys &env) [~@(keys &env)]))
+(defmacro get-env []
+  (let [;; Clear meta to keep ((fn [^long x] (get-env)) 0) from generating
+        ;; "Can't type hint a primitive local" compiler errors:
+        ks (map #(with-meta % nil) (keys &env))]
+    `(zipmap '~ks [~@ks])))
+
+(comment
+  (let [x :x] (get-env))
+  ((fn [^long x] (get-env)) 0))
+
 (defn- filter-env [m]
   (reduce-kv
     (fn [acc k v]
@@ -469,8 +478,6 @@
         (dissoc acc k)
         acc))
     m m))
-
-(comment (macroexpand '(get-env)))
 
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
 (def  -invar-undefined-val :invariant/undefined-val)
