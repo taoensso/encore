@@ -33,7 +33,7 @@
 
   #+cljs (:require-macros
           [taoensso.encore :as enc-macros :refer
-           (catch-errors* catch-errors have have? compile-if)]))
+           (catch-errors* catch-errors get-env have have? compile-if)]))
 
 (comment
   (set! *unchecked-math* :warn-on-boxed)
@@ -459,14 +459,26 @@
   ((-invar-pred [:or zero? nil?]) nil) ; (zero? nil) throws
   )
 
-(declare format now-udt)
+(declare format now-udt str-starts-with?)
+
+(defmacro get-env [] `(zipmap '~(keys &env) [~@(keys &env)]))
+(defn- filter-env [m]
+  (reduce-kv
+    (fn [acc k v]
+      (if (str-starts-with? (name k) "__")
+        (dissoc acc k)
+        acc))
+    m m))
+
+(comment (macroexpand '(get-env)))
+
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
 (def  -invar-undefined-val :invariant/undefined-val)
 (defn -invar-violation!
   ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
   ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   ([] (throw (ex-info "Invariant violation" {:invariant-violation? true})))
-  ([assertion? ns-str ?line form val ?err ?data-fn]
+  ([assertion? ns-str ?line form val ?err env ?data-fn]
    (let [;; Cider unfortunately doesn't seem to print newlines in errors...
          pattern     "Invariant violation in `%s:%s` [pred-form, val]:\n [%s, %s]"
          line-str    (or ?line "?")
@@ -482,7 +494,9 @@
                          undefn-val? (str msg       "\n`val` error: " ?err-str)
                          :else       (str msg "\n`pred-form` error: " ?err-str)))
          ?data       (when-let [data-fn ?data-fn]
-                       (catch-errors* (data-fn) e {:data-error e}))]
+                       (catch-errors* (data-fn (filter-env env))
+                         e {:data-error e}))]
+
      (throw
        (if false #_assertion? ; Let's rather just always throw `ex-info`'s
          (assertion-error msg)
@@ -510,21 +524,21 @@
 
     (if (list? x) ; x is a form; might throw on evaluation
       `(let [~'__x
-             (catch-errors* ~x ~'t
+             (catch-errors* ~x ~'__t
                (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
-                 -invar-undefined-val ~'t ~?data-fn))]
+                 -invar-undefined-val ~'__t (get-env) ~?data-fn))]
 
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t
-                 ~?data-fn)))
+           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'__t
+                   (get-env) ~?data-fn)))
 
       ;; x is pre-evaluated (common case); no need to wrap for possible throws
       `(let [~'__x ~x]
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'t
-                 ~?data-fn))))))
+           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'__t
+                   (get-env) ~?data-fn))))))
 
 (comment
   (macroexpand '(-invariant1 true false 1    #(string? %) "foo" nil))
@@ -551,7 +565,7 @@
 
         data?      (and (> (count sigs) 2) ; Distinguish from `:data` pred
                         (= (last (butlast sigs)) :data))
-        ?data-fn   (when data? (list 'fn '[] (last sigs)))
+        ?data-fn   (when data? `(fn [~'&env] ~(last sigs)))
         sigs       (if data? (butlast (butlast sigs)) sigs)
 
         auto-pred? (= (count sigs) 1) ; Unique common case: (have ?x)
@@ -604,7 +618,10 @@
 
   (qb 10000
     (have string? "foo")
-    (have string? "foo" :data "bar")))
+    (have string? "foo" :data "bar"))
+
+  (defn foo [x] (let [a "a" b "b"] (have string? x :data {:env &env})))
+  (foo 5))
 
 (defmacro have
   "EXPERIMENTAL. Takes a pred and one or more vals. Tests pred against each val,
@@ -619,6 +636,9 @@
 
     ;; Will throw a detailed, helpful error message on invariant violation:
     (fn my-fn [x] (str/trim (have string? x)))
+
+  May attach arbitrary debug info to assertion violations like:
+    `(have string? x :data {:my-debug-info \"foo\" :env &env})`
 
   See also `have?`, `have!`."
   {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
