@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "2.30.0"
+(defproject com.taoensso/encore "2.31.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure/Script cross-platform core utils library"
   :url "https://github.com/ptaoussanis/encore"
