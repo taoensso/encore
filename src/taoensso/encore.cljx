@@ -466,7 +466,7 @@
   (let [ks (reduce
              (fn [acc in]
                (if (str-starts-with? (name in) "__") ; Hide privates
-                 acc
+                 acc ; Strip primitive tags, etc. which can cause problems:
                  (conj acc (without-meta in))))
              [] (keys &env))]
     `(zipmap '~ks ~ks)))
@@ -567,7 +567,7 @@
 
         data?      (and (> (count sigs) 2) ; Distinguish from `:data` pred
                         (= (last (butlast sigs)) :data))
-        ?data-fn   (when data? `(fn [] (let [~'&env (get-env)] ~(last sigs))))
+        ?data-fn   (when data? `(fn [] ~(last sigs)))
         sigs       (if data? (butlast (butlast sigs)) sigs)
 
         auto-pred? (= (count sigs) 1) ; Unique common case: (have ?x)
@@ -613,9 +613,8 @@
 
   (macroexpand '(have string? 5))
   (macroexpand '(have string? 5 :data "foo"))
-  (macroexpand '(have string? 5 :data &env))
-
-  (let [x :x] (have string? 5 :data &env))
+  (macroexpand '(have string? 5 :data (get-env)))
+  (let [x :x]   (have string? 5 :data (get-env)))
 
   (have string? 5)
   (have string? 5 :data {:a "a"})
@@ -624,10 +623,9 @@
   (qb 100000
     (string? "foo")
     (have string? "foo")
-    (have string? "foo" :data "bar")) ; [4.06 4.86 8.23]
+    (have string? "foo" :data "bar")) ; [4.19 4.78 4.69]
 
-  (defn foo [x] (let [a "a" b "b"] (have string? x :data {:env &env})))
-  (foo 5))
+  ((fn [x] (let [a "a" b "b"] (have string? x :data {:env (get-env)}))) 5))
 
 (defmacro have
   "EXPERIMENTAL. Takes a pred and one or more vals. Tests pred against each val,
@@ -644,7 +642,7 @@
     (fn my-fn [x] (str/trim (have string? x)))
 
   May attach arbitrary debug info to assertion violations like:
-    `(have string? x :data {:my-debug-info \"foo\" :env &env})`
+    `(have string? x :data {:my-debug-info \"foo\" :env (get-env)})`
 
   See also `have?`, `have!`."
   {:arglists '([pred (:in) x] [pred (:in) x & more-xs])}
