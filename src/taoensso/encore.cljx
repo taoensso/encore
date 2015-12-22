@@ -461,20 +461,19 @@
 
 (declare format now-udt str-starts-with?)
 
-(defn- clear-meta [x] (if (meta x) (with-meta x nil) x))
-(defmacro get-env [] (let [ks (mapv clear-meta (keys &env))] `(zipmap '~ks [~@ks])))
+(defn- without-meta [x] (if (meta x) (with-meta x nil) x))
+(defmacro get-env []
+  (let [ks (reduce
+             (fn [acc in]
+               (if (str-starts-with? (name in) "__") ; Hide privates
+                 acc
+                 (conj acc (without-meta in))))
+             [] (keys &env))]
+    `(zipmap '~ks ~ks)))
 
 (comment
   (let [x :x] (get-env))
   ((fn [^long x] (get-env)) 0))
-
-(defn- filter-env [m]
-  (reduce-kv
-    (fn [acc k v]
-      (if (str-starts-with? (name k) "__")
-        (dissoc acc k)
-        acc))
-    m m))
 
 (defn assertion-error [msg] #+clj (AssertionError. msg) #+cljs (js/Error. msg))
 (def  -invar-undefined-val :invariant/undefined-val)
@@ -482,7 +481,7 @@
   ;; * http://dev.clojure.org/jira/browse/CLJ-865 would be handy for line numbers
   ;; * Clojure 1.7+'s error pr-str dumps a ton of info that we don't want here
   ([] (throw (ex-info "Invariant violation" {:invariant-violation? true})))
-  ([assertion? ns-str ?line form val ?err env ?data-fn]
+  ([assertion? ns-str ?line form val ?err ?data-fn]
    (let [;; Cider unfortunately doesn't seem to print newlines in errors...
          pattern     "Invariant violation in `%s:%s` [pred-form, val]:\n [%s, %s]"
          line-str    (or ?line "?")
@@ -498,8 +497,7 @@
                          undefn-val? (str msg       "\n`val` error: " ?err-str)
                          :else       (str msg "\n`pred-form` error: " ?err-str)))
          ?data       (when-let [data-fn ?data-fn]
-                       (catch-errors* (data-fn (filter-env env))
-                         e {:data-error e}))]
+                       (catch-errors* (data-fn) e {:data-error e}))]
 
      (throw
        (if false #_assertion? ; Let's rather just always throw `ex-info`'s
@@ -530,19 +528,19 @@
       `(let [~'__x
              (catch-errors* ~x ~'__t
                (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
-                 -invar-undefined-val ~'__t (get-env) ~?data-fn))]
+                 -invar-undefined-val ~'__t ~?data-fn))]
 
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'__t
-                   (get-env) ~?data-fn)))
+           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
+                   ~'__x ~'__t ~?data-fn)))
 
       ;; x is pre-evaluated (common case); no need to wrap for possible throws
       `(let [~'__x ~x]
          (catch-errors*
            (if (~pred* ~'__x) ~pass-result (-invar-violation!))
-           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form ~'__x ~'__t
-                   (get-env) ~?data-fn))))))
+           ~'__t (-invar-violation! ~assertion? ~(str *ns*) ~line '~form
+                   ~'__x ~'__t ~?data-fn))))))
 
 (comment
   (macroexpand '(-invariant1 true false 1    #(string? %) "foo" nil))
@@ -569,7 +567,7 @@
 
         data?      (and (> (count sigs) 2) ; Distinguish from `:data` pred
                         (= (last (butlast sigs)) :data))
-        ?data-fn   (when data? `(fn [~'&env] ~(last sigs)))
+        ?data-fn   (when data? `(fn [] (let [~'&env (get-env)] ~(last sigs))))
         sigs       (if data? (butlast (butlast sigs)) sigs)
 
         auto-pred? (= (count sigs) 1) ; Unique common case: (have ?x)
@@ -615,14 +613,18 @@
 
   (macroexpand '(have string? 5))
   (macroexpand '(have string? 5 :data "foo"))
+  (macroexpand '(have string? 5 :data &env))
+
+  (let [x :x] (have string? 5 :data &env))
 
   (have string? 5)
   (have string? 5 :data {:a "a"})
   (have string? 5 :data {:a (/ 5 0)})
 
-  (qb 10000
+  (qb 100000
+    (string? "foo")
     (have string? "foo")
-    (have string? "foo" :data "bar"))
+    (have string? "foo" :data "bar")) ; [4.06 4.86 8.23]
 
   (defn foo [x] (let [a "a" b "b"] (have string? x :data {:env &env})))
   (foo 5))
@@ -710,7 +712,8 @@
     (string? "a")
     (have? "a")
     (have string? "a" "b" "c")
-    (have? [:or nil? string?] "a" "b" "c"))
+    (have? [:or nil? string?] "a" "b" "c")
+    (have? [:or nil? string?] "a" "b" "c" :data "foo"))
   ;; [     5.59 26.48 45.82] ; 1st gen (macro form)
   ;; [     3.31 13.48 36.22] ; 2nd gen (fn form)
   ;; [0.82 1.75  7.57 27.05] ; 3rd gen (lean macro form)
