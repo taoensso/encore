@@ -19,7 +19,7 @@
   :plugins
   [[lein-pprint  "1.1.2"]
    [lein-ancient "0.6.8"]
-   [lein-codox   "0.9.0"]]
+   [lein-codox   "0.9.1"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
