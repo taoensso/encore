@@ -88,8 +88,8 @@
         [attr macro-args] (if (map? (first macro-args))
                             [(first macro-args) (next macro-args)]
                             [{} macro-args])
-        attr (if docstring   (assoc attr :doc docstring) attr)
-        attr (if (meta name) (conj (meta name) attr)     attr)]
+        attr (if docstring (assoc attr :doc docstring) attr)
+        attr (if (meta name) (conj (meta name) attr)   attr)]
     [(with-meta name attr) macro-args]))
 
 (defmacro defonce*
@@ -126,13 +126,12 @@
            (when-let [doc# ~doc] {:doc doc#})))
       (var ~name))))
 
-(defmacro cond! "Like `cond` but throws on no-match like `case`, `condp`"
+(defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
 (comment (cond false "false") (cond! false "false"))
 
-(defmacro doto-cond
-  "Diabolical cross between `doto`, `cond->` and `as->`"
+(defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`"
   [[name x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
@@ -276,9 +275,10 @@
 (defn error-data
   "Returns data map iff `x` is an error of any type on platform"
   [x]
-  (when-let [data-map (or (ex-data x) ; ExceptionInfo
-                          #+clj  (when (instance? Throwable x) {})
-                          #+cljs (when (instance? js/Error  x) {}))]
+  (when-let [data-map
+             (or (ex-data x) ; ExceptionInfo
+               #+clj  (when (instance? Throwable x) {})
+               #+cljs (when (instance? js/Error  x) {}))]
     (merge
       #+clj  (let [^Throwable t x] ; (catch Throwable t <...>)
                {:err-type   (type        t)
@@ -425,6 +425,7 @@
 
 (defn- non-throwing [pred] (fn [x] (catch-errors* (pred x) _ nil)))
 (defn -invar-pred [pred-form]
+  ;; TODO (Optimization): simple compile-time transformations when possible
   (if-not (vector? pred-form) pred-form
     (let [[type p1 p2 & more] pred-form]
       (case type
@@ -440,18 +441,18 @@
 
         ;; complement/none-of:
         :not (fn [x] (and (if-not p1 true (not ((-invar-pred p1) x)))
-                          (if-not p2 true (not ((-invar-pred p2) x)))
-                          (revery?       #(not ((-invar-pred  %) x)) more)))
+                         (if-not p2 true (not ((-invar-pred p2) x)))
+                         (revery?       #(not ((-invar-pred  %) x)) more)))
 
         ;; any-of, (apply some-fn preds):
         :or  (fn [x] (or (when p1 ((non-throwing (-invar-pred p1)) x))
-                         (when p2 ((non-throwing (-invar-pred p2)) x))
-                         (rsome  #((non-throwing (-invar-pred  %)) x) more)))
+                        (when p2 ((non-throwing (-invar-pred p2)) x))
+                        (rsome  #((non-throwing (-invar-pred  %)) x) more)))
 
         ;; all-of, (apply every-pred preds):
         :and (fn [x] (and (if-not p1 true ((-invar-pred p1) x))
-                          (if-not p2 true ((-invar-pred p2) x))
-                          (revery?       #((-invar-pred  %) x) more)))))))
+                         (if-not p2 true ((-invar-pred p2) x))
+                         (revery?       #((-invar-pred  %) x) more)))))))
 
 (comment
   ((-invar-pred [:or nil? string?]) "foo")
@@ -619,6 +620,10 @@
   (have string? 5)
   (have string? 5 :data {:a "a"})
   (have string? 5 :data {:a (/ 5 0)})
+
+  (qb 100000
+    (have           string?  "foo")
+    (have [:or nil? string?] "foo"))
 
   (qb 100000
     (string? "foo")
