@@ -1,6 +1,6 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing)
 
-# Clojure/Script cross-platform core utils library
+# Core utils library for Clojure/Script
 
 > **Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it - **Peter Taoussanis**
 

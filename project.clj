@@ -1,6 +1,6 @@
 (defproject com.taoensso/encore "2.31.3"
   :author "Peter Taoussanis <https://www.taoensso.com>"
-  :description "Clojure/Script cross-platform core utils library"
+  :description "Core utils library for Clojure/Script"
   :url "https://github.com/ptaoussanis/encore"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"
@@ -14,7 +14,8 @@
 
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
-   [org.clojure/tools.reader "0.10.0"]]
+   [org.clojure/tools.reader "0.10.0"]
+   [com.taoensso/truss       "1.0.0-RC1"]]
 
   :plugins
   [[lein-pprint  "1.1.2"]
