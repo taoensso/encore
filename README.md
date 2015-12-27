@@ -1,37 +1,50 @@
-**[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing)
+[More by @ptaoussanis] | **[CHANGELOG]** | [API] | current [Break Version] below:
 
-# Core utils library for Clojure/Script
+```clojure
+[com.taoensso/encore "2.31.3"]
+```
 
-> **Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it - **Peter Taoussanis**
+# Encore
 
-  * See the [source][] to see what's available (few docs on this one, sorry)
-  * Used by all [my other Clojure libs][]
+### Core utils library for Clojure/Script
 
-## Contact & contributing
+**Or**: What happens when you spend way too much time with Clojure
 
-`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (Emacs) or your IDE.
+**Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it.
 
-Please use the project's GitHub [issues page][] for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
+\- [Peter Taoussanis]
 
-Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Cheers!
+## Experiencing a dependency conflict?
+
+Please see [here](https://github.com/ptaoussanis/encore/blob/master/DEP-CONFLICT.md) for help.
+
+## Contacting me / contributions
+
+Please use the project's [GitHub issues page] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors page] for a list of contributors.
+
+Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
+
+\- [Peter Taoussanis]
 
 ## License
 
-Copyright &copy; 2012-2015 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
+Distributed under the [EPL v1.0] \(same as Clojure).  
+Copyright &copy; 2015 [Peter Taoussanis].
 
-
-[API docs]: http://ptaoussanis.github.io/encore/
-[CHANGELOG_]: https://github.com/ptaoussanis/encore/releases
-[other Clojure libs]: https://www.taoensso.com/clojure
-[taoensso.com]: https://www.taoensso.com
-[Twitter]: https://twitter.com/ptaoussanis
-[issues page]: https://github.com/ptaoussanis/encore/issues
-[commit history]: https://github.com/ptaoussanis/encore/commits/master
+<!--- Standard links -->
+[Taoensso.com]: https://www.taoensso.com
+[Peter Taoussanis]: https://www.taoensso.com
+[@ptaoussanis]: https://www.taoensso.com
+[More by @ptaoussanis]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
-[Leiningen]: http://leiningen.org/
-[Cider]: https://github.com/clojure-emacs/cider
-[Eclipse Public License]: https://raw2.github.com/ptaoussanis/encore/master/LICENSE
 
+<!--- Standard links (repo specific) -->
+[_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
 [CHANGELOG]: https://github.com/ptaoussanis/encore/commits/master
-[my other Clojure libs]: https://www.taoensso.com/clojure
-[source]: https://github.com/ptaoussanis/encore/blob/master/src/taoensso/encore.cljx
+[API]: http://ptaoussanis.github.io/encore/
+[GitHub issues page]: https://github.com/ptaoussanis/encore/issues
+[GitHub contributors page]: https://github.com/ptaoussanis/encore/graphs/contributors
+[EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/encore/master/LICENSE
+[Hero]: https://raw.githubusercontent.com/ptaoussanis/encore/master/hero.png
+
+<!--- Unique links -->
