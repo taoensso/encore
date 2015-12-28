@@ -7,7 +7,7 @@
                    [clojure.java.io :as io]
                    ;; [clojure.core.async    :as async]
                    [clojure.tools.reader.edn :as edn]
-                   [taoensso.truss])
+                   [taoensso.truss :as truss])
   #+clj  (:import  [java.util Date Locale TimeZone]
                    [java.text SimpleDateFormat]
                    ;; [org.apache.commons.codec.binary Base64]
@@ -31,7 +31,7 @@
                    [goog.structs        :as gstructs]
                    [goog.net.EventType]
                    [goog.net.ErrorCode]
-                   [taoensso.truss])
+                   [taoensso.truss :as truss])
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
@@ -186,6 +186,10 @@
 (defmacro have!  [& sigs] `(taoensso.truss/have!  ~@sigs))
 (defmacro have?  [& sigs] `(taoensso.truss/have?  ~@sigs))
 (defmacro have!? [& sigs] `(taoensso.truss/have!? ~@sigs))
+
+(defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
+(defmacro with-dynamic-assertion-data [& sigs]
+  `(taoensso.truss/with-dynamic-assertion-data ~@sigs))
 
 ;;;; Edn
 
