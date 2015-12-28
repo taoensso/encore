@@ -1553,11 +1553,11 @@
       @(or (.get cache_ args)
            (let [dv (delay (apply f args))] (or (.putIfAbsent cache_ args dv) dv))))))
 
-(defn a0-memoize_ "Fastest possible 0-arg `memoize_`" [f]
+(defn memoize-a0_ "Fastest possible 0-arg `memoize_`" [f]
   (let [cache_ (atom nil)]
     (fn [] @(or @cache_ (swap! cache_ (fn [?dv] (if ?dv ?dv (delay (f)))))))))
 
-(defn a1-memoize_ "Fastest possible 0/1-arg `memoize_`" [f]
+(defn memoize-a1_ "Fastest possible 0/1-arg `memoize_`" [f]
   #+cljs
   (let [cache_ (atom {})]
     (fn
@@ -2367,6 +2367,9 @@
 ;; cljs.test (e.g. for `use-fixtures`)
 
 ;;;; DEPRECATED
+
+(def a0-memoize_ memoize-a0_)
+(def a1-memoize_ memoize-a1_)
 
 ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
 (defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
