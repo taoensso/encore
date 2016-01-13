@@ -1,7 +1,10 @@
-[More by @ptaoussanis] | **[CHANGELOG]** | [API] | current [Break Version] below:
+<a href="https://www.taoensso.com" title="More stuff by @ptaoussanis at www.taoensso.com">
+<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="400"/></a>
+
+**[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/encore "2.31.3"]
+[com.taoensso/encore "2.32.0"] ; Stable
 ```
 
 # Encore
@@ -29,7 +32,7 @@ Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
 ## License
 
 Distributed under the [EPL v1.0] \(same as Clojure).  
-Copyright &copy; 2015 [Peter Taoussanis].
+Copyright &copy; 2014-2016 [Peter Taoussanis].
 
 <!--- Standard links -->
 [Taoensso.com]: https://www.taoensso.com
