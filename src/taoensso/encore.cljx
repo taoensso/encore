@@ -625,6 +625,7 @@
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
 (defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
 
+(defn vnext [v] (when (> (count v) 1) (subvec v 1)))
 (defn vsplit-last  [v]
   (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
 (defn vsplit-first [v]
