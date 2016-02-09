@@ -380,7 +380,7 @@
   (cond (nil?    x) nil
         (number? x) (double x)
         (string? x)
-        #+cljs (let [x (js/parseFloat x)] (when-not (js/isNan x) x))
+        #+cljs (let [x (js/parseFloat x)] (when-not (js/isNaN x) x))
         #+clj  (try (Double/parseDouble x)
                     (catch NumberFormatException _ nil))))
 
