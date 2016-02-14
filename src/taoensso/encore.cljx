@@ -803,153 +803,6 @@
   (let [c (repeatedly 5000 rand)]
     (qb 100 (into [] (take 2) (sort-by - c)) (top 2 - c))))
 
-(defrecord Swapped  [new-val return-val])
-(defn      swapped  [new-val return-val] (Swapped. new-val return-val))
-(defn      swapped? [x] (instance? Swapped x))
-(defn      swapped* [x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
-
-(comment ; TODO Debug, Ref. http://dev.clojure.org/jira/browse/CLJ-979
-  ;; Appears (?) to be fixed as of Clojure 1.7-alpha5,
-  ;; Ref. http://dev.clojure.org/jira/browse/CLJ-979
-  (defrecord Foo1 [x])
-  (instance? Foo1 (Foo1.  "bar"))
-  (instance? Foo1 (->Foo1 "bar"))
-  (compile 'taoensso.encore))
-
-(declare dissoc-in)
-(defn- swapped*-in "[<new-val> <return-val>]" [m ks f]
-  (if (kw-identical? f :swap/dissoc)
-    (swapped* (dissoc-in m (butlast ks) (last ks)))
-    (let [old-val-in (get-in m ks)
-          [new-val-in return-val] (swapped* (f old-val-in))
-          new-val (if (kw-identical? new-val-in :swap/dissoc)
-                    (dissoc-in m (butlast ks) (last ks))
-                    (assoc-in  m ks new-val-in))]
-      [new-val return-val])))
-
-(defn- replace-in*
-  "Reduces input with
-  [<type> <ks> <reset-val-or-swap-fn>] or
-         [<ks> <reset-val-or-swap-fn>] ops"
-  [?vf-type m ops]
-  (reduce
-    (fn [accum ?op]
-      (if-not ?op ; Allow conditional ops: (when <pred> <op>), etc.
-        accum
-        (let [[vf-type ks valf] (if-not ?vf-type ?op (cons ?vf-type ?op))]
-          (case vf-type
-            :reset (if (empty? ks) valf (assoc-in accum ks valf))
-            :swap  (if (nil? valf)
-                     accum ; Noop, allows conditional ops
-                     (if (empty? ks)
-                       (valf accum)
-                       ;; Currently ignore possible <return-val>:
-                       (nth (swapped*-in accum ks valf) 0)))))))
-    m ops))
-
-(defn replace-in "Experimental. For use with `swap!`, etc."
-  [m & ops] (replace-in* nil m ops))
-
-(comment
-  (replace-in {}
-    [:reset [:a] {:b :B :c 100}]
-    (when false [:reset [:a :b] :B2]) ; Conditionals okay
-    (do (assert true)
-        [:reset [:a :b] :B3]) ; Side-effects okay
-    (let [my-swap-fn inc] ; `let`s okay
-      [:swap [:a :c] my-swap-fn]))
-
-  (let [a_ (atom {})]
-    (swap! a_ replace-in
-      [:reset [:a]    {:b :b1 :c :c1 :d 100}]
-      [:swap  [:a :d] inc]
-      [:swap  [:a :b] :swap/dissoc]
-      [:swap  [:a :c] (fn [_] :swap/dissoc)]))
-
-  (let [a_ (atom [0 1 2])]
-    (swap! a_ replace-in
-      [:swap [0] inc]
-      ;; [:swap [5] identity] ; Will throw
-      [:swap [5]] nil ; Noop (no throw)
-      )))
-
-(defn swap-in!
-  "More powerful version of `swap!`:
-    * Supports optional `update-in` semantics.
-    * Swap fn can return `(swapped <new-val> <return-val>)` rather than just
-      <new-val>. This is useful when writing atomic pull fns, etc."
-  ([atom_ ks f]
-     (if (empty? ks)
-       (loop []
-         (let [old-val @atom_
-               [new-val return-val] (swapped* (f old-val))]
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur) ; Ref. http://goo.gl/rFG8mW
-             return-val)))
-
-       (loop []
-         (let [old-val @atom_
-               [new-val return-val] (swapped*-in old-val ks f)]
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur)
-             return-val)))))
-
-  ([atom_ ks f & more] {:pre [(have? even? (count more))]}
-     (let [pairs (into [[ks f]] (partition 2 more))]
-       (loop []
-         (let [old-val @atom_
-               new-val (replace-in* :swap old-val pairs)]
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur)
-             {:old old-val :new new-val}))))))
-
-(defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
-  ([atom_ ks new-val]
-   (if (empty? ks)
-     (reset! atom_ new-val)
-     ;; Actually need swap! (CAS) to preserve other keys:
-     (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
-
-  ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
-   (let [pairs (into [[ks new-val]] (partition 2 more))]
-     (loop []
-       (let [old-val @atom_
-             new-val (replace-in* :reset old-val pairs)]
-         (if-not (compare-and-set! atom_ old-val new-val)
-           (recur)
-           {:old old-val :new new-val}))))))
-
-(comment
-  ;;; update-in, `swapped`
-  (let [a_ (atom {:a :A :b :B})] ; Returns new-val (default)
-    [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
-  (let [a_ (atom {:a :A :b :B})] ; Returns old-val
-    [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-  (let [a_ (atom {:a {:b :B}})] ; Returns new-val-in (default)
-    [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
-  (let [a_ (atom {:a {:b :B}})] ; Returns old-val-in
-    [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-  (let [a_ (atom {:a {:b 100}})] (swap-in! a_ [:a :b] inc)) ; => 101
-
-  (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})]
-    (swap-in! a_ [:a :c] :swap/dissoc) @a_)
-
-  ;;; Bulk atomic updates
-  (let [a_ (atom {})]
-    (swap-in! a_
-      []      (constantly {:a {:b :b1 :c :c1 :d 100}})
-      [:a :b] (constantly :b2)
-      ;; [:a] #(dissoc % :c)
-      ;; [:a :c] :swap/dissoc
-      [:a :c] (fn [_] :swap/dissoc)
-      [:a :d] inc))
-
-  (let [a_ (atom {})]
-    (reset-in! a_
-      []      {:a {:b :b1 :c :c1 :d 100}}
-      [:a :b] :b2
-      [:a :d] inc)))
-
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
 (defn dissoc-in [m ks & dissoc-ks]
   (update-in* m ks (fn [m] (apply dissoc m dissoc-ks))))
@@ -1201,6 +1054,155 @@
       (if (== idx n)
         v
         (recur (conj v (f)) (unchecked-inc idx))))))
+
+;;;; Swap stuff
+
+(defrecord Swapped  [new-val return-val])
+(defn      swapped  [new-val return-val] (Swapped. new-val return-val))
+(defn      swapped? [x] (instance? Swapped x))
+(defn      swapped* [x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
+
+(defn- swapped*-in "[<new-val> <return-val>]" [m ks f]
+  (if (kw-identical? f :swap/dissoc)
+    (swapped* (dissoc-in m (butlast ks) (last ks)))
+    (let [old-val-in (get-in m ks)
+          [new-val-in return-val] (swapped* (f old-val-in))
+          new-val (if (kw-identical? new-val-in :swap/dissoc)
+                    (dissoc-in m (butlast ks) (last ks))
+                    (assoc-in  m ks new-val-in))]
+      [new-val return-val])))
+
+(defn- replace-in*
+  "Reduces input with
+  [<type> <ks> <reset-val-or-swap-fn>] or
+         [<ks> <reset-val-or-swap-fn>] ops"
+  [?vf-type m ops]
+  (reduce
+    (fn [accum ?op]
+      (if-not ?op ; Allow conditional ops: (when <pred> <op>), etc.
+        accum
+        (let [[vf-type ks valf] (if-not ?vf-type ?op (cons ?vf-type ?op))]
+          (case vf-type
+            :reset (if (empty? ks) valf (assoc-in accum ks valf))
+            :swap  (if (nil? valf)
+                     accum ; Noop, allows conditional ops
+                     (if (empty? ks)
+                       (valf accum)
+                       ;; Currently ignore possible <return-val>:
+                       (nth (swapped*-in accum ks valf) 0)))))))
+    m ops))
+
+(defn replace-in "Experimental. For use with `swap!`, etc."
+  [m & ops] (replace-in* nil m ops))
+
+(comment
+  (replace-in {}
+    [:reset [:a] {:b :B :c 100}]
+    (when false [:reset [:a :b] :B2]) ; Conditionals okay
+    (do (assert true)
+        [:reset [:a :b] :B3]) ; Side-effects okay
+    (let [my-swap-fn inc] ; `let`s okay
+      [:swap [:a :c] my-swap-fn]))
+
+  (let [a_ (atom {})]
+    (swap! a_ replace-in
+      [:reset [:a]    {:b :b1 :c :c1 :d 100}]
+      [:swap  [:a :d] inc]
+      [:swap  [:a :b] :swap/dissoc]
+      [:swap  [:a :c] (fn [_] :swap/dissoc)]))
+
+  (let [a_ (atom [0 1 2])]
+    (swap! a_ replace-in
+      [:swap [0] inc]
+      ;; [:swap [5] identity] ; Will throw
+      [:swap [5]] nil ; Noop (no throw)
+      )))
+
+(defn swap-in!
+  "More powerful version of `swap!`:
+    * Supports optional `update-in` semantics.
+    * Swap fn can return `(swapped <new-val> <return-val>)` rather than just
+      <new-val>. This is useful when writing atomic pull fns, etc."
+  ([atom_ ks f]
+     (if (empty? ks)
+       (loop []
+         (let [old-val @atom_
+               [new-val return-val] (swapped* (f old-val))]
+           ;; #+cljs (do (reset! atom_ new-val) return-val)
+           ;; #+clj
+           (if-not (compare-and-set! atom_ old-val new-val)
+             (recur) ; Ref. http://goo.gl/rFG8mW
+             return-val)))
+
+       (loop []
+         (let [old-val @atom_
+               [new-val return-val] (swapped*-in old-val ks f)]
+           ;; #+cljs (do (reset! atom_ new-val) return-val)
+           ;; #+clj
+           (if-not (compare-and-set! atom_ old-val new-val)
+             (recur)
+             return-val)))))
+
+  ([atom_ ks f & more] {:pre [(have? even? (count more))]}
+     (let [pairs (into [[ks f]] (partition 2 more))]
+       (loop []
+         (let [old-val @atom_
+               new-val (replace-in* :swap old-val pairs)]
+           ;; #+cljs (do (reset! atom_ new-val) {:old old-val :new new-val})
+           ;; #+clj
+           (if-not (compare-and-set! atom_ old-val new-val)
+             (recur)
+             ;; No way to support `swapped`:
+             {:old old-val :new new-val}))))))
+
+(defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
+  ([atom_ ks new-val]
+   (if (empty? ks)
+     (reset! atom_ new-val)
+     ;; Actually need swap! (CAS) to preserve other keys:
+     (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
+
+  ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
+   (let [pairs (into [[ks new-val]] (partition 2 more))]
+     (loop []
+       (let [old-val @atom_
+             new-val (replace-in* :reset old-val pairs)]
+         ;; #+cljs (do (reset! atom_ new-val) {:old old-val :new new-val})
+         ;; #+clj
+         (if-not (compare-and-set! atom_ old-val new-val)
+           (recur)
+           {:old old-val :new new-val}))))))
+
+(comment
+  ;;; update-in, `swapped`
+  (let [a_ (atom {:a :A :b :B})] ; Returns new-val (default)
+    [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
+  (let [a_ (atom {:a :A :b :B})] ; Returns old-val
+    [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+  (let [a_ (atom {:a {:b :B}})] ; Returns new-val-in (default)
+    [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
+  (let [a_ (atom {:a {:b :B}})] ; Returns old-val-in
+    [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+  (let [a_ (atom {:a {:b 100}})] (swap-in! a_ [:a :b] inc)) ; => 101
+
+  (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})]
+    (swap-in! a_ [:a :c] :swap/dissoc) @a_)
+
+  ;;; Bulk atomic updates
+  (let [a_ (atom {})]
+    (swap-in! a_
+      []      (constantly {:a {:b :b1 :c :c1 :d 100}})
+      [:a :b] (constantly :b2)
+      ;; [:a] #(dissoc % :c)
+      ;; [:a :c] :swap/dissoc
+      [:a :c] (fn [_] :swap/dissoc)
+      [:a :d] inc))
+
+  (let [a_ (atom {})]
+    (reset-in! a_
+      []      {:a {:b :b1 :c :c1 :d 100}}
+      [:a :b] :b2
+      [:a :d] inc)))
 
 ;;;; Strings
 
