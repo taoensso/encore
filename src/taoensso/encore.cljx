@@ -1118,6 +1118,12 @@
       [:swap [5]] nil ; Noop (no throw)
       )))
 
+(defn- platform-cas!
+  "Minor optimization for single-threaded Cljs"
+  [atom_ old-val new-val]
+  #+cljs (do (reset! atom_ new-val) true)
+  #+clj  (.compareAndSet ^clojure.lang.IAtom atom_ old-val new-val))
+
 (defn swap-in!
   "More powerful version of `swap!`:
     * Supports optional `update-in` semantics.
@@ -1128,32 +1134,27 @@
        (loop []
          (let [old-val @atom_
                [new-val return-val] (swapped* (f old-val))]
-           ;; #+cljs (do (reset! atom_ new-val) return-val)
-           ;; #+clj
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur) ; Ref. http://goo.gl/rFG8mW
-             return-val)))
+           (if (platform-cas! atom_ old-val new-val)
+             return-val
+             ;; Ref. https://goo.gl/HTVSWe:
+             (recur))))
 
        (loop []
          (let [old-val @atom_
                [new-val return-val] (swapped*-in old-val ks f)]
-           ;; #+cljs (do (reset! atom_ new-val) return-val)
-           ;; #+clj
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur)
-             return-val)))))
+           (if (platform-cas! atom_ old-val new-val)
+             return-val
+             (recur))))))
 
   ([atom_ ks f & more] {:pre [(have? even? (count more))]}
      (let [pairs (into [[ks f]] (partition 2 more))]
        (loop []
          (let [old-val @atom_
                new-val (replace-in* :swap old-val pairs)]
-           ;; #+cljs (do (reset! atom_ new-val) {:old old-val :new new-val})
-           ;; #+clj
-           (if-not (compare-and-set! atom_ old-val new-val)
-             (recur)
+           (if (platform-cas! atom_ old-val new-val)
              ;; No way to support `swapped`:
-             {:old old-val :new new-val}))))))
+             {:old old-val :new new-val}
+             (recur)))))))
 
 (defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
   ([atom_ ks new-val]
@@ -1167,11 +1168,9 @@
      (loop []
        (let [old-val @atom_
              new-val (replace-in* :reset old-val pairs)]
-         ;; #+cljs (do (reset! atom_ new-val) {:old old-val :new new-val})
-         ;; #+clj
-         (if-not (compare-and-set! atom_ old-val new-val)
-           (recur)
-           {:old old-val :new new-val}))))))
+         (if (platform-cas! atom_ old-val new-val)
+           {:old old-val :new new-val}
+           (recur)))))))
 
 (comment
   ;;; update-in, `swapped`
@@ -1538,7 +1537,8 @@
     (let [old-m @atom_
           new-v (f (get old-m k))
           new-m (assoc old-m k new-v)]
-      (if (compare-and-set! atom_ old-m new-m) new-v
+      (if (platform-cas! atom_ old-m new-m)
+        new-v
         (recur)))))
 
 (defn memoize_
