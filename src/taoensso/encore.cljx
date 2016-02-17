@@ -1611,7 +1611,7 @@
    (let [cache_ (atom {})] ; {<args> <delay-val>}
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) @cache_ ; Support debugging
+         (kw-identical? arg1 :mem/get) cache_ ; Support debugging
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
@@ -1658,7 +1658,7 @@
 
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) @cache_
+         (kw-identical? arg1 :mem/get) cache_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
@@ -1756,7 +1756,7 @@
 
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) @state_
+         (kw-identical? arg1 :mem/get) state_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! state_ {:tick 0})
@@ -1830,74 +1830,89 @@
           _           (assert (or (zero? nid-specs) (= nid-specs nspecs)))
           return-ids? (not (zero? nid-specs))]
 
-      (fn check-rate-limits [& [req-id]]
-        (let [instant (now-udt)]
+      (fn check-rate-limits [& [?a1 ?a2]]
+        (cond
+          (kw-identical? ?a1 :rl/get) vstates_ ; Support debugging
+          (kw-identical? ?a1 :rl/reset)
+          (do
+            (if (kw-identical? ?a2 :rl/all)
+              (reset! vstates_ {})
+              (swap!  vstates_ dissoc ?a2))
+            nil)
 
-          (when (and req-id (gc-now?))
-            (swap-in! vstates_ []
-              (fn gc [m]
-                (reduce-kv
-                  (fn [m* req-id vstate]
-                    (let [^long max-udt-win-start
-                          (reduce (fn [^long acc [_ ^long udt _]]
-                                    (max acc udt))
-                            0 vstate)
-                          min-win-ms-elapsed (- instant max-udt-win-start)]
-                      (if (> min-win-ms-elapsed max-win-ms)
-                        (dissoc m* req-id)
-                        m*)))
-                  m m))))
+          :else
+          (let [req-id  ?a1
+                instant (now-udt)]
 
-          (swap-in! vstates_ [req-id]
-            (fn [?vstate]
-              (if-not ?vstate
-                (swapped (vec (repeat nspecs [1 instant])) nil)
-                ;; Need to atomically check if all limits pass before committing
-                ;; to any ncall increments:
-                (let [[vstate-with-resets ?worst-limit-offence]
-                      (loop [in-vspecs  vspecs
-                             in-vstate  ?vstate
-                             out-vstate []
-                             ?worst-limit-offence nil]
-                        (let [[[^long ncalls-limit ^long win-ms ?spec-id]
-                               & next-in-vspecs] in-vspecs
-                              [[^long ncalls ^long udt-win-start]
-                               & next-in-vstate] in-vstate
+            (when (and req-id (gc-now?))
+              (swap-in! vstates_ []
+                (fn gc [m]
+                  (reduce-kv
+                    (fn [m* req-id vstate]
+                      (let [^long max-udt-win-start
+                            (reduce (fn [^long acc [_ ^long udt _]]
+                                      (max acc udt))
+                              0 vstate)
+                            min-win-ms-elapsed (- instant max-udt-win-start)]
+                        (if (> min-win-ms-elapsed max-win-ms)
+                          (dissoc m* req-id)
+                          m*)))
+                    m m))))
 
-                              win-ms-elapsed (- instant udt-win-start)
-                              reset-due?     (>= win-ms-elapsed win-ms)
-                              rate-limited?  (and (not reset-due?)
-                                                  (>= ncalls ncalls-limit))
-                              new-out-vstate ; No ncall increments yet:
-                              (conj out-vstate
-                                (if reset-due? [0 instant] [ncalls udt-win-start]))
+            (swap-in! vstates_ [req-id]
+              (fn [?vstate]
+                (if-not ?vstate
+                  (swapped (vec (repeat nspecs [1 instant])) nil)
+                  ;; Need to atomically check if all limits pass before committing
+                  ;; to any ncall increments:
+                  (let [[vstate-with-resets ?worst-limit-offence]
+                        (loop [in-vspecs  vspecs
+                               in-vstate  ?vstate
+                               out-vstate []
+                               ?worst-limit-offence nil]
+                          (let [[[^long ncalls-limit ^long win-ms ?spec-id]
+                                 & next-in-vspecs] in-vspecs
+                                [[^long ncalls ^long udt-win-start]
+                                 & next-in-vstate] in-vstate
 
-                              new-?worst-limit-offence
-                              (if-not rate-limited?
-                                ?worst-limit-offence
-                                (let [ms-wait (- win-ms win-ms-elapsed)]
-                                  (if (or (nil? ?worst-limit-offence)
-                                          (let [[^long max-ms-wait _] ?worst-limit-offence]
-                                            (> ms-wait max-ms-wait)))
-                                    [ms-wait ?spec-id]
-                                    ?worst-limit-offence)))]
+                                win-ms-elapsed (- instant udt-win-start)
+                                reset-due?     (>= win-ms-elapsed win-ms)
+                                rate-limited?  (and (not reset-due?)
+                                                    (>= ncalls ncalls-limit))
+                                new-out-vstate ; No ncall increments yet:
+                                (conj out-vstate
+                                  (if reset-due? [0 instant] [ncalls udt-win-start]))
 
-                          (if-not next-in-vspecs
-                            [new-out-vstate new-?worst-limit-offence]
-                            (recur next-in-vspecs next-in-vstate new-out-vstate
-                                   new-?worst-limit-offence))))
+                                new-?worst-limit-offence
+                                (if-not rate-limited?
+                                  ?worst-limit-offence
+                                  (let [ms-wait (- win-ms win-ms-elapsed)]
+                                    (if (or (nil? ?worst-limit-offence)
+                                            (let [[^long max-ms-wait _] ?worst-limit-offence]
+                                              (> ms-wait max-ms-wait)))
+                                      [ms-wait ?spec-id]
+                                      ?worst-limit-offence)))]
 
-                      all-limits-pass? (nil? ?worst-limit-offence)
-                      new-vstate (if-not all-limits-pass?
-                                   vstate-with-resets
-                                   (mapv (fn [[^long ncalls udt-win-start]]
-                                           [(inc ncalls) udt-win-start])
-                                     vstate-with-resets))
+                            (if-not next-in-vspecs
+                              [new-out-vstate new-?worst-limit-offence]
+                              (recur next-in-vspecs next-in-vstate new-out-vstate
+                                     new-?worst-limit-offence))))
 
-                      result (when-let [wlo ?worst-limit-offence]
-                               (if return-ids? wlo (let [[ms-wait _] wlo] ms-wait)))]
+                        all-limits-pass? (nil? ?worst-limit-offence)
+                        new-vstate
+                        (if-not all-limits-pass?
+                          vstate-with-resets
+                          (mapv (fn [[^long ncalls udt-win-start]]
+                                  [(inc ncalls) udt-win-start])
+                            vstate-with-resets))
 
-                (swapped new-vstate result))))))))))
+                        result
+                        (when-let [wlo ?worst-limit-offence]
+                          (if return-ids?
+                            wlo
+                            (let [[ms-wait _] wlo] ms-wait)))]
+
+                    (swapped new-vstate result)))))))))))
 
 (comment
   (def rl (rate-limiter* [[5 2000 :5s] [10 10000 :10s]]))
