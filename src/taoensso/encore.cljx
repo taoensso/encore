@@ -1611,7 +1611,7 @@
    (let [cache_ (atom {})] ; {<args> <delay-val>}
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) cache_ ; Support debugging
+         (kw-identical? arg1 :mem/debug) cache_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
@@ -1658,7 +1658,7 @@
 
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) cache_
+         (kw-identical? arg1 :mem/debug) cache_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
@@ -1756,7 +1756,7 @@
 
      (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/get) state_
+         (kw-identical? arg1 :mem/debug) state_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! state_ {:tick 0})
@@ -1832,7 +1832,7 @@
 
       (fn check-rate-limits [& [?a1 ?a2]]
         (cond
-          (kw-identical? ?a1 :rl/get) vstates_ ; Support debugging
+          (kw-identical? ?a1 :rl/debug) vstates_
           (kw-identical? ?a1 :rl/reset)
           (do
             (if (kw-identical? ?a2 :rl/all)
