@@ -1841,7 +1841,8 @@
             nil)
 
           :else
-          (let [req-id  ?a1
+          (let [peek?   (kw-identical? ?a1 :rl/peek)
+                req-id  (if peek? ?a2 ?a1)
                 instant (now-udt)]
 
             (when (and req-id (gc-now?))
@@ -1862,7 +1863,10 @@
             (swap-in! vstates_ [req-id]
               (fn [?vstate]
                 (if-not ?vstate
-                  (swapped (vec (repeat nspecs [1 instant])) nil)
+                  (if peek?
+                    (swapped ?vstate nil)
+                    (swapped (vec (repeat nspecs [1 instant])) nil))
+
                   ;; Need to atomically check if all limits pass before committing
                   ;; to any ncall increments:
                   (let [[vstate-with-resets ?worst-limit-offence]
@@ -1900,8 +1904,10 @@
 
                         all-limits-pass? (nil? ?worst-limit-offence)
                         new-vstate
-                        (if-not all-limits-pass?
-                          vstate-with-resets
+                        (cond
+                          peek? ?vstate
+                          (not all-limits-pass?) vstate-with-resets
+                          :else
                           (mapv (fn [[^long ncalls udt-win-start]]
                                   [(inc ncalls) udt-win-start])
                             vstate-with-resets))
@@ -1915,12 +1921,13 @@
                     (swapped new-vstate result)))))))))))
 
 (comment
-  (def rl (rate-limiter* [[5 2000 :5s] [10 10000 :10s]]))
+  (def rl (rate-limiter* [[5 2000 :5s] [10 20000 :20s]]))
   (def rl (rate-limiter* [[5 2000    ] [10 10000     ]]))
   (def rl (rate-limiter* [[5 2000 :5s]]))
-  (repeatedly 5 rl)
-  (rl :req-id-1)
-  (rl :req-id-2)
+  (repeatedly 5 (fn [] (rl :rid1)))
+  (rl :rid1)
+  (rl :rl/peek :rid1)
+  (rl :rid2)
   (qb 10000 (rl)))
 
 (defn rate-limit [specs f]
