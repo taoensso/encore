@@ -1599,12 +1599,11 @@
 
 (defn memoize*
   "Like `clojure.core/memoize` but:
-    * Uses delays to prevent race conditions on writes.
-    * Supports auto invalidation & gc with `ttl-ms` option.
-    * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`.
-    * Supports cache size limit & gc with `cache-size` option.
-
-  Much faster than `clojure.core.memoize`."
+    * Can be significantly faster (depends on opts)
+    * Uses delays to prevent race conditions on writes
+    * Supports auto invalidation & gc with `ttl-ms` option
+    * Supports cache size limit & gc with `cache-size` option
+    * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`"
 
   ;; De-raced, commands
   ([f]
