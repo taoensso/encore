@@ -1122,7 +1122,7 @@
   "Minor optimization for single-threaded Cljs"
   [atom_ old-val new-val]
   #+cljs (do (reset! atom_ new-val) true)
-  #+clj  (.compareAndSet ^clojure.lang.IAtom atom_ old-val new-val))
+  #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
 
 (defn swap-in!
   "More powerful version of `swap!`:
