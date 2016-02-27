@@ -281,6 +281,7 @@
 (defmacro catch-errors* "Experimental!"
   ;; Badly need something like http://dev.clojure.org/jira/browse/CLJ-1293
   ;; TODO js/Error instead of :default as temp workaround for http://goo.gl/UW7773
+  ([try-form] `(catch-errors* ~try-form ~'_ nil))
   ([try-form error-sym error-form]
    `(if-cljs
       (try ~try-form (catch js/Error  ~error-sym ~error-form))
