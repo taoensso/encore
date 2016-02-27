@@ -100,7 +100,7 @@
   {:arglists '([name expr])}
   [name & sigs]
   (let [[name [expr]] (name-with-attrs name sigs)]
-    `(clojure.core/defonce ~name ~expr)))
+    `(defonce ~name ~expr)))
 
 (defmacro declare-remote
   "Declares the given ns-qualified names, preserving symbol metadata. Useful for
