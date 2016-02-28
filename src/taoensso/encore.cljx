@@ -82,17 +82,19 @@
 
 (defn name-with-attrs
   "Handles optional docstrings & attr maps for a macro def's name.
-  Stolen from `clojure.tools.macro`."
-  [name macro-args]
-  (let [[docstring macro-args] (if (string? (first macro-args))
-                                 [(first macro-args) (next macro-args)]
-                                 [nil macro-args])
-        [attr macro-args] (if (map? (first macro-args))
-                            [(first macro-args) (next macro-args)]
-                            [{} macro-args])
-        attr (if docstring (assoc attr :doc docstring) attr)
-        attr (if (meta name) (conj (meta name) attr)   attr)]
-    [(with-meta name attr) macro-args]))
+  Originally stolen from `clojure.tools.macro`"
+  ([name             macro-args] (name-with-attrs name nil macro-args))
+  ([name attrs-merge macro-args]
+   (let [[docstring macro-args] (if (string? (first macro-args))
+                                  [(first macro-args) (next macro-args)]
+                                  [nil macro-args])
+         [attrs macro-args] (if (map? (first macro-args))
+                              [(first macro-args) (next macro-args)]
+                              [{} macro-args])
+         attrs (if docstring (assoc attrs :doc docstring) attrs)
+         attrs (if (meta name) (conj (meta name) attrs)   attrs)
+         attrs (conj attrs attrs-merge)]
+     [(with-meta name attrs) macro-args])))
 
 (defmacro defonce*
   "Like `clojure.core/defonce` but supports optional docstring and attributes
