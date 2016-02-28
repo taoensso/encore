@@ -1776,9 +1776,8 @@
              (swap! state_
                (fn [m]
                  (if-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
-                   (merge m {:tick (inc tick)
-                             args  [dv ?udt tick (inc tick-lfu)]})
-                   (merge m {:tick (inc tick)}))))
+                   (assoc m :tick (inc tick) args [dv ?udt tick (inc tick-lfu)])
+                   (assoc m :tick (inc tick)))))
              @dv)))))))
 
 (comment
