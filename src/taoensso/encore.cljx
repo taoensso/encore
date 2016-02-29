@@ -369,9 +369,8 @@
     (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
     (string? x) x))
 
-(defn as-?int [x]
-  (cond (nil?    x) nil
-        (number? x) (long x)
+(defn as-?int #_as-?long [x]
+  (cond (number? x) (long x)
         (string? x)
         #+cljs (let [x (js/parseInt x 10)] (when-not (js/isNaN x) x))
         #+clj  (try (Long/parseLong x)
@@ -379,13 +378,17 @@
                       (try (long (Float/parseFloat x))
                            (catch NumberFormatException _ nil))))))
 
-(defn as-?float [x]
-  (cond (nil?    x) nil
-        (number? x) (double x)
+(defn as-?float #_as-?double [x]
+  (cond (number? x) (double x)
         (string? x)
         #+cljs (let [x (js/parseFloat x)] (when-not (js/isNaN x) x))
         #+clj  (try (Double/parseDouble x)
                     (catch NumberFormatException _ nil))))
+
+(defn as-?uint   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
+(defn as-?ufloat [x] (when-let [n (as-?float x)] (when-not (neg? ^double n) n)))
+(defn as-?pint   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
+(defn as-?pfloat [x] (when-let [n (as-?float x)] (when     (pos? ^double n) n)))
 
 (defn as-?bool [x]
   (cond (nil?  x) nil
@@ -429,10 +432,15 @@
 (defn as-name   [x] (or (as-?name   x) (?as-throw :name   x)))
 (defn as-qname  [x] (or (as-?qname  x) (?as-throw :qname  x)))
 (defn as-bool   [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (?as-throw :bool x))))
-(defn as-int    [x] (or (as-?int    x) (?as-throw :int    x)))
-(defn as-float  [x] (or (as-?float  x) (?as-throw :float  x)))
 (defn as-email  [x] (or (as-?email  x) (?as-throw :email  x)))
 (defn as-nemail [x] (or (as-?nemail x) (?as-throw :nemail x)))
+
+(defn as-int      ^long [x] (or (as-?int    x) (?as-throw :int    x)))
+(defn as-uint     ^long [x] (or (as-?uint   x) (?as-throw :uint   x)))
+(defn as-pint     ^long [x] (or (as-?pint   x) (?as-throw :pint   x)))
+(defn as-float  ^double [x] (or (as-?float  x) (?as-throw :float  x)))
+(defn as-ufloat ^double [x] (or (as-?ufloat x) (?as-throw :ufloat x)))
+(defn as-pfloat ^double [x] (or (as-?pfloat x) (?as-throw :pfloat x)))
 
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
