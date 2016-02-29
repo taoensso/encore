@@ -400,6 +400,26 @@
 (comment (mapv as-?nemail ["foo" "foo@" "foo@bar" "Foo@BAR.com"
                            "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"]))
 
+(defn- try-pred [pred x] (catch-errors* (pred x) _ false))
+(defn when?     [pred x] (when (try-pred pred x) x))
+(defn is! "Cheaper `have!` that provides less diagnostic info"
+  ([     x] (is! identity x nil)) ; Nb different to single-arg `have`
+  ([pred x] (is! identity x nil))
+  ([pred x fail-?data]
+   (if (try-pred pred x)
+     x
+     (throw (ex-info (str "`is!` " (str pred) " failure against arg: "
+                       (pr-str x))
+              {:arg-val x :arg-type (type x) :fail-?data fail-?data})))))
+
+(comment
+  (is! false)
+  (when-let [n (when? nneg? (as-?int 37))] n)
+  (qb 100000 ; [7.85 12.66 24.24]
+    (     string? "foo") ; Lower limit
+    (is!  string? "foo")
+    (have string? "foo")))
+
 (defn- ?as-throw [as-name x]
   (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
            {:arg x :type (type x)})))
@@ -421,6 +441,28 @@
 (comment (nnil= :foo :foo nil))
 
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
+
+;;;; Invariants
+
+(defmacro check-some
+  "Returns first logical false/throwing expression (id/form), or nil"
+  ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
+  ([test]
+   (let [[error-id test] (if (vector? test) test [nil test])]
+     `(let [[test# err#] (catch-errors ~test)]
+        (when-not test# (or ~error-id '~test :check/falsey))))))
+
+(defmacro check-all
+  "Returns all logical false/throwing expressions (ids/forms), or nil"
+  ([test] `(check-some ~test))
+  ([test & more]
+   `(let [errors# (filterv identity
+                    [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
+      (not-empty errors#))))
+
+(comment
+  (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
+  (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
 ;;;; Keywords
 
@@ -1416,51 +1458,6 @@
           (hex) (hex) (hex) (hex)))))
 
 (comment (uuid-str 5))
-
-;;;; Invariants
-
-(defn- try-pred [pred x] (catch-errors* (pred x) _ false))
-
-(defn is!
-  "Experimental. Cheaper `have!` alt that provides less diagnostic info."
-  ([     x] (if x x (is! identity x))) ; Nb different to single-arg `have`
-  ([pred x]
-   (if (try-pred pred x) ; `try` perf impact is infinitesimal here
-     x
-     (throw (ex-info (str "`is!` " (str pred) " failure against arg: " (pr-str x))
-              {:arg x :arg-type (type x)})))))
-
-(comment (is! false))
-
-(defn when? "Experimental. For use with `if-let`s, `when-let`s, etc."
-  [pred x] (when (try-pred pred x) x))
-
-(comment
-  (when-let [x (when? pos? 37)] x)
-  (qb 100000 ; [7.85 12.66 24.24]
-    (     string? "foo") ; Lower limit
-    (is!  string? "foo")
-    (have string? "foo")))
-
-(defmacro check-some
-  "Returns first logical false/throwing expression (id/form), or nil"
-  ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
-  ([test]
-   (let [[error-id test] (if (vector? test) test [nil test])]
-     `(let [[test# err#] (catch-errors ~test)]
-        (when-not test# (or ~error-id '~test :check/falsey))))))
-
-(defmacro check-all
-  "Returns all logical false/throwing expressions (ids/forms), or nil"
-  ([test] `(check-some ~test))
-  ([test & more]
-   `(let [errors# (filterv identity
-                    [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
-      (not-empty errors#))))
-
-(comment
-  (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
-  (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
 ;;;; Env
 
