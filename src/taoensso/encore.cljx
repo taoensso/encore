@@ -143,7 +143,7 @@
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
-(comment (cond false "false") (cond! false "false"))
+(comment [(cond false "false") (cond! false "false")])
 
 (defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`"
   [[name x] & clauses]
@@ -255,7 +255,7 @@
     #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
     #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
 
-  ;; Nb nil to help distinguish from negative (false) `instance?` test:
+  ;; nil to help distinguish from negative `instance?` test:
   (defn chan? [x] nil))
 
 #+clj (defn throwable? [x] (instance? Throwable x))
@@ -423,13 +423,7 @@
                        (pr-str x))
               {:arg-val x :arg-type (type x) :fail-?data fail-?data})))))
 
-(comment
-  (is! false)
-  (when-let [n (when? nneg? (as-?int 37))] n)
-  (qb 100000 ; [7.85 12.66 24.24]
-    (     string? "foo") ; Lower limit
-    (is!  string? "foo")
-    (have string? "foo")))
+(comment [(is! false) (when-let [n (when? nneg? (as-?int 37))] n)])
 
 (defn- ?as-throw [as-name x]
   (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
@@ -474,10 +468,7 @@
 
 ;;;; Keywords
 
-(def qname "Like `name` but includes keyword namespaces in name string" as-qname)
-(comment (map qname ["foo" :foo :foo.bar/baz]))
-
-(defn explode-keyword [k] (str/split (qname k) #"[\./]"))
+(defn explode-keyword [k] (str/split (as-qname k) #"[\./]"))
 (comment (explode-keyword :foo.bar/baz))
 
 (defn merge-keywords [ks & [no-slash?]]
@@ -490,13 +481,7 @@
           (keyword (when-not (empty? ppop) (str/join "." ppop))
             (peek parts)))))))
 
-(comment
-  (merge-keywords [:foo.bar nil :baz.qux/end nil])
-  (merge-keywords [:foo.bar nil :baz.qux/end nil] :no-slash)
-  (merge-keywords [:a.b.c "d.e/k"])
-  (merge-keywords [:a.b.c :d.e/k])
-  (merge-keywords [nil :k])
-  (merge-keywords [nil]))
+(comment (merge-keywords [:foo.bar nil "d.e/k" :baz.qux/end nil] :no))
 
 ;;;; Bytes
 
@@ -690,9 +675,7 @@
   ([coll ?x      ] (if (nnil? ?x) (conj coll ?x) coll))
   ([coll ?x & ?xs] (reduce conj-some (conj-some coll ?x) ?xs)))
 
-(comment
-  (nnil-set [:a :b nil])
-  (conj-some [] :a :b nil :c :d nil :e))
+(comment [(nnil-set [:a :b nil]) (conj-some [] :a :b nil :c :d nil :e)])
 
 (defn preserve-reduced "As `clojure.core/preserving-reduced`"
   [rf]
@@ -712,13 +695,78 @@
   [pred coll]
   (reduce (fn [acc in] (if (pred in) true (reduced nil))) true coll))
 
-;; Experimental
-;; (defn every [pred coll]
-;;   (if (nil? coll)
-;;     [] ; Match (every? even? nil) = (every? even? []) => true
-;;     (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll)))
+(defn every [pred coll]
+  ;; Note that `(every? even? nil)` ≠ `(every even? nil)`
+  (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll))
 
-(comment [(every? even? []) (every even? [])])
+(comment [(every? even? nil) (every even? nil)])
+
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn reduce-kvs
+    "Like `reduce-kv` but takes a flat sequence of kv pairs"
+    [rf init kvs]
+    (transduce (partition-all 2)
+      (completing (fn [acc [k v]] (rf acc k v)))
+      init kvs))
+
+  (defn reduce-kvs [rf init kvs]
+    (reduce (fn [acc [k v]] (rf acc k v))
+      init (partition-all 2 kvs))))
+
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn into!
+       ([to       from] (reduce          conj! to from))
+       ([to xform from] (transduce xform conj! to from)))
+  (defn into! [to from] (reduce          conj! to from)))
+
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn xdistinct
+    ([] (distinct)) ; clojure.core now has a distinct transducer
+    ([keyfn]
+     (fn [rf]
+       (let [seen_ (volatile! #{})]
+         (fn
+           ([]    (rf))
+           ([acc] (rf acc))
+           ([acc input]
+            (let [k (keyfn input)]
+              (if (contains? @seen_ k)
+                acc
+                (do (vswap! seen_ conj k)
+                    (rf acc input)))))))))))
+
+(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
+
+(declare subvec*)
+(compile-if (do (completing (fn [])) true) ; We have transducers
+  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
+  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
+
+(defn into-all "Like `into` but supports multiple \"from\"s"
+  ([to from       ] (into to from))
+  ([to from & more] (reduce into (into to from) more)))
+
+(defn repeatedly-into
+  "Like `repeatedly` but faster and `conj`s items into given collection"
+  [coll ^long n f]
+  (if (and (> n 10) ; Worth the fixed transient overhead
+           #+clj  (instance?   clojure.lang.IEditableCollection coll)
+           #+cljs (implements? IEditableCollection              coll))
+    (loop [v (transient coll) idx 0]
+      (if (== idx n)
+        (persistent! v)
+        (recur (conj! v (f)) (unchecked-inc idx))))
+    (loop [v coll idx 0]
+      (if (== idx n)
+        v
+        (recur (conj v (f)) (unchecked-inc idx))))))
+
+(defn map-vals       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m k (f v))) {} m)))
+(defn map-keys       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
+(defn filter-kvs  [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
+(defn filter-keys [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred k)   m (dissoc m k))) m m)))
+(defn filter-vals [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred v)   m (dissoc m k))) m m)))
+(defn remove-vals [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m))   m m)))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
@@ -804,13 +852,6 @@
 
 (comment (subvec* [:a :b :c :d :e] -1))
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (defn into!
-       ([to       from] (reduce          conj! to from))
-       ([to xform from] (transduce xform conj! to from)))
-  (defn into! [to from] (reduce          conj! to from)))
-
-(declare repeatedly-into)
 (defn top
   "Returns a sorted vector of the top n items from coll of N items in O(N.logn)
   time. (take n (sort-by ...)) is O(N.logN) time, so much slower when n << N.
@@ -875,107 +916,26 @@
 
 (defn queue* [& items] (queue items))
 
-(def seq-kvs
-  "(seq     {:a :A}) => ([:a :A])
-   (seq-kvs {:a :A}) => (:a :A)"
-  (partial reduce concat))
+(def seq-kvs "(seq-kvs {:a :A}) => (:a :A)" (partial reduce concat))
+(defn mapply "Like `apply` but calls `seq-kvs` on final arg"
+  [f & args] (apply f (concat (butlast args) (seq-kvs (last args)))))
 
-(comment (seq-kvs {:a :A :b :B}))
-
-(defn mapply
-  "Like `apply` but assumes last arg is a map whose elements should be applied
-  to `f` as an unpaired seq:
-    (mapply (fn [x & {:keys [y z]}] (str x y z)) 1 {:y 2 :z 3})
-      where fn will receive args as: `(1 :y 2 :z 3)`."
-  [f & args]
-  (apply f (concat (butlast args) (seq-kvs (last args)))))
-
-(defn map-kvs [kf vf m]
-  (if-not m {}
-    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond (nil? kf) (fn [k _] k)
-                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                   :else kf)]
-      (persistent!
-        (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
-          (transient {}) m)))))
-
-(defn map-vals [f m] (map-kvs nil (fn [_ v] (f v)) m))
-(defn map-keys [f m] (map-kvs (if (kw-identical? f :keywordize) :keywordize (fn [k _] (f k)))
-                       nil m))
-
-(defn filter-kvs [predk predv m]
-  (if-not m {}
-    (reduce-kv (fn [m k v] (if (and (predk k) (predv v)) m (dissoc m k))) m m)))
-
-(defn filter-keys [pred m] (filter-kvs pred (constantly true) m))
-(defn filter-vals [pred m] (filter-kvs (constantly true) pred m))
-
-(comment (filter-vals (complement nil?) {:a :A :b :B :c false :d nil}))
-
-(defn remove-vals
-  "Smaller, common-case version of `filter-vals`. Esp useful with `nil?`/`blank?`
-  pred when constructing maps: {:foo (when _ <...>) :bar (when _ <...>)} in a
-  way that preservers :or semantics."
-  [pred m]
-  (if-not m {}
-    (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m)))
-
-(comment (remove-vals nil? {:a :A :b false :c nil :d :D}))
-
-;; (def keywordize-map #(map-kvs :keywordize nil %))
-(defn keywordize-map [m]
-  (if-not m {}
-    (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m)))
-
-(comment (keywordize-map nil)
-         (keywordize-map {"akey" "aval" "bkey" "bval"}))
-
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (defn- as-map* [kf vf kvs]
-    (transduce
-      (partition-all 2)
-      (completing (fn [acc [k v]] (assoc! acc (kf k v) (vf k v))) persistent!)
-      (transient {})
-      kvs))
-  (defn- as-map* [kf vf kvs]
-    (loop [m (transient {}) [k v :as s] kvs]
-      (let [new-m (assoc! m (kf k v) (vf k v))]
-        (if-let [n (nnext s)]
-          (recur new-m n)
-          (persistent! new-m))))))
-
-(defn as-map "Cross between `hash-map` & `map-kvs`"
-  [kvs & [kf vf]]
-  (if (empty? kvs) {}
-    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond (nil? kf) (fn [k _] k)
-                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                   :else kf)]
-      (as-map* kf vf kvs))))
-
-(comment
-  (as-map nil)
-  (as-map [])
-  (as-map ["a" "A" "b" "B" "c" "C"] :keywordize
-    (fn [k v] (case k (:a :b) (str "boo-" v) v))))
+(comment [(seq-kvs {:a :A :b :B}) (mapply str 1 2 3 {:a :A})])
 
 (defn fzipmap "Faster `zipmap` using transients" [ks vs]
   (loop [m  (transient {})
          ks (seq ks)
          vs (seq vs)]
-    (if-not (and ks vs) (persistent! m)
+    (if-not (and ks vs)
+      (persistent! m)
       (recur (assoc! m (first ks) (first vs))
         (next ks)
         (next vs)))))
 
 (comment (let [kvs (range 100)] (qb 100 (zipmap kvs kvs) (fzipmap kvs kvs))))
 
-(defn into-all "Like `into` but supports multiple \"from\"s"
-  ([to from       ] (into to from))
-  ([to from & more] (reduce into (into to from) more)))
-
-(defn interleave-all "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb"
+(defn interleave-all
+  "Greedy version of `interleave`, Ref. http://goo.gl/KvzqWb"
   ([] '())
   ([c1] (lazy-seq c1))
   ([c1 c2]
@@ -994,57 +954,6 @@
                 (apply interleave-all (map rest ss)))))))
 
 (comment (interleave-all [:a :b :c] [:A :B :C :D :E] [:1 :2]))
-
-(defn distinct-by [keyfn coll]
-  (let [step (fn step [xs seen]
-               (lazy-seq
-                ((fn [[v :as xs] seen]
-                   (when-let [s (seq xs)]
-                     (let [v* (keyfn v)]
-                       (if (contains? seen v*)
-                         (recur (rest s) seen)
-                         (cons v (step (rest s) (conj seen v*)))))))
-                 xs seen)))]
-    (step coll #{})))
-
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (defn xdistinct
-    ([] (distinct)) ; clojure.core now has a distinct transducer
-    ([keyfn]
-     (fn [rf]
-       (let [seen_ (volatile! #{})]
-         (fn
-           ([]    (rf))
-           ([acc] (rf acc))
-           ([acc input]
-            (let [k (keyfn input)]
-              (if (contains? @seen_ k)
-                acc
-                (do (vswap! seen_ conj k)
-                    (rf acc input)))))))))))
-
-(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
-
-(compile-if (do (completing (fn [])) true) ; We have transducers
-  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
-  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
-
-(defn removev [pred coll] (filterv (complement pred) coll))
-(defn distinctv
-  ([      coll] (distinctv identity coll))
-  ([keyfn coll]
-   (let [tr (reduce (fn [[v seen] in]
-                      (let [in* (keyfn in)]
-                        (if-not (contains? seen in*)
-                          [(conj! v in) (conj seen in*)]
-                          [v seen])))
-              [(transient []) #{}]
-              coll)]
-     (persistent! (nth tr 0)))))
-
-(comment
-  (distinctv        [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]])
-  (distinctv second [[:a 1] [:a 1] [:a 2] [:b 1] [:b 3]]))
 
 #+cljs (defn rcompare "Reverse comparator" [x y] (compare y x))
 #+clj  (defn rcompare "Reverse comparator"
@@ -1081,21 +990,6 @@
     nil
     {}) ; =>
   {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
-
-(defn repeatedly-into
-  "Like `repeatedly` but faster and `conj`s items into given collection"
-  [coll ^long n f]
-  (if (and (> n 10) ; Worth the fixed transient overhead
-           #+clj  (instance?   clojure.lang.IEditableCollection coll)
-           #+cljs (implements? IEditableCollection              coll))
-    (loop [v (transient coll) idx 0]
-      (if (== idx n)
-        (persistent! v)
-        (recur (conj! v (f)) (unchecked-inc idx))))
-    (loop [v coll idx 0]
-      (if (== idx n)
-        v
-        (recur (conj v (f)) (unchecked-inc idx))))))
 
 ;;;; Swap stuff
 
@@ -1407,25 +1301,9 @@
    nil
    coll))
 
-(defn path
-  "Joins string paths (URLs, file paths, etc.) ensuring correct \"/\"
-  interposition"
-  [& parts] (apply join-once "/" parts))
+(defn path [& parts] (apply join-once "/" parts))
 
-(comment (path "foo/"  "/bar" "baz/" "/qux/")
-         (path "foo" nil "" "bar"))
-
-;; (defn base64-enc "Encodes string as URL-safe Base64 string."
-;;   [s] {:pre [(have? string? s)]}
-;;   #+clj  (Base64/encodeBase64URLSafeString (.getBytes ^String s "UTF-8"))
-;;   #+cljs (base64/encodeString s (boolean :web-safe)))
-
-;; (defn base64-dec "Decodes Base64 string to string."
-;;   [s]
-;;   #+clj  (String. (Base64/decodeBase64 ^String s) "UTF-8")
-;;   #+cljs (base64/decodeString s (boolean :web-safe)))
-
-;; (comment (-> "Hello this is a test" base64-enc base64-dec))
+(comment (path "foo/" nil "/bar" "baz/" "/qux/"))
 
 (defn norm-word-breaks
   "Converts all word breaks of any form and length (including line breaks of any
@@ -1467,9 +1345,7 @@
              [] (keys &env))]
     `(zipmap '~ks ~ks)))
 
-(comment
-  (let [x :x]    (get-env))
-  ((fn [^long x] (get-env)) 0))
+(comment [(let [x :x] (get-env)) ((fn [^long x] (get-env)) 0)])
 
 ;;;; IO
 
@@ -2053,6 +1929,8 @@
 
 (declare spaced-str-with-nils)
 
+;;;; Browser stuff
+
 #+cljs
 (do ; Trivial client-side logging stuff
   (def ^:private console-log
@@ -2082,8 +1960,6 @@
        :hash     (.-hash     loc) ; "#bang"
        })))
 
-;;;; Ajax
-
 #+cljs (def ^:private xhr-pool_ (delay (goog.net.XhrIoPool.)))
 #+cljs
 (defn- get-pooled-xhr!
@@ -2106,7 +1982,6 @@
       :post [uri ?pstr]
       :put  [uri ?pstr])))
 
-;; TODO Ajax file params support
 #+cljs
 (defn ajax-lite
   "Alpha - subject to change.
@@ -2128,7 +2003,7 @@
         ;; ?error   - e/o #{:xhr-pool-depleted :exception :http-error :abort
         ;;                  :timeout :no-content <http-error-status> nil}
         (js/alert (str \"Ajax response: \" resp-map)))))"
-
+  ;; TODO Ajax file params support
   [uri {:keys [method params headers timeout-ms resp-type with-credentials?
                progress-fn ; Undocumented, experimental
                errorf] :as opts
@@ -2317,7 +2192,7 @@
 (comment (url-decode (url-encode "Hello there~*+")))
 
 (defn format-query-string [m]
-  (let [param (fn [k v]  (str (url-encode (qname k)) "="
+  (let [param (fn [k v]  (str (url-encode (as-qname k)) "="
                              (url-encode (or (as-?qname v) (str v)))))
         join  (fn [strs] (str/join "&" strs))]
     (if (empty? m)
@@ -2353,7 +2228,7 @@
                   {}
                   (str/split s #"&"))]
           (if-not keywordize? m
-            (keywordize-map m)))))))
+            (map-keys keyword m)))))))
 
 (comment
   (parse-query-params nil)
@@ -2365,8 +2240,8 @@
 (defn merge-url-with-query-string [url m]
   (let [[url ?qstr] (str/split (str url) #"\?" 2)
         qmap  (merge
-                (when ?qstr (keywordize-map (parse-query-params ?qstr)))
-                (keywordize-map m))
+                (when ?qstr (map-keys keyword (parse-query-params ?qstr)))
+                (map-keys keyword m))
         ?qstr (as-?nblank (format-query-string qmap))]
     (if-let [qstr ?qstr] (str url "?" qstr) url)))
 
@@ -2387,51 +2262,39 @@
 ;;;; DEPRECATED
 
 #+cljs (def get-window-location get-win-loc)
+(def a0-memoize_     memoize-a0_)
+(def a1-memoize_     memoize-a1_)
+(def memoize-1       memoize1)
+(def backport-run!   run!*)
+(def fq-name         as-qname)
+(def qname           as-qname)
+(def merge-deep-with nested-merge-with)
+(def merge-deep      nested-merge)
+(def parse-bool      as-?bool)
+(def parse-int       as-?int)
+(def parse-float     as-?float)
 
-(def a0-memoize_ memoize-a0_)
-(def a1-memoize_ memoize-a1_)
+(defmacro cond-throw  [& args] `(cond! ~@args))
+(defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
+(defmacro have-in!   [s1 & sn] `(have! ~s1 :in ~@sn))
 
 ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
 (defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
 (defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
 
-(def backport-run! run!*)
-(def fq-name qname) ; Lots of consumers
-(def memoize-1 memoize1)
-
 ;; Arg order changed for easier partials, etc.:
 (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
-
-(defmacro have-in  "Deprecated" [s1 & sn] `(have  ~s1 :in ~@sn))
-(defmacro have-in! "Deprecated" [s1 & sn] `(have! ~s1 :in ~@sn))
-
-;; Used by Sente <= v1.4.0-alpha2
-(def logging-level (atom :debug)) ; Just ignoring this now
 
 ;; Used by Carmine <= v2.7.0
 (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
 (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
   [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
 
-;; Used by Sente <= v1.1.0
-#+cljs
-(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
-  (when-let [js-win js-?win]
-    (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0)))))
-
 ;;; Arg order changed for easier partials
 (defn keys=      [m ks] (ks=      ks m))
 (defn keys<=     [m ks] (ks<=     ks m))
 (defn keys>=     [m ks] (ks>=     ks m))
 (defn keys=nnil? [m ks] (ks-nnil? ks m))
-
-;;;; Legacy coercions (used by Carmine <= v2.7.1, at least)
-(def parse-bool  as-?bool)
-(def parse-int   as-?int)
-(def parse-float as-?float)
-
-(def merge-deep-with nested-merge-with)
-(def merge-deep      nested-merge)
 
 ;; API changed for greater flexibility:
 (defn rate-limiter [ncalls-limit window-ms] (rate-limiter* [[ncalls-limit window-ms]]))
@@ -2442,7 +2305,13 @@
         {:backoff-ms backoff-ms}
         {:result     (f)}))))
 
-(defmacro cond-throw [& args] `(cond! ~@args))
+;; Used by Sente <= v1.4.0-alpha2
+(def logging-level (atom :debug)) ; Just ignoring this now
+
+#+cljs ; Used by Sente <= v1.1.0
+(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
+  (when-let [js-win js-?win]
+    (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0)))))
 
 #+cljs
 (do ; Level-based Cljs logging (prefer Timbre v4+)
@@ -2459,14 +2328,62 @@
   (defn fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
   (defn reportf [fmt & xs] (when (log? :report) (apply logf fmt xs))))
 
-(defn greatest "Deprecated" [coll & [?comparator]]
+(defn greatest [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
 
-(defn least "Deprecated" [coll & [?comparator]]
+(defn least [coll & [?comparator]]
   (let [comparator (or ?comparator rcompare)]
     (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
 (comment (greatest ["a" "e" "c" "b" "d"]))
 
 (defn clj1098 "Ref. http://goo.gl/0GzRuz" [x] (or x {}))
+
+(defn distinct-by "Deprecated, prefer `xdistinct`"
+  [keyfn coll]
+  (let [step (fn step [xs seen]
+               (lazy-seq
+                ((fn [[v :as xs] seen]
+                   (when-let [s (seq xs)]
+                     (let [v* (keyfn v)]
+                       (if (contains? seen v*)
+                         (recur (rest s) seen)
+                         (cons v (step (rest s) (conj seen v*)))))))
+                 xs seen)))]
+    (step coll #{})))
+
+(defn distinctv "Deprecated, prefer `xdistinct`"
+  ([      coll] (distinctv identity coll))
+  ([keyfn coll]
+   (let [tr (reduce (fn [[v seen] in]
+                      (let [in* (keyfn in)]
+                        (if-not (contains? seen in*)
+                          [(conj! v in) (conj seen in*)]
+                          [v seen])))
+              [(transient []) #{}]
+              coll)]
+     (persistent! (nth tr 0)))))
+
+(defn map-kvs "Deprecated, prefer `reduce-kv`" [kf vf m]
+  (if-not m {}
+    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond (nil? kf) (fn [k _] k)
+                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                   :else kf)]
+      (persistent!
+        (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
+          (transient {}) m)))))
+
+(defn as-map "Deprecated, prefer `reduce-kvs`" [kvs & [kf vf]]
+  (if (empty? kvs) {}
+    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond (nil? kf) (fn [k _] k)
+                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                   :else kf)]
+      (persistent!
+        (reduce-kvs
+          (fn [m k v] (assoc! m (kf k v) (vf k v))) (transient {}) kvs)))))
+
+(defn keywordize-map [m] (map-keys keyword m))
+(defn removev [pred coll] (filterv (complement pred) coll))
