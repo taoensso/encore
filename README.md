@@ -4,7 +4,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/encore "2.39.0"] ; Stable
+[com.taoensso/encore "2.40.0"] ; Stable
 ```
 
 # Encore
