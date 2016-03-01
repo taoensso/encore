@@ -41,10 +41,20 @@
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
-;;;; Version check
+;;;; Truss aliases (for back compatibility, convenience)
+
+(defmacro have   [& sigs] `(taoensso.truss/have   ~@sigs))
+(defmacro have!  [& sigs] `(taoensso.truss/have!  ~@sigs))
+(defmacro have?  [& sigs] `(taoensso.truss/have?  ~@sigs))
+(defmacro have!? [& sigs] `(taoensso.truss/have!? ~@sigs))
+(defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
+(defmacro with-dynamic-assertion-data [& sigs]
+  `(taoensso.truss/with-dynamic-assertion-data ~@sigs))
+
+;;;; Version check (helps with dependency conflicts, etc.)
 
 (declare as-?int)
-(def  encore-version "Used for lib-consumer version assertions" [2 38 0])
+(def             encore-version [2 38 0])
 (defn assert-min-encore-version [min-version]
   (let [[xc yc zc] encore-version
         [xm ym zm] (if (vector? min-version) min-version (re-seq #"\d+" (str min-version)))
@@ -52,7 +62,7 @@
 
     (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
       (throw
-        (ex-info (str "Insufficient com.taoensso/encore version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution).")
+        (ex-info (str "Insufficient `com.taoensso/encore` version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution).")
           {:min-version  (str/join "." [xm ym zm])
            :your-version (str/join "." [xc yc zc])})))))
 
@@ -119,8 +129,8 @@
 
 (defmacro defalias
   "Defines an alias for a var, preserving metadata. Adapted from
-  clojure.contrib/def.clj, Ref. http://goo.gl/xpjeH"
-  ;; TODO Would be nice to have a ClojureScript impln.
+  `clojure.contrib/def.clj`, Ref. http://goo.gl/xpjeH"
+  ;; TODO Would be nice to have a ClojureScript impln. (possible?)
   ([     target] `(defalias ~(symbol (name target)) ~target nil))
   ([name target] `(defalias ~name                   ~target nil))
   ([name target doc]
@@ -181,18 +191,6 @@
 (defmacro do-false [& body] `(do ~@body false))
 (defmacro do-true  [& body] `(do ~@body true))
 
-;;;; Truss aliases
-;; For backwards-compatibility, convenience
-
-(defmacro have   [& sigs] `(taoensso.truss/have   ~@sigs))
-(defmacro have!  [& sigs] `(taoensso.truss/have!  ~@sigs))
-(defmacro have?  [& sigs] `(taoensso.truss/have?  ~@sigs))
-(defmacro have!? [& sigs] `(taoensso.truss/have!? ~@sigs))
-
-(defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
-(defmacro with-dynamic-assertion-data [& sigs]
-  `(taoensso.truss/with-dynamic-assertion-data ~@sigs))
-
 ;;;; Edn
 
 (declare map-keys kw-identical?)
@@ -240,7 +238,7 @@
          #+clj  (clojure.tools.reader.edn/read-string opts s)
          #+cljs (cljs.tools.reader.edn/read-string    opts s))))))
 
-(defn  pr-edn
+(defn pr-edn
   ([      x] (pr-edn nil x))
   ([_opts x] ; Opts currently unused
    #+cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
@@ -250,12 +248,45 @@
        (pr x) ; Avoid `pr-str`'s `apply` call
        (str sw)))))
 
-;;;; Errors
+;;;; Type preds, etc.
+
+(compile-if (do (require 'clojure.core.async) true)
+  (defn chan? [x]
+    #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
+    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
+
+  ;; Nb nil to help distinguish from negative (false) `instance?` test:
+  (defn chan? [x] nil))
 
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
-      (defn error?     [x] #+clj  (throwable? x)
-                           #+cljs (instance? js/Error x))
+(defn    stringy? [x] (or (keyword? x) (string? x)))
+(defn      error? [x] (instance? #+cljs js/Error  #+clj Throwable          x))
+(defn       atom? [x] (instance? #+cljs Atom      #+clj clojure.lang.Atom  x))
+(defn      named? [x] (instance? #+cljs INamed    #+clj clojure.lang.Named x))
+(defn   lazy-seq? [x] (instance? #+cljs LazySeq   #+clj clojure.lang.LazySeq    x))
+(defn re-pattern? [x] (instance? #+cljs js/RegExp #+clj java.util.regex.Pattern x))
+(defn       nnil? [x] (not (nil? x))) ; Same as `some?` in Clojure v1.6+
+(defn     nblank? [x] (not (str/blank? x)))
+(defn       nneg? [x] (not (neg? x)))
+(defn    pos-int? [x] (and (integer? x) (pos? x)))
+(defn   nneg-int? [x] (and (integer? x) (not (neg? x))))
+(defn     nvec? [n x] (and (vector?  x) (= (count x) n)))
+(defn       vec2? [x] (nvec? 2 x))
+(defn       vec3? [x] (nvec? 3 x))
+(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
+(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
+(defn    pos-num? [x] (and (number? x) (pos? x)))
+(defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
+(def udt? nneg-int?)
+
+(do
+  (def sentinel #+clj (Object.) #+cljs (js-obj))
+  (defn     sentinel? [x] (identical? x sentinel))
+  (defn nil->sentinel [x] (if (nil? x) sentinel x))
+  (defn sentinel->nil [x] (if (sentinel? x) nil x)))
+
+;;;; Errors
 
 (defn error-data
   "Returns data map iff `x` is an error of any type on platform"
@@ -309,57 +340,29 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-;;;; Types
+;;;; Type coercions, etc.
+
+;; `vec*`, `set*` functionality added to clojure.core with Clojure 1.7-alpha5
+;; but keeping these around for use/compatibility with older versions of Clojure
+(defn vec* [x] (if (vector? x) x (vec x)))
+(defn set* [x] (if (set?    x) x (set x)))
 
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
 ;; `keyword-identical?`. This util helps alleviate the pain of writing
-;; cross-platform code. Ref. http://goo.gl/be8CGP.
+;; cross-platform code, Ref. http://goo.gl/be8CGP.
 #+cljs (def  kw-identical? keyword-identical?)
 #+clj  (defn kw-identical?
          {:inline (fn [x y] `(. clojure.lang.Util identical ~x ~y))
           :inline-arities #{2}}
          ([x y] (clojure.lang.Util/identical x y)))
 
-(defn stringy? [x] (or (keyword? x) (string? x)))
-(defn atom?    [x] (instance? #+clj clojure.lang.Atom #+cljs Atom x))
-(defn named?   [x]
-  #+clj  (instance?   clojure.lang.Named x)
-  #+cljs (implements? INamed             x))
-
-(compile-if (do (require 'clojure.core.async) true)
-  (defn chan? [x]
-    #+clj  (instance? clojure.core.async.impl.channels.ManyToManyChannel x)
-    #+cljs (instance?    cljs.core.async.impl.channels.ManyToManyChannel x))
-
-  ;; Nb nil to help distinguish from negative (false) `instance?` test:
-  (defn chan? [x] nil))
-
-(defn lazy-seq? [x]
-  #+clj  (instance? clojure.lang.LazySeq x)
-  #+cljs (instance? LazySeq              x))
-
-(defn re-pattern? [x]
-  #+clj  (instance? java.util.regex.Pattern x)
-  #+cljs (instance? js/RegExp               x))
-
-(defn     nnil? [x] (not (nil? x))) ; Same as `some?` in Clojure v1.6+
-(defn   nblank? [x] (not (str/blank? x)))
-(defn     nneg? [x] (not (neg? x)))
-(defn  pos-int? [x] (and (integer? x) (pos? x)))
-(defn nneg-int? [x] (and (integer? x) (not (neg? x))))
-(defn   nvec? [n x] (and (vector?  x) (= (count x) n)))
-
-(declare set*)
-(def udt? nneg-int?)
-(defn vec2? [x] (nvec? 2 x))
-(defn vec3? [x] (nvec? 3 x))
+(defn without-meta [x] (if (meta x) (with-meta x nil) x))
 (defn distinct-elements? [x] (or (set? x) (= (count x) (count (set* x)))))
+(defn nnil=
+  ([x y]        (and (nnil? x) (= x y)))
+  ([x y & more] (and (nnil? x) (apply = x y more))))
 
-;;; These are less useful now that `have` traps errors
-(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
-(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
-(defn    pos-num? [x] (and (number? x) (pos? x)))
-(defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
+(comment (nnil= :foo :foo nil))
 
 (defn as-?nblank  [x] (when (string?  x) (if (str/blank? x) nil x)))
 (defn as-?kw      [x] (cond (keyword? x)       x  (string? x) (keyword x)))
@@ -389,12 +392,13 @@
 (defn as-?ufloat [x] (when-let [n (as-?float x)] (when-not (neg? ^double n) n)))
 (defn as-?pint   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
 (defn as-?pfloat [x] (when-let [n (as-?float x)] (when     (pos? ^double n) n)))
-
-(defn as-?bool [x]
+(defn as-?bool   [x]
   (cond (nil?  x) nil
     (or (true? x) (false? x)) x
     (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
     (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
+
+(def as-?udt as-?uint)
 
 ;; Uses simple regex to test for basic "x@y.z" form:
 (defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
@@ -427,30 +431,22 @@
   (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
            {:arg x :type (type x)})))
 
-(defn as-nblank [x] (or (as-?nblank x) (?as-throw :nblank x)))
-(defn as-kw     [x] (or (as-?kw     x) (?as-throw :kw     x)))
-(defn as-name   [x] (or (as-?name   x) (?as-throw :name   x)))
-(defn as-qname  [x] (or (as-?qname  x) (?as-throw :qname  x)))
-(defn as-bool   [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (?as-throw :bool x))))
-(defn as-email  [x] (or (as-?email  x) (?as-throw :email  x)))
-(defn as-nemail [x] (or (as-?nemail x) (?as-throw :nemail x)))
-
+(defn as-nblank         [x] (or (as-?nblank x) (?as-throw :nblank x)))
+(defn as-kw             [x] (or (as-?kw     x) (?as-throw :kw     x)))
+(defn as-name           [x] (or (as-?name   x) (?as-throw :name   x)))
+(defn as-qname          [x] (or (as-?qname  x) (?as-throw :qname  x)))
+(defn as-bool           [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (?as-throw :bool x))))
+(defn as-email          [x] (or (as-?email  x) (?as-throw :email  x)))
+(defn as-nemail         [x] (or (as-?nemail x) (?as-throw :nemail x)))
 (defn as-int      ^long [x] (or (as-?int    x) (?as-throw :int    x)))
 (defn as-uint     ^long [x] (or (as-?uint   x) (?as-throw :uint   x)))
 (defn as-pint     ^long [x] (or (as-?pint   x) (?as-throw :pint   x)))
 (defn as-float  ^double [x] (or (as-?float  x) (?as-throw :float  x)))
 (defn as-ufloat ^double [x] (or (as-?ufloat x) (?as-throw :ufloat x)))
 (defn as-pfloat ^double [x] (or (as-?pfloat x) (?as-throw :pfloat x)))
+(def as-udt as-uint)
 
-(defn nnil=
-  ([x y]        (and (nnil? x) (= x y)))
-  ([x y & more] (and (nnil? x) (apply = x y more))))
-
-(comment (nnil= :foo :foo nil))
-
-(defn without-meta [x] (if (meta x) (with-meta x nil) x))
-
-;;;; Invariants
+;;;; Validation
 
 (defmacro check-some
   "Returns first logical false/throwing expression (id/form), or nil"
@@ -661,11 +657,6 @@
 
 ;;;; Collections
 
-;;; `vec*`, `set*` functionality added to clojure.core with Clojure 1.7-alpha5
-;;; but keeping these around for use/compatibility with older versions of Clojure
-(defn vec* [x] (if (vector? x) x (vec x)))
-(defn set* [x] (if (set?    x) x (set x)))
-
 #+cljs
 (defn oget
   "Like `aget` for JS objects, Ref. https://goo.gl/eze8hY.
@@ -723,7 +714,7 @@
 ;;     [] ; Match (every? even? nil) = (every? even? []) => true
 ;;     (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll)))
 
-(comment [(every? even? []) (every  even? [])])
+(comment [(every? even? []) (every even? [])])
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
@@ -814,12 +805,6 @@
        ([to       from] (reduce          conj! to from))
        ([to xform from] (transduce xform conj! to from)))
   (defn into! [to from] (reduce          conj! to from)))
-
-(do
-  (def sentinel #+clj (Object.) #+cljs (js-obj))
-  (defn     sentinel? [x] (identical? x sentinel))
-  (defn nil->sentinel [x] (if (nil? x) sentinel x))
-  (defn sentinel->nil [x] (if (sentinel? x) nil x)))
 
 (declare repeatedly-into)
 (defn top
@@ -2478,4 +2463,4 @@
 
 (comment (greatest ["a" "e" "c" "b" "d"]))
 
-(defn clj1098 [x] (or x {})) ; Ref. http://dev.clojure.org/jira/browse/CLJ-1098
+(defn clj1098 "Ref. http://goo.gl/0GzRuz" [x] (or x {}))
