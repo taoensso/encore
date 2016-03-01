@@ -286,6 +286,10 @@
   (defn nil->sentinel [x] (if (nil? x) sentinel x))
   (defn sentinel->nil [x] (if (sentinel? x) nil x)))
 
+#+cljs
+(def js-?win "May not be available with Node.js, etc."
+  (when (exists? js/window) js/window))
+
 ;;;; Errors
 
 (defn error-data
@@ -1985,11 +1989,10 @@
 (def nano-time
   ;; 1ms = 10^6ns
   ;; Uses **window context** as epoch!, Ref. http://goo.gl/mWZWnR
-  (if-let [perf (and (exists? js/window)
-                     (aget js/window "performance"))]
+  (if-let [perf (and (oget js-?win "performance"))]
     ;; Ref. http://goo.gl/fn84us
-    (if-let [f (or (aget perf "now")  (aget perf "mozNow") (aget perf "msNow")
-                   (aget perf "oNow") (aget perf "webkitNow"))]
+    (if-let [f (or (oget perf "now")  (oget perf "mozNow") (oget perf "msNow")
+                   (oget perf "oNow") (oget perf "webkitNow"))]
       ;; JS call returns millisecs double, accurate to 1/1000th of a ms:
       (fn [] (long (* 1e6 (.call f perf))))
       (fn [] (* 1e6 (now-udt))))
@@ -2064,21 +2067,20 @@
   (defn sayf [fmt & xs] (js/alert (format* fmt xs))))
 
 #+cljs
-(defn get-window-location
-  "Returns browser window's current location. These details can be forged!"
+(defn get-win-loc
+  "Returns `js/window`'s current location as a map"
   []
-  (let [loc* (.-location js/window)
-        loc
-        {;; Ref. http://bl.ocks.org/abernier/3070589
-         :href     (.-href     loc*) ; "http://www.example.org:80/foo/bar?q=baz#bang"
-         :protocol (.-protocol loc*) ; "http:" ; Note the :
-         :hostname (.-hostname loc*) ; "example.org"
-         :host     (.-host     loc*) ; "example.org:80"
-         :pathname (.-pathname loc*) ; "/foo/bar"
-         :search   (.-search   loc*) ; "?q=baz"
-         :hash     (.-hash     loc*) ; "#bang"
-         }]
-    loc))
+  (when-let [js-win js-?win]
+    (when-let [loc (.-location js-win)]
+      {;; Ref. http://bl.ocks.org/abernier/3070589
+       :href     (.-href     loc) ; "http://www.example.org:80/foo/bar?q=baz#bang"
+       :protocol (.-protocol loc) ; "http:" ; Note the :
+       :hostname (.-hostname loc) ; "example.org"
+       :host     (.-host     loc) ; "example.org:80"
+       :pathname (.-pathname loc) ; "/foo/bar"
+       :search   (.-search   loc) ; "?q=baz"
+       :hash     (.-hash     loc) ; "#bang"
+       })))
 
 ;;;; Ajax
 
@@ -2384,6 +2386,8 @@
 
 ;;;; DEPRECATED
 
+#+cljs (def get-window-location get-win-loc)
+
 (def a0-memoize_ memoize-a0_)
 (def a1-memoize_ memoize-a1_)
 
@@ -2410,8 +2414,10 @@
   [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
 
 ;; Used by Sente <= v1.1.0
-#+cljs (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
-         (.setTimeout js/window nullary-f (exp-backoff (or nattempt 0))))
+#+cljs
+(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
+  (when-let [js-win js-?win]
+    (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0)))))
 
 ;;; Arg order changed for easier partials
 (defn keys=      [m ks] (ks=      ks m))
