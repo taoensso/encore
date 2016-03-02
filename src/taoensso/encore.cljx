@@ -275,12 +275,11 @@
 (defn       nneg? [x] (not (neg? x)))
 (defn    pos-int? [x] (and (integer? x) (pos? x)))
 (defn   nneg-int? [x] (and (integer? x) (not (neg? x))))
-(defn     nvec? [n x] (and (vector?  x) (= (count x) n)))
-(defn       vec2? [x] (nvec? 2 x))
-(defn       vec3? [x] (nvec? 3 x))
-(defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
-(defn   nneg-num? [x] (and (number? x) (not (neg? x))))
-(defn    pos-num? [x] (and (number? x) (pos? x)))
+(defn       vec2? [x] (and (vector?  x) (= (count x) 2)))
+(defn       vec3? [x] (and (vector?  x) (= (count x) 3)))
+(defn nblank-str? [x] (and (string?  x) (not (str/blank? x))))
+(defn   nneg-num? [x] (and (number?  x) (not (neg? x))))
+(defn    pos-num? [x] (and (number?  x) (pos? x)))
 (defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
 (def udt? nneg-int?)
 
@@ -298,6 +297,7 @@
 
 (defn error-data
   "Returns data map iff `x` is an error of any type on platform"
+  ;; Note that Clojure 1.7+ now has `Throwable->map`
   [x]
   (when-let [data-map
              (or (ex-data x) ; ExceptionInfo
@@ -305,9 +305,9 @@
                #+cljs (when (instance? js/Error  x) {}))]
     (merge
       #+clj  (let [^Throwable t x] ; (catch Throwable t <...>)
-               {:err-type   (type        t)
-                :err-msg    (.getMessage t)
-                :err-cause  (.getCause   t)})
+               {:err-type   (type                 t)
+                :err-msg    (.getLocalizedMessage t)
+                :err-cause  (.getCause            t)})
       #+cljs (let [err x] ; (catch :default t <...)
                {:err-type  (type      err)
                 :err-msg   (.-message err)
@@ -350,8 +350,7 @@
 
 ;;;; Type coercions, etc.
 
-;; `vec*`, `set*` functionality added to clojure.core with Clojure 1.7-alpha5
-;; but keeping these around for use/compatibility with older versions of Clojure
+;;; Clojure 1.7-alpha5+ now has similar behaviour in `vec`, `set`
 (defn vec* [x] (if (vector? x) x (vec x)))
 (defn set* [x] (if (set?    x) x (set x)))
 
@@ -1229,7 +1228,7 @@
   provides only inconsistent (single-match) and error-prone compatibility with
   Clojure's `str/replace`. CLJS-794 is also still unresolved.
 
-  This util provides proper consistent Clojure/Script replace behaviour."
+  This util provides behaviour consistent between Clojure/Script."
 
   [s match replacement]
   #+clj (str/replace s match replacement)
@@ -2391,3 +2390,4 @@
 
 (defn keywordize-map [m] (map-keys keyword m))
 (defn removev [pred coll] (filterv (complement pred) coll))
+(defn nvec? [n x] (and (vector? x) (= (count x) n)))
