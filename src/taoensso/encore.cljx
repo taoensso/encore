@@ -258,12 +258,16 @@
   ;; nil to help distinguish from negative `instance?` test:
   (defn chan? [x] nil))
 
+(defn named? [x]
+  #+cljs (implements? INamed x)
+  #+clj  (instance? clojure.lang.Named x))
+
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
+
 (defn    stringy? [x] (or (keyword? x) (string? x)))
 (defn      error? [x] (instance? #+cljs js/Error  #+clj Throwable          x))
 (defn       atom? [x] (instance? #+cljs Atom      #+clj clojure.lang.Atom  x))
-(defn      named? [x] (instance? #+cljs INamed    #+clj clojure.lang.Named x))
 (defn   lazy-seq? [x] (instance? #+cljs LazySeq   #+clj clojure.lang.LazySeq    x))
 (defn re-pattern? [x] (instance? #+cljs js/RegExp #+clj java.util.regex.Pattern x))
 (defn       nnil? [x] (not (nil? x))) ; Same as `some?` in Clojure v1.6+
