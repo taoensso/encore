@@ -722,7 +722,12 @@
   (defn reduce-n [rf init ^long n] (reduce rf init (range n)))
   (defn reduce-n [rf init ^long n]
     (loop [acc init idx 0]
-      (if (== idx n) acc (recur (rf acc idx) (unchecked-inc idx))))))
+      (if (== idx n)
+        acc
+        (let [acc (rf acc idx)]
+          (if (reduced? acc)
+            @acc
+            (recur acc (unchecked-inc idx))))))))
 
 (comment (reduce-n conj [] 100))
 
