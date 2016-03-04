@@ -262,6 +262,10 @@
   #+cljs (implements? INamed x)
   #+clj  (instance? clojure.lang.Named x))
 
+(defn editable? [coll]
+  #+cljs (implements? IEditableCollection              coll)
+  #+clj  (instance?   clojure.lang.IEditableCollection coll))
+
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
 
@@ -704,25 +708,31 @@
 
 (comment [(every? even? nil) (every even? nil)])
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
+(compile-if (completing (fn [])) ; Transducers
   (defn reduce-kvs
     "Like `reduce-kv` but takes a flat sequence of kv pairs"
     [rf init kvs]
     (transduce (partition-all 2)
-      (completing (fn [acc [k v]] (rf acc k v)))
-      init kvs))
+      (completing (fn [acc [k v]] (rf acc k v))) init kvs))
 
   (defn reduce-kvs [rf init kvs]
-    (reduce (fn [acc [k v]] (rf acc k v))
-      init (partition-all 2 kvs))))
+    (reduce (fn [acc [k v]] (rf acc k v)) init (partition-all 2 kvs))))
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
+(compile-if clojure.lang.LongRange ; Clojure 1.7+ (no Cljs support yet)
+  (defn reduce-n [rf init ^long n] (reduce rf init (range n)))
+  (defn reduce-n [rf init ^long n]
+    (loop [acc init idx 0]
+      (if (== idx n) acc (recur (rf acc idx) (unchecked-inc idx))))))
+
+(comment (reduce-n conj [] 100))
+
+(compile-if (completing (fn [])) ; Transducers
   (defn into!
        ([to       from] (reduce          conj! to from))
        ([to xform from] (transduce xform conj! to from)))
   (defn into! [to from] (reduce          conj! to from)))
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
+(compile-if (completing (fn [])) ; Transducers
   (defn xdistinct
     ([] (distinct)) ; clojure.core now has a distinct transducer
     ([keyfn]
@@ -741,7 +751,7 @@
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
 (declare subvec*)
-(compile-if (do (completing (fn [])) true) ; We have transducers
+(compile-if (completing (fn [])) ; Transducers
   (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
   (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
 
@@ -752,17 +762,11 @@
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection"
   [coll ^long n f]
-  (if (and (> n 10) ; Worth the fixed transient overhead
-           #+clj  (instance?   clojure.lang.IEditableCollection coll)
-           #+cljs (implements? IEditableCollection              coll))
-    (loop [v (transient coll) idx 0]
-      (if (== idx n)
-        (persistent! v)
-        (recur (conj! v (f)) (unchecked-inc idx))))
-    (loop [v coll idx 0]
-      (if (== idx n)
-        v
-        (recur (conj v (f)) (unchecked-inc idx))))))
+  (if (and (> n 10) (editable? coll))
+    (persistent! (reduce-n (fn [acc _] (conj! acc (f))) (transient coll) n))
+    (do          (reduce-n (fn [acc _] (conj  acc (f)))            coll  n))))
+
+(comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
 (defn map-vals       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m k (f v))) {} m)))
 (defn map-keys       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
@@ -1176,7 +1180,7 @@
   #+clj  (if (nil? x) "nil" x)
   #+cljs (if (or (undefined? x) (nil? x)) "nil" x))
 
-(compile-if (do (completing (fn [])) true) ; We have transducers
+(compile-if (completing (fn [])) ; Transducers
   (defn str-join
     "Faster, transducer-based generalization of `clojure.string/join` with `xform`
     support"
