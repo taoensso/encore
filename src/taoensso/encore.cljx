@@ -375,6 +375,7 @@
 
 (comment (nnil= :foo :foo nil))
 
+(defn as-?nzero   [x] (when (number?  x) (if (= 0 x)        nil x)))
 (defn as-?nblank  [x] (when (string?  x) (if (str/blank? x) nil x)))
 (defn as-?kw      [x] (cond (keyword? x)       x  (string? x) (keyword x)))
 (defn as-?name    [x] (cond (named?   x) (name x) (string? x)          x))
@@ -433,9 +434,10 @@
 (comment [(is! false) (when-let [n (when? nneg? (as-?int 37))] n)])
 
 (defn- ?as-throw [as-name x]
-  (throw (ex-info (str "nil as-?" (name as-name) " against arg: " (pr-str x))
+  (throw (ex-info (str "`as-" (name as-name) "` failed against: `" (pr-str x) "`")
            {:arg x :type (type x)})))
 
+(defn as-nzero          [x] (or (as-?nzero  x) (?as-throw :nzero  x)))
 (defn as-nblank         [x] (or (as-?nblank x) (?as-throw :nblank x)))
 (defn as-kw             [x] (or (as-?kw     x) (?as-throw :kw     x)))
 (defn as-name           [x] (or (as-?name   x) (?as-throw :name   x)))
