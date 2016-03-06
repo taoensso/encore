@@ -775,12 +775,12 @@
 
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
-(defn map-vals       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m k (f v))) {} m)))
-(defn map-keys       [f m] (if-not m {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
-(defn filter-kvs  [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
-(defn filter-keys [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred k)   m (dissoc m k))) m m)))
-(defn filter-vals [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred v)   m (dissoc m k))) m m)))
-(defn remove-vals [pred m] (if-not m {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m))   m m)))
+(defn map-vals       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m k (f v))) {} m)))
+(defn map-keys       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
+(defn filter-kvs  [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
+(defn filter-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k)   m (dissoc m k))) m m)))
+(defn filter-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v)   m (dissoc m k))) m m)))
+(defn remove-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m))   m m)))
 
 ;;; Useful for map assertions, etc. (do *not* check that input is a map)
 (defn ks=      [ks m] (=             (set (keys m)) (set* ks)))
@@ -910,12 +910,14 @@
   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
 
 (defn assoc-some "Assocs each kv iff its value is not nil"
-  [m & kvs] {:pre [(have? even? (count kvs))]}
-  (into (or m {}) (for [[k v] (partition 2 kvs) :when (not (nil? v))] [k v])))
+  ([m k v      ] (if (nil? v) (if (nil? m) {} m) (assoc m k v)))
+  ([m k v & kvs] (reduce-kvs (fn [acc k v] (assoc-some acc k v))
+                   (assoc-some m k v) kvs)))
 
 (defn assoc-when "Assocs each kv iff its val is truthy"
-  [m & kvs] {:pre [(have? even? (count kvs))]}
-  (into (or m {}) (for [[k v] (partition 2 kvs) :when v] [k v])))
+  ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
+  ([m k v & kvs] (reduce-kvs (fn [acc k v] (assoc-when acc k v))
+                   (assoc-when m k v) kvs)))
 
 (comment (assoc-some {:a :A} :b nil :c :C :d nil :e :E))
 
