@@ -447,11 +447,11 @@
 (defn as-nemail         [x] (or (as-?nemail x) (?as-throw :nemail x)))
 (defn as-int      ^long [x] (or (as-?int    x) (?as-throw :int    x)))
 (defn as-uint     ^long [x] (or (as-?uint   x) (?as-throw :uint   x)))
+(defn as-udt      ^long [x] (or (as-?uint   x) (?as-throw :udt    x)))
 (defn as-pint     ^long [x] (or (as-?pint   x) (?as-throw :pint   x)))
 (defn as-float  ^double [x] (or (as-?float  x) (?as-throw :float  x)))
 (defn as-ufloat ^double [x] (or (as-?ufloat x) (?as-throw :ufloat x)))
 (defn as-pfloat ^double [x] (or (as-?pfloat x) (?as-throw :pfloat x)))
-(def as-udt as-uint)
 
 ;;;; Validation
 
