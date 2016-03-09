@@ -433,25 +433,25 @@
 
 (comment [(is! false) (when-let [n (when? nneg? (as-?int 37))] n)])
 
-(defn- ?as-throw [as-name x]
+(defn- -as-throw [as-name x]
   (throw (ex-info (str "`as-" (name as-name) "` failed against: `" (pr-str x) "`")
            {:arg x :type (type x)})))
 
-(defn as-nzero          [x] (or (as-?nzero  x) (?as-throw :nzero  x)))
-(defn as-nblank         [x] (or (as-?nblank x) (?as-throw :nblank x)))
-(defn as-kw             [x] (or (as-?kw     x) (?as-throw :kw     x)))
-(defn as-name           [x] (or (as-?name   x) (?as-throw :name   x)))
-(defn as-qname          [x] (or (as-?qname  x) (?as-throw :qname  x)))
-(defn as-bool           [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (?as-throw :bool x))))
-(defn as-email          [x] (or (as-?email  x) (?as-throw :email  x)))
-(defn as-nemail         [x] (or (as-?nemail x) (?as-throw :nemail x)))
-(defn as-int      ^long [x] (or (as-?int    x) (?as-throw :int    x)))
-(defn as-uint     ^long [x] (or (as-?uint   x) (?as-throw :uint   x)))
-(defn as-udt      ^long [x] (or (as-?uint   x) (?as-throw :udt    x)))
-(defn as-pint     ^long [x] (or (as-?pint   x) (?as-throw :pint   x)))
-(defn as-float  ^double [x] (or (as-?float  x) (?as-throw :float  x)))
-(defn as-ufloat ^double [x] (or (as-?ufloat x) (?as-throw :ufloat x)))
-(defn as-pfloat ^double [x] (or (as-?pfloat x) (?as-throw :pfloat x)))
+(defn as-nzero          [x] (or (as-?nzero  x) (-as-throw :nzero  x)))
+(defn as-nblank         [x] (or (as-?nblank x) (-as-throw :nblank x)))
+(defn as-kw             [x] (or (as-?kw     x) (-as-throw :kw     x)))
+(defn as-name           [x] (or (as-?name   x) (-as-throw :name   x)))
+(defn as-qname          [x] (or (as-?qname  x) (-as-throw :qname  x)))
+(defn as-bool           [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (-as-throw :bool x))))
+(defn as-email          [x] (or (as-?email  x) (-as-throw :email  x)))
+(defn as-nemail         [x] (or (as-?nemail x) (-as-throw :nemail x)))
+(defn as-int      ^long [x] (or (as-?int    x) (-as-throw :int    x)))
+(defn as-uint     ^long [x] (or (as-?uint   x) (-as-throw :uint   x)))
+(defn as-udt      ^long [x] (or (as-?uint   x) (-as-throw :udt    x)))
+(defn as-pint     ^long [x] (or (as-?pint   x) (-as-throw :pint   x)))
+(defn as-float  ^double [x] (or (as-?float  x) (-as-throw :float  x)))
+(defn as-ufloat ^double [x] (or (as-?ufloat x) (-as-throw :ufloat x)))
+(defn as-pfloat ^double [x] (or (as-?pfloat x) (-as-throw :pfloat x)))
 
 ;;;; Validation
 
