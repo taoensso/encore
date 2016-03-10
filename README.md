@@ -7,6 +7,8 @@
 [com.taoensso/encore "2.42.0"] ; Stable
 ```
 
+Want to help [support taoensso/open-source]?
+
 # Encore
 
 ### Core utils library for Clojure/Script
@@ -40,6 +42,7 @@ Copyright &copy; 2014-2016 [Peter Taoussanis].
 [@ptaoussanis]: https://www.taoensso.com
 [More by @ptaoussanis]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
+[support taoensso/open-source]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
 [_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
