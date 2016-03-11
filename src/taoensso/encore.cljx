@@ -278,14 +278,17 @@
 (defn     nblank? [x] (not (str/blank? x)))
 (defn       nneg? [x] (not (neg? x)))
 (defn    pos-int? [x] (and (integer? x) (pos? x)))
+(defn       pint? [x] (and (integer? x) (pos? x)))
 (defn   nneg-int? [x] (and (integer? x) (not (neg? x))))
+(defn       uint? [x] (and (integer? x) (not (neg? x)))) ; Alias
+(defn        udt? [x] (and (integer? x) (not (neg? x)))) ; Alias
 (defn       vec2? [x] (and (vector?  x) (= (count x) 2)))
 (defn       vec3? [x] (and (vector?  x) (= (count x) 3)))
 (defn nblank-str? [x] (and (string?  x) (not (str/blank? x))))
 (defn   nneg-num? [x] (and (number?  x) (not (neg? x))))
 (defn    pos-num? [x] (and (number?  x) (pos? x)))
 (defn   zero-num? [x] (= 0 x)) ; Unlike `zero?`, works on non-nums
-(def udt? nneg-int?)
+(defn       pval? [x] (and (number? x) (let [n (double x)] (and (>= n 0.0) (<= n 1.0)))))
 
 (do
   (def sentinel #+clj (Object.) #+cljs (js-obj))
@@ -401,16 +404,17 @@
                     (catch NumberFormatException _ nil))))
 
 (defn as-?uint   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
-(defn as-?ufloat [x] (when-let [n (as-?float x)] (when-not (neg? ^double n) n)))
+(defn as-?udt    [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n))) ; Alias
 (defn as-?pint   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
+(defn as-?ufloat [x] (when-let [n (as-?float x)] (when-not (neg? ^double n) n)))
 (defn as-?pfloat [x] (when-let [n (as-?float x)] (when     (pos? ^double n) n)))
+(defn as-?pval   [x] (when-let [^double f (as-?float x)]
+                       (if (> f 1.0) 1.0 (if (< f 0.0) 0.0 f))))
 (defn as-?bool   [x]
   (cond (nil?  x) nil
     (or (true? x) (false? x)) x
     (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
     (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
-
-(def as-?udt as-?uint)
 
 ;; Uses simple regex to test for basic "x@y.z" form:
 (defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
@@ -433,7 +437,7 @@
 
 (comment [(is! false) (when-let [n (when? nneg? (as-?int 37))] n)])
 
-(defn- -as-throw [as-name x]
+(defn -as-throw [as-name x]
   (throw (ex-info (str "`as-" (name as-name) "` failed against: `" (pr-str x) "`")
            {:arg x :type (type x)})))
 
@@ -452,6 +456,7 @@
 (defn as-float  ^double [x] (or (as-?float  x) (-as-throw :float  x)))
 (defn as-ufloat ^double [x] (or (as-?ufloat x) (-as-throw :ufloat x)))
 (defn as-pfloat ^double [x] (or (as-?pfloat x) (-as-throw :pfloat x)))
+(defn as-pval   ^double [x] (or (as-?pval   x) (-as-throw :pval   x)))
 
 ;;;; Validation
 
