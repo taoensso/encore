@@ -266,6 +266,10 @@
   #+cljs (implements? IEditableCollection              coll)
   #+clj  (instance?   clojure.lang.IEditableCollection coll))
 
+(defn derefable? [x]
+  #+cljs (satisfies? IDeref x)
+  #+clj  (instance? clojure.lang.IDeref x))
+
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
 
@@ -295,6 +299,8 @@
   (defn     sentinel? [x] (identical? x sentinel))
   (defn nil->sentinel [x] (if (nil? x) sentinel x))
   (defn sentinel->nil [x] (if (sentinel? x) nil x)))
+
+(defn force-ref "Like `force` for refs" [x] (if (derefable? x) (deref x) x))
 
 #+cljs
 (def js-?win "May not be available with Node.js, etc."
