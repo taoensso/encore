@@ -35,7 +35,8 @@
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
-    (compile-if catch-errors* catch-errors have have! have?)]))
+    (compile-if catch-errors* catch-errors have have! have?
+     name-with-attrs)]))
 
 (comment
   (set! *unchecked-math* :warn-on-boxed)
@@ -2279,6 +2280,62 @@
   (merge-url-with-query-string "/?foo=bar" {:foo  "overwrite"})
   (merge-url-with-query-string "/?foo=bar" {:foo  nil})
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
+
+;;;; Stubfns
+
+(compile-if (volatile! nil) ; Overhead => only useful for stubfns:
+  (do (def -vol! volatile!) (defn -reset-vol! [v_ x] (vreset! v_ x)))
+  (do (def -vol! atom)      (defn -reset-vol! [v_ x] (reset!  v_ x))))
+
+(defn -new-stub_ [sfn-name]
+  (-vol!
+    (fn [& args]
+      (throw (ex-info (str "No stubfn implementation for: " sfn-name)
+               {:sfn-name sfn-name
+                :args     args})))))
+
+(defn -new-stubfn [stub_]
+  (fn
+    ([                     ]       (@stub_))
+    ([x1                   ]       (@stub_ x1))
+    ([x1 x2                ]       (@stub_ x1 x2))
+    ([x1 x2 x3             ]       (@stub_ x1 x2 x3))
+    ([x1 x2 x3 x4          ]       (@stub_ x1 x2 x3 x4))
+    ([x1 x2 x3 x4 x5       ]       (@stub_ x1 x2 x3 x4 x5))
+    ([x1 x2 x3 x4 x5 & more] (apply @stub_ x1 x2 x3 x4 x5 more))))
+
+(defmacro defn-stub
+  "Defines a stub function that can be implemented from anywhere (incl. other
+  namespaces) using `implement-<stubfn-name>`. Handy for defining functions
+  in shared namespaces but implementing them elsewhere (private namespaces,
+  cyclic namespaces, etc.)."
+  {:arglists '([name ?docstring ?attrs [params*] ...])}
+  [sfn-name & sigs]
+  (let [[sfn-name sigs] (name-with-attrs sfn-name sigs)
+        stub_ (symbol (str "__"         (name sfn-name) "_stub"))
+        impl  (symbol (str "implement-" (name sfn-name)))
+        sfn-def
+        (if (empty? sigs)
+          ;; No arity checks, arglists, or ^primitive <params>:
+          `(def  ~sfn-name (-new-stubfn ~stub_))
+          `(defn ~sfn-name
+             ~@(map (fn [params]
+                      (if-not (some #{'&} params)
+                        `(~params (      @~stub_ ~@params))
+                        `(~params (apply @~stub_ ~@(remove #{'&} params)))))
+                 sigs)))]
+    `(do
+       (defonce ~stub_ (-new-stub_ ~(name sfn-name)))
+       (defn ~impl [~'f] (-reset-vol! ~stub_ ~'f))
+       ~sfn-def)))
+
+(comment
+  (defn -foo ^long [x] (* x x))
+  (macroexpand '(defn-stub foo "docstring" [x] [x y]))
+  (defn-stub foo "docstring" ^long [x])
+  (implement-foo -foo)
+  (qb 1000000 (-foo 5) (foo 5)) ; [71.26 71.43]
+  )
 
 ;;;; Testing utils
 
