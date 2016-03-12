@@ -378,6 +378,7 @@
          ([x y] (clojure.lang.Util/identical x y)))
 
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
+(defn merge-meta   [x m] (with-meta x (merge (meta x) m)))
 (defn distinct-elements? [x] (or (set? x) (= (count x) (count (set* x)))))
 (defn nnil=
   ([x y]        (and (nnil? x) (= x y)))
@@ -2291,8 +2292,7 @@
   (-vol!
     (fn [& args]
       (throw (ex-info (str "No stubfn implementation for: " sfn-name)
-               {:sfn-name sfn-name
-                :args     args})))))
+               {:sfn-name sfn-name :args args})))))
 
 (defn -new-stubfn [stub_]
   (fn
@@ -2312,22 +2312,41 @@
   {:arglists '([name ?docstring ?attrs [params*] ...])}
   [sfn-name & sigs]
   (let [[sfn-name sigs] (name-with-attrs sfn-name sigs)
-        stub_ (symbol (str "__"         (name sfn-name) "_stub"))
-        impl  (symbol (str "implement-" (name sfn-name)))
-        sfn-def
+        sfn-name (merge-meta sfn-name {:arglists `'~sigs :stubfn? true})
+        stub_    (symbol (str "__"         (name sfn-name) "_stub"))
+        impl     (symbol (str "implement-" (name sfn-name)))
+        sfn
         (if (empty? sigs)
           ;; No arity checks, arglists, or ^primitive <params>:
-          `(def  ~sfn-name (-new-stubfn ~stub_))
-          `(defn ~sfn-name
-             ~@(map (fn [params]
-                      (if-not (some #{'&} params)
-                        `(~params (      @~stub_ ~@params))
-                        `(~params (apply @~stub_ ~@(remove #{'&} params)))))
+          `(-new-stubfn ~stub_)
+          `(fn
+             ~@(map
+                 (fn normalize-params [params]
+                   (let [m      (meta       params)
+                         vargs? (some #{'&} params)
+                         params (if vargs? (drop-last 2 params) params)
+                         vargs? (or vargs? (> (count params) 5))
+                         params (case (count params)
+                                  0 '[]
+                                  1 '[x1]
+                                  2 '[x1 x2]
+                                  3 '[x1 x2 x3]
+                                  4 '[x1 x2 x3 x4]
+                                    '[x1 x2 x3 x4 x5])
+                         params  (if vargs? (conj params '& 'more) params)
+                         lparams (with-meta params m)
+                         rparams (remove #{'&} params)]
+
+                     (if vargs?
+                       `(~lparams (apply @~stub_ ~@rparams))
+                       `(~lparams (      @~stub_ ~@rparams)))))
+
                  sigs)))]
+
     `(do
        (defonce ~stub_ (-new-stub_ ~(name sfn-name)))
        (defn ~impl [~'f] (-reset-vol! ~stub_ ~'f))
-       ~sfn-def)))
+       (def ~sfn-name ~sfn))))
 
 (comment
   (defn -foo ^long [x] (* x x))
