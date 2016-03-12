@@ -2309,51 +2309,24 @@
   namespaces) using `implement-<stubfn-name>`. Handy for defining functions
   in shared namespaces but implementing them elsewhere (private namespaces,
   cyclic namespaces, etc.)."
+  ;; A stubfn gives up arity checking, ^primitive params
   {:arglists '([name ?docstring ?attrs [params*] ...])}
   [sfn-name & sigs]
   (let [[sfn-name sigs] (name-with-attrs sfn-name sigs)
         sfn-name (merge-meta sfn-name {:arglists `'~sigs :stubfn? true})
         stub_    (symbol (str "__"         (name sfn-name) "_stub"))
-        impl     (symbol (str "implement-" (name sfn-name)))
-        sfn
-        (if (empty? sigs)
-          ;; No arity checks, arglists, or ^primitive <params>:
-          `(-new-stubfn ~stub_)
-          `(fn
-             ~@(map
-                 (fn normalize-params [params]
-                   (let [m      (meta       params)
-                         vargs? (some #{'&} params)
-                         params (if vargs? (drop-last 2 params) params)
-                         vargs? (or vargs? (> (count params) 5))
-                         params (case (count params)
-                                  0 '[]
-                                  1 '[x1]
-                                  2 '[x1 x2]
-                                  3 '[x1 x2 x3]
-                                  4 '[x1 x2 x3 x4]
-                                    '[x1 x2 x3 x4 x5])
-                         params  (if vargs? (conj params '& 'more) params)
-                         lparams (with-meta params m)
-                         rparams (remove #{'&} params)]
-
-                     (if vargs?
-                       `(~lparams (apply @~stub_ ~@rparams))
-                       `(~lparams (      @~stub_ ~@rparams)))))
-
-                 sigs)))]
-
+        impl     (symbol (str "implement-" (name sfn-name)))]
     `(do
        (defonce ~stub_ (-new-stub_ ~(name sfn-name)))
        (defn ~impl [~'f] (-reset-vol! ~stub_ ~'f))
-       (def ~sfn-name ~sfn))))
+       (def ~sfn-name (-new-stubfn ~stub_)))))
 
 (comment
-  (defn -foo ^long [x] (* x x))
-  (macroexpand '(defn-stub foo "docstring" [x] [x y]))
-  (defn-stub foo "docstring" ^long [x])
+  (defn -foo [x] (* x x))
+  (macroexpand '(defn-stub foo "docstring" [x] [x y & more]))
+  (defn-stub foo "docstring" [x])
   (implement-foo -foo)
-  (qb 1000000 (-foo 5) (foo 5)) ; [71.26 71.43]
+  (qb 1000000 (-foo 5) (foo 5)) ; [56.08 61.11]
   )
 
 ;;;; Testing utils
