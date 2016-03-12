@@ -2294,39 +2294,47 @@
       (throw (ex-info (str "No stubfn implementation for: " sfn-name)
                {:sfn-name sfn-name :args args})))))
 
-(defn -new-stubfn [stub_]
-  (fn
-    ([                     ]       (@stub_))
-    ([x1                   ]       (@stub_ x1))
-    ([x1 x2                ]       (@stub_ x1 x2))
-    ([x1 x2 x3             ]       (@stub_ x1 x2 x3))
-    ([x1 x2 x3 x4          ]       (@stub_ x1 x2 x3 x4))
-    ([x1 x2 x3 x4 x5       ]       (@stub_ x1 x2 x3 x4 x5))
-    ([x1 x2 x3 x4 x5 & more] (apply @stub_ x1 x2 x3 x4 x5 more))))
-
 (defmacro defn-stub
   "Defines a stub function that can be implemented from anywhere (incl. other
   namespaces) using `implement-<stubfn-name>`. Handy for defining functions
   in shared namespaces but implementing them elsewhere (private namespaces,
-  cyclic namespaces, etc.)."
-  ;; A stubfn gives up arity checking, ^primitive params
+  cyclic namespaces, etc.). `params*` are optional and used only for
+  argslists and type hints."
   {:arglists '([name ?docstring ?attrs [params*] ...])}
   [sfn-name & sigs]
   (let [[sfn-name sigs] (name-with-attrs sfn-name sigs)
-        sfn-name (merge-meta sfn-name {:arglists `'~sigs :stubfn? true})
-        stub_    (symbol (str "__"         (name sfn-name) "_stub"))
-        impl     (symbol (str "implement-" (name sfn-name)))]
+        stub_ (symbol (str "__"         (name sfn-name) "_stub"))
+        impl  (symbol (str "implement-" (name sfn-name)))
+        have-varargs? (some   #(some #{'&} %) sigs)
+        fixed-params  (remove #(some #{'&} %) sigs)
+        pmetas (reduce #(assoc %1 (count %2) (meta %2)) {} fixed-params)
+        ps0    (with-meta '[              ] (pmetas 0))
+        ps1    (with-meta '[x1            ] (pmetas 1))
+        ps2    (with-meta '[x1 x2         ] (pmetas 2))
+        ps3    (with-meta '[x1 x2 x3      ] (pmetas 3))
+        ps4    (with-meta '[x1 x2 x3 x4   ] (pmetas 4))
+        ps5    (with-meta '[x1 x2 x3 x4 x5] (pmetas 5))
+        psm               '[x1 x2 x3 x4 x5 & more]]
+
     `(do
        (defonce ~stub_ (-new-stub_ ~(name sfn-name)))
        (defn ~impl [~'f] (-reset-vol! ~stub_ ~'f))
-       (def ~sfn-name (-new-stubfn ~stub_)))))
+       (let [~'stub_ ~stub_]
+         (defn ~sfn-name {:arglists '~sigs :stubfn? true}
+           (~ps0       (@~'stub_      ))
+           (~ps1       (@~'stub_ ~@ps1))
+           (~ps2       (@~'stub_ ~@ps2))
+           (~ps3       (@~'stub_ ~@ps3))
+           (~ps4       (@~'stub_ ~@ps4))
+           (~ps5       (@~'stub_ ~@ps5))
+           (~psm (apply @~'stub_ ~@(remove #{'&} psm))))))))
 
 (comment
-  (defn -foo [x] (* x x))
+  (defn -foo ^long [x] (* x x))
   (macroexpand '(defn-stub foo "docstring" [x] [x y & more]))
-  (defn-stub foo "docstring" [x])
+  (defn-stub foo "docstring" ^long [x])
   (implement-foo -foo)
-  (qb 1000000 (-foo 5) (foo 5)) ; [56.08 61.11]
+  (qb 1000000 (-foo 5) (foo 5)) ; [69.87 70.46]
   )
 
 ;;;; Testing utils
