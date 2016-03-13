@@ -1134,7 +1134,7 @@
        (let [old-val @atom_
              new-val (-replace-in :swap old-val op-pairs)]
          (if (platform-cas! atom_ old-val new-val)
-           {:old old-val :new new-val} ; TODO [old-val new-val]
+           [old-val new-val]
            (recur)))))))
 
 (defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
@@ -1150,7 +1150,7 @@
        (let [old-val @atom_
              new-val (-replace-in :reset old-val op-pairs)]
          (if (platform-cas! atom_ old-val new-val)
-           {:old old-val :new new-val} ; TODO [old-val new-val]
+           [old-val new-val]
            (recur)))))))
 
 (comment
