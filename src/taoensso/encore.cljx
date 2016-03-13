@@ -1022,43 +1022,70 @@
 
 ;;;; Swap stuff
 
-(defrecord Swapped  [new-val return-val])
-(defn      swapped  [new-val return-val] (Swapped. new-val return-val))
-(defn      swapped? [x] (instance? Swapped x))
-(defn      swapped* [x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
+(defn- platform-cas! "Minor optimization for single-threaded Cljs"
+  [atom_ old-val new-val]
+  #+cljs (do (reset! atom_ new-val) true)
+  #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
 
-(defn- swapped*-in "[<new-val> <return-val>]" [m ks f]
-  (if (kw-identical? f :swap/dissoc)
-    (swapped* (dissoc-in m (butlast ks) (last ks)))
-    (let [old-val-in (get-in m ks)
-          [new-val-in return-val] (swapped* (f old-val-in))
-          new-val (if (kw-identical? new-val-in :swap/dissoc)
-                    (dissoc-in m (butlast ks) (last ks))
-                    (assoc-in  m ks new-val-in))]
-      [new-val return-val])))
+(defn dswap! "Returns [<old-val> <new-val>]" [atom_ f]
+  #+cljs (let [ov @atom_ nv (f old)] (reset! atom_ nv) [ov nv])
+  #+clj
+  (loop []
+    (let [ov @atom_ nv (f ov)]
+      (if (.compareAndSet ^clojure.lang.Atom atom_ ov nv)
+        [ov nv]
+        (recur)))))
 
-(defn- replace-in*
+(defn swap-val! ; Specialized `swap-in!` used by memoization utils
+  "Swaps associative value at key and returns the new value"
+  [atom_ k f]
+  (loop []
+    (let [old-m @atom_
+          new-v (f (get old-m k))
+          new-m (assoc  old-m k new-v)]
+      (if (platform-cas! atom_ old-m new-m)
+        new-v
+        (recur)))))
+
+(defrecord Swapped [new-val return-val])
+(defn  swapped? [x] (instance? Swapped x))
+(defn  swapped  [new-val return-val] (Swapped. new-val return-val))
+(defn -swapped "Returns [<new-val> <return-val>]"
+  ([x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
+  ([old-val ks f]
+   (if (empty? ks)
+     (-swapped (f old-val))
+     (let [m old-val]
+       (if (kw-identical? f :swap/dissoc)
+         (-swapped (dissoc-in m (butlast ks) (last ks)))
+         (let [old-val-in (get-in m ks)
+               [new-val-in return-val] (-swapped (f old-val-in))
+               new-val (if (kw-identical? new-val-in :swap/dissoc)
+                         (dissoc-in m (butlast ks) (last ks))
+                         (assoc-in  m ks new-val-in))]
+           [new-val return-val]))))))
+
+(defn- -replace-in
   "Reduces input with
   [<type> <ks> <reset-val-or-swap-fn>] or
          [<ks> <reset-val-or-swap-fn>] ops"
   [?vf-type m ops]
   (reduce
-    (fn [accum ?op]
+    (fn [acc ?op]
       (if-not ?op ; Allow conditional ops: (when <pred> <op>), etc.
-        accum
+        acc
         (let [[vf-type ks valf] (if-not ?vf-type ?op (cons ?vf-type ?op))]
           (case vf-type
-            :reset (if (empty? ks) valf (assoc-in accum ks valf))
+            :reset (if (empty? ks) valf (assoc-in acc ks valf))
             :swap  (if (nil? valf)
-                     accum ; Noop, allows conditional ops
+                     acc ; Noop, allows conditional ops
                      (if (empty? ks)
-                       (valf accum)
+                       (valf acc)
                        ;; Currently ignore possible <return-val>:
-                       (nth (swapped*-in accum ks valf) 0)))))))
+                       (nth (-swapped acc ks valf) 0)))))))
     m ops))
 
-(defn replace-in "Experimental. For use with `swap!`, etc."
-  [m & ops] (replace-in* nil m ops))
+(defn replace-in "For use with `swap!`, etc." [m & ops] (-replace-in nil m ops))
 
 (comment
   (replace-in {}
@@ -1083,11 +1110,9 @@
       [:swap [5]] nil ; Noop (no throw)
       )))
 
-(defn- platform-cas!
-  "Minor optimization for single-threaded Cljs"
-  [atom_ old-val new-val]
-  #+cljs (do (reset! atom_ new-val) true)
-  #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
+(compile-if (completing (fn [])) ; Transducers
+  (defn- pairs-into [to from] (into to (partition-all 2) from))
+  (defn- pairs-into [to from] (into to (partition     2  from))))
 
 (defn swap-in!
   "More powerful version of `swap!`:
@@ -1095,31 +1120,22 @@
     * Swap fn can return `(swapped <new-val> <return-val>)` rather than just
       <new-val>. This is useful when writing atomic pull fns, etc."
   ([atom_ ks f]
-     (if (empty? ks)
-       (loop []
-         (let [old-val @atom_
-               [new-val return-val] (swapped* (f old-val))]
-           (if (platform-cas! atom_ old-val new-val)
-             return-val
-             ;; Ref. https://goo.gl/HTVSWe:
-             (recur))))
+   (loop []
+     (let [old-val @atom_
+           [new-val return-val] (-swapped old-val ks f)]
+       (if (platform-cas! atom_ old-val new-val)
+         return-val
+         (recur)))))
 
-       (loop []
-         (let [old-val @atom_
-               [new-val return-val] (swapped*-in old-val ks f)]
-           (if (platform-cas! atom_ old-val new-val)
-             return-val
-             (recur))))))
-
+  ;; Note no way to support `swapped`
   ([atom_ ks f & more] {:pre [(have? even? (count more))]}
-     (let [pairs (into [[ks f]] (partition 2 more))]
-       (loop []
-         (let [old-val @atom_
-               new-val (replace-in* :swap old-val pairs)]
-           (if (platform-cas! atom_ old-val new-val)
-             ;; No way to support `swapped`:
-             {:old old-val :new new-val}
-             (recur)))))))
+   (let [op-pairs (pairs-into [[ks f]] more)]
+     (loop []
+       (let [old-val @atom_
+             new-val (-replace-in :swap old-val op-pairs)]
+         (if (platform-cas! atom_ old-val new-val)
+           {:old old-val :new new-val} ; TODO [old-val new-val]
+           (recur)))))))
 
 (defn reset-in! "Is to `reset!` as `swap-in!` is to `swap!`"
   ([atom_ ks new-val]
@@ -1129,12 +1145,12 @@
      (swap!  atom_ (fn [old-val] (assoc-in old-val ks new-val)))))
 
   ([atom_ ks new-val & more] {:pre [(have? even? (count more))]}
-   (let [pairs (into [[ks new-val]] (partition 2 more))]
+   (let [op-pairs (pairs-into [[ks new-val]] more)]
      (loop []
        (let [old-val @atom_
-             new-val (replace-in* :reset old-val pairs)]
+             new-val (-replace-in :reset old-val op-pairs)]
          (if (platform-cas! atom_ old-val new-val)
-           {:old old-val :new new-val}
+           {:old old-val :new new-val} ; TODO [old-val new-val]
            (recur)))))))
 
 (comment
@@ -1430,18 +1446,6 @@
 
 (def ^:private ^:const gc-rate (/ 1.0 16000))
 (defn gc-now? [] (<= ^double (rand) gc-rate))
-
-(defn swap-val! ; Public since it can be useful for custom memoization utils
-  "Swaps associative value at key and returns the new value. Specialized, fast
-  `swap-in!` for use mostly by memoization utils."
-  [atom_ k f]
-  (loop []
-    (let [old-m @atom_
-          new-v (f (get old-m k))
-          new-m (assoc old-m k new-v)]
-      (if (platform-cas! atom_ old-m new-m)
-        new-v
-        (recur)))))
 
 (defn memoize_
   "Like `clojure.core/memoize` but faster, uses delays to avoid write races"
@@ -2357,6 +2361,7 @@
 (def parse-bool      as-?bool)
 (def parse-int       as-?int)
 (def parse-float     as-?float)
+(def swapped*        -swapped)
 
 (defmacro cond-throw  [& args] `(cond! ~@args))
 (defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
