@@ -914,8 +914,9 @@
     (qb 100 (into [] (take 2) (sort-by - c)) (top 2 - c))))
 
 (defn contains-in? [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
-(defn dissoc-in [m ks & dissoc-ks]
-  (update-in* m ks (fn [m] (apply dissoc m dissoc-ks))))
+(defn dissoc-in
+  ([m ks dissoc-k]        (update-in* m ks (fn [m]       (dissoc m dissoc-k))))
+  ([m ks dissoc-k & more] (update-in* m ks (fn [m] (apply dissoc m dissoc-k more)))))
 
 (comment
   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
