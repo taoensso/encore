@@ -1019,7 +1019,7 @@
   #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
 
 (defn dswap! "Returns [<old-val> <new-val>]" [atom_ f]
-  #+cljs (let [ov @atom_ nv (f old)] (reset! atom_ nv) [ov nv])
+  #+cljs (let [ov @atom_ nv (f ov)] (reset! atom_ nv) [ov nv])
   #+clj
   (loop []
     (let [ov @atom_ nv (f ov)]
