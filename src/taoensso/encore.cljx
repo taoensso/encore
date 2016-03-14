@@ -16,7 +16,6 @@
                    [clojure.set         :as set]
                    ;; [cljs.core.async  :as async]
                    [cljs.reader]
-                   ;; [cljs.reader      :as edn]
                    [cljs.tools.reader.edn :as edn]
                    ;;[goog.crypt.base64 :as base64]
                    [goog.object         :as gobj]
@@ -26,7 +25,6 @@
                    [goog.events         :as gevents]
                    [goog.net.XhrIo      :as gxhr]
                    [goog.net.XhrIoPool  :as gxhr-pool]
-                   ;; [goog.net.XhrManager :as xhrm]
                    [goog.Uri.QueryData  :as gquery-data]
                    [goog.structs        :as gstructs]
                    [goog.net.EventType]
@@ -93,7 +91,7 @@
 
 (defn name-with-attrs
   "Handles optional docstrings & attr maps for a macro def's name.
-  Originally stolen from `clojure.tools.macro`"
+  Originally stolen from `clojure.tools.macro`."
   ([name             macro-args] (name-with-attrs name nil macro-args))
   ([name attrs-merge macro-args]
    (let [[docstring macro-args] (if (string? (first macro-args))
@@ -621,13 +619,13 @@
   [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
 
 #+clj
-(def ^:private simple-date-format*
+(def ^:private -simple-date-format
   "Returns a SimpleDateFormat ThreadLocal proxy"
   (memoize
     (fn [^String pattern & [{:keys [locale timezone]}]]
       (let [^Locale locale
-            (case locale
-              :jvm-default (Locale/getDefault)
+            (if (kw-identical? locale :jvm-default)
+              (Locale/getDefault)
               locale)
 
             ^TimeZone timezone
@@ -646,23 +644,15 @@
 
 #+clj
 (defn simple-date-format
-  "Returns a thread-local java.text.SimpleDateFormat for simple date formatting
-  and parsing. Uses JVM's default locale + timezone when unspecified.
-
-  (.format (simple-date-format \"yyyy-MMM-dd\") (Date.)) => \"2014-Mar-07\"
-  Ref. http://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html
-
-  Prefer the java.time (Java 8) or Joda-Time (external lib) APIs when available.
-  Tower also offers facilities built on DateFormat (rather than the more
-  restrictive SimpleDateFormat)."
-  ;; Note fully qualified type hint!
+  "Returns a thread-local `java.text.SimpleDateFormat`, Ref. http://goo.gl/Vh392A
+  ~Prefer java.time (Java 8) > Joda-Time > Tower/DateFormat > SimpleDateFormat"
   ^java.text.SimpleDateFormat [pattern & [{:keys [locale timezone] :as opts}]]
   (let [pattern
         (case pattern
           :iso8601 "yyyy-MM-dd HH:mm:ss.SSSZ"
           :rss2 "EEE, dd MMM yyyy HH:mm:ss z"
           pattern)]
-    (.get ^ThreadLocal (simple-date-format* pattern opts))))
+    (.get ^ThreadLocal (-simple-date-format pattern opts))))
 
 (comment (qb 10000 (.format (simple-date-format "yyyy-MMM-dd") (Date.))))
 
@@ -1025,7 +1015,7 @@
 
 (defn- platform-cas! "Minor optimization for single-threaded Cljs"
   [atom_ old-val new-val]
-  #+cljs (do (reset! atom_ new-val) true)
+  #+cljs (do (reset! atom_ new-val) true) ; No compare for our uses
   #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
 
 (defn dswap! "Returns [<old-val> <new-val>]" [atom_ f]
@@ -1853,7 +1843,7 @@
   "Experimental. Returns a fixed-size future pool:
     (fn
       [f] - Blocks to acquire a future, then executes (f) on that future.
-      []  - Blocks to acquire all futures, then immediately releases them.
+      [ ] - Blocks to acquire all futures, then immediately releases them.
             Useful for blocking till all outstanding work completes.
   Timeout variants are also provided."
   [^long n]
