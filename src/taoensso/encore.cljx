@@ -1013,28 +1013,31 @@
 
 ;;;; Swap stuff
 
-(defn- platform-cas! "Minor optimization for single-threaded Cljs"
+(defn- -platform-cas! "Minor optimization for single-threaded Cljs"
   [atom_ old-val new-val]
   #+cljs (do (reset! atom_ new-val) true) ; No compare for our uses
   #+clj  (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val))
 
+;; Fastest possible simple swap with [old new] return
 (defn dswap! "Returns [<old-val> <new-val>]" [atom_ f]
   #+cljs (let [ov @atom_ nv (f ov)] (reset! atom_ nv) [ov nv])
   #+clj
   (loop []
-    (let [ov @atom_ nv (f ov)]
-      (if (.compareAndSet ^clojure.lang.Atom atom_ ov nv)
-        [ov nv]
+    (let [old-val @atom_
+          new-val (f old-val)]
+      (if (.compareAndSet ^clojure.lang.Atom atom_ old-val new-val)
+        [old-val new-val]
         (recur)))))
 
-(defn swap-val! ; Specialized `swap-in!` used by memoization utils
-  "Swaps associative value at key and returns the new value"
-  [atom_ k f]
+;; Fastest possible simple swap with k, new-in return
+(defn- -swap-cache! "Used by memoization utils" [atom_ k f]
+  #+cljs (let [om @atom_ nv (f (get om k)) nm (assoc om k nv)] (reset! atom_ nm) nv)
+  #+clj
   (loop []
     (let [old-m @atom_
           new-v (f (get old-m k))
           new-m (assoc  old-m k new-v)]
-      (if (platform-cas! atom_ old-m new-m)
+      (if (.compareAndSet ^clojure.lang.Atom atom_ old-m new-m)
         new-v
         (recur)))))
 
@@ -1043,10 +1046,11 @@
 (defn  swapped  [new-val return-val] (Swapped. new-val return-val))
 (defn -swapped "Returns [<new-val> <return-val>]"
   ([x] (if (swapped? x) [(:new-val x) (:return-val x)] [x x]))
+  ([old-val    f] (-swapped (f old-val)))
   ([old-val ks f]
-   (if (empty? ks)
-     (-swapped (f old-val))
-     (let [m old-val]
+   (let [[k1 & kn] ks ; Singular k1 is common case
+         m old-val]
+     (if kn
        (if (kw-identical? f :swap/dissoc)
          (-swapped (dissoc-in m (butlast ks) (last ks)))
          (let [old-val-in (get-in m ks)
@@ -1054,7 +1058,19 @@
                new-val (if (kw-identical? new-val-in :swap/dissoc)
                          (dissoc-in m (butlast ks) (last ks))
                          (assoc-in  m ks new-val-in))]
-           [new-val return-val]))))))
+           [new-val return-val]))
+
+       ;; 0 or 1 ks
+       (if (and (nil? k1) (empty? ks))
+         (-swapped (f old-val))
+         (if (kw-identical? f :swap/dissoc)
+           (-swapped (dissoc m k1))
+           (let [old-val-in (get m k1)
+                 [new-val-in return-val] (-swapped (f old-val-in))
+                 new-val (if (kw-identical? new-val-in :swap/dissoc)
+                           (dissoc m k1)
+                           (assoc  m k1 new-val-in))]
+             [new-val return-val])))))))
 
 (defn- -replace-in
   "Reduces input with
@@ -1110,21 +1126,30 @@
     * Supports optional `update-in` semantics.
     * Swap fn can return `(swapped <new-val> <return-val>)` rather than just
       <new-val>. This is useful when writing atomic pull fns, etc."
-  ([atom_ ks f]
+
+  ([atom_ f] ; Like `swap!` with `swapped` support
    (loop []
      (let [old-val @atom_
-           [new-val return-val] (-swapped old-val ks f)]
-       (if (platform-cas! atom_ old-val new-val)
+           [new-val return-val] (-swapped (f old-val))]
+       (if (-platform-cas! atom_ old-val new-val)
          return-val
          (recur)))))
 
-  ;; Note no way to support `swapped`
+  ([atom_ ks f] ; Add `update-in` support
+   (loop []
+     (let [old-val @atom_
+           [new-val return-val] (-swapped old-val ks f)]
+       (if (-platform-cas! atom_ old-val new-val)
+         return-val
+         (recur)))))
+
+  ;; Add `replace-in` support, note no way to support `swapped`
   ([atom_ ks f & more] {:pre [(have? even? (count more))]}
    (let [op-pairs (pairs-into [[ks f]] more)]
      (loop []
        (let [old-val @atom_
              new-val (-replace-in :swap old-val op-pairs)]
-         (if (platform-cas! atom_ old-val new-val)
+         (if (-platform-cas! atom_ old-val new-val)
            [old-val new-val]
            (recur)))))))
 
@@ -1140,7 +1165,7 @@
      (loop []
        (let [old-val @atom_
              new-val (-replace-in :reset old-val op-pairs)]
-         (if (platform-cas! atom_ old-val new-val)
+         (if (-platform-cas! atom_ old-val new-val)
            [old-val new-val]
            (recur)))))))
 
@@ -1445,7 +1470,7 @@
   (let [cache_ (atom {})]
     (fn [& args]
       @(or (get @cache_ args)
-           (swap-val! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args))))))))
+           (-swap-cache! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args))))))))
 
   #+clj ; Minor extra optimization possible here using ConcurrentHashMap
   (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
@@ -1462,9 +1487,9 @@
   (let [cache_ (atom {})]
     (fn
       ([ ] @(or (get @cache_ sentinel)
-                (swap-val! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
+                (-swap-cache! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
       ([x] @(or (get @cache_ x)
-                (swap-val! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))))
+                (-swap-cache! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))))
   #+clj
   (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
     (fn
@@ -1492,7 +1517,7 @@
   [cache f & args]
   (if-not cache ; {<args> <delay-val>}
     (apply f args)
-    @(swap-val! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
+    @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
 
 (defn memoize*
   "Like `clojure.core/memoize` but:
@@ -1517,7 +1542,7 @@
          (let [fresh? (kw-identical? arg1 :mem/fresh)
                args   (if fresh? argn args)]
            @(or (get @cache_ args)
-                (swap-val! cache_ args
+                (-swap-cache! cache_ args
                   (fn [?dv] (if (and ?dv (not fresh?))
                              ?dv
                              (delay (apply f args)))))))))))
@@ -1566,7 +1591,7 @@
            (let [fresh?  (kw-identical? arg1 :mem/fresh)
                  args    (if fresh? argn args)
                  instant (now-udt)
-                 [dv]    (swap-val! cache_ args
+                 [dv]    (-swap-cache! cache_ args
                            (fn [?cv]
                              (if (and ?cv (not fresh?)
                                    (let [[_dv ^long udt] ?cv]
@@ -1634,7 +1659,7 @@
          cv-fn
          (if-not ttl-ms?
            (fn [args fresh? tick]
-             (swap-val! state_ args
+             (-swap-cache! state_ args
                (fn [?cv]
                  (if (and ?cv (not fresh?))
                    ?cv
@@ -1642,7 +1667,7 @@
 
            (fn [args fresh? tick]
              (let [instant (now-udt)]
-               (swap-val! state_ args
+               (-swap-cache! state_ args
                  (fn [?cv]
                    (if (and ?cv (not fresh?)
                          (let [[_dv ^long udt] ?cv]
@@ -1677,15 +1702,14 @@
 (comment
   (do
     (def f0 (memoize         (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f_ (memoize_        (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f1 (memoize*        (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f2 (memoize* 5000   (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f3 (memoize* 2 nil  (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
-  (qb 10000
-    (f0) (f1) (f2) (f3) (f4) ; (f5)
-    ;;(f0 (rand)) (f1 (rand)) (f2 (rand)) (f3 (rand)) (f4 (rand))
-    )
+  (qb 10000 (f0) (f_) (f1) (f2) (f3) (f4))
+
   ;; [ 0.95  1.29  4.13 10.36 11.32] ; w/o args
   ;; [12.76 18.64 20.10 30.99 36.25] ; with args
 
@@ -2353,6 +2377,7 @@
 (def parse-int       as-?int)
 (def parse-float     as-?float)
 (def swapped*        -swapped)
+(def swap-val!       -swap-cache!)
 
 (defmacro cond-throw  [& args] `(cond! ~@args))
 (defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
