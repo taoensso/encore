@@ -1464,39 +1464,41 @@
 (defn gc-now? [] (<= ^double (rand) gc-rate))
 
 (defn memoize_
-  "Like `clojure.core/memoize` but faster, uses delays to avoid write races"
+  "Like `clojure.core/memoize` but faster + uses delays to avoid write races"
   [f]
-  #+cljs
-  (let [cache_ (atom {})]
-    (fn [& args]
-      @(or (get @cache_ args)
-           (-swap-cache! cache_ args (fn [?dv] (if ?dv ?dv (delay (apply f args))))))))
-
-  #+clj ; Minor extra optimization possible here using ConcurrentHashMap
-  (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
-    (fn [& args]
-      @(or (.get cache_ args)
-           (let [dv (delay (apply f args))] (or (.putIfAbsent cache_ args dv) dv))))))
-
-(defn memoize-a0_ "Fastest possible 0-arg `memoize_`" [f]
-  (let [cache_ (atom nil)]
-    (fn [] @(or @cache_ (swap! cache_ (fn [?dv] (if ?dv ?dv (delay (f)))))))))
-
-(defn memoize-a1_ "Fastest possible 0/1-arg `memoize_`" [f]
   #+cljs
   (let [cache_ (atom {})]
     (fn
       ([ ] @(or (get @cache_ sentinel)
                 (-swap-cache! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
       ([x] @(or (get @cache_ x)
-                (-swap-cache! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))))
+                (-swap-cache! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))
+      ([x & more]
+       (let [xs (cons x more)]
+         @(or (get @cache_ xs)
+              (-swap-cache! cache_ xs (fn [?dv] (if ?dv ?dv (delay (apply f xs))))))))))
+
   #+clj
   (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
     (fn
       ([ ] @(or (.get cache_ sentinel)
-                (let [dv (delay (f))] (or (.putIfAbsent cache_ sentinel dv) dv))))
+                (let [dv (delay (f))]   (or (.putIfAbsent cache_ sentinel dv) dv))))
       ([x] @(or (.get cache_ x)
-                (let [dv (delay (f x))] (or (.putIfAbsent cache_ x dv) dv)))))))
+                (let [dv (delay (f x))] (or (.putIfAbsent cache_ x        dv) dv))))
+      ([x & more]
+       (let [xs (cons x more)]
+         @(or (.get cache_ xs)
+              (let [dv (delay (apply f xs))] (or (.putIfAbsent cache_ xs dv) dv))))))))
+
+(comment
+  (do
+    (def f0  (memoize  (fn [])))
+    (def f0_ (memoize_ (fn [])))
+    (def f1  (memoize  (fn [x] x)))
+    (def f1_ (memoize_ (fn [x] x))))
+  (qb 100000 (f0   ) (f0_   )) ; [ 5.61 4.94]
+  (qb 100000 (f1 :x) (f1_ :x)) ; [20.79 5.61]
+  )
 
 (defn memoize1
   "Great for Reactjs render op caching on mobile devices, etc."
@@ -1507,7 +1509,7 @@
            (get (swap! cache_
                   (fn [cache]
                     (if (get cache args)
-                      cache ; Replace entire cache:
+                      cache
                       {args (delay (apply f args))})))
              args)))))
 
@@ -1702,16 +1704,13 @@
 (comment
   (do
     (def f0 (memoize         (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f_ (memoize_        (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f1 (memoize*        (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f2 (memoize* 5000   (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f3 (memoize* 2 nil  (fn [& [x]] (if x x (Thread/sleep 600)))))
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
-  (qb 10000 (f0) (f_) (f1) (f2) (f3) (f4))
-
-  ;; [ 0.95  1.29  4.13 10.36 11.32] ; w/o args
-  ;; [12.76 18.64 20.10 30.99 36.25] ; with args
+  (qb 10000 (f0 :x) (f1 :x) (f2 :x) (f3 :x) (f4 :x))
+  ;; [2.06 3.99 7.23 14.66 15.24]
 
   (f1)
   (f1 :mem/del)
@@ -2365,9 +2364,6 @@
 ;;;; DEPRECATED
 
 #+cljs (def get-window-location get-win-loc)
-(def a0-memoize_     memoize-a0_)
-(def a1-memoize_     memoize-a1_)
-(def memoize-1       memoize1)
 (def backport-run!   run!*)
 (def fq-name         as-qname)
 (def qname           as-qname)
@@ -2378,6 +2374,11 @@
 (def parse-float     as-?float)
 (def swapped*        -swapped)
 (def swap-val!       -swap-cache!)
+(def memoize-a0_     memoize_)
+(def memoize-a1_     memoize_)
+(def a0-memoize_     memoize_)
+(def a1-memoize_     memoize_)
+(def memoize-1       memoize1)
 
 (defmacro cond-throw  [& args] `(cond! ~@args))
 (defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
