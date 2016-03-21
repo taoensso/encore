@@ -46,7 +46,7 @@
 (defmacro have!  [& sigs] `(taoensso.truss/have!  ~@sigs))
 (defmacro have?  [& sigs] `(taoensso.truss/have?  ~@sigs))
 (defmacro have!? [& sigs] `(taoensso.truss/have!? ~@sigs))
-(defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
+(defn      get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
 (defmacro with-dynamic-assertion-data [& sigs]
   `(taoensso.truss/with-dynamic-assertion-data ~@sigs))
 
@@ -90,54 +90,49 @@
     then else))
 
 (defn name-with-attrs
-  "Handles optional docstrings & attr maps for a macro def's name.
-  Originally stolen from `clojure.tools.macro`."
-  ([name             macro-args] (name-with-attrs name nil macro-args))
-  ([name attrs-merge macro-args]
-   (let [[docstring macro-args] (if (string? (first macro-args))
-                                  [(first macro-args) (next macro-args)]
-                                  [nil macro-args])
-         [attrs macro-args] (if (map? (first macro-args))
-                              [(first macro-args) (next macro-args)]
-                              [{} macro-args])
-         attrs (if docstring (assoc attrs :doc docstring) attrs)
-         attrs (if (meta name) (conj (meta name) attrs)   attrs)
+  "Given a name symbol and sigs, returns [<name-with-attrs-meta> <args>]"
+  ([sym             sigs] (name-with-attrs sym nil sigs))
+  ([sym attrs-merge sigs]
+   (let [[?docstring sigs] (if (string? (first sigs)) [(first sigs) (next sigs)] [nil sigs])
+         [attrs      sigs] (if (map?    (first sigs)) [(first sigs) (next sigs)] [{}  sigs])
+         attrs (if ?docstring (assoc attrs :doc ?docstring) attrs)
+         attrs (if (meta sym) (conj (meta sym) attrs) attrs)
          attrs (conj attrs attrs-merge)]
-     [(with-meta name attrs) macro-args])))
+     [(with-meta sym attrs) sigs])))
 
 (defmacro defonce*
-  "Like `clojure.core/defonce` but supports optional docstring and attributes
-  map for name symbol."
-  {:arglists '([name expr])}
-  [name & sigs]
-  (let [[name [expr]] (name-with-attrs name sigs)]
-    `(defonce ~name ~expr)))
+  "Like `defonce` but uses `name-with-attrs` to support optional docstring
+  and attrs map for name symbol"
+  {:arglists '([sym expr])}
+  [sym & sigs]
+  (let [[sym body] (name-with-attrs sym sigs)]
+    `(defonce ~sym ~@body)))
 
 (defmacro declare-remote
-  "Declares the given ns-qualified names, preserving symbol metadata. Useful for
-  circular dependencies."
-  [& names]
+  "Declares the given ns-qualified name symbols, preserving symbol metadata.
+  Useful for circular dependencies."
+  [& syms]
   (let [original-ns (str *ns*)]
-    `(do ~@(map (fn [n]
-                  (let [ns (namespace n)
-                        v  (name n)
-                        m  (meta n)]
+    `(do ~@(map (fn [s]
+                  (let [ns (namespace s)
+                        v  (name      s)
+                        m  (meta      s)]
                     `(do (in-ns  '~(symbol ns))
-                         (declare ~(with-meta (symbol v) m))))) names)
+                         (declare ~(with-meta (symbol v) m))))) syms)
          (in-ns '~(symbol original-ns)))))
 
 (defmacro defalias
   "Defines an alias for a var, preserving metadata. Adapted from
   `clojure.contrib/def.clj`, Ref. http://goo.gl/xpjeH"
-  ;; TODO Would be nice to have a ClojureScript impln. (possible?)
-  ([     target] `(defalias ~(symbol (name target)) ~target nil))
-  ([name target] `(defalias ~name                   ~target nil))
-  ([name target doc]
+  ;; TODO Would be nice to have a ClojureScript impln. (impossible?)
+  ([    target          ] `(defalias ~(symbol (name target)) ~target nil))
+  ([sym target          ] `(defalias ~sym                    ~target nil))
+  ([sym target docstring]
    `(let [^clojure.lang.Var v# (var ~target)]
-      (alter-meta! (def ~name (.getRawRoot v#))
+      (alter-meta! (def ~sym (.getRawRoot v#))
         #(merge % (dissoc (meta v#) :column :line :file :test :name)
-           (when-let [doc# ~doc] {:doc doc#})))
-      (var ~name))))
+           (when-let [doc# ~docstring] {:doc doc#})))
+      (var ~sym))))
 
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
@@ -145,22 +140,21 @@
 (comment [(cond false "false") (cond! false "false")])
 
 (defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`"
-  [[name x] & clauses]
+  [[sym x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
-        pstep (fn [[test-expr step]] `(when-let [~name ~test-expr]
-                                       (-> ~g ~step)))]
+        pstep (fn [[test-expr step]] `(when-let [~sym ~test-expr] (-> ~g ~step)))]
     `(let [~g ~x]
        ~@(map pstep (partition 2 clauses))
        ~g)))
 
 (defmacro case-eval
   "Like `case` but evals test constants for their compile-time value"
-  [e & clauses]
+  [expr & clauses]
   (let [;; Don't evaluate default expression!
         default (when (odd? (count clauses)) (last clauses))
         clauses (if default (butlast clauses) clauses)]
-    `(case ~e
+    `(case ~expr
        ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
        ~(when default default))))
 
@@ -216,23 +210,24 @@
              ;;  *.tools.reader/*data-readers*,
              ;;  *.tools.reader/default-data-reader-fn*
              ;;
-             ;; [1] Lib consumer doesn't care that we've standardized to using
-             ;;     tools.reader under the covers
+             ;; [1] Lib consumer doesn't care that we've standardized to
+             ;;     using tools.reader under the covers
 
              readers
              (if-not (kw-identical? readers ::dynamic)
                readers
                #+clj  clojure.core/*data-readers*
-               ;; Unfortunate (slow), but faster than gc caching in most cases:
+               ;; Unfortunate (slow), but faster than gc'd memoization in most cases:
                #+cljs (map-keys symbol @cljs.reader/*tag-table*))
 
-             default (if-not (kw-identical? default ::dynamic)
-                       default
-                       #+clj  clojure.core/*default-data-reader-fn*
-                       #+cljs @cljs.reader/*default-data-reader-fn*)
+             default
+             (if-not (kw-identical? default ::dynamic)
+               default
+               #+clj  clojure.core/*default-data-reader-fn*
+               #+cljs @cljs.reader/*default-data-reader-fn*)
 
-             opts    (merge opts {:readers readers
-                                  :default default})]
+             opts (merge opts {:readers readers
+                               :default default})]
 
          #+clj  (clojure.tools.reader.edn/read-string opts s)
          #+cljs (cljs.tools.reader.edn/read-string    opts s))))))
@@ -258,16 +253,16 @@
   (defn chan? [x] nil))
 
 (defn named? [x]
-  #+cljs (implements? INamed x)
-  #+clj  (instance? clojure.lang.Named x))
+  #+cljs (implements? INamed             x)
+  #+clj  (instance?   clojure.lang.Named x))
 
 (defn editable? [coll]
   #+cljs (implements? IEditableCollection              coll)
   #+clj  (instance?   clojure.lang.IEditableCollection coll))
 
 (defn derefable? [x]
-  #+cljs (satisfies? IDeref x)
-  #+clj  (instance? clojure.lang.IDeref x))
+  #+cljs (satisfies? IDeref              x)
+  #+clj  (instance?  clojure.lang.IDeref x))
 
 #+clj (defn throwable? [x] (instance? Throwable x))
 #+clj (defn exception? [x] (instance? Exception x))
@@ -295,7 +290,11 @@
 
 (do
   (def sentinel #+clj (Object.) #+cljs (js-obj))
-  (defn     sentinel? [x] (identical? x sentinel))
+  #+cljs (defn sentinel? [x] (identical? x sentinel))
+  #+clj  (defn sentinel?
+           {:inline (fn [x] `(. clojure.lang.Util identical ~x sentinel))
+            :inline-arities #{1}}
+           [x] (identical? x sentinel))
   (defn nil->sentinel [x] (if (nil? x) sentinel x))
   (defn sentinel->nil [x] (if (sentinel? x) nil x)))
 
@@ -331,7 +330,7 @@
   (error-data (Exception. "foo"))
   (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro catch-errors* "Experimental!"
+(defmacro catch-errors*
   ;; Badly need something like http://dev.clojure.org/jira/browse/CLJ-1293
   ;; TODO js/Error instead of :default as temp workaround for http://goo.gl/UW7773
   ([try-form] `(catch-errors* ~try-form ~'_ nil))
@@ -354,9 +353,7 @@
   (catch-errors* (/ 5 0)    e e))
 
 (defmacro caught-error-data "Handy for error-throwing unit tests"
-  [& body]
-  `(let [[result# err#] (catch-errors ~@body)]
-     (when err# (error-data err#))))
+  [& body] `(catch-errors* (do ~@body nil) e# (error-data e#)))
 
 (comment (caught-error-data (/ 5 0)))
 
@@ -368,7 +365,7 @@
 
 ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
 ;; `keyword-identical?`. This util helps alleviate the pain of writing
-;; cross-platform code, Ref. http://goo.gl/be8CGP.
+;; cross-platform code, Ref. http://goo.gl/be8CGP
 #+cljs (def  kw-identical? keyword-identical?)
 #+clj  (defn kw-identical?
          {:inline (fn [x y] `(. clojure.lang.Util identical ~x ~y))
@@ -384,11 +381,11 @@
 
 (comment (nnil= :foo :foo nil))
 
-(defn as-?nzero   [x] (when (number?  x) (if (= 0 x)        nil x)))
-(defn as-?nblank  [x] (when (string?  x) (if (str/blank? x) nil x)))
-(defn as-?kw      [x] (cond (keyword? x)       x  (string? x) (keyword x)))
-(defn as-?name    [x] (cond (named?   x) (name x) (string? x)          x))
-(defn as-?qname   [x]
+(defn as-?nzero  [x] (when (number?  x) (if (zero? x)      nil x)))
+(defn as-?nblank [x] (when (string?  x) (if (str/blank? x) nil x)))
+(defn as-?kw     [x] (cond (keyword? x)       x  (string? x) (keyword x)))
+(defn as-?name   [x] (cond (named?   x) (name x) (string? x)          x))
+(defn as-?qname  [x]
   (cond
     (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
     (string? x) x))
@@ -425,15 +422,14 @@
 ;; Uses simple regex to test for basic "x@y.z" form:
 (defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
 (defn as-?nemail [?s] (when-let [email (as-?email ?s)] (str/lower-case email)))
-
 (comment (mapv as-?nemail ["foo" "foo@" "foo@bar" "Foo@BAR.com"
                            "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"]))
 
 (defn- try-pred [pred x] (catch-errors* (pred x) _ false))
 (defn when?     [pred x] (when (try-pred pred x) x))
 (defn is! "Cheaper `have!` that provides less diagnostic info"
-  ([     x] (is! identity x nil)) ; Nb different to single-arg `have`
-  ([pred x] (is! identity x nil))
+  ([     x           ] (is! identity x nil)) ; Nb different to single-arg `have`
+  ([pred x           ] (is! identity x nil))
   ([pred x fail-?data]
    (if (try-pred pred x)
      x
@@ -704,8 +700,7 @@
   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
 
 (defn revery? "Faster `every?` based on `reduce`"
-  [pred coll]
-  (reduce (fn [acc in] (if (pred in) true (reduced nil))) true coll))
+  [pred coll] (reduce (fn [acc in] (if (pred in) true (reduced nil))) true coll))
 
 (defn every [pred coll]
   ;; Note that `(every? even? nil)` ≠ `(every even? nil)`
@@ -766,7 +761,7 @@
   (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
 
 (defn into-all "Like `into` but supports multiple \"from\"s"
-  ([to from       ] (into to from))
+  ([to from       ]              (into to from))
   ([to from & more] (reduce into (into to from) more)))
 
 (defn repeatedly-into
@@ -1050,7 +1045,7 @@
   ([old-val ks f]
    (let [[k1 & kn] ks ; Singular k1 is common case
          m old-val]
-     (if kn
+     (if kn ; >1 ks
        (if (kw-identical? f :swap/dissoc)
          (-swapped (dissoc-in m (butlast ks) (last ks)))
          (let [old-val-in (get-in m ks)
@@ -1270,10 +1265,10 @@
 
 (defn format
   "Like `clojure.core/format` but:
-    * Returns \"\" when fmt is nil rather than throwing an NPE.
-    * Formats nil as \"nil\" rather than \"null\".
+    * Returns \"\" when fmt is nil rather than throwing an NPE
+    * Formats nil as \"nil\" rather than \"null\"
     * Provides ClojureScript support via goog.string.format (this has fewer
-      formatting options than Clojure's `format`!)."
+      formatting options than Clojure's `format`!)"
   [fmt & args] (format* fmt args))
 
 (defn str-replace
@@ -1345,24 +1340,27 @@
 
 (comment (str-?index "hello there" "there"))
 
-(defn join-once "Like `clojure.string/join` but ensures no double separators"
-  [separator & coll]
-  (reduce
-   (fn [s1 s2]
-     (let [s1 (str s1) s2 (str s2)]
-       (if (str-ends-with? s1 separator)
-         (if (str-starts-with? s2 separator)
-           (str s1 (.substring s2 1))
-           (str s1 s2))
-         (if (str-starts-with? s2 separator)
-           (str s1 s2)
-           (if (or (= s1 "") (= s2 ""))
-             (str s1 s2)
-             (str s1 separator s2))))))
-   nil
-   coll))
+(defn str-join-once
+  "Like `clojure.string/join` but ensures no double separators"
+  [separator coll]
+  (if (str/blank? separator)
+    (str (reduce str-rf "" coll))
+    (reduce
+      (fn [acc in]
+        (let [acc (str acc) in (str in)]
+          (if (str-ends-with? acc separator)
+            (if (str-starts-with? in separator)
+              (str acc (.substring in 1))
+              (str acc in))
+            (if (str-starts-with? in separator)
+              (str acc in)
+              (if (or (= acc "") (= in ""))
+                (str acc in)
+                (str acc separator in))))))
+      ""
+      coll)))
 
-(defn path [& parts] (apply join-once "/" parts))
+(defn path [& parts] (str-join-once "/" parts))
 
 (comment (path "foo/" nil "/bar" "baz/" "/qux/"))
 
@@ -1874,7 +1872,7 @@
         msecs java.util.concurrent.TimeUnit/MILLISECONDS
         fp-call
         (fn [f]
-          (when-not (fn? f) (.release s) (throw (ex-info "Not an ifn" {:arg f})))
+          (when-not (fn? f) (.release s) (throw (ex-info "Not a fn" {:arg f})))
           (future
             (try
               (f)
@@ -2302,7 +2300,7 @@
 
 ;;;; Stubfns
 
-(compile-if (volatile! nil) ; Overhead => only useful for stubfns:
+(compile-if (volatile! nil) ; Var overhead => useful only for stubfns:
   (do (def -vol! volatile!) (defn -reset-vol! [v_ x] (vreset! v_ x)))
   (do (def -vol! atom)      (defn -reset-vol! [v_ x] (reset!  v_ x))))
 
@@ -2390,6 +2388,9 @@
 
 ;; Arg order changed for easier partials, etc.:
 (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
+
+;; & coll changed to coll:
+(defn join-once [sep & coll] (apply str-join-once coll))
 
 ;; Used by Carmine <= v2.7.0
 (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
