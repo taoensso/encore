@@ -529,6 +529,12 @@
 
 ;;;; Math
 
+(defn approx=
+  ([x y      ] (approx= x y 0.001))
+  ([x y signf] (< (Math/abs (- (double x) (double y))) (double signf))))
+
+(comment (qb 10000 (approx= 3.141592 (/ 22 7) 0.01)))
+
 ;; This must reflect to output correct long/double types:
 (defn clamp [nmin nmax n] (if (< n nmin) nmin (if (> n nmax) nmax n)))
 
