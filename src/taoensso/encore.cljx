@@ -34,7 +34,7 @@
   (:require-macros
    [taoensso.encore :as enc-macros :refer
     (compile-if catch-errors* catch-errors have have! have?
-     name-with-attrs)]))
+     name-with-attrs -vol! -vol-reset! -vol-swap!)]))
 
 (comment
   (set! *unchecked-math* :warn-on-boxed)
@@ -1340,25 +1340,53 @@
 
 (comment (str-?index "hello there" "there"))
 
-(defn str-join-once
-  "Like `clojure.string/join` but ensures no double separators"
+;; Back-compatible volatiles, private for now
+;; Note: benching seems to consistently show that atoms are actually no
+;; slower than volatiles when used in the same way (i.e. w/o contention
+;; or watches)?
+(compile-if (volatile! nil)
+  (do
+    (defmacro -vol!       [val]           `(volatile!     ~val))
+    (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
+    (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args)))
+  (do
+    (defmacro -vol!       [val]           `(atom         ~val))
+    (defmacro -vol-reset! [vol_ val]      `(reset! ~vol_ ~val))
+    (defmacro -vol-swap!  [vol_ f & args] `(swap!  ~vol_ ~f ~@args))))
+
+(defn str-join-once "Like `string/join` but skips duplicate separators"
   [separator coll]
-  (if (str/blank? separator)
-    (str (reduce str-rf "" coll))
-    (reduce
-      (fn [acc in]
-        (let [acc (str acc) in (str in)]
-          (if (str-ends-with? acc separator)
-            (if (str-starts-with? in separator)
-              (str acc (.substring in 1))
-              (str acc in))
-            (if (str-starts-with? in separator)
-              (str acc in)
-              (if (or (= acc "") (= in ""))
-                (str acc in)
-                (str acc separator in))))))
-      ""
-      coll)))
+  (let [sep separator]
+    (if (str/blank? sep)
+      (str (reduce str-rf "" coll))
+      (let [acc-ends-with-sep?_ (-vol! false)
+            acc-empty?_         (-vol! true)]
+        (str
+          (reduce
+            (fn [acc in]
+              (let [in (str in)
+                    in-empty? (= in "")
+                    in-starts-with-sep? (str-starts-with? in sep)
+                    in-ends-with-sep?   (str-ends-with?   in sep)
+                    acc-ends-with-sep?  @acc-ends-with-sep?_
+                    acc-empty?          @acc-empty?_]
+
+                (-vol-reset! acc-ends-with-sep?_ in-ends-with-sep?)
+                (when acc-empty? (-vol-reset! acc-empty?_ in-empty?))
+
+                (if acc-ends-with-sep?
+                  (if in-starts-with-sep?
+                    (sb-append acc (.substring in 1))
+                    (sb-append acc in))
+
+                  (if in-starts-with-sep?
+                    (sb-append acc in)
+                    (if (or acc-empty? in-empty?)
+                      (sb-append acc in)
+                      (do (sb-append acc sep)
+                          (sb-append acc in)))))))
+            (str-builder)
+            coll))))))
 
 (defn path [& parts] (str-join-once "/" parts))
 
@@ -2300,10 +2328,6 @@
 
 ;;;; Stubfns
 
-(compile-if (volatile! nil) ; Var overhead => useful only for stubfns:
-  (do (def -vol! volatile!) (defn -reset-vol! [v_ x] (vreset! v_ x)))
-  (do (def -vol! atom)      (defn -reset-vol! [v_ x] (reset!  v_ x))))
-
 (defn -new-stub_ [sfn-name]
   (-vol!
     (fn [& args]
@@ -2334,7 +2358,7 @@
 
     `(do
        (defonce ~stub_ (-new-stub_ ~(name sfn-name)))
-       (defn ~impl [~'f] (-reset-vol! ~stub_ ~'f))
+       (defn ~impl [~'f] (-vol-reset! ~stub_ ~'f))
        (let [~'stub_ ~stub_]
          (defn ~sfn-name {:arglists '~sigs :stubfn? true}
            (~ps0       (@~'stub_      ))
