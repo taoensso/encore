@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "2.46.1"
+(defproject com.taoensso/encore "2.47.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Core utils library for Clojure/Script"
   :url "https://github.com/ptaoussanis/encore"
@@ -19,7 +19,7 @@
 
   :plugins
   [[lein-pprint  "1.1.2"]
-   [lein-ancient "0.6.8"]
+   [lein-ancient "0.6.9"]
    [lein-codox   "0.9.4"]]
 
   :profiles
