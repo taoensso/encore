@@ -4,7 +4,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/encore "2.47.0"] ; Stable
+[com.taoensso/encore "2.48.0"] ; Stable
 ```
 
 Want to help [support taoensso/open-source]?
