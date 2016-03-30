@@ -1501,28 +1501,32 @@
   "Like `clojure.core/memoize` but faster + uses delays to avoid write races"
   [f]
   #+cljs
-  (let [cache_ (atom {})]
+  (let [a0-sentinel (js-obj) ; Faster as a local binding
+        cache_ (atom {})]
     (fn
-      ([ ] @(or (get @cache_ sentinel)
-                (-swap-cache! cache_ sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
+      ([ ] @(or (get @cache_ a0-sentinel)
+                (-swap-cache! cache_ a0-sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
       ([x] @(or (get @cache_ x)
-                (-swap-cache! cache_ x        (fn [?dv] (if ?dv ?dv (delay (f x)))))))
+                (-swap-cache! cache_ x           (fn [?dv] (if ?dv ?dv (delay (f x)))))))
       ([x & more]
        (let [xs (cons x more)]
          @(or (get @cache_ xs)
               (-swap-cache! cache_ xs (fn [?dv] (if ?dv ?dv (delay (apply f xs))))))))))
 
   #+clj
-  (let [cache_ (java.util.concurrent.ConcurrentHashMap.)]
+  (let [a0-sentinel     (Object.)
+        nil-a1-sentinel (Object.)
+        cache_ (java.util.concurrent.ConcurrentHashMap.)]
     (fn
-      ([ ] @(or (.get cache_ sentinel)
-                (let [dv (delay (f))]   (or (.putIfAbsent cache_ sentinel dv) dv))))
-      ([x] @(or (.get cache_ x)
-                (let [dv (delay (f x))] (or (.putIfAbsent cache_ x        dv) dv))))
+      ([ ] @(or (.get cache_ a0-sentinel)
+                (let [dv (delay (f))] (or (.putIfAbsent cache_ a0-sentinel dv) dv))))
+      ([x] (let [xk (if (nil? x) nil-a1-sentinel x)]
+             @(or (.get cache_ xk)
+                  (let [dv (delay (f x))] (or (.putIfAbsent cache_ xk dv) dv)))))
       ([x & more]
        (let [xs (cons x more)]
          @(or (.get cache_ xs)
-              (let [dv (delay (apply f xs))] (or (.putIfAbsent cache_ xs dv) dv))))))))
+            (let [dv (delay (apply f xs))] (or (.putIfAbsent cache_ xs dv) dv))))))))
 
 (comment
   (do
@@ -1562,6 +1566,8 @@
     * Supports auto invalidation & gc with `ttl-ms` option
     * Supports cache size limit & gc with `cache-size` option
     * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`"
+
+  ;; TODO Consider locking writes on GC?
 
   ;; De-raced, commands
   ([f]
