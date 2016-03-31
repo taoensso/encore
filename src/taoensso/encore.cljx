@@ -1215,9 +1215,12 @@
   #+cljs (fn ([]       (goog.string.StringBuffer.))
             ([s-init] (goog.string.StringBuffer. s-init))))
 
-(def sb-append "For cross-platform string building"
-  #+clj  (fn ^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
-  #+cljs (fn                [               str-builder         s] (.append str-builder s)))
+(defn sb-append "For cross-platform string building"
+  #+clj  (^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
+  #+cljs (               [               str-builder         s] (.append str-builder s))
+  ([str-builder s & more]
+   (sb-append str-builder s)
+   (reduce (fn [acc in] (sb-append acc in)) str-builder more)))
 
 (comment (str (sb-append (str-builder "foo") "bar")))
 
