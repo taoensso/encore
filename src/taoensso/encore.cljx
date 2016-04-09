@@ -36,7 +36,7 @@
     (compile-if catch-errors* catch-errors have have! have?
      name-with-attrs -vol! -vol-reset! -vol-swap!)]))
 
-(comment
+(comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
