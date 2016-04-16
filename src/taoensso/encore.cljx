@@ -983,36 +983,39 @@
          {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))}
          [x y] (compare y x))
 
-(defn nested-merge-with [f & maps]
-  (when (some identity maps)
-    (let [merge-entry
-          (fn [m e]
-            (let [k (key e) rv (val e)]
-              (if-not (contains? m k) ; No lv
-                (assoc m k rv)
-                (let [lv (get m k)]
-                  (if (and (map? lv) (map? rv)
-                        #_(or (map? rv) (nil? rv)))
-                    ;; Stack limited (don't nest too deaply):
-                    (assoc m k (nested-merge-with f lv rv))
-                    (assoc m k (f lv rv)))))))
-          merge2 (fn [m1 m2] (reduce merge-entry (or m1 {}) (seq m2)))]
-      (reduce merge2 maps))))
+(defn -nested-merge-with [f maps]
+  (when (rsome identity maps) ; (merge nil nil) => nil
+    (reduce
+      (fn [acc in]
+        (reduce-kv
+          (fn rf2 [acc k rv]
+            (if (contains? acc k)
+              (let [lv (get acc k)]
+                (if (and (map? lv) (map? rv))
+                  (assoc acc k (reduce-kv rf2 lv rv))
+                  (if (kw-identical? rv :merge/dissoc)
+                    (dissoc acc k)
+                    (let [new-rv (f lv rv)]
+                      (if (kw-identical? new-rv :merge/dissoc)
+                        (dissoc acc k)
+                        (assoc  acc k new-rv))))))
+              (assoc acc k rv)))
+          acc
+          in))
+      {}
+      maps)))
 
-(def nested-merge
-  (partial nested-merge-with #_(fn [x y] y)
-    ;; We'll mimic `merge` behaviour re: nils against maps:
-    (fn [x y] (if (and (map? x) (nil? y)) x y))))
+(defn nested-merge-with [f & maps] (-nested-merge-with f           maps))
+(defn nested-merge        [& maps] (-nested-merge-with (fn [x y] y) maps))
 
 (comment
+  (nested-merge nil nil nil) ; => nil
   (nested-merge
-    {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3}}}
-    {        :b1 :B1* :c1 {        :b2 {        :b3 :B3*}}}
-    {                 :c1 nil}
-    {                 :c1 {}}
+    {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
+    {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :merge/dissoc}}}
     nil
     {}) ; =>
-  {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*}}})
+  {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}})
 
 ;;;; Swap stuff
 
