@@ -1505,48 +1505,97 @@
 
 ;;;; Memoization
 
-(def ^:private ^:const gc-rate (/ 1.0 16000))
-(defn gc-now? [] (<= ^double (rand) gc-rate))
-
 (defn memoize_
-  "Like `clojure.core/memoize` but faster + uses delays to avoid write races"
+  "Like `clojure.core/memoize` but avoids write races, supports invalidation"
   [f]
+
+  ;; (let [cache_ (atom {})]
+  ;;   (fn [& xs]
+  ;;     (let [x1 (first xs)]
+  ;;       (cond
+  ;;         (kw-identical? x1 :mem/del)
+  ;;         (let [xn (next  xs)
+  ;;               x2 (first xn)]
+  ;;           (if (kw-identical? x2 :mem/all)
+  ;;             (reset! cache_ {})
+  ;;             (swap!  cache_ dissoc xn))
+  ;;           nil)
+
+  ;;         (kw-identical? x1 :mem/fresh)
+  ;;         @(let [xn (next xs)
+  ;;                dv (delay (apply f xn))] (swap! cache_ assoc xn dv) dv)
+
+  ;;         :else
+  ;;         @(or
+  ;;            (get @cache_ xs)
+  ;;            (-swap-cache! cache_ xs
+  ;;              (fn [?dv] (or ?dv (delay (apply f xs))))))))))
+
   #+cljs
-  (let [a0-sentinel (js-obj) ; Faster as a local binding
-        cache_ (atom {})]
-    (fn
-      ([ ] @(or (get @cache_ a0-sentinel)
-                (-swap-cache! cache_ a0-sentinel (fn [?dv] (if ?dv ?dv (delay (f)))))))
-      ([x] @(or (get @cache_ x)
-                (-swap-cache! cache_ x           (fn [?dv] (if ?dv ?dv (delay (f x)))))))
-      ([x & more]
-       (let [xs (cons x more)]
-         @(or (get @cache_ xs)
-              (-swap-cache! cache_ xs (fn [?dv] (if ?dv ?dv (delay (apply f xs))))))))))
+  (let [cache_ (volatile! {})]
+    (fn [& xs]
+      (let [get-sentinel (js-obj)
+            x1 (first xs)]
+
+        (cond
+          (kw-identical? x1 :mem/del)
+          (let [xn (next  xs)
+                x2 (first xn)]
+            (if (kw-identical? x2 :mem/all)
+              (vreset! cache_ {})
+              (vswap!  cache_ dissoc xn))
+            nil)
+
+          (kw-identical? x1 :mem/fresh)
+          (let [xn (next xs)
+                v  (apply f xn)] (vswap! cache_ assoc xn v) v)
+
+          :else
+          (let [v (get @cache_ xs get-sentinel)]
+            (if (identical? v get-sentinel)
+              (let [v (apply f xs)] (vswap! cache_ assoc xs v) v)
+              v))))))
 
   #+clj
-  (let [a0-sentinel     (Object.)
-        nil-a1-sentinel (Object.)
+  (let [nil-sentinel (Object.)
         cache_ (java.util.concurrent.ConcurrentHashMap.)]
+
     (fn
-      ([ ] @(or (.get cache_ a0-sentinel)
-                (let [dv (delay (f))] (or (.putIfAbsent cache_ a0-sentinel dv) dv))))
-      ([x] (let [xk (if (nil? x) nil-a1-sentinel x)]
-             @(or (.get cache_ xk)
-                  (let [dv (delay (f x))] (or (.putIfAbsent cache_ xk dv) dv)))))
-      ([x & more]
-       (let [xs (cons x more)]
-         @(or (.get cache_ xs)
-            (let [dv (delay (apply f xs))] (or (.putIfAbsent cache_ xs dv) dv))))))))
+      ([ ] @(or (.get cache_ nil-sentinel)
+                (let [dv (delay (f))]
+                  (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
+
+      ([& xs]
+       (let [x1 (first xs)]
+
+        (cond
+          (kw-identical? x1 :mem/del)
+          (let [xn (next  xs)
+                x2 (first xn)]
+            (if (kw-identical? x2 :mem/all)
+              (.clear  cache_)
+              (.remove cache_ (or xn nil-sentinel)))
+            nil)
+
+          (kw-identical? x1 :mem/fresh)
+          @(let [xn (next xs)
+                 dv (delay (apply f xn))] (.put cache_ (or xn nil-sentinel) dv) dv)
+
+          :else
+          @(or (.get cache_ xs)
+               (let [dv (delay (apply f xs))]
+                 (or (.putIfAbsent cache_ xs dv) dv)))))))))
 
 (comment
   (do
+    (def foo (memoize_ (fn [& args] [(rand) args])))
     (def f0  (memoize  (fn [])))
     (def f0_ (memoize_ (fn [])))
     (def f1  (memoize  (fn [x] x)))
     (def f1_ (memoize_ (fn [x] x))))
-  (qb 100000 (f0   ) (f0_   )) ; [ 5.61 4.94]
-  (qb 100000 (f1 :x) (f1_ :x)) ; [20.79 5.61]
+
+  (qb 100000 (f0   ) (f0_   )) ; [ 5.53  4.85]
+  (qb 100000 (f1 :x) (f1_ :x)) ; [23.99 17.56]
   )
 
 (defn memoize1
@@ -1562,43 +1611,20 @@
                       {args (delay (apply f args))})))
              args)))))
 
-(defn memoized
-  "Like `(memoize* f)` but takes an explicit cache atom (possibly nil)
-  and immediately applies memoized f to given arguments"
-  [cache f & args]
-  (if-not* cache ; {<args> <delay-val>}
-    (apply f args)
-    @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
+(def ^:private ^:const gc-rate (/ 1.0 16000))
+(defn gc-now? [] (<= ^double (rand) gc-rate))
 
 (defn memoize*
   "Like `clojure.core/memoize` but:
-    * Can be significantly faster (depends on opts)
-    * Uses delays to prevent race conditions on writes
-    * Supports auto invalidation & gc with `ttl-ms` option
-    * Supports cache size limit & gc with `cache-size` option
-    * Supports manual invalidation by prepending args with `:mem/del` or `:mem/fresh`"
+    * Often faster, depends on opts
+    * Prevents race conditions on writes
+    * Supports auto invalidation & gc with `ttl-ms` opt
+    * Supports cache size limit & gc with `cache-size` opt
+    * Supports invalidation by prepending args with `:mem/del` or `:mem/fresh`"
 
   ;; TODO Consider locking writes on GC?
 
-  ;; De-raced, commands
-  ([f]
-   (let [cache_ (atom {})] ; {<args> <delay-val>}
-     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
-       (cond
-         (kw-identical? arg1 :mem/debug) cache_
-         (kw-identical? arg1 :mem/del)
-         (do (if (kw-identical? (first argn) :mem/all)
-               (reset! cache_ {})
-               (swap!  cache_ dissoc argn))
-             nil)
-         :else
-         (let [fresh? (kw-identical? arg1 :mem/fresh)
-               args   (if fresh? argn args)]
-           @(or (get @cache_ args)
-                (-swap-cache! cache_ args
-                  (fn [?dv] (if (and ?dv (not fresh?))
-                             ?dv
-                             (delay (apply f args)))))))))))
+  ([f] (memoize_ f)) ; De-raced, commands
 
   ;; De-raced, commands, ttl, gc
   ([ttl-ms f]
@@ -1630,9 +1656,8 @@
 
                (reset! gc-running?_ false))))]
 
-     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+     (fn [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/debug) cache_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! cache_ {})
@@ -1728,9 +1753,8 @@
                      ?cv
                      [(delay (apply f args)) instant tick 1]))))))]
 
-     (fn ^{:arglists '([command & args] [& args])} [& [arg1 & argn :as args]]
+     (fn [& [arg1 & argn :as args]]
        (cond
-         (kw-identical? arg1 :mem/debug) state_
          (kw-identical? arg1 :mem/del)
          (do (if (kw-identical? (first argn) :mem/all)
                (reset! state_ {:tick 0})
@@ -2544,3 +2568,8 @@
 (defn keywordize-map [m] (map-keys keyword m))
 (defn removev [pred coll] (filterv (complement pred) coll))
 (defn nvec? [n x] (and (vector? x) (= (count x) n)))
+
+(defn memoized [cache f & args]
+  (if-not* cache ; {<args> <delay-val>}
+    (apply f args)
+    @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
