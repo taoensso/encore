@@ -2463,7 +2463,7 @@
 (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
 
 ;; & coll changed to coll:
-(defn join-once [sep & coll] (apply str-join-once coll))
+(defn join-once [sep & coll] (str-join-once sep coll))
 
 ;; Used by Carmine <= v2.7.0
 (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
