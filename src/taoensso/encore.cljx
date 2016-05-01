@@ -33,7 +33,7 @@
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
-    (compile-if catch-errors* catch-errors have have! have?
+    (compile-if if-not* catch-errors* catch-errors have have! have?
      name-with-attrs -vol! -vol-reset! -vol-swap!)]))
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
@@ -184,6 +184,10 @@
 (defmacro do-false [& body] `(do ~@body false))
 (defmacro do-true  [& body] `(do ~@body true))
 
+(defmacro if-not* "Like `if-not` without the unnecessary `not` cost"
+  ([test then     ] `(if ~test nil   ~then))
+  ([test then else] `(if ~test ~else ~then)))
+
 ;;;; Edn
 
 (declare map-keys kw-identical?)
@@ -199,7 +203,7 @@
    ;; First normalize behaviour for unexpected inputs:
    (if (or (nil? s) (identical? s ""))
      nil
-     (if-not (string? s)
+     (if-not* (string? s)
        (throw (ex-info "`read-edn` attempt against non-nil, non-string arg"
                 {:arg s :type (type s)}))
 
@@ -214,23 +218,24 @@
              ;;     using tools.reader under the covers
 
              readers
-             (if-not (kw-identical? readers ::dynamic)
+             (if-not* (kw-identical? readers ::dynamic)
                readers
                #+clj  clojure.core/*data-readers*
                ;; Unfortunate (slow), but faster than gc'd memoization in most cases:
                #+cljs (map-keys symbol @cljs.reader/*tag-table*))
 
              default
-             (if-not (kw-identical? default ::dynamic)
+             (if-not* (kw-identical? default ::dynamic)
                default
                #+clj  clojure.core/*default-data-reader-fn*
                #+cljs @cljs.reader/*default-data-reader-fn*)
 
-             opts (merge opts {:readers readers
-                               :default default})]
+             opts (assoc opts
+                    :readers readers
+                    :default default)]
 
          #+clj  (clojure.tools.reader.edn/read-string opts s)
-         #+cljs (cljs.tools.reader.edn/read-string    opts s))))))
+         #+cljs    (cljs.tools.reader.edn/read-string opts s))))))
 
 (defn pr-edn
   ([      x] (pr-edn nil x))
@@ -448,7 +453,7 @@
 (defn as-kw             [x] (or (as-?kw     x) (-as-throw :kw     x)))
 (defn as-name           [x] (or (as-?name   x) (-as-throw :name   x)))
 (defn as-qname          [x] (or (as-?qname  x) (-as-throw :qname  x)))
-(defn as-bool           [x] (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (-as-throw :bool x))))
+(defn as-bool           [x] (let [?b (as-?bool x)] (if-not* (nil? ?b) ?b (-as-throw :bool x))))
 (defn as-email          [x] (or (as-?email  x) (-as-throw :email  x)))
 (defn as-nemail         [x] (or (as-?nemail x) (-as-throw :nemail x)))
 (defn as-int      ^long [x] (or (as-?int    x) (-as-throw :int    x)))
@@ -556,7 +561,7 @@
   ([type nplaces n]
    (let [n        (double n)
          modifier (when nplaces (Math/pow 10.0 nplaces))
-         n*       (if-not modifier n (* n ^double modifier))
+         n*       (if-not* modifier n (* n ^double modifier))
          rounded
          (case type
            ;;; Note same API for both #+clj, #+cljs:
@@ -565,7 +570,7 @@
            :ceil  (Math/ceil  n*) ; Round up to +inf
            :trunc (long n*)       ; Round up/down toward zero
            (throw (ex-info "Unknown round type" {:type type})))]
-     (if-not modifier
+     (if-not* modifier
        (long rounded)                        ; Returns long
        (/ (double rounded) ^double modifier) ; Returns double
        ))))
@@ -884,7 +889,7 @@
    #+clj
    (let [coll-size (count coll)
          n         (long (min coll-size (long n)))]
-     (if-not (pos? n)
+     (if-not* (pos? n)
        []
        (let [^java.util.PriorityQueue pq
              (java.util.PriorityQueue. coll-size
@@ -922,7 +927,7 @@
                    (assoc-some m k v) kvs)))
 
 (defn assoc-when "Assocs each kv iff its val is truthy"
-  ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
+  ([m k v      ] (if-not* v (if (nil? m) {} m) (assoc m k v)))
   ([m k v & kvs] (reduce-kvs (fn [acc k v] (assoc-when acc k v))
                    (assoc-when m k v) kvs)))
 
@@ -949,7 +954,7 @@
   (loop [m  (transient {})
          ks (seq ks)
          vs (seq vs)]
-    (if-not (and ks vs)
+    (if-not* (and ks vs)
       (persistent! m)
       (recur (assoc! m (first ks) (first vs))
         (next ks)
@@ -1085,9 +1090,9 @@
   [?vf-type m ops]
   (reduce
     (fn [acc ?op]
-      (if-not ?op ; Allow conditional ops: (when <pred> <op>), etc.
+      (if-not* ?op ; Allow conditional ops: (when <pred> <op>), etc.
         acc
-        (let [[vf-type ks valf] (if-not ?vf-type ?op (cons ?vf-type ?op))]
+        (let [[vf-type ks valf] (if-not* ?vf-type ?op (cons ?vf-type ?op))]
           (case vf-type
             :reset (if (empty? ks) valf (assoc-in acc ks valf))
             :swap  (if (nil? valf)
@@ -1561,7 +1566,7 @@
   "Like `(memoize* f)` but takes an explicit cache atom (possibly nil)
   and immediately applies memoized f to given arguments"
   [cache f & args]
-  (if-not cache ; {<args> <delay-val>}
+  (if-not* cache ; {<args> <delay-val>}
     (apply f args)
     @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
 
@@ -1705,7 +1710,7 @@
                (reset! gc-running?_ false))))
 
          cv-fn
-         (if-not ttl-ms?
+         (if-not* ttl-ms?
            (fn [args fresh? tick]
              (-swap-cache! state_ args
                (fn [?cv]
@@ -1826,7 +1831,7 @@
 
             (swap-in! vstates_ [req-id]
               (fn [?vstate]
-                (if-not ?vstate
+                (if-not* ?vstate
                   (if peek?
                     (swapped ?vstate nil)
                     (swapped (vec (repeat nspecs [1 instant])) nil))
@@ -1852,7 +1857,7 @@
                                   (if reset-due? [0 instant] [ncalls udt-win-start]))
 
                                 new-?worst-limit-offence
-                                (if-not rate-limited?
+                                (if-not* rate-limited?
                                   ?worst-limit-offence
                                   (let [ms-wait (- win-ms win-ms-elapsed)]
                                     (if (or (nil? ?worst-limit-offence)
@@ -1861,7 +1866,7 @@
                                       [ms-wait ?spec-id]
                                       ?worst-limit-offence)))]
 
-                            (if-not next-in-vspecs
+                            (if-not* next-in-vspecs
                               [new-out-vstate new-?worst-limit-offence]
                               (recur next-in-vspecs next-in-vstate new-out-vstate
                                      new-?worst-limit-offence))))
@@ -2115,7 +2120,7 @@
             [uri* post-content*] (coerce-xhr-params uri method params)
             headers*
             (clj->js
-             (if-not post-content* headers
+             (if-not* post-content* headers
                (assoc headers "Content-Type"
                  "application/x-www-form-urlencoded; charset=UTF-8")))]
 
@@ -2135,7 +2140,7 @@
                     ?content
                     (when ?http-status
                       (let [resp-type
-                            (if-not (= resp-type :auto) resp-type
+                            (if-not* (= resp-type :auto) resp-type
                               (condp #(str-contains? %2 %1)
                                   (str ?content-type) ; Prevent nil
                                 "/edn"  :edn
@@ -2240,7 +2245,7 @@
 
 #+clj
 (do
-  (defn- ->body-in-map [x] (when x (if-not (map? x) {:body x} x)))
+  (defn- ->body-in-map [x] (when x (if-not* (map? x) {:body x} x)))
   (defn set-body      [resp body]    (assoc     (->body-in-map resp) :body   body))
   (defn set-status    [resp code]    (assoc     (->body-in-map resp) :status code))
   (defn merge-headers [resp headers] (update-in (->body-in-map resp) [:headers]
@@ -2312,7 +2317,7 @@
   (if (str/blank? s) {}
     (let [;; For convenience (e.g. JavaScript win-loc :search)
           s (if (str-starts-with? s "?") (substr s 1) s)]
-      (if-not (str-contains? s "=") {}
+      (if-not* (str-contains? s "=") {}
         (let [m (reduce
                   (fn [m param]
                     (if-let [[k v] (str/split param #"=" 2)]
@@ -2320,7 +2325,7 @@
                       m))
                   {}
                   (str/split s #"&"))]
-          (if-not keywordize? m
+          (if-not* keywordize? m
             (map-keys keyword m)))))))
 
 (comment
@@ -2509,7 +2514,7 @@
   ([keyfn coll]
    (let [tr (reduce (fn [[v seen] in]
                       (let [in* (keyfn in)]
-                        (if-not (contains? seen in*)
+                        (if-not* (contains? seen in*)
                           [(conj! v in) (conj seen in*)]
                           [v seen])))
               [(transient []) #{}]
@@ -2517,7 +2522,7 @@
      (persistent! (nth tr 0)))))
 
 (defn map-kvs "Deprecated, prefer `reduce-kv`" [kf vf m]
-  (if-not m {}
+  (if-not* m {}
     (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
           kf (cond (nil? kf) (fn [k _] k)
                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
