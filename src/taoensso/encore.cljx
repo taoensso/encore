@@ -33,7 +33,7 @@
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
-    (compile-if if-not* catch-errors* catch-errors have have! have?
+    (compile-if if-not* cond* catch-errors* catch-errors have have! have?
      name-with-attrs -vol! -vol-reset! -vol-swap!)]))
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
@@ -134,8 +134,29 @@
            (when-let [doc# ~docstring] {:doc doc#})))
       (var ~sym))))
 
+(defmacro if-not*
+  "Micro optimization: like `if-not` but w/o the unnecessary `not` cost"
+  ([test then     ] `(if ~test nil   ~then))
+  ([test then else] `(if ~test ~else ~then)))
+
+(defmacro cond*
+  "Micro optimization: like `cond` but with more efficient `else` expansion"
+  [& clauses]
+  (when clauses
+    (if (keyword? (first clauses)) ; :else, etc.
+      (second clauses)
+      (list 'if (first clauses)
+        (if (next clauses)
+          (second clauses)
+          (throw (IllegalArgumentException. "cond* requires an even number of forms")))
+        (cons 'taoensso.encore/cond* (nnext clauses))))))
+
+(comment
+  [(clojure.walk/macroexpand-all '(cond  nil "a" nil "b" :else "c"))
+   (clojure.walk/macroexpand-all '(cond* nil "a" nil "b" :else "c"))])
+
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
-  [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
+  [& clauses] `(cond* ~@clauses :else (throw (ex-info "No matching clause" {}))))
 
 (comment [(cond false "false") (cond! false "false")])
 
@@ -183,10 +204,6 @@
 (defmacro do-nil   [& body] `(do ~@body nil))
 (defmacro do-false [& body] `(do ~@body false))
 (defmacro do-true  [& body] `(do ~@body true))
-
-(defmacro if-not* "Like `if-not` without the unnecessary `not` cost"
-  ([test then     ] `(if ~test nil   ~then))
-  ([test then else] `(if ~test ~else ~then)))
 
 ;;;; Edn
 
@@ -675,7 +692,7 @@
 
 (defn   singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
-(defn ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
+(defn ->vec [x] (cond* (vector? x) x (sequential? x) (vec x) :else [x]))
 
 (defn vnext [v] (when (> (count v) 1) (subvec v 1)))
 (defn vsplit-last  [v]
@@ -844,7 +861,7 @@
         xlen       (count x) ; also = max-exclusive-end-idx
         start-idx* (translate-signed-idx start-idx xlen)
         end-idx*   (long
-                     (cond
+                     (cond*
                        max-len (#+clj min* #+cljs enc-macros/min*
                                  (+ start-idx* max-len) xlen)
                        end-idx (inc ; Want exclusive
@@ -1305,7 +1322,7 @@
   [s match replacement]
   #+clj (str/replace s match replacement)
   #+cljs
-  (cond
+  (cond*
     (string? match) ; string -> string replacement
     (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
     ;; (.hasOwnProperty match "source") ; No! Ref. http://goo.gl/8hdqxb
@@ -1512,7 +1529,7 @@
   ;; (let [cache_ (atom {})]
   ;;   (fn [& xs]
   ;;     (let [x1 (first xs)]
-  ;;       (cond
+  ;;       (cond*
   ;;         (kw-identical? x1 :mem/del)
   ;;         (let [xn (next  xs)
   ;;               x2 (first xn)]
@@ -1537,7 +1554,7 @@
       (let [get-sentinel (js-obj)
             x1 (first xs)]
 
-        (cond
+        (cond*
           (kw-identical? x1 :mem/del)
           (let [xn (next  xs)
                 x2 (first xn)]
@@ -1568,7 +1585,7 @@
       ([& xs]
        (let [x1 (first xs)]
 
-        (cond
+        (cond*
           (kw-identical? x1 :mem/del)
           (let [xn (next  xs)
                 x2 (first xn)]
@@ -1658,7 +1675,7 @@
 
      (fn [& args]
        (let [a1 (first args)]
-         (cond
+         (cond*
            (kw-identical? a1 :mem/del)
            (let [argn (next  args)
                  a2   (first argn)]
@@ -1759,7 +1776,7 @@
 
      (fn [& args]
        (let [a1 (first args)]
-         (cond
+         (cond*
            (kw-identical? a1 :mem/del)
            (let [argn (next args)
                  a2   (first argn)]
@@ -1831,7 +1848,7 @@
           return-ids? (not (zero? nid-specs))]
 
       (fn check-rate-limits [& [?a1 ?a2]]
-        (cond
+        (cond*
           (kw-identical? ?a1 :rl/debug) vstates_
           (kw-identical? ?a1 :rl/reset)
           (do
@@ -1904,7 +1921,7 @@
 
                         all-limits-pass? (nil? ?worst-limit-offence)
                         new-vstate
-                        (cond
+                        (cond*
                           peek? ?vstate
                           (not all-limits-pass?) vstate-with-resets
                           :else
@@ -2554,20 +2571,20 @@
 
 (defn map-kvs "Deprecated, prefer `reduce-kv`" [kf vf m]
   (if-not* m {}
-    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond (nil? kf) (fn [k _] k)
-                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                   :else kf)]
+    (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond* (nil? kf) (fn [k _] k)
+                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                    :else kf)]
       (persistent!
         (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
           (transient {}) m)))))
 
 (defn as-map "Deprecated, prefer `reduce-kvs`" [kvs & [kf vf]]
   (if (empty? kvs) {}
-    (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond (nil? kf) (fn [k _] k)
-                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                   :else kf)]
+    (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
+          kf (cond* (nil? kf) (fn [k _] k)
+                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                    :else kf)]
       (persistent!
         (reduce-kvs
           (fn [m k v] (assoc! m (kf k v) (vf k v))) (transient {}) kvs)))))
