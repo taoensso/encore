@@ -1656,27 +1656,31 @@
 
                (reset! gc-running?_ false))))]
 
-     (fn [& [arg1 & argn :as args]]
-       (cond
-         (kw-identical? arg1 :mem/del)
-         (do (if (kw-identical? (first argn) :mem/all)
+     (fn [& args]
+       (let [a1 (first args)]
+         (cond
+           (kw-identical? a1 :mem/del)
+           (let [argn (next  args)
+                 a2   (first argn)]
+             (if (kw-identical? a2 :mem/all)
                (reset! cache_ {})
                (swap!  cache_ dissoc argn))
              nil)
-         :else
-         (do
-           (gc-fn)
-           (let [fresh?  (kw-identical? arg1 :mem/fresh)
-                 args    (if fresh? argn args)
-                 instant (now-udt)
-                 [dv]    (-swap-cache! cache_ args
-                           (fn [?cv]
-                             (if (and ?cv (not fresh?)
-                                   (let [[_dv ^long udt] ?cv]
-                                     (< (- instant udt) ttl-ms)))
-                               ?cv
-                               [(delay (apply f args)) instant])))]
-             @dv))))))
+
+          :else
+          (do
+            (gc-fn)
+            (let [fresh?  (kw-identical? a1 :mem/fresh)
+                  args    (if fresh? (next args) args)
+                  instant (now-udt)
+                  [dv]    (-swap-cache! cache_ args
+                            (fn [?cv]
+                              (if (and ?cv (not fresh?)
+                                    (let [[_dv ^long udt] ?cv]
+                                      (< (- instant udt) ttl-ms)))
+                                ?cv
+                                [(delay (apply f args)) instant])))]
+              @dv)))))))
 
   ;; De-raced, commands, ttl, gc, max-size
   ([cache-size ttl-ms f]
@@ -1753,28 +1757,31 @@
                      ?cv
                      [(delay (apply f args)) instant tick 1]))))))]
 
-     (fn [& [arg1 & argn :as args]]
-       (cond
-         (kw-identical? arg1 :mem/del)
-         (do (if (kw-identical? (first argn) :mem/all)
+     (fn [& args]
+       (let [a1 (first args)]
+         (cond
+           (kw-identical? a1 :mem/del)
+           (let [argn (next args)
+                 a2   (first argn)]
+             (if (kw-identical? a2 :mem/all)
                (reset! state_ {:tick 0})
                (swap!  state_ dissoc argn))
              nil)
-         :else
-         (do
-           (gc-fn)
-           (let [fresh?     (kw-identical? arg1 :mem/fresh)
-                 args       (if fresh? argn args)
-                 ^long tick (:tick @state_) ; Atomic sync unimportant
-                 [dv]       (cv-fn args fresh? tick)]
+           :else
+           (do
+             (gc-fn)
+             (let [fresh?     (kw-identical? a1 :mem/fresh)
+                   args       (if fresh? (next args) args)
+                   ^long tick (:tick @state_) ; Atomic sync unimportant
+                   [dv]       (cv-fn args fresh? tick)]
 
-             ;; We always adjust counters, even on reads:
-             (swap! state_
-               (fn [m]
-                 (if-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
-                   (assoc m :tick (inc tick) args [dv ?udt tick (inc tick-lfu)])
-                   (assoc m :tick (inc tick)))))
-             @dv)))))))
+               ;; We always adjust counters, even on reads:
+               (swap! state_
+                 (fn [m]
+                   (if-let [[dv ?udt tick-lru ^long tick-lfu :as cv] (get m args)]
+                     (assoc m :tick (inc tick) args [dv ?udt tick (inc tick-lfu)])
+                     (assoc m :tick (inc tick)))))
+               @dv))))))))
 
 (comment
   (do
@@ -1785,7 +1792,7 @@
     (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
 
   (qb 10000 (f0 :x) (f1 :x) (f2 :x) (f3 :x) (f4 :x))
-  ;; [2.06 3.99 7.23 14.66 15.24]
+  ;; [1.96 1.68 5.61 13.03 13.72]
 
   (f1)
   (f1 :mem/del)
