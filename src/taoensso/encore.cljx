@@ -694,11 +694,9 @@
 (defn ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
 (defn ->vec [x] (cond* (vector? x) x (sequential? x) (vec x) :else [x]))
 
-(defn vnext [v] (when (> (count v) 1) (subvec v 1)))
-(defn vsplit-last  [v]
-  (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
-(defn vsplit-first [v]
-  (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (subvec v 1))]))))
+(defn vnext        [v] (when (> (count v) 1) (subvec v 1)))
+(defn vsplit-last  [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
+(defn vsplit-first [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (subvec v 1))]))))
 
 (comment
   (vsplit-first [:a :b :c])
@@ -1002,7 +1000,8 @@
 
 #+cljs (defn rcompare "Reverse comparator" [x y] (compare y x))
 #+clj  (defn rcompare "Reverse comparator"
-         {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))}
+         {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))
+          :inline-arities #{1}}
          [x y] (compare y x))
 
 (defn -nested-merge-with [f maps]
@@ -1236,9 +1235,9 @@
 
 (def str-builder "For cross-platform string building"
   #+clj  (fn (^StringBuilder []       (StringBuilder.))
-            (^StringBuilder [s-init] (StringBuilder. ^String s-init)))
+             (^StringBuilder [s-init] (StringBuilder. ^String s-init)))
   #+cljs (fn ([]       (goog.string.StringBuffer.))
-            ([s-init] (goog.string.StringBuffer. s-init))))
+             ([s-init] (goog.string.StringBuffer. s-init))))
 
 (defn sb-append "For cross-platform string building"
   #+clj  (^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
@@ -1639,8 +1638,6 @@
     * Supports cache size limit & gc with `cache-size` opt
     * Supports invalidation by prepending args with `:mem/del` or `:mem/fresh`"
 
-  ;; TODO Consider locking writes on GC?
-
   ([f] (memoize_ f)) ; De-raced, commands
 
   ;; De-raced, commands, ttl, gc
@@ -1664,6 +1661,8 @@
                            acc))
                        (transient [])
                        snapshot))]
+
+               ;; TODO Lock writes here?
 
                (swap! cache_
                  (fn [m]
@@ -1728,6 +1727,8 @@
                            (transient [])
                            snapshot))]
 
+                   ;; TODO Lock writes here?
+
                    (swap! state_
                      (fn [m]
                        (persistent!
@@ -1745,6 +1746,8 @@
                              (let [[_ _ ^long tick-lru ^long tick-lfu] (snapshot k)]
                                (+ tick-lru tick-lfu)))
                            (keys snapshot))]
+
+                     ;; TODO Lock writes here?
 
                      ;; (println (str "ks-to-gc: " ks-to-gc)) ; Debug
                      (swap! state_
