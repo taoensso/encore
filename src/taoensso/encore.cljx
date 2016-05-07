@@ -5,6 +5,7 @@
   #+clj  (:require [clojure.string  :as str]
                    [clojure.set     :as set]
                    [clojure.java.io :as io]
+                   [clojure.test    :as test :refer (is use-fixtures)]
                    ;; [clojure.core.async    :as async]
                    [clojure.tools.reader.edn :as edn]
                    [taoensso.truss :as truss])
@@ -17,6 +18,7 @@
                    ;; [cljs.core.async  :as async]
                    [cljs.reader]
                    [cljs.tools.reader.edn :as edn]
+                   [cljs.test             :as test :refer-macros (is use-fixtures)]
                    ;;[goog.crypt.base64 :as base64]
                    [goog.object         :as gobj]
                    [goog.string         :as gstr]
@@ -2455,9 +2457,26 @@
 
 ;;;; Testing utils
 
-;; TODO `deftest` with auto name prefixing
-;; TODO `expect` macro, utils to pave over differences in clojure.test,
-;; cljs.test (e.g. for `use-fixtures`)
+(defmacro expect
+  ([             expr] `(is                        ~expr))
+  ([         val expr] `(is                (= ~val ~expr)))
+  ([bindings val expr] `(is (let ~bindings (= ~val ~expr)))))
+
+(comment
+  (expect-let [foo {:a :A}] :A (:a foo))
+  (expect (thrown? Exception "foo")))
+
+(defn- fixture-map->fn [{:keys [before after] :or {before 'do after 'do}}]
+  `(fn [f#] (~before) (f#) (~after)))
+
+(defmacro use-fixtures* [fixture-type & fixtures]
+  (have? [:el #{:each :once}] fixture-type)
+  (have? map? :in fixtures)
+  `(if-cljs
+     (use-fixtures ~fixture-type ~@fixtures)
+     (use-fixtures ~fixture-type ~@(map fixture-map->fn fixtures))))
+
+(comment (use-fixtures* :each {:before (fn []) :after (fn [])}))
 
 ;;;; DEPRECATED
 
