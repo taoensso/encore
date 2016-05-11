@@ -54,12 +54,12 @@
 
 ;;;; Version check (helps with dependency conflicts, etc.)
 
-(declare as-?int)
+(declare parse-version)
 (def             encore-version [2 52 1])
 (defn assert-min-encore-version [min-version]
   (let [[xc yc zc] encore-version
-        [xm ym zm] (if (vector? min-version) min-version (re-seq #"\d+" (str min-version)))
-        [xm ym zm] (mapv #(or (as-?int %) 0) [xm ym zm])]
+        [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
+        [xm ym zm] (mapv #(or % 0) [xm ym zm])]
 
     (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
       (throw
@@ -483,6 +483,13 @@
 (defn as-ufloat ^double [x] (or (as-?ufloat x) (-as-throw :ufloat x)))
 (defn as-pfloat ^double [x] (or (as-?pfloat x) (-as-throw :pfloat x)))
 (defn as-pval   ^double [x] (or (as-?pval   x) (-as-throw :pval   x)))
+
+(defn parse-version [x]
+  (let [[s-version ?s-qualifier] (str/split (str x) #"-" 2)]
+    {:version   (when-let [s (re-seq #"\d+" s-version)] (mapv as-?int s))
+     :qualifier (when-let [s ?s-qualifier] (str/lower-case s))}))
+
+(comment [(parse-version "40.32.34.8-foo") (parse-version 10.3)])
 
 ;;;; Validation
 
