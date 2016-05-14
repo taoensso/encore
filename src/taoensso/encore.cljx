@@ -2556,186 +2556,185 @@
 
 (comment (use-fixtures* :each {:before (fn []) :after (fn [])}))
 
-;;;; DEPRECATED
+(do ; DEPRECATED
+  #+cljs (def get-window-location get-win-loc)
+  (def backport-run!   run!*)
+  (def fq-name         as-qname)
+  (def qname           as-qname)
+  (def merge-deep-with nested-merge-with)
+  (def merge-deep      nested-merge)
+  (def parse-bool      as-?bool)
+  (def parse-int       as-?int)
+  (def parse-float     as-?float)
+  (def swapped*        -swapped)
+  (def swap-val!       -swap-cache!)
+  (def memoize-a0_     memoize_)
+  (def memoize-a1_     memoize_)
+  (def a0-memoize_     memoize_)
+  (def a1-memoize_     memoize_)
+  (def memoize-1       memoize1)
 
-#+cljs (def get-window-location get-win-loc)
-(def backport-run!   run!*)
-(def fq-name         as-qname)
-(def qname           as-qname)
-(def merge-deep-with nested-merge-with)
-(def merge-deep      nested-merge)
-(def parse-bool      as-?bool)
-(def parse-int       as-?int)
-(def parse-float     as-?float)
-(def swapped*        -swapped)
-(def swap-val!       -swap-cache!)
-(def memoize-a0_     memoize_)
-(def memoize-a1_     memoize_)
-(def a0-memoize_     memoize_)
-(def a1-memoize_     memoize_)
-(def memoize-1       memoize1)
+  (defmacro cond-throw  [& args] `(cond! ~@args))
+  (defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
+  (defmacro have-in!   [s1 & sn] `(have! ~s1 :in ~@sn))
 
-(defmacro cond-throw  [& args] `(cond! ~@args))
-(defmacro have-in    [s1 & sn] `(have  ~s1 :in ~@sn))
-(defmacro have-in!   [s1 & sn] `(have! ~s1 :in ~@sn))
+  ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
+  (defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
+  (defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
 
-;;; Prefer `str-join` when possible (needs Clojure 1.7+)
-(defn spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
-(defn spaced-str [xs] (str/join " " #+clj xs #+cljs (mapv undefined->nil xs)))
+  ;; Arg order changed for easier partials, etc.:
+  (defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
 
-;; Arg order changed for easier partials, etc.:
-(defn round [n & [type nplaces]] (round* (or type :round) nplaces n))
+  ;; & coll changed to coll:
+  (defn join-once [sep & coll] (str-join-once sep coll))
 
-;; & coll changed to coll:
-(defn join-once [sep & coll] (str-join-once sep coll))
+  ;; Used by Carmine <= v2.7.0
+  (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+  (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
+    [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
 
-;; Used by Carmine <= v2.7.0
-(defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
-(defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
-  [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
+  ;;; Arg order changed for easier partials
+  (defn keys=      [m ks] (ks=      ks m))
+  (defn keys<=     [m ks] (ks<=     ks m))
+  (defn keys>=     [m ks] (ks>=     ks m))
+  (defn keys=nnil? [m ks] (ks-nnil? ks m))
 
-;;; Arg order changed for easier partials
-(defn keys=      [m ks] (ks=      ks m))
-(defn keys<=     [m ks] (ks<=     ks m))
-(defn keys>=     [m ks] (ks>=     ks m))
-(defn keys=nnil? [m ks] (ks-nnil? ks m))
+  ;; API changed for greater flexibility:
+  (defn rate-limiter [ncalls-limit window-ms] (rate-limiter* [[ncalls-limit window-ms]]))
+  (defn rate-limited [ncalls-limit window-ms f]
+    (let [rl (rate-limiter* [[ncalls-limit window-ms]])]
+      (fn [& args]
+        (if-let [backoff-ms (rl)]
+          {:backoff-ms backoff-ms}
+          {:result     (f)}))))
 
-;; API changed for greater flexibility:
-(defn rate-limiter [ncalls-limit window-ms] (rate-limiter* [[ncalls-limit window-ms]]))
-(defn rate-limited [ncalls-limit window-ms f]
-  (let [rl (rate-limiter* [[ncalls-limit window-ms]])]
-    (fn [& args]
-      (if-let [backoff-ms (rl)]
-        {:backoff-ms backoff-ms}
-        {:result     (f)}))))
+  ;; Used by Sente <= v1.4.0-alpha2
+  (def logging-level (atom :debug)) ; Just ignoring this now
 
-;; Used by Sente <= v1.4.0-alpha2
-(def logging-level (atom :debug)) ; Just ignoring this now
+  #+cljs ; Used by Sente <= v1.1.0
+  (defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
+    (when-let [js-win js-?win]
+      (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0)))))
 
-#+cljs ; Used by Sente <= v1.1.0
-(defn set-exp-backoff-timeout! [nullary-f & [nattempt]]
-  (when-let [js-win js-?win]
-    (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0)))))
+  #+cljs
+  (do ; Level-based Cljs logging (prefer Timbre v4+)
+    (enc-macros/defonce* ^:dynamic *log-level* "DEPRECATED" :debug)
+    (def ^:private log?
+      (let [->n {:trace 1 :debug 2 :info 3 :warn 4 :error 5 :fatal 6 :report 7}]
+        (fn [level] (>= (->n level) (->n *log-level*)))))
 
-#+cljs
-(do ; Level-based Cljs logging (prefer Timbre v4+)
-  (enc-macros/defonce* ^:dynamic *log-level* "DEPRECATED" :debug)
-  (def ^:private log?
-    (let [->n {:trace 1 :debug 2 :info 3 :warn 4 :error 5 :fatal 6 :report 7}]
-      (fn [level] (>= (->n level) (->n *log-level*)))))
+    (defn tracef  [fmt & xs] (when (log? :trace)  (apply logf fmt xs)))
+    (defn debugf  [fmt & xs] (when (log? :debug)  (apply logf fmt xs)))
+    (defn infof   [fmt & xs] (when (log? :info)   (apply logf fmt xs)))
+    (defn warnf   [fmt & xs] (when (log? :warn)   (apply logf (str "WARN: "  fmt) xs)))
+    (defn errorf  [fmt & xs] (when (log? :error)  (apply logf (str "ERROR: " fmt) xs)))
+    (defn fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
+    (defn reportf [fmt & xs] (when (log? :report) (apply logf fmt xs))))
 
-  (defn tracef  [fmt & xs] (when (log? :trace)  (apply logf fmt xs)))
-  (defn debugf  [fmt & xs] (when (log? :debug)  (apply logf fmt xs)))
-  (defn infof   [fmt & xs] (when (log? :info)   (apply logf fmt xs)))
-  (defn warnf   [fmt & xs] (when (log? :warn)   (apply logf (str "WARN: "  fmt) xs)))
-  (defn errorf  [fmt & xs] (when (log? :error)  (apply logf (str "ERROR: " fmt) xs)))
-  (defn fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
-  (defn reportf [fmt & xs] (when (log? :report) (apply logf fmt xs))))
+  (defn greatest [coll & [?comparator]]
+    (let [comparator (or ?comparator rcompare)]
+      (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
 
-(defn greatest [coll & [?comparator]]
-  (let [comparator (or ?comparator rcompare)]
-    (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
+  (defn least [coll & [?comparator]]
+    (let [comparator (or ?comparator rcompare)]
+      (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
-(defn least [coll & [?comparator]]
-  (let [comparator (or ?comparator rcompare)]
-    (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
+  (comment (greatest ["a" "e" "c" "b" "d"]))
 
-(comment (greatest ["a" "e" "c" "b" "d"]))
+  (defn clj1098 "Ref. http://goo.gl/0GzRuz" [x] (or x {}))
 
-(defn clj1098 "Ref. http://goo.gl/0GzRuz" [x] (or x {}))
+  (defn distinct-by "Deprecated, prefer `xdistinct`"
+    [keyfn coll]
+    (let [step (fn step [xs seen]
+                 (lazy-seq
+                   ((fn [[v :as xs] seen]
+                      (when-let [s (seq xs)]
+                        (let [v* (keyfn v)]
+                          (if (contains? seen v*)
+                            (recur (rest s) seen)
+                            (cons v (step (rest s) (conj seen v*)))))))
+                    xs seen)))]
+      (step coll #{})))
 
-(defn distinct-by "Deprecated, prefer `xdistinct`"
-  [keyfn coll]
-  (let [step (fn step [xs seen]
-               (lazy-seq
-                ((fn [[v :as xs] seen]
-                   (when-let [s (seq xs)]
-                     (let [v* (keyfn v)]
-                       (if (contains? seen v*)
-                         (recur (rest s) seen)
-                         (cons v (step (rest s) (conj seen v*)))))))
-                 xs seen)))]
-    (step coll #{})))
+  (defn distinctv "Deprecated, prefer `xdistinct`"
+    ([      coll] (distinctv identity coll))
+    ([keyfn coll]
+     (let [tr (reduce (fn [[v seen] in]
+                        (let [in* (keyfn in)]
+                          (if-not* (contains? seen in*)
+                            [(conj! v in) (conj seen in*)]
+                            [v seen])))
+                [(transient []) #{}]
+                coll)]
+       (persistent! (nth tr 0)))))
 
-(defn distinctv "Deprecated, prefer `xdistinct`"
-  ([      coll] (distinctv identity coll))
-  ([keyfn coll]
-   (let [tr (reduce (fn [[v seen] in]
-                      (let [in* (keyfn in)]
-                        (if-not* (contains? seen in*)
-                          [(conj! v in) (conj seen in*)]
-                          [v seen])))
-              [(transient []) #{}]
-              coll)]
-     (persistent! (nth tr 0)))))
+  (defn map-kvs "Deprecated, prefer `reduce-kv`" [kf vf m]
+    (if-not* m {}
+      (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
+            kf (cond* (nil? kf) (fn [k _] k)
+                 (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                 :else kf)]
+        (persistent!
+          (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
+            (transient {}) m)))))
 
-(defn map-kvs "Deprecated, prefer `reduce-kv`" [kf vf m]
-  (if-not* m {}
-    (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond* (nil? kf) (fn [k _] k)
-                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                    :else kf)]
-      (persistent!
-        (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
-          (transient {}) m)))))
+  (defn as-map "Deprecated, prefer `reduce-kvs`" [kvs & [kf vf]]
+    (if (empty? kvs) {}
+        (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
+              kf (cond* (nil? kf) (fn [k _] k)
+                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                   :else kf)]
+          (persistent!
+            (reduce-kvs
+              (fn [m k v] (assoc! m (kf k v) (vf k v))) (transient {}) kvs)))))
 
-(defn as-map "Deprecated, prefer `reduce-kvs`" [kvs & [kf vf]]
-  (if (empty? kvs) {}
-    (let [vf (cond* (nil? vf) (fn [_ v] v) :else vf)
-          kf (cond* (nil? kf) (fn [k _] k)
-                    (kw-identical? kf :keywordize) (fn [k _] (keyword k))
-                    :else kf)]
-      (persistent!
-        (reduce-kvs
-          (fn [m k v] (assoc! m (kf k v) (vf k v))) (transient {}) kvs)))))
+  (defn keywordize-map [m] (map-keys keyword m))
+  (defn removev [pred coll] (filterv (complement pred) coll))
+  (defn nvec? [n x] (and (vector? x) (= (count x) n)))
 
-(defn keywordize-map [m] (map-keys keyword m))
-(defn removev [pred coll] (filterv (complement pred) coll))
-(defn nvec? [n x] (and (vector? x) (= (count x) n)))
+  (defn memoized [cache f & args]
+    (if-not* cache ; {<args> <delay-val>}
+      (apply f args)
+      @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
 
-(defn memoized [cache f & args]
-  (if-not* cache ; {<args> <delay-val>}
-    (apply f args)
-    @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
+  (defn- translate-signed-idx [^long signed-idx ^long max-idx]
+    (if (>= signed-idx 0)
+      (min      signed-idx max-idx)
+      (max 0 (+ signed-idx max-idx))))
 
-(defn- translate-signed-idx [^long signed-idx ^long max-idx]
-  (if (>= signed-idx 0)
-    (min      signed-idx max-idx)
-    (max 0 (+ signed-idx max-idx))))
+  (comment (translate-signed-idx -3 5))
 
-(comment (translate-signed-idx -3 5))
+  (defn sub-indexes [x start-idx & {:keys [^long max-len ^long end-idx]}]
+    (let [start-idx  ^long start-idx
+          xlen       (count x) ; also = max-exclusive-end-idx
+          ^long start-idx* (translate-signed-idx start-idx xlen)
+          end-idx*   (long
+                       (cond*
+                         max-len (#+clj min* #+cljs enc-macros/min*
+                                   (+ start-idx* max-len) xlen)
+                         end-idx (inc ; Want exclusive
+                                   ^long (translate-signed-idx end-idx xlen))
+                         :else   xlen))]
+      (if (> start-idx* end-idx*)
+        ;; [end-idx* start-idx*] ; Allow wrapping
+        [0 0] ; Disallow wrapping
+        [start-idx* end-idx*])))
 
-(defn sub-indexes [x start-idx & {:keys [^long max-len ^long end-idx]}]
-  (let [start-idx  ^long start-idx
-        xlen       (count x) ; also = max-exclusive-end-idx
-        ^long start-idx* (translate-signed-idx start-idx xlen)
-        end-idx*   (long
-                     (cond*
-                       max-len (#+clj min* #+cljs enc-macros/min*
-                                 (+ start-idx* max-len) xlen)
-                       end-idx (inc ; Want exclusive
-                                 ^long (translate-signed-idx end-idx xlen))
-                       :else   xlen))]
-    (if (> start-idx* end-idx*)
-      ;; [end-idx* start-idx*] ; Allow wrapping
-      [0 0] ; Disallow wrapping
-      [start-idx* end-idx*])))
+  (defn substr "Deprecated, prefer `?substr<idx` or `?substr<len`"
+    [s start-idx & [?max-len]]
+    (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
+      #+clj  (.substring ^String s start-idx* end-idx*)
+      #+cljs (.substring         s start-idx* end-idx*)))
 
-(defn substr "Deprecated, prefer `?substr<idx` or `?substr<len`"
-  [s start-idx & [?max-len]]
-  (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
-    #+clj  (.substring ^String s start-idx* end-idx*)
-    #+cljs (.substring         s start-idx* end-idx*)))
+  (comment (substr "hello" -1 1))
 
-(comment (substr "hello" -1 1))
+  (defn subvec* "Deprecated, prefer `?subvec<idx` or `?subvec<len`"
+    [v start-idx & [?max-len]]
+    (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
+      (subvec v start-idx* end-idx*)))
 
-(defn subvec* "Deprecated, prefer `?subvec<idx` or `?subvec<len`"
-  [v start-idx & [?max-len]]
-  (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
-    (subvec v start-idx* end-idx*)))
-
-(comment
-  (subvec* [:a :b :c :d :e] -1)
-  (qb 10000
-    (subvec*     [:a :b :c :d :e] -1)
-    (?subvec<len [:a :b :c :d :e] -1)))
+  (comment
+    (subvec* [:a :b :c :d :e] -1)
+    (qb 10000
+      (subvec*     [:a :b :c :d :e] -1)
+      (?subvec<len [:a :b :c :d :e] -1))))
