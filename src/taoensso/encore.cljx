@@ -414,6 +414,10 @@
     (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
     (string? x) x))
 
+(defn as-?nempty-str [x]
+  (when (string? x)
+    (if #+clj (.isEmpty ^String x) #+cljs (zero? (.-length x)) nil x)))
+
 (defn as-?int #_as-?long [x]
   (cond (number? x) (long x)
         (string? x)
@@ -469,6 +473,7 @@
 
 (defn as-nzero          [x] (or (as-?nzero  x) (-as-throw :nzero  x)))
 (defn as-nblank         [x] (or (as-?nblank x) (-as-throw :nblank x)))
+(defn as-nempty-str     [x] (or (as-?nempty-str x) (-as-throw :nempty-str x)))
 (defn as-kw             [x] (or (as-?kw     x) (-as-throw :kw     x)))
 (defn as-name           [x] (or (as-?name   x) (-as-throw :name   x)))
 (defn as-qname          [x] (or (as-?qname  x) (-as-throw :qname  x)))
@@ -790,10 +795,10 @@
 
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
-(declare subvec*)
+(declare ?subvec<len)
 (compile-if (completing (fn [])) ; Transducers
-  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (into [] (take n) coll)))
-  (defn takev [n coll] (if (vector? coll) (subvec* coll 0 n) (vec (take n coll)))))
+  (defn takev [n coll] (if (vector? coll) (or (?subvec<len coll 0 n) []) (into [] (take n) coll)))
+  (defn takev [n coll] (if (vector? coll) (or (?subvec<len coll 0 n) []) (vec (take n coll)))))
 
 (defn into-all "Like `into` but supports multiple \"from\"s"
   ([to from       ]              (into to from))
@@ -841,65 +846,65 @@
         (assoc m k (update-in* (get m k) ks f))
         (assoc m k (f          (get m k)))))))
 
-(defn- translate-signed-idx ^long [^long signed-idx ^long max-idx]
-  (if (>= signed-idx 0)
-    (min      signed-idx max-idx)
-    (max 0 (+ signed-idx max-idx))))
+(defn ?subvec<idx
+  "Like `subvec` but:
+    - Never throws; snaps to valid start and end indexes.
+    - Returns nil rather than an empty vector."
+  ([v ^long start]
+   (let [start (if (< start 0) 0 start)
+         vlen  (count v)]
+     (if (>= start vlen)
+       nil
+       (subvec v start vlen))))
 
-(comment (translate-signed-idx -3 5))
-
-(defn sub-indexes
-  "Returns [<inclusive-start-idx*> <exclusive-end-idx*>] for counted 0-indexed
-  input (str, vec, etc.) with support for:
-    * Clamping of indexes beyond limits.
-    * Max-length -> end-index.
-    * -ive indexes (as +ive indexes but work from back of input):
-      (+0) (+1) (+2) (+3) (+4)  ; inclusive +ive indexes
-        h    e    l    l    o   ; 5 count
-      (-5) (-4) (-3) (-2) (-1)  ; inclusive -ive indexes"
-  [x start-idx & {:keys [^long max-len ^long end-idx]}]
-  {:pre  [(have? [:or nil? nneg-int?] max-len)]
-   ;; Common out-of-bounds conds:
-   ;; :post [(have? (fn [[s e]] (>= e s)) %)
-   ;;        (have? (fn [[s e]] (>= s 0)) %)
-   ;;        (have? (fn [[s e]] (<= e (count x))) %)]
-   }
-  (let [start-idx  ^long start-idx
-        xlen       (count x) ; also = max-exclusive-end-idx
-        start-idx* (translate-signed-idx start-idx xlen)
-        end-idx*   (long
-                     (cond*
-                       max-len (#+clj min* #+cljs enc-macros/min*
-                                 (+ start-idx* max-len) xlen)
-                       end-idx (inc ; Want exclusive
-                                 (translate-signed-idx end-idx xlen))
-                       :else   xlen))]
-    (if (> start-idx* end-idx*)
-      ;; [end-idx* start-idx*] ; Allow wrapping
-      [0 0] ; Disallow wrapping
-      [start-idx* end-idx*])))
+  ([v ^long start ^long end]
+   (let [start (if (< start 0) 0 start)
+         vlen  (long (count v))
+         end   (if (> end vlen) vlen end)]
+     (if (>= start end)
+       nil
+       (subvec v start end)))))
 
 (comment
-  (sub-indexes "hello"  0 :max-len 5)  ; hello
-  (sub-indexes "hello"  0 :max-len 9)  ; hello
-  (sub-indexes "hello" -4 :max-len 5)  ; _ello
-  (sub-indexes "hello"  2 :max-len 2)  ; __ll_
-  (sub-indexes "hello" -2 :max-len 2)  ; ___lo
-  (sub-indexes "hello" -2)             ; ___lo
-  (sub-indexes "hello"  2)             ; __llo
-  (sub-indexes "hello"  8)             ; _____
-  (sub-indexes "hello"  9 :max-len 9)  ; _____
-  (sub-indexes "hello"  0 :max-len 0)  ; _____
-  (sub-indexes "hello"  3 :end-idx  1) ; _____
-  (sub-indexes "hello"  3 :end-idx -1) ; ___lo
-  )
+  (qb 10000
+    (subvec      [:a :b] 1)
+    (?subvec<idx [:a :b] 1)))
 
-(defn subvec* "Like `subvec` but uses `sub-indexes`"
-  [v start-idx & [?max-len]] {:pre [(have? vector? v)]}
-  (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
-    (subvec v start-idx* end-idx*)))
+(defn ?subvec<len
+  "Like `?subvec<idx` but:
+    - Takes `length` instead of `end`.
+    - -ive `start` => index from right of vector."
+  ([v ^long start]
+   (let [vlen (count v)]
+     (if (< start 0)
+       (let [start (+ start vlen)
+             start (if (< start 0) 0 start)]
+         (subvec v start vlen))
+       (if (>= start vlen)
+         nil
+         (subvec v start vlen)))))
 
-(comment (subvec* [:a :b :c :d :e] -1))
+  ([v ^long start ^long length]
+   (if (<= length 0)
+     nil
+     (let [vlen (long (count v))]
+       (if (< start 0)
+         (let [start (+ start vlen)
+               start (if (< start 0) 0 start)
+               end   (+ start length)
+               end   (if (> end vlen) vlen end)]
+           (subvec v start end))
+
+         (let [end (+ start length)
+               end (if (> end vlen) vlen end)]
+           (if (>= start end)
+             nil
+             (subvec v start end))))))))
+
+(comment
+  (qb 1000000
+    (subvec      [:a :b :c] 1)
+    (?subvec<idx [:a :b :c] 1)))
 
 (defn top
   "Returns a sorted vector of the top n items from coll of N items in O(N.logn)
@@ -1347,17 +1352,6 @@
       (.replace s (js/RegExp. (.-source match) flags) replacement))
     :else (throw (str "Invalid match arg: " match))))
 
-(defn substr
-  "Gives a consistent, flexible, cross-platform substring API built on
-  `sub-indexes`"
-  [s start-idx & [?max-len]] {:pre [(have? string? s)]}
-  (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
-    #+clj  (.substring ^String s start-idx* end-idx*)
-    ;; Could also use .substr:
-    #+cljs (.substring         s start-idx* end-idx*)))
-
-(comment (substr "hello" -1 1))
-
 (defn str-contains? [s substr]
   #+clj  (.contains ^String s ^String substr)
   #+cljs (not= -1 (.indexOf s substr)))
@@ -1368,21 +1362,98 @@
 
 (defn str-ends-with? [s substr]
   #+clj  (.endsWith ^String s ^String substr)
-  #+cljs (let [s-len      (alength s) ; not .length!
-               substr-len (alength substr)]
+  #+cljs (let [s-len      (.-length s)
+               substr-len (.-length substr)]
            (when (>= s-len substr-len)
              (not= -1 (.indexOf s substr (- s-len substr-len))))))
 
-(defn str-?index [s substr & [start-idx last?]]
-  (let [start-idx (int (or start-idx 0))
-        result    (int (if last?
-                         #+clj  (.lastIndexOf ^String s ^String substr start-idx)
-                         #+cljs (.lastIndexOf         s         substr start-idx)
-                         #+clj  (.indexOf     ^String s ^String substr start-idx)
-                         #+cljs (.indexOf             s         substr start-idx)))]
-    (when (not= result -1) result)))
+(defn str-?index
+  ([s substr          ] (str-?index s substr 0         false))
+  ([s substr start-idx] (str-?index s substr start-idx false))
+  ([s substr start-idx last?]
+   (let [result
+         (if last?
+           #+clj  (.lastIndexOf ^String s ^String substr ^long start-idx)
+           #+cljs (.lastIndexOf         s         substr       start-idx)
+           #+clj  (.indexOf     ^String s ^String substr ^long start-idx)
+           #+cljs (.indexOf             s         substr       start-idx))]
 
-(comment (str-?index "hello there" "there"))
+     (when (not= result -1) result))))
+
+(comment (qb 1000 (str-?index "hello there" "there")))
+
+(defn ?substr<idx
+  "Like `subs` but provides consistent clj/s behaviour:
+    - Never throws; snaps to valid start and end indexes.
+    - Returns nil rather than an empty string."
+  ([s ^long start]
+   #+cljs (as-?nempty-str (.substring s start))
+   #+clj
+   (let [start (if (< start 0) 0 start)
+         slen  (.length ^String s)]
+     (if (>= start slen)
+       nil
+       (.substring ^String s start slen))))
+
+  ([s ^long start ^long end]
+   #+cljs (if (>= start end) nil (.substring s start end))
+   #+clj
+   (let [start (if (< start 0) 0 start)
+         slen  (long (.length ^String s))
+         end   (if (> end slen) slen end)]
+     (if (>= start end)
+       nil
+       (.substring ^String s start end)))))
+
+(comment
+  (?substr<idx "foo" 1)
+  (?substr<idx "hello world" -10)
+  (?substr<idx "hello world" 100)
+  (?substr<idx "hello world" -10 100)
+  (?substr<idx "hello world" 100 -10)
+  (qb 100000
+    (subs "hello world" 0 11)
+    (?substr<idx "hello world" -10 100)))
+
+(defn ?substr<len
+  "Like `?substr<idx` but:
+    - Takes `length` instead of `end`.
+    - -ive `start` => index from right of string."
+  ([s ^long start]
+   #+cljs (as-?nempty-str (.substr s start))
+   #+clj
+   (let [slen (.length ^String s)]
+     (if (< start 0)
+       (let [start (+ start slen)
+             start (if (< start 0) 0 start)]
+         (.substring ^String s start) slen)
+       (if (>= start slen)
+         nil
+         (.substring ^String s start slen)))))
+
+  ([s ^long start ^long length]
+   #+cljs (as-?nempty-str (.substr s start length))
+   #+clj
+   (if (<= length 0)
+     nil
+     (let [slen (long (.length ^String s))]
+       (if (< start 0)
+         (let [start (+ start slen)
+               start (if (< start 0) 0 start)
+               end   (+ start length)
+               end   (if (> end slen) slen end)]
+           (.substring ^String s start end))
+
+         (let [end (+ start length)
+               end (if (> end slen) slen end)]
+           (if (>= start end)
+             nil
+             (.substring ^String s start end))))))))
+
+(comment
+  (?substr<len "hello world" -8)
+  (?substr<len "hello world" -8 2)
+  (?substr<len "hello world" 2 2))
 
 ;; Back-compatible volatiles, private for now
 ;; Note: benching seems to consistently show that atoms are actually no
@@ -1448,7 +1519,7 @@
   "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\",
   Ref. http://www.ietf.org/rfc/rfc4122.txt,
        https://gist.github.com/franks42/4159427"
-  ([max-length] (substr (uuid-str) 0 max-length))
+  ([max-length] (?substr<len (uuid-str) 0 max-length))
   ([]
    #+clj (str (java.util.UUID/randomUUID))
    #+cljs
@@ -2376,7 +2447,7 @@
   [s & [keywordize? encoding]] {:post [(have? map? %)]}
   (if (str/blank? s) {}
     (let [;; For convenience (e.g. JavaScript win-loc :search)
-          s (if (str-starts-with? s "?") (substr s 1) s)]
+          s (if (str-starts-with? s "?") (subs s 1) s)]
       (if-not* (str-contains? s "=") {}
         (let [m (reduce
                   (fn [m param]
@@ -2626,3 +2697,45 @@
   (if-not* cache ; {<args> <delay-val>}
     (apply f args)
     @(-swap-cache! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
+
+(defn- translate-signed-idx [^long signed-idx ^long max-idx]
+  (if (>= signed-idx 0)
+    (min      signed-idx max-idx)
+    (max 0 (+ signed-idx max-idx))))
+
+(comment (translate-signed-idx -3 5))
+
+(defn sub-indexes [x start-idx & {:keys [^long max-len ^long end-idx]}]
+  (let [start-idx  ^long start-idx
+        xlen       (count x) ; also = max-exclusive-end-idx
+        ^long start-idx* (translate-signed-idx start-idx xlen)
+        end-idx*   (long
+                     (cond*
+                       max-len (#+clj min* #+cljs enc-macros/min*
+                                 (+ start-idx* max-len) xlen)
+                       end-idx (inc ; Want exclusive
+                                 ^long (translate-signed-idx end-idx xlen))
+                       :else   xlen))]
+    (if (> start-idx* end-idx*)
+      ;; [end-idx* start-idx*] ; Allow wrapping
+      [0 0] ; Disallow wrapping
+      [start-idx* end-idx*])))
+
+(defn substr "Deprecated, prefer `?substr<idx` or `?substr<len`"
+  [s start-idx & [?max-len]]
+  (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
+    #+clj  (.substring ^String s start-idx* end-idx*)
+    #+cljs (.substring         s start-idx* end-idx*)))
+
+(comment (substr "hello" -1 1))
+
+(defn subvec* "Deprecated, prefer `?subvec<idx` or `?subvec<len`"
+  [v start-idx & [?max-len]]
+  (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
+    (subvec v start-idx* end-idx*)))
+
+(comment
+  (subvec* [:a :b :c :d :e] -1)
+  (qb 10000
+    (subvec*     [:a :b :c :d :e] -1)
+    (?subvec<len [:a :b :c :d :e] -1)))
