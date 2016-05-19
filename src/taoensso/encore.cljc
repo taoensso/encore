@@ -71,16 +71,17 @@
 
 ;;;; Core macros
 
-(defmacro compile-if
-  "Evaluates `test`. If it doesn't error and returns logical true, expands to
-  `then`, otherwise expands to `else`. Stolen from `clojure.core.reducers`.
-  (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
-    (do-cool-stuff-with-fork-join)
-    (fall-back-to-executor-services))"
-  [test then & [else]]
-  (if (try (eval test) (catch Throwable _ false))
-    `(do ~then)
-    `(do ~else)))
+#?(:clj
+   (defmacro compile-if
+     "Evaluates `test`. If it doesn't error and returns logical true, expands to
+     `then`, otherwise expands to `else`. Stolen from `clojure.core.reducers`.
+     (compile-if (Class/forName \"java.util.concurrent.ForkJoinTask\")
+       (do-cool-stuff-with-fork-join)
+       (fall-back-to-executor-services))"
+     [test then & [else]]
+     (if (try (eval test) (catch Throwable _ false))
+       `(do ~then)
+       `(do ~else))))
 
 (defmacro if-cljs
   "Executes `then` clause iff generating ClojureScript code.
@@ -141,17 +142,18 @@
   ([test then     ] `(if ~test nil   ~then))
   ([test then else] `(if ~test ~else ~then)))
 
-(defmacro cond*
-  "Micro optimization: like `cond` but with more efficient `else` expansion"
-  [& clauses]
-  (when clauses
-    (if (keyword? (first clauses)) ; :else, etc.
-      (second clauses)
-      (list 'if (first clauses)
-        (if (next clauses)
-          (second clauses)
-          (throw (IllegalArgumentException. "cond* requires an even number of forms")))
-        (cons 'taoensso.encore/cond* (nnext clauses))))))
+#?(:clj
+   (defmacro cond*
+     "Micro optimization: like `cond` but with more efficient `else` expansion"
+     [& clauses]
+     (when clauses
+       (if (keyword? (first clauses)) ; :else, etc.
+         (second clauses)
+         (list 'if (first clauses)
+               (if (next clauses)
+                 (second clauses)
+                 (throw (IllegalArgumentException. "cond* requires an even number of forms")))
+               (cons 'taoensso.encore/cond* (nnext clauses)))))))
 
 (comment
   [(clojure.walk/macroexpand-all '(cond  nil "a" nil "b" :else "c"))
@@ -171,15 +173,16 @@
        ~@(map pstep (partition 2 clauses))
        ~g)))
 
-(defmacro case-eval
-  "Like `case` but evals test constants for their compile-time value"
-  [expr & clauses]
-  (let [;; Don't evaluate default expression!
-        default (when (odd? (count clauses)) (last clauses))
-        clauses (if default (butlast clauses) clauses)]
-    `(case ~expr
-       ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
-       ~(when default default))))
+#?(:clj
+   (defmacro case-eval
+     "Like `case` but evals test constants for their compile-time value"
+     [expr & clauses]
+     (let [;; Don't evaluate default expression!
+           default (when (odd? (count clauses)) (last clauses))
+           clauses (if default (butlast clauses) clauses)]
+       `(case ~expr
+          ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
+          ~(when default default)))))
 
 (defmacro if-lets
   "Like `if-let` but binds multiple values iff all tests are true"
