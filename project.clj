@@ -29,9 +29,10 @@
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
    :1.8  {:dependencies [[org.clojure/clojure "1.8.0"]]}
+   :1.9  {:dependencies [[org.clojure/clojure "1.9.0-alpha5"]]}
    :test {:dependencies [[org.clojure/test.check "0.9.0"]]}
    :dev
-   [:1.8 :test
+   [:1.9 :test :server-jvm
     {:dependencies
      [[org.clojure/clojurescript "1.7.145"]
       [org.clojure/core.async    "0.2.374"]]
@@ -82,11 +83,11 @@
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
-                 "with-profile" "+1.5:+1.6:+1.7:+1.8" "test,"
+                 "with-profile" "+1.9:+1.8:+1.7:+1.6:+1.5" "test,"
                  ;; "with-profile" "+test" "cljsbuild" "test"
                  ]
    "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
    "deploy-lib" ["do" "build-once," "deploy" "clojars," "install"]
-   "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
+   "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}
 
   :repositories {"sonatype-oss-public" "https://oss.sonatype.org/content/groups/public/"})
