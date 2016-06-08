@@ -538,9 +538,13 @@
 ;;;; Bytes
 
 #+clj
+(def ^:const bytes-class (Class/forName "[B"))
+
+#+clj
+(defn bytes? [x] (instance? bytes-class x))
+
+#+clj
 (do
-  (def ^:const bytes-class (Class/forName "[B"))
-  (defn bytes? [x] (instance? bytes-class x))
   (defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
 
   (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
