@@ -34,7 +34,7 @@
    :dev
    [:1.9 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.7.145"]
+     [[org.clojure/clojurescript "1.9.36"]
       [org.clojure/core.async    "0.2.374"]]
 
      :plugins
