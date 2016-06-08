@@ -1,7 +1,7 @@
 (ns taoensso.encore
   "Core utils library for Clojure/Script"
   {:author "Peter Taoussanis (@ptaoussanis)"}
-  #+clj  (:refer-clojure :exclude (format))
+  #+clj  (:refer-clojure :exclude (format bytes?))
   #+clj  (:require [clojure.string  :as str]
                    [clojure.set     :as set]
                    [clojure.java.io :as io]
@@ -540,7 +540,7 @@
 #+clj
 (do
   (def ^:const bytes-class (Class/forName "[B"))
-  (defn bytes? [x] (instance? bytes-class x))
+  (defn bytes? [x] (instance? bytes-class x)) ; Also introduced in Clojure v1.9-alpha5+
   (defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
 
   (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
