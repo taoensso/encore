@@ -70,7 +70,7 @@
 ;;;; Version check (helps with dependency conflicts, etc.)
 
 (declare parse-version)
-(def             encore-version [2 53 1])
+(def             encore-version [2 54 0])
 (defn assert-min-encore-version [min-version]
   (let [[xc yc zc] encore-version
         [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
