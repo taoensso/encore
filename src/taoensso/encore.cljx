@@ -668,11 +668,25 @@
 (defn merge-meta   [x m] (with-meta x (merge (meta x) m)))
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
 
+(declare revery?)
 (defn some=
   ([x y]        (and (some? x) (= x y)))
-  ([x y & more] (and (some? x) (= x y) (apply = x y more))))
+  ([x y & more] (and (some? x) (= x y) (revery? #(= % x) more))))
 
 (comment (some= :foo :foo nil))
+
+(declare rfirst)
+(defn nnil "Returns first non-nil arg, or nil"
+  ([            ] nil)
+  ([x           ] x)
+  ([x y         ] (if (nil? x) y x))
+  ([x y z       ] (if (nil? x) (if (nil? y) z y) x))
+  ([x y z & more] (if (nil? x) (if (nil? y) (if (nil? z) (rfirst some? more) z) y) x)))
+
+(comment
+  (qb 100000
+    (or   nil nil nil false :a)
+    (nnil nil nil nil false :a)))
 
 (do
   ;; In most cases you'll want to define a local sentinel when possible
@@ -877,12 +891,17 @@
 (defn run!    [proc coll] (reduce    #(proc %2)    nil coll) nil)
 
 ;;; Faster `reduce`-based variants:
-(defn rsome   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p))) nil coll))
+(defn rsome   [pred coll] (reduce (fn [acc in] (when-let [p (pred in)] (reduced p)))  nil coll))
+(defn rfirst  [pred coll] (reduce (fn [acc in] (when        (pred in)  (reduced in))) nil coll))
 (defn revery? [pred coll] (reduce (fn [acc in] (if (pred in) true (reduced nil))) true coll))
 (defn every   [pred coll] (reduce (fn [acc in] (if (pred in) coll (reduced nil))) coll coll))
 
-;; Note that `(every? even? nil)` ≠ `(every even? nil)`
-(comment [(every? even? nil) (every even? nil)])
+(comment
+  ;; Note that `(every? even? nil)` ≠ `(every even? nil)`
+  [(every? even? nil) (every even? nil)]
+  (qb 10e4
+    (rsome #(when (string? %) %) [:a :b :c :d "boo"])
+    (rfirst        string?       [:a :b :c :d "boo"])))
 
 (compile-if (completing (fn [])) ; Transducers
   (defn reduce-kvs
