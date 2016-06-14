@@ -926,6 +926,11 @@
 
 (comment (reduce-n conj [] 100))
 
+#+cljs
+(defn reduce-obj "Like `reduce-kv` but for JavaScript objects"
+  [f init o]
+  (reduce (fn [acc k] (f acc k (gobj/get o k nil))) init (js-keys o)))
+
 (compile-if (completing (fn [])) ; Transducers
   (defn into!
        ([to       from] (reduce          conj! to from))
