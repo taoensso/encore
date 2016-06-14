@@ -1,4 +1,34 @@
-(ns taoensso.encore "Core utils library for Clojure/Script"
+(ns taoensso.encore
+  "Core utils library for Clojure/Script.
+
+  A personal collection of low-level tools for Clojure/Script that
+  emphasizes:
+    * Cross platform API compatibility
+    * Flexibility
+    * Performance
+    * Backwards compatibility
+
+  This lib's mostly for my own use and for advanced users that feel
+  comfortable reading this source. Not providing much beginner-oriented
+  documentation for this, sorry.
+
+  Quick Taoensso naming conventions:
+    **foo** - Dynamic var.
+    foo!    - Fn with side effects, or that should otherwise be used cautiously.
+    foo?    - Truthy val or fn that returns truthy val.
+    foo!?   - Fn that has side effetcs (or requires caution) and that returns
+              a truthy val. Note: !?, not ?!.
+    foo$    - Fn that's notably expensive to compute (e.g. hits db).
+    foo_    - Dereffable val (e.g. atom, volatile, delay, etc.).
+    _       - Unnamed val.
+    _foo    - Named but unused val.
+    ?foo    - Optional val (emphasize that val may be nil).
+    foo*    - A variation of `foo` (e.g. `foo*` macro vs `foo` fn).
+    -foo    - Public implementation detail or intermediate (e.g. uncoerced) val.
+    >foo    - Val \"to foo\" (e.g. >sender, >host), or fn to put/coerce/transform.
+    <foo    - Val \"from foo\" (e.g. <sender, <host), or fn to take/coerce/transform.
+    ->foo   - Fn to put/coerce/transform."
+
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
