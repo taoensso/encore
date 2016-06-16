@@ -34,6 +34,7 @@
   (:refer-clojure :exclude
     [defonce if-not cond format bytes?
      run! some? ident? float? boolean? uri? indexed?
+     int? pos-int? neg-int? nat-int?
      simple-ident?   qualified-ident?
      simple-symbol?  qualified-symbol?
      simple-keyword? qualified-keyword?])
