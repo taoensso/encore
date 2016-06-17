@@ -796,15 +796,18 @@
 (defn round1 ^double [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
 (defn round2 ^double [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
 
-(defn exp-backoff "Returns binary exponential backoff value."
-  [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
-  (let [binary-exp (double (Math/pow 2 (dec ^long nattempt)))
-        time       (* (+ binary-exp ^double (rand binary-exp)) 0.5 (double factor))]
-    (long (let [time (if min' (max (long min') (long time)) time)
-                time (if max' (min (long max') (long time)) time)]
-            time))))
+(defn exp-backoff
+  "Returns binary exponential backoff value for n<=36"
+  ([^long n-attempt] (exp-backoff n-attempt nil))
+  ([^long n-attempt {:keys [min max factor] :or {factor 1000}}]
+   (let [n (if (> n-attempt 36) 36 n-attempt) ; >2^36 excessive
+         b (Math/pow 2 n)
+         t (long (* (+ b ^double (rand b)) 0.5 (double factor)))
+         t (long (if min (if (< t ^long min) min t) t))
+         t (long (if max (if (> t ^long max) max t) t))]
+     t)))
 
-(comment (exp-backoff 4))
+(comment (exp-backoff 128))
 
 ;;;; Date & time
 
