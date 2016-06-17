@@ -799,7 +799,8 @@
 (defn exp-backoff "Returns binary exponential backoff value."
   [nattempt & [{:keys [factor] min' :min max' :max :or {factor 1000}}]]
   (let [binary-exp (double (Math/pow 2 (dec ^long nattempt)))
-        time       (* (+ binary-exp ^double (rand binary-exp)) 0.5 (double factor))]
+        time       (* (+ binary-exp ^double (rand binary-exp)) 0.5 (double factor))
+        time       (min Long/MAX_VALUE time)]
     (long (let [time (if min' (max (long min') (long time)) time)
                 time (if max' (min (long max') (long time)) time)]
             time))))
