@@ -1741,6 +1741,13 @@
 ;;;; IO
 
 #+clj
+(defn get-sys-val [id]
+  (or (System/getProperty id)
+      (System/getenv      id)))
+
+#+clj (defn read-sys-val [id] (when-let [s (get-sys-val id)] (read-edn s)))
+
+#+clj
 (defn slurp-resource
   "Returns slurped named resource on classpath, or nil when resource not found"
   [rname]
