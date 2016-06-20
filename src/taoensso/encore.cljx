@@ -101,7 +101,7 @@
 ;;;; Version check (helps with dependency conflicts, etc.)
 
 (declare parse-version)
-(def             encore-version [2 57 0])
+(def             encore-version [2 58 0])
 (defn assert-min-encore-version [min-version]
   (let [[xc yc zc] encore-version
         [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
@@ -907,12 +907,12 @@
 (defn rfirst-kv  [pred coll] (reduce-kv (fn [acc k v] (when        (pred k v)  (reduced [k v]))) nil coll))
 (defn revery?    [pred coll] (reduce    (fn [acc in]  (if (pred in)  true (reduced nil))) true coll))
 (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced nil))) true coll))
-(defn every      [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
-(defn every-kv   [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
+(defn revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
+(defn revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
 
 (comment
-  ;; Note that `(every? even? nil)` ≠ `(every even? nil)`
-  [(every? even? nil) (every even? nil)]
+  ;; Note that `(every? even? nil)` ≠ `(revery even? nil)`
+  [(every? even? nil) (revery even? nil)]
   (qb 10e4
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
     (rfirst        string?       [:a :b :c :d "boo"])))
@@ -2820,6 +2820,7 @@
   (def as-ufloat       as-nat-float)
   (def as-pfloat       as-pos-float)
   (def run!*           run!)
+  (def every           revery)
 
   (defmacro have-in       [s1 & sn] `(have  ~s1 :in ~@sn))
   (defmacro have-in!      [s1 & sn] `(have! ~s1 :in ~@sn))
