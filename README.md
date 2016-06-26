@@ -7,7 +7,11 @@
 [com.taoensso/encore "2.58.0"] ; Stable
 ```
 
-Want to help [support taoensso/open-source]?
+> Please consider helping to [support my continued open-source Clojure/Script work]? 
+> 
+> Even small contributions can add up + make a big difference to help sustain my time writing, maintaining, and supporting Encore and other Clojure/Script libraries. **Thank you!**
+>
+> \- Peter Taoussanis
 
 # Encore
 
@@ -16,8 +20,6 @@ Want to help [support taoensso/open-source]?
 **Or**: What happens when you spend way too much time with Clojure
 
 **Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it.
-
-\- [Peter Taoussanis]
 
 ## Experiencing a dependency conflict?
 
@@ -42,7 +44,7 @@ Copyright &copy; 2014-2016 [Peter Taoussanis].
 [@ptaoussanis]: https://www.taoensso.com
 [More by @ptaoussanis]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
-[support taoensso/open-source]: http://taoensso.com/clojure/backers
+[support my continued open-source Clojure/Script work]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
 [_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
