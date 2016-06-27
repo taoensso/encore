@@ -897,8 +897,10 @@
         (reduced result)
         result))))
 
-(defn run-kv! [proc    m] (reduce-kv #(proc %2 %3) nil    m) nil)
-(defn run!    [proc coll] (reduce    #(proc %2)    nil coll) nil)
+(declare reduce-kvs)
+(defn run!     [proc coll] (reduce     #(proc %2)    nil coll) nil)
+(defn run-kv!  [proc    m] (reduce-kv  #(proc %2 %3) nil    m) nil)
+(defn run-kvs! [proc  kvs] (reduce-kvs #(proc %2 %3) nil  kvs) nil)
 
 ;;; Faster `reduce`-based variants:
 (defn rsome      [pred coll] (reduce    (fn [acc in]  (when-let [p (pred in)]  (reduced p)))     nil coll))
