@@ -840,7 +840,8 @@
 
 #+clj (declare -simple-date-format)
 #+clj
-(defn simple-date-format* [pattern locale timezone]
+(defn simple-date-format*
+  ^java.text.SimpleDateFormat [pattern locale timezone]
   (.get ^ThreadLocal (-simple-date-format pattern locale timezone)))
 
 #+clj
