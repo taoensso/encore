@@ -81,7 +81,8 @@
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
-    [have have! have? compile-if if-not cond catch-errors* catch-errors
+    [have have! have? compile-if if-not if-lets when-lets cond
+     catch-errors* catch-errors
      name-with-attrs -vol! -vol-reset! -vol-swap!]]))
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
@@ -198,10 +199,7 @@
 (defmacro when-lets
   "Like `when-let` but binds multiple values iff all tests are true"
   [bindings & body]
-  (let [[b1 b2 & bnext] bindings]
-    (if bnext
-      `(when-let [~b1 ~b2] (when-lets ~(vec bnext) ~@body))
-      `(when-let [~b1 ~b2] ~@body))))
+  `(if-lets ~bindings (do ~@body)))
 
 (comment
   (if-lets   [a :a b (= a :a)] [a b] "else")
