@@ -186,6 +186,28 @@
   ([test then     ] `(if ~test nil   ~then))
   ([test then else] `(if ~test ~else ~then)))
 
+(defmacro if-lets
+  "Like `if-let` but binds multiple values iff all tests are true"
+  ([bindings then] `(if-lets ~bindings ~then nil))
+  ([bindings then else]
+   (let [[b1 b2 & bnext] bindings]
+     (if bnext
+       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
+       `(if-let [~b1 ~b2] ~then ~else)))))
+
+(defmacro when-lets
+  "Like `when-let` but binds multiple values iff all tests are true"
+  [bindings & body]
+  (let [[b1 b2 & bnext] bindings]
+    (if bnext
+      `(when-let [~b1 ~b2] (when-lets ~(vec bnext) ~@body))
+      `(when-let [~b1 ~b2] ~@body))))
+
+(comment
+  (if-lets   [a :a b (= a :a)] [a b] "else")
+  (if-lets   [a :a b (= a :b)] [a b] "else")
+  (when-lets [a :a b nil] "true"))
+
 #+clj
 (defmacro cond "Like `core/cond` but with more efficient `else` expansion"
   [& clauses]
@@ -226,28 +248,6 @@
     `(case ~expr
        ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
        ~(when default default))))
-
-(defmacro if-lets
-  "Like `if-let` but binds multiple values iff all tests are true"
-  ([bindings then] `(if-lets ~bindings ~then nil))
-  ([bindings then else]
-   (let [[b1 b2 & bnext] bindings]
-     (if bnext
-       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
-       `(if-let [~b1 ~b2] ~then ~else)))))
-
-(defmacro when-lets
-  "Like `when-let` but binds multiple values iff all tests are true"
-  [bindings & body]
-  (let [[b1 b2 & bnext] bindings]
-    (if bnext
-      `(when-let [~b1 ~b2] (when-lets ~(vec bnext) ~@body))
-      `(when-let [~b1 ~b2] ~@body))))
-
-(comment
-  (if-lets   [a :a b (= a :a)] [a b] "else")
-  (if-lets   [a :a b (= a :b)] [a b] "else")
-  (when-lets [a :a b nil] "true"))
 
 (defmacro do-nil   [& body] `(do ~@body nil))
 (defmacro do-false [& body] `(do ~@body false))
