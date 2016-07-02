@@ -212,20 +212,32 @@
   (when-lets [:let [a :a b :b] c (str a b)] c))
 
 #+clj
-(defmacro cond "Like `core/cond` but with more efficient `else` expansion"
+(defmacro cond
+  "Like `core/cond` but:
+    * Has more efficient `else` expansion
+    * Supports :let, :when, :when-let, :when-lets as in `for`:
+      (cond
+        false 0
+        :when true
+        :let  [foo :bar]
+        :else foo) => :bar"
   [& clauses]
-  (when clauses
-    (if (keyword? (first clauses)) ; :else, etc.
-      (second clauses)
-      (list 'if (first clauses)
-        (if (next clauses)
-          (second clauses)
-          (throw (IllegalArgumentException. "cond* requires an even number of forms")))
-        (cons 'taoensso.encore/cond (nnext clauses))))))
+  (when-let [[test expr & more] (seq clauses)]
+    (if true #_(next clauses) ; Implicit :else
+      (case test
+        :let       `(let       ~expr (cond ~@more))
+        :when      `(when      ~expr (cond ~@more))
+        :when-let  `(when-let  ~expr (cond ~@more))
+        :when-lets `(when-lets ~expr (cond ~@more))
+        (if (keyword? test) ; :else, etc.
+          expr
+          `(if ~test ~expr (cond ~@more))))
+      test)))
 
 (comment
   [(clojure.walk/macroexpand-all    '(clojure.core/cond nil "a" nil "b" :else "c"))
-   (clojure.walk/macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))])
+   (clojure.walk/macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))
+   (clojure.walk/macroexpand-all '(taoensso.encore/cond :when true :let [x "x"] :else x))])
 
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
