@@ -202,8 +202,7 @@
 (defmacro when-lets
   "Like `when-let` but binds multiple values for `body` iff all tests are
   true, supports internal `:let`s"
-  [bindings & body]
-  `(if-lets ~bindings (do ~@body)))
+  [bindings & body] `(if-lets ~bindings (do ~@body)))
 
 (comment
   (if-lets   [a :a b (= a :a)] [a b] "else")
@@ -213,41 +212,57 @@
 
 #+clj
 (defmacro cond
-  "Like `core/cond` but supports implicit (final) `else` clause, and
-  special test keywords: :else, :let, :when, :when-let, :when-lets.
-  Other test keywords will throw  (an nb difference from `core/cond`).
+  "Like `core/cond` but provides more efficient expansions in some common
+  cases, supports implicit (final) `else` clause, and supports special test
+  keywords: :else, :let, :do, :when, :when-not, :when-let, :when-lets.
 
     (cond
       false 0
-      :when true
-      :let  [foo :bar]
-      :else foo) => :bar
+      :when true       ; Returns nil, or continues cond
+      :let  [foo :bar] ; Establishes bindings and continues cond
+      foo              ; Implicit (final) `else` clause, equivalent to `:else foo`
+     ) => :bar
 
   :let support inspired by https://github.com/Engelberg/better-cond."
   [& clauses]
   (when-let [[test expr & more] (seq clauses)]
     (if (next clauses) #_true ; To disable implicit `else`
       (case test
-        :let        `(let       ~expr (cond ~@more))
-        :when       `(when      ~expr (cond ~@more))
-        :when-let   `(when-let  ~expr (cond ~@more))
-        :when-lets  `(when-lets ~expr (cond ~@more))
-        ;; (nil false)               `(cond ~@more) ; Optimization
-        (:else true)            expr ; More efficient than (if <truthy> ...)
+        :do        `(do        ~expr (cond ~@more))
+        :let       `(let       ~expr (cond ~@more))
+        :when      `(when      ~expr (cond ~@more))
+        :when-not  `(when-not  ~expr (cond ~@more))
+        :when-let  `(when-let  ~expr (cond ~@more))
+        :when-lets `(when-lets ~expr (cond ~@more))
+        (nil false)                 `(cond ~@more) ; Micro optimization
+        (:else :default true)   expr ; More efficient than (if <truthy> ...)
+
         (if (keyword? test)
-          ;; expr ; For full back-compatibility
-          ;; This technically breaks compatibility with `core/cond`:
-          (throw (ex-info "Unrecognized `encore/cond` test keyword"
-                   {:keyword test}))
-          `(if ~test ~expr (cond ~@more))))
+
+          ;; expr ; For `core/cond` back-compatibility
+          ;; Undocumented, but throws at compile-time so easy to catch:
+          (throw (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
+                   {:test-form test :expr-form expr}))
+
+          ;; For `core/cond` back-compatibility:
+          ;; `(if ~test ~expr (cond ~@more))
+
+          ;; Undocumented, experimental micro optimization. Assumes that
+          ;; `not` resolves to `core/not` (hasn't been rebound):
+          (if (and (list? test) (= (first test) 'not #_'cond/not)
+                   #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not))
+            `(if ~(second test) (cond ~@more) ~expr)
+            `(if ~test ~expr (cond ~@more)))))
       test)))
 
 (comment
+  (def macroexpand-all clojure.walk/macroexpand-all)
   (macroexpand '(cond (println "foo")))
-  (cond "a" "foo" :foo "d" (println "bar"))
-  [(clojure.walk/macroexpand-all    '(clojure.core/cond nil "a" nil "b" :else "c"))
-   (clojure.walk/macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))
-   (clojure.walk/macroexpand-all '(taoensso.encore/cond :when true :let [x "x"] :else x))])
+  (cond "a" "foo" "b" (println "bar"))
+  [(macroexpand-all    '(clojure.core/cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(taoensso.encore/cond :when true :let [x "x"] :else x))
+   (macroexpand-all '(taoensso.encore/cond false 0 (not false) 1 :default))])
 
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
@@ -432,7 +447,7 @@
   (defn ^boolean some?       [x] (not (nil? x)))
   (defn ^boolean stringy?    [x] (or (keyword? x) (string? x)))
   (defn ^boolean ident?      [x] (or (keyword? x) (symbol? x)))
-  (defn ^boolean boolean?    [x] (or (true?    x) (false?  x))) ; TODO
+  (defn ^boolean boolean?    [x] (or (true?    x) (false?  x)))
   ;; (defn uri?              [x])
   (defn ^boolean indexed?    [x] (satisfies?  IIndexed            x))
   (defn ^boolean named?      [x] (implements? INamed              x))
