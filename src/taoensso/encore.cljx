@@ -188,23 +188,28 @@
   ([test then else] `(if ~test ~else ~then)))
 
 (defmacro if-lets
-  "Like `if-let` but binds multiple values iff all tests are true"
-  ([bindings then] `(if-lets ~bindings ~then nil))
+  "Like `if-let` but binds multiple values for `then` iff all tests are true,
+  supports internal `:let`s"
+  ([bindings then     ] `(if-lets ~bindings ~then nil))
   ([bindings then else]
-   (let [[b1 b2 & bnext] bindings]
-     (if bnext
-       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else)
-       `(if-let [~b1 ~b2] ~then ~else)))))
+   (if-let [[b1 b2 & bnext] (seq bindings)]
+     (if (= b1 :let)
+       `(let         ~b2  (if-lets ~(vec bnext) ~then ~else))
+       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else))
+     then ; (if-lets [] true false) => true (experimental, undocumented)
+     )))
 
 (defmacro when-lets
-  "Like `when-let` but binds multiple values iff all tests are true"
+  "Like `when-let` but binds multiple values for `body` iff all tests are
+  true, supports internal `:let`s"
   [bindings & body]
   `(if-lets ~bindings (do ~@body)))
 
 (comment
   (if-lets   [a :a b (= a :a)] [a b] "else")
   (if-lets   [a :a b (= a :b)] [a b] "else")
-  (when-lets [a :a b nil] "true"))
+  (when-lets [a :a b nil] "true")
+  (when-lets [:let [a :a b :b] c (str a b)] c))
 
 #+clj
 (defmacro cond "Like `core/cond` but with more efficient `else` expansion"
