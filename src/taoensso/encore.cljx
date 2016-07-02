@@ -213,28 +213,38 @@
 
 #+clj
 (defmacro cond
-  "Like `core/cond` but:
-    * Has more efficient `else` expansion
-    * Supports :let, :when, :when-let, :when-lets as in `for`:
-      (cond
-        false 0
-        :when true
-        :let  [foo :bar]
-        :else foo) => :bar"
+  "Like `core/cond` but supports implicit (final) `else` clause, and
+  special test keywords: :else, :let, :when, :when-let, :when-lets.
+  Other test keywords will throw  (an nb difference from `core/cond`).
+
+    (cond
+      false 0
+      :when true
+      :let  [foo :bar]
+      :else foo) => :bar
+
+  :let support inspired by https://github.com/Engelberg/better-cond."
   [& clauses]
   (when-let [[test expr & more] (seq clauses)]
-    (if true #_(next clauses) ; Implicit :else
+    (if (next clauses) #_true ; To disable implicit `else`
       (case test
-        :let       `(let       ~expr (cond ~@more))
-        :when      `(when      ~expr (cond ~@more))
-        :when-let  `(when-let  ~expr (cond ~@more))
-        :when-lets `(when-lets ~expr (cond ~@more))
-        (if (keyword? test) ; :else, etc.
-          expr
+        :let        `(let       ~expr (cond ~@more))
+        :when       `(when      ~expr (cond ~@more))
+        :when-let   `(when-let  ~expr (cond ~@more))
+        :when-lets  `(when-lets ~expr (cond ~@more))
+        ;; (nil false)               `(cond ~@more) ; Optimization
+        (:else true)            expr ; More efficient than (if <truthy> ...)
+        (if (keyword? test)
+          ;; expr ; For full back-compatibility
+          ;; This technically breaks compatibility with `core/cond`:
+          (throw (ex-info "Unrecognized `encore/cond` test keyword"
+                   {:keyword test}))
           `(if ~test ~expr (cond ~@more))))
       test)))
 
 (comment
+  (macroexpand '(cond (println "foo")))
+  (cond "a" "foo" :foo "d" (println "bar"))
   [(clojure.walk/macroexpand-all    '(clojure.core/cond nil "a" nil "b" :else "c"))
    (clojure.walk/macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))
    (clojure.walk/macroexpand-all '(taoensso.encore/cond :when true :let [x "x"] :else x))])
