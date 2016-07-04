@@ -293,6 +293,10 @@
 (defmacro do-false [& body] `(do ~@body false))
 (defmacro do-true  [& body] `(do ~@body true))
 
+(defmacro defonce* "Alias" [& sigs]  `(taoensso.encore/defonce ~@sigs))
+(defmacro if-not*  "Alias" [& sigs]  `(taoensso.encore/if-not  ~@sigs))
+(defmacro cond*    "Alias" [& sigs]  `(taoensso.encore/cond    ~@sigs))
+
 ;;;; Edn
 
 (declare map-keys kw-identical?)
@@ -487,8 +491,13 @@
         (instance? Number x)
         (or
           (instance? Integer x)
+
+          ;; Note: Clojure 1.9's own new `int?` has decided to exclude
+          ;; arb-precision integers for some reason?
+          ;; Ref. https://goo.gl/Waa0Yb
           (instance? clojure.lang.BigInt x)
           (instance? BigInteger x)
+
           (instance? Short x)
           (instance? Byte x)))))
 
@@ -1936,7 +1945,7 @@
   (qb 100000 (f1 :x) (f1_ :x)) ; [23.99 17.56]
   )
 
-(defn memoize1
+(defn memoize-last
   "Great for Reactjs render op caching on mobile devices, etc."
   [f]
   (let [cache_ (atom {})]
@@ -2849,7 +2858,8 @@
   (def memoize-a1_     memoize_)
   (def a0-memoize_     memoize_)
   (def a1-memoize_     memoize_)
-  (def memoize-1       memoize1)
+  (def memoize-1       memoize-last)
+  (def memoize1        memoize-last)
   (def nnil?           some?)
   (def nneg-num?       nat-num?)
   (def nneg-int?       nat-int?)
@@ -2870,9 +2880,6 @@
 
   (defmacro have-in       [s1 & sn] `(have  ~s1 :in ~@sn))
   (defmacro have-in!      [s1 & sn] `(have! ~s1 :in ~@sn))
-  (defmacro defonce*      [& sigs]  `(taoensso.encore/defonce ~@sigs))
-  (defmacro if-not*       [& sigs]  `(taoensso.encore/if-not  ~@sigs))
-  (defmacro cond*         [& sigs]  `(taoensso.encore/cond    ~@sigs))
   (defmacro cond-throw    [& sigs]  `(cond!                   ~@sigs))
   (defmacro use-fixtures* [& sigs]  `(use-fixtures            ~@sigs))
 
