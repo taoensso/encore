@@ -850,8 +850,11 @@
 
 ;;;; Date & time
 
-(defn   now-dt       [] #+clj (java.util.Date.) #+cljs (js/Date.))
-(defn  now-udt ^long [] #+clj (System/currentTimeMillis) #+cljs (.getTime (js/Date.)))
+(defmacro now-dt*       [] `(if-cljs (js/Date.)       (java.util.Date.)))
+(defn     now-dt        []    #+cljs (js/Date.) #+clj (java.util.Date.))
+(defmacro now-udt*      [] `(if-cljs (.getTime (js/Date.))       (System/currentTimeMillis)))
+(defn     now-udt ^long []    #+cljs (.getTime (js/Date.)) #+clj (System/currentTimeMillis))
+
 (defn secs->ms ^long [secs] (* (long secs)  1000))
 (defn ms->secs ^long [ms]   (quot (long ms) 1000))
 (defn ms "Returns ~number of milliseconds in period defined by given args"
@@ -2373,6 +2376,8 @@
       (fn [] (long (* 1e6 (.call f perf))))
       (fn [] (* 1e6 (now-udt))))
     (fn [] (* 1e6 (now-udt)))))
+
+(defmacro nano-time* [] `(if-cljs (nano-time) (System/nanoTime)))
 
 (defmacro time-ms "Returns number of milliseconds it takes to execute body"
   [& body] `(let [t0# (now-udt)] ~@body (- (now-udt) t0#)))
