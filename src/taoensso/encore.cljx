@@ -228,31 +228,33 @@
   (when-let [[test expr & more] (seq clauses)]
     (if (next clauses) #_true ; To disable implicit `else`
       (case test
+        (nil false)                 `(cond ~@more) ; Micro optimization
         :do        `(do        ~expr (cond ~@more))
         :let       `(let       ~expr (cond ~@more))
         :when      `(when      ~expr (cond ~@more))
         :when-not  `(when-not  ~expr (cond ~@more))
         :when-let  `(when-let  ~expr (cond ~@more))
         :when-lets `(when-lets ~expr (cond ~@more))
-        (nil false)                 `(cond ~@more) ; Micro optimization
         (:else :default true)   expr ; More efficient than (if <truthy> ...)
-
-        (if (keyword? test)
-
-          ;; expr ; For `core/cond` back-compatibility
+        (cond
+          (keyword? test) ; expr ; For `core/cond` back-compatibility
           ;; Undocumented, but throws at compile-time so easy to catch:
           (throw (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
                    {:test-form test :expr-form expr}))
 
           ;; For `core/cond` back-compatibility:
-          ;; `(if ~test ~expr (cond ~@more))
+          ;; :else `(if ~test ~expr (cond ~@more))
+
+          ;; Experimental `if-lets` support, currently undocumented:
+          (vector? test) `(if-lets ~test ~expr (cond ~@more))
 
           ;; Undocumented, experimental micro optimization. Assumes that
           ;; `not` resolves to `core/not` (hasn't been rebound):
-          (if (and (list? test) (= (first test) 'not #_'cond/not)
-                   #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not))
-            `(if ~(second test) (cond ~@more) ~expr)
-            `(if ~test ~expr (cond ~@more)))))
+          (and (list? test) (= (first test) 'not #_'cond/not)
+               #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not))
+          `(if ~(second test) (cond ~@more) ~expr)
+
+          :else `(if ~test ~expr (cond ~@more))))
       test)))
 
 (comment
