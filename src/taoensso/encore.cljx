@@ -488,20 +488,12 @@
   (defn float? [x] (or (instance? Double x) (instance? Float x)))
   (defn int?   [x]
     (or
-      (instance? Long x) ; Common case
-      (and
-        (instance? Number x)
-        (or
-          (instance? Integer x)
-
-          ;; Note: Clojure 1.9's own new `int?` has decided to exclude
-          ;; arb-precision integers for some reason?
-          ;; Ref. https://goo.gl/Waa0Yb
-          (instance? clojure.lang.BigInt x)
-          (instance? BigInteger x)
-
-          (instance? Short x)
-          (instance? Byte x)))))
+      (instance? Long    x)
+      (instance? Integer x)
+      ;; (instance? clojure.lang.BigInt x)
+      ;; (instance? BigInteger          x)
+      (instance? Short x)
+      (instance? Byte  x)))
 
   (defn nat-num?   [x] (and (number? x) (not (neg? x))))
   (defn pos-num?   [x] (and (number? x)      (pos? x)))
