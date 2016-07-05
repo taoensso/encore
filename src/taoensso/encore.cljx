@@ -44,6 +44,7 @@
    [clojure.string  :as str]
    [clojure.set     :as set]
    [clojure.java.io :as io]
+   [clojure.walk    :as walk :refer [macroexpand-all]]
    [clojure.test    :as test :refer [is]]
    ;; [clojure.core.async    :as async]
    [clojure.tools.reader.edn :as edn]
@@ -212,8 +213,8 @@
 
 #+clj
 (defmacro cond
-  "Like `core/cond` but provides more efficient expansions in some common
-  cases, supports implicit (final) `else` clause, and supports special test
+  "Like `core/cond` but can yield more efficient expansions in some cases,
+  supports implicit (final) `else` clause, and supports special test
   keywords: :else, :let, :do, :when, :when-not, :when-let, :when-lets.
 
     (cond
@@ -226,45 +227,37 @@
   :let support inspired by https://github.com/Engelberg/better-cond."
   [& clauses]
   (when-let [[test expr & more] (seq clauses)]
-    (if (next clauses) #_true ; To disable implicit `else`
+    (if-not (next clauses)
+      test ; Implicit else
       (case test
-        (nil false)                 `(cond ~@more) ; Micro optimization
+        (true :else :default)   expr               ; Faster than (if <truthy> ...)
+        (false nil)                 `(cond ~@more) ; Faster than (if <falsey> ...)
         :do        `(do        ~expr (cond ~@more))
         :let       `(let       ~expr (cond ~@more))
         :when      `(when      ~expr (cond ~@more))
         :when-not  `(when-not  ~expr (cond ~@more))
         :when-let  `(when-let  ~expr (cond ~@more))
         :when-lets `(when-lets ~expr (cond ~@more))
-        (:else :default true)   expr ; More efficient than (if <truthy> ...)
-        (cond
-          (keyword? test) ; expr ; For `core/cond` back-compatibility
+        (if (keyword? test)
           ;; Undocumented, but throws at compile-time so easy to catch:
           (throw (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
                    {:test-form test :expr-form expr}))
 
-          ;; For `core/cond` back-compatibility:
-          ;; :else `(if ~test ~expr (cond ~@more))
+          (if (vector? test) ; Experimental
+            `(if-lets ~test ~expr (cond ~@more))
 
-          ;; Experimental `if-lets` support, currently undocumented:
-          (vector? test) `(if-lets ~test ~expr (cond ~@more))
-
-          ;; Undocumented, experimental micro optimization. Assumes that
-          ;; `not` resolves to `core/not` (hasn't been rebound):
-          (and (list? test) (= (first test) 'not #_'cond/not)
-               #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not))
-          `(if ~(second test) (cond ~@more) ~expr)
-
-          :else `(if ~test ~expr (cond ~@more))))
-      test)))
+            (if (and (list? test) (= (first test) 'not)) ; Experimental
+              #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not)            
+              ;; Assumes `not` = `core/not`:
+              `(if ~(second test) (cond ~@more) ~expr)
+              `(if ~test ~expr (cond ~@more)))))))))
 
 (comment
-  (def macroexpand-all clojure.walk/macroexpand-all)
-  (macroexpand '(cond (println "foo")))
-  (cond "a" "foo" "b" (println "bar"))
-  [(macroexpand-all    '(clojure.core/cond nil "a" nil "b" :else "c"))
-   (macroexpand-all '(taoensso.encore/cond nil "a" nil "b" :else "c"))
-   (macroexpand-all '(taoensso.encore/cond :when true :let [x "x"] :else x))
-   (macroexpand-all '(taoensso.encore/cond false 0 (not false) 1 :default))])
+  [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(cond nil "a" nil "b" (println "bar")))
+   (macroexpand-all '(cond :when true :let [x "x"] :else x))
+   (macroexpand-all '(cond false 0 (not false) 1 2))])
 
 (defmacro cond! "Like `cond` but throws on no-match like `case` and `condp`"
   [& clauses] `(cond ~@clauses :else (throw (ex-info "No matching clause" {}))))
