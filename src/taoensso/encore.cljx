@@ -780,8 +780,8 @@
 
 ;;;; Math
 
-(def ^:private ^:const max-long #+clj Long/MAX_VALUE #+cljs  9223372036854775807)
-(def ^:private ^:const min-long #+clj Long/MIN_VALUE #+cljs -9223372036854775808)
+(def ^:private ^:const max-long #+clj Long/MAX_VALUE #+cljs  9007199254740991)
+(def ^:private ^:const min-long #+clj Long/MIN_VALUE #+cljs -9007199254740991)
 
 (defn approx=
   ([x y      ] (approx= x y 0.001))
