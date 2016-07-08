@@ -140,6 +140,8 @@
   (if (:ns &env) ; nil when compiling for Clojure, nnil for ClojureScript
     then else))
 
+(defmacro if-clj [then else] (if (:ns &env) else then))
+
 (defn name-with-attrs
   "Given a name symbol and sigs, returns [<name-with-attrs-meta> <args>]"
   ([sym             sigs] (name-with-attrs sym nil sigs))
