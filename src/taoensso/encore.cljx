@@ -776,6 +776,8 @@
 
 (comment [(parse-version "40.32.34.8-foo") (parse-version 10.3)])
 
+;; #{goog/global js/global}
+#+cljs (def node-target? (= *target* "nodejs")) ; TODO ^:const?
 #+cljs
 (def js-?win "May not be available with Node.js, etc."
   (when (exists? js/window) js/window))
