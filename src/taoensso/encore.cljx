@@ -2478,17 +2478,30 @@
     (when-not (undefined? result) result)))
 
 #+cljs
+(defn- to-?query-string [params]
+  (when (seq params)
+    (let [s (-> params clj->js gstructs/Map. gquery-data/createFromMap
+                .toString)]
+      (when-not (str/blank? s) s))))
+
+#+cljs
+(defn- to-request-body [params]
+  (if (and (not (undefined? js/File)) ;; Some browsers don't support File
+           (some #(instance? js/File %) (vals params)))
+    (let [form-data (js/FormData.)]
+      (doseq [[k v] params]
+        (.append form-data k v))
+      form-data)
+    (to-?query-string params)))
+
+#+cljs
 (defn- coerce-xhr-params "[uri method get-or-post-params] -> [uri post-content]"
   [uri method params] {:pre [(have? [:or nil? map?] params)]}
-  (let [?pstr ; URL-encoded string, or nil
-        (when (seq params)
-          (let [s (-> params clj->js gstructs/Map. gquery-data/createFromMap
-                      .toString)]
-            (when-not (str/blank? s) s)))]
-    (case method
-      :get  [(if ?pstr (str uri "?" ?pstr) uri) nil]
-      :post [uri ?pstr]
-      :put  [uri ?pstr])))
+  (case method
+      :get  [(if-let [?pstr (to-?query-string params)] (str uri "?" ?pstr) uri)
+             nil]
+      :post [uri (to-request-body params)]
+      :put  [uri (to-request-body params)]))
 
 #+cljs
 (defn ajax-lite
@@ -2530,9 +2543,10 @@
             [uri* post-content*] (coerce-xhr-params uri method params)
             headers*
             (clj->js
-             (if-not post-content* headers
+             (if (and post-content* (not (instance? js/FormData post-content*)))
                (assoc headers "Content-Type"
-                 "application/x-www-form-urlencoded; charset=UTF-8")))]
+                 "application/x-www-form-urlencoded; charset=UTF-8")
+               headers))]
 
         (doto xhr
           (gevents/listenOnce goog.net.EventType/READY
