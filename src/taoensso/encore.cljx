@@ -1038,7 +1038,7 @@
 
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
-;;; Note `mapv`-like nil->{} semantics
+;;; Note `mapv`-like nil->{} semantics, no transients
 (defn map-vals       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m k (f v))) m m)))
 (defn map-keys       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
 (defn filter-kvs  [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
@@ -2524,17 +2524,16 @@
      :timeout-ms 7000
      :with-credentials? false ; Enable if using CORS (requires xhr v2+)
     }
-    (fn async-callback [resp-map]
+    (fn async-callback-fn [resp-map]
       (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
-        ;; ?status  - e/o #{nil 200 404 ...}, nnil iff server responded
-        ;; ?error   - e/o #{nil <http-error-status-code> <exception> :timeout
-                            :abort :http-error :exception :xhr-pool-depleted}
+        ;; ?status - e/o #{nil 200 404 ...}, non-nil iff server responded
+        ;; ?error  - e/o #{nil <http-error-status-code> <exception> :timeout
+                           :abort :http-error :exception :xhr-pool-depleted}
         (js/alert (str \"Ajax response: \" resp-map)))))
 
   [1] Ref. https://developers.google.com/closure/library/docs/xhrio"
 
-  [uri {:keys [method params headers timeout-ms resp-type
-               with-credentials?] :as opts
+  [uri {:keys [method params headers timeout-ms resp-type with-credentials?] :as opts
         :or   {method :get timeout-ms 10000 resp-type :auto}}
    callback-fn]
 
@@ -2549,10 +2548,12 @@
             (coerce-xhr-params uri method (map-keys name params))
 
             xhr-headers
-            (let [opts-headers (map-keys #(str/lower-case (name %)) headers)]
-              ;; x-www-form-urlencoded / multipart/form-data content-type
-              ;; stuff will be added automatically by Closure
-              (clj->js (assoc opts-headers "x-requested-with" "XMLHTTPRequest")))]
+            (let [headers (map-keys #(str/lower-case (name %)) headers)
+                  headers (assoc-some headers "x-requested-with"
+                                 (get headers "x-requested-with" "XMLHTTPRequest"))]
+              ;; `x-www-form-urlencoded`/`multipart/form-data` content-type
+              ;; will be added by Closure if a custom content-type isn't provided
+              (clj->js headers))]
 
         (doto xhr
           (gevents/listenOnce goog.net.EventType/READY
@@ -2616,7 +2617,7 @@
                          (.getLastErrorCode xhr)
                          :unknown)))})))))
 
-        ;; Experimental, undocumented opt
+        ;; Experimental, untested, undocumented opt
         (when-let [pf (:progress-fn opts)]
           (gevents/listen xhr goog.net.EventType/PROGRESS
             (fn [ev]
@@ -2658,8 +2659,8 @@
   with subtle, tough-to-diagnose issues."
   [req resp f & args]
   (when resp
-    (let [base (if (contains? resp :session) (:session resp) (:session req))
-          new-session (if (empty? args) (f base) (apply f base args))]
+    (let [base (get resp :session (get req :session))
+          new-session (if args (apply f base args) (f base))]
       (assoc resp :session new-session))))
 
 #+clj
