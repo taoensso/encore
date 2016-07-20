@@ -2124,132 +2124,132 @@
       (future (f1)) ; Never prints >once
       (future (f0)))))
 
-(defn rate-limiter* ; `rate-limiter` name taken by deprecated API
-  "Takes one or more rate specs of form [ncalls-limit window-ms ?spec-id] and
-  returns a (fn [& [req-id])) that returns `nil` (=> all rate limits passed), or
-  [<ms-wait> <worst-offending-spec-id>] / <ms-wait>."
+;;;; Rate limits
+
+(deftype LimitSpec  [^long n ^long ms])
+(deftype LimitEntry [^long n ^long udt0])
+
+(defn- coerce-limit-specs [specs]
+  (map-vals
+    (fn [in]
+      (cond
+        (vector? in) (let [       [n ms]  in] (LimitSpec. (have pos-int? n) (have pos-int? ms)))
+        (map?    in) (let [{:keys [n ms]} in] (LimitSpec. (have pos-int? n) (have pos-int? ms)))
+        :else (throw (ex-info "Unexpected limit spec type" {:spec in :type (type in)}))))
+    specs))
+
+(defn limiter
+  "Takes {<spec-id> {:n <long> :ms <long>}}, and returns a
+  (fn check-limits! [req-id]) -> ?{<spec-id> <backoff-ms>}."
   [specs]
+  (have? [:or nil? map? specs])
   (if (empty? specs)
     (constantly nil)
-    (let [vspecs      (vec specs)
-          vstates_    (atom {}) ; {<req-id> [[ncalls udt-window-start] <...>]}
-          max-win-ms  (long (reduce max 0 (mapv (fn [[_ win-ms _ :as spec]] win-ms)
-                                            vspecs)))
-          nspecs      (count vspecs)
-          nid-specs   (count (filterv (fn [[_ _ id]] id) vspecs))
-          _           (assert (or (zero? nid-specs) (= nid-specs nspecs)))
-          return-ids? (not (zero? nid-specs))]
+    (let [latch_ (atom nil) ; Used to pause writes during gc
+          reqs_  (atom nil) ; {<rid> {<sid> <LimitEntry>}}
+          specs  (coerce-limit-specs specs) ; {<sid> <LimitSpec>}
+          f1
+          (fn [rid peek?]
+            (let [instant (now-udt*)]
 
-      (fn check-rate-limits [& [?a1 ?a2]]
-        (cond
-          (kw-identical? ?a1 :rl/debug) vstates_
-          (kw-identical? ?a1 :rl/reset)
-          (do
-            (if (kw-identical? ?a2 :rl/all)
-              (reset! vstates_ {})
-              (swap!  vstates_ dissoc ?a2))
-            nil)
+              (when (and (not peek?) (-gc-now?))
+                (let [latch #+clj (CountDownLatch. 1) #+cljs nil]
+                  (when (compare-and-set! latch_ nil latch)
 
-          :else
-          (let [peek?   (kw-identical? ?a1 :rl/peek)
-                req-id  (if peek? ?a2 ?a1)
-                instant (now-udt)]
+                    (swap! reqs_
+                      (fn [reqs] ; {<rid> <entries>}
+                        (persistent!
+                          (reduce-kv
+                            (fn [acc rid entries]
+                              (let [new-entries
+                                    (reduce-kv
+                                      (fn [acc sid ^LimitEntry e]
+                                        (let [^LimitSpec s (get specs sid)]
+                                          (if (>= instant (+ (.-udt0 e) (.-ms s)))
+                                            (dissoc acc sid)
+                                            acc)))
+                                      entries ; {<sid <LimitEntry>}
+                                      entries)]
+                                (if (empty? new-entries)
+                                  (dissoc! acc rid)
+                                  (assoc!  acc rid new-entries))))
+                            (transient (or reqs {}))
+                            reqs))))
 
-            (when (and req-id (-gc-now?))
-              (swap-in! vstates_ []
-                (fn gc [m]
-                  (reduce-kv
-                    (fn [m* req-id vstate]
-                      (let [^long max-udt-win-start
-                            (reduce (fn [^long acc [_ ^long udt _]]
-                                      (max acc udt))
-                              0 vstate)
-                            min-win-ms-elapsed (- instant max-udt-win-start)]
-                        (if (> min-win-ms-elapsed max-win-ms)
-                          (dissoc m* req-id)
-                          m*)))
-                    m m))))
+                    #+clj (.countDown latch)
+                    #+clj (reset! latch_ nil))))
 
-            (swap-in! vstates_ [req-id]
-              (fn [?vstate]
-                (if-not ?vstate
-                  (if peek?
-                    (swapped ?vstate nil)
-                    (swapped (vec (repeat nspecs [1 instant])) nil))
+              ;; Need to atomically check if all limits pass before
+              ;; committing to any n increments:
+              (loop []
+                (let [reqs        @reqs_     ;  {<sid> <entries>}
+                      entries (get reqs rid) ;  {<sid> <LimitEntry>}
+                      hits                   ; ?{<sid> <backoff-ms>}
+                      (if (nil? entries)
+                        nil
+                        (reduce-kv
+                          (fn [acc sid ^LimitEntry e]
+                            (let [^LimitSpec s (get specs sid)]
+                              (if (<= (.-n e) (.-n s))
+                                acc
+                                (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
+                                  (if (<= tdelta 0)
+                                    acc
+                                    (assoc acc sid tdelta))))))
+                          nil
+                          entries))]
 
-                  ;; Need to atomically check if all limits pass before committing
-                  ;; to any ncall increments:
-                  (let [[vstate-with-resets ?worst-limit-offence]
-                        (loop [in-vspecs  vspecs
-                               in-vstate  ?vstate
-                               out-vstate []
-                               ?worst-limit-offence nil]
-                          (let [[[^long ncalls-limit ^long win-ms ?spec-id]
-                                 & next-in-vspecs] in-vspecs
-                                [[^long ncalls ^long udt-win-start]
-                                 & next-in-vstate] in-vstate
+                  (if (or peek? hits)
+                    hits ; No action (peeking, or hit >= 1 spec)
+                    ;; Passed all limit specs, ready to commit increments:
+                    (if-let [l @latch_]
+                      #+clj (do (.await ^CountDownLatch l) (recur)) #+cljs nil
+                      (let [new-entries
+                            (reduce-kv
+                              (fn [acc sid ^LimitSpec s]
+                                (assoc acc sid
+                                  (if-let [^LimitEntry e (get entries sid)]
+                                    (let [udt0 (.-udt0 e)]
+                                      (if (>= instant (+ udt0 (.-ms s)))
+                                        (LimitEntry. 1 instant)
+                                        (LimitEntry. (inc (.-n e)) udt0)))
+                                    (LimitEntry. 1 instant))))
+                              entries
+                              specs)]
 
-                                win-ms-elapsed (- instant udt-win-start)
-                                reset-due?     (>= win-ms-elapsed win-ms)
-                                rate-limited?  (and (not reset-due?)
-                                                    (>= ncalls ncalls-limit))
-                                new-out-vstate ; No ncall increments yet:
-                                (conj out-vstate
-                                  (if reset-due? [0 instant] [ncalls udt-win-start]))
+                        (if (compare-and-set! reqs_ reqs (assoc reqs rid new-entries))
+                          nil
+                          (recur)))))))))]
 
-                                new-?worst-limit-offence
-                                (if-not rate-limited?
-                                  ?worst-limit-offence
-                                  (let [ms-wait (- win-ms win-ms-elapsed)]
-                                    (if (or (nil? ?worst-limit-offence)
-                                            (let [[^long max-ms-wait _] ?worst-limit-offence]
-                                              (> ms-wait max-ms-wait)))
-                                      [ms-wait ?spec-id]
-                                      ?worst-limit-offence)))]
+      (fn check-limits!
+        ([          ] (f1 nil    false))
+        ([    req-id] (f1 req-id false))
+        ([cmd req-id]
+         (cond
+           (kw-identical? cmd :rl/reset)
+           (do
+             (if (kw-identical? req-id :rl/all)
+               (reset! reqs_ nil)
+               (swap!  reqs_ dissoc req-id))
+             nil)
 
-                            (if-not next-in-vspecs
-                              [new-out-vstate new-?worst-limit-offence]
-                              (recur next-in-vspecs next-in-vstate new-out-vstate
-                                     new-?worst-limit-offence))))
+           (kw-identical? cmd :rl/peek)
+           (f1 req-id true)
 
-                        all-limits-pass? (nil? ?worst-limit-offence)
-                        new-vstate
-                        (cond
-                          peek? ?vstate
-                          (not all-limits-pass?) vstate-with-resets
-                          :else
-                          (mapv (fn [[^long ncalls udt-win-start]]
-                                  [(inc ncalls) udt-win-start])
-                            vstate-with-resets))
-
-                        result
-                        (when-let [wlo ?worst-limit-offence]
-                          (if return-ids?
-                            wlo
-                            (let [[ms-wait _] wlo] ms-wait)))]
-
-                    (swapped new-vstate result)))))))))))
+           :else
+           (throw
+             (ex-info "Unrecongnized rate limiter command"
+               {:command cmd :req-id req-id}))))))))
 
 (comment
-  (def rl (rate-limiter* [[5 2000 :5s] [10 20000 :20s]]))
-  (def rl (rate-limiter* [[5 2000    ] [10 10000     ]]))
-  (def rl (rate-limiter* [[5 2000 :5s]]))
-  (repeatedly 5 (fn [] (rl :rid1)))
-  (rl :rid1)
-  (rl :rl/peek :rid1)
-  (rl :rid2)
-  (qb 10000 (rl)))
+  (def rl1
+    (limiter
+      {:2s {:n 1 :ms 2000}
+       :5s {:n 2 :ms 5000}
+       :1d {:n 5 :ms (ms :days 1)}}))
 
-(defn rate-limit [specs f]
-  (let [rl (rate-limiter* specs)]
-    (fn [& args]
-      (if-let [backoff (rl)]
-        [nil backoff]
-        [(f) nil]))))
-
-(comment
-  (def compute (rate-limit [[3 5000 :5s]] (fn [] "Compute!")))
-  (compute))
+  (qb 1e6 (rl1)) ; 246.97
+  )
 
 ;;;; Async
 
@@ -2879,6 +2879,33 @@
   (defn keys<=     [m ks] (ks<=     ks m))
   (defn keys>=     [m ks] (ks>=     ks m))
   (defn keys=nnil? [m ks] (ks-nnil? ks m))
+
+  (defn rate-limiter* "Deprecated, prefer `limiter`" [specs]
+    (let [ids?  (rsome (fn [[_ _ id]] id) specs)
+          specs (reduce
+                  (fn [acc [n ms ?id]]
+                    (assoc acc (or ?id (keyword (gensym)))
+                      {:n n :ms ms}))
+                  {}
+                  specs)
+
+          lfn (limiter specs)]
+
+      (fn [& args]
+        (when-let [m (apply lfn args)]
+          (let [[[worst-sid backoff-ms]]
+                (sort-by (fn [[sid ms]] ms) rcompare m)]
+
+            (if ids?
+              [backoff-ms worst-sid]
+              backoff-ms))))))
+
+  (defn rate-limit [specs f]
+    (let [rl (rate-limiter* specs)]
+      (fn [& args]
+        (if-let [backoff (rl)]
+          [nil backoff]
+          [(f) nil]))))
 
   ;; API changed for greater flexibility:
   (defn rate-limiter [ncalls-limit window-ms] (rate-limiter* [[ncalls-limit window-ms]]))
