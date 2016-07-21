@@ -109,7 +109,7 @@
 
 (do
   (declare parse-version)
-  (def             encore-version [2 65 0])
+  (def             encore-version [2 67 0])
   (defn assert-min-encore-version [min-version]
     (let [[xc yc zc] encore-version
           [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
@@ -1014,6 +1014,9 @@
              (subvec v start end))))))))
 
 (comment
+  [(get-subvec    nil 2)
+   (get-subvector nil 2)]
+
   (qb 1e6
     (subvec        [:a :b :c] 1)
     (get-subvec    [:a :b :c] 1)
@@ -3261,7 +3264,7 @@
     (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
       (subvec v start-idx* end-idx*)))
 
-  (def sentinel #+clj (Object.) #+cljs (js-obj))
+  (def  sentinel #+clj (Object.) #+cljs (js-obj))
   (defn sentinel?     [x] (identical? x sentinel))
   (defn nil->sentinel [x] (if (nil? x) sentinel x))
   (defn sentinel->nil [x] (if (sentinel? x) nil x))
