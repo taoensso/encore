@@ -2172,6 +2172,23 @@
 
 (comment (qb 1e4 (uuid-str 5)))
 
+(defn into-str
+  "Simple Hiccup-like string templating to complement Tempura."
+  [& xs]
+  (str
+    (reduce
+      (fn rf [acc in]
+        (if (sequential? in)
+          (reduce rf acc in)
+          (sb-append acc (str in))))
+      (str-builder)
+      xs)))
+
+(comment
+  (let [br "\n\n"]
+    (into-str :a :b br :c (for [n (range 5)] [n br])
+      (when true [:d :e [:f :g]]))))
+
 ;;;; Sorting
 
 #+cljs (defn rcompare "Reverse comparator." [x y] (compare y x))
