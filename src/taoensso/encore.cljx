@@ -2882,6 +2882,111 @@
   (qb 1e5 (nsf? "foo")) ; 20.44
   )
 
+;;;; Timeouts
+
+;;; TODO
+;; - Recurring timeouts (fixed rate + fixed delay).
+;; - core.async impl?
+;; - Hashed timer wheel impl?
+
+(do
+  (defprotocol   ITimeoutImpl (-schedule-timeout [_ msecs f]))
+  (deftype DefaultTimeoutImpl [#+clj ^java.util.Timer timer]
+                 ITimeoutImpl
+    (-schedule-timeout [_ msecs f]
+      #+cljs (.setTimeout js/window f msecs)
+      #+clj  (let [tt (proxy [java.util.TimerTask] []
+                        (run [] (catching (f))))]
+               (.schedule timer tt (long msecs)))))
+
+  (defonce default-timeout-impl_
+    "Simple timeout implementation provided by platform.
+    O(logn) add, O(1) cancel, O(1) tick.
+    Similar efficiency to core.async timers (binary heap vs DelayQueue)."
+    (delay
+      (DefaultTimeoutImpl.
+        #+clj (java.util.Timer. "encore/timer" true))))
+
+  (def ^:private -tout-pending   #+clj (Object.) #+cljs (js-obj))
+  (def ^:private -tout-cancelled #+clj (Object.) #+cljs (js-obj))
+  (defn- tout-result [result_]
+    (if (kw-identical? result_ -tout-pending)
+      :timeout/pending
+      (if (kw-identical? result_ -tout-cancelled)
+        :timeout/cancelled
+        @result_))))
+
+(deftype TimeoutFuture
+  [result__ #+clj ^java.util.concurrent.CountDownLatch latch]
+
+  #+cljs IDeref #+cljs (-deref [_] (tout-result @result__))
+
+  #+clj clojure.lang.IDeref
+  #+clj (deref [_] (.await latch) (tout-result @result__))
+
+  #+clj clojure.lang.IBlockingDeref
+  #+clj
+  (deref [_ timeout-ms timeout-val]
+    (if (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
+      (tout-result @result__)
+      timeout-val))
+
+  #+clj clojure.lang.IPending ; (realized? _)
+  #+clj (isRealized [_] (zero? (.getCount latch)))
+
+  #+cljs IPending ; (realized? _)
+  #+cljs (-realized? [_] (not (kw-identical? @result__ -tout-pending)))
+
+  #+clj java.util.concurrent.Future
+  #+clj (isCancelled [_] (kw-identical? @result__ -tout-cancelled))
+  #+clj (isDone [_] (not (kw-identical? @result__ -tout-pending)))
+  #+clj (cancel [_ _interrupt?]
+          (if (compare-and-set! result__ -tout-pending -tout-cancelled)
+            (do
+              (.countDown latch)
+              true)
+            false)))
+
+(defn call-after-timeout
+  "Alpha, subject to change.
+  Returns a TimeoutFuture[1] that will execute `f` after given msecs.
+  `f` must be non-blocking or cheap.
+
+  Performance depends on the provided timer implementation (`impl_`).
+  The default implementation offers O(logn) add, O(1) cancel, O(1) tick.
+
+  See `ITimeoutImpl` for extending to arbitrary timer implementations.
+
+  [1] Provides support for:
+        * [blocking] deref ; @(after-timeout 500 \"result\")
+        * `realized?`
+        * `future-cancel`, `future-cancelled?`"
+  ([             msecs f] (call-after-timeout default-timeout-impl_ msecs f))
+  ([ impl_ ^long msecs f]
+   #+clj
+   (let [result__ (atom -tout-pending)
+         #+clj latch #+clj (java.util.concurrent.CountDownLatch. 1)
+         #+clj frame #+clj (clojure.lang.Var/cloneThreadBindingFrame)
+         f (fn []
+             #+clj (clojure.lang.Var/resetThreadBindingFrame frame)
+             (let [result_ (delay (f))]
+               (when (compare-and-set! result__ -tout-pending result_)
+                 @result_
+                 #+clj (.countDown latch))))]
+
+     (let [impl (force default-timeout-impl_)]
+       (-schedule-timeout impl msecs f))
+
+     (TimeoutFuture. result__ #+clj latch))))
+
+(defmacro after-timeout
+  "Alpha, subject to change.
+  Returns a TimeoutFuture that will execute body after timeout.
+  Body must be non-blocking or cheap."
+  [msecs & body] `(call-after-timeout ~msecs (fn [] ~@body)))
+
+(comment @(after-timeout 500 (println "foo") "bar"))
+
 ;;;; Testing utils
 
 (defmacro expect
