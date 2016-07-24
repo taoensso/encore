@@ -1032,6 +1032,17 @@
   (vsplit-first [:a :b :c])
   (vsplit-last  [:a :b :c]))
 
+(defn- fsplit-last
+  "Faster (f (vec (butlast xs)) (last x))."
+  [f xs]
+  (loop [butlast [] xs xs]
+    (let [[x1 & xn] xs]
+      (if xn
+        (recur (conj butlast x1) xn)
+        (f butlast x1)))))
+
+(comment (let [v [:a :b]] (qb 1e6 (fsplit-last vector v) [(butlast v) (last v)])))
+
 (compile-if have-transducers?
   (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
   (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (vec (take n coll)))))
@@ -1042,7 +1053,7 @@
 
 (def seq-kvs "(seq-kvs {:a :A}) => (:a :A)." (partial reduce concat))
 (defn mapply "Like `apply` but calls `seq-kvs` on final arg."
-  [f & args] (apply f (concat (butlast args) (seq-kvs (last args)))))
+  [f & args] (apply f (fsplit-last (fn [xs lx] (concat xs (seq-kvs lx))) args)))
 
 (comment [(seq-kvs {:a :A :b :B}) (mapply str 1 2 3 {:a :A})])
 
@@ -1115,9 +1126,13 @@
         (assoc m k (update-in* (get m k) ks f))
         (assoc m k (f          (get m k)))))))
 
+
 (defn #+clj contains-in? #+cljs ^boolean contains-in?
-  ([coll ks  ] (contains? (get-in coll (butlast ks)) (last ks)))
-  ([coll ks k] (contains? (get-in coll ks) k)))
+  ([coll ks k] (contains? (get-in coll ks) k))
+  ([coll ks  ]
+   (if (seq ks)
+     (fsplit-last (fn [ks lk] (contains-in? coll ks lk)) ks)
+     false)))
 
 (defn dissoc-in
   ([m ks dissoc-k]        (update-in* m ks (fn [m]       (dissoc m dissoc-k))))
@@ -1271,14 +1286,15 @@
          m old-val]
      (if kn ; >1 ks
        (if (kw-identical? f :swap/dissoc)
-         (-swapped (dissoc-in m (butlast ks) (last ks)))
+         (-swapped (fsplit-last (fn [ks lk] (dissoc-in m ks lk)) ks))
          (let [old-val-in (get-in m ks)
                ^Swapped s (-swapped (f old-val-in))
                new-val-in (.-new-val    s)
                return-val (.-return-val s)
-               new-val (if (kw-identical? new-val-in :swap/dissoc)
-                         (dissoc-in m (butlast ks) (last ks))
-                         (assoc-in  m ks new-val-in))]
+               new-val
+               (if (kw-identical? new-val-in :swap/dissoc)
+                 (fsplit-last (fn [ks lk] (dissoc-in m ks lk)) ks)
+                 (assoc-in m ks new-val-in))]
            (Swapped. new-val return-val)))
 
        ;; 0 or 1 ks
