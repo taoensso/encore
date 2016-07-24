@@ -789,8 +789,8 @@
   (defn rsome-kv   [pred coll] (reduce-kv (fn [acc k v] (when-let [p (pred k v)] (reduced p)))     nil coll))
   (defn rfirst     [pred coll] (reduce    (fn [acc in]  (when        (pred in)   (reduced in)))    nil coll))
   (defn rfirst-kv  [pred coll] (reduce-kv (fn [acc k v] (when        (pred k v)  (reduced [k v]))) nil coll))
-  (defn revery?    [pred coll] (reduce    (fn [acc in]  (if (pred in)  true (reduced nil))) true coll))
-  (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced nil))) true coll))
+  (defn revery?    [pred coll] (reduce    (fn [acc in]  (if (pred in)  true (reduced false))) true coll))
+  (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced false))) true coll))
   (defn revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
   (defn revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll)))
 
@@ -1100,11 +1100,11 @@
   (defn #+clj ks-nnil? #+cljs ^boolean ks-nnil? [ks m] (revery?     #(some? (get m %))     ks)))
 
 (comment
-  (ks=      {:a :A :b :B  :c :C}  #{:a :b})
-  (ks<=     {:a :A :b :B  :c :C}  #{:a :b})
-  (ks>=     {:a :A :b :B  :c :C}  #{:a :b})
-  (ks-nnil? {:a :A :b :B  :c nil} #{:a :b})
-  (ks-nnil? {:a :A :b nil :c nil} #{:a :b}))
+  (ks=      #{:a :b} {:a :A :b :B  :c :C})
+  (ks<=     #{:a :b} {:a :A :b :B  :c :C})
+  (ks>=     #{:a :b} {:a :A :b :B  :c :C})
+  (ks-nnil? #{:a :b} {:a :A :b :B  :c nil})
+  (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
 
 (defn update-in*
   "Like `update-in` but faster, more flexible, and simpler (less ambiguous)."
