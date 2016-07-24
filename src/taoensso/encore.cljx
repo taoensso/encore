@@ -1086,12 +1086,10 @@
 (do ; Note `mapv`-like nil->{} semantics, no transients
   (defn map-vals       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m k (f v))) m m)))
   (defn map-keys       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
-  (defn filter-kvs  [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
-  (defn filter-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k)   m (dissoc m k))) m m)))
-  (defn filter-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v)   m (dissoc m k))) m m)))
-  (defn remove-vals [pred m] (filter-vals (complement pred) m))
-  (defn remove-keys [pred m] (filter-keys (complement pred) m))
-  (defn remove-kvs  [pred m] (filter-kvs  (complement pred) m)))
+  (defn filter-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k) m (dissoc m k))) m m)))
+  (defn filter-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) m (dissoc m k))) m m)))
+  (defn remove-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k) (dissoc m k) m)) m m)))
+  (defn remove-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m))))
 
 (do
   (defn #+clj ks=      #+cljs ^boolean ks=      [ks m] (=             (set (keys m)) (set* ks)))
@@ -3290,4 +3288,7 @@
         (persistent! m)
         (recur (assoc! m (first ks) (first vs))
           (next ks)
-          (next vs))))))
+          (next vs)))))
+
+  (defn filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
+  (defn remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k) m)) m m))))
