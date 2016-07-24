@@ -582,6 +582,9 @@
 ;;;; Type coercions
 
 (do
+  ;; (defn not-blank     [s] (if (str/blank? s) nil s))
+  ;; (defn not-empty-str [s] (if #+clj (.isEmpty ^String s) #+cljs (= s "") nil s))
+
   (defn as-?nzero  [x] (when (number?  x) (if (zero? x)      nil x)))
   (defn as-?nblank [x] (when (string?  x) (if (str/blank? x) nil x)))
   (defn as-?kw     [x] (cond (keyword? x)       x  (string? x) (keyword x)))
@@ -963,14 +966,12 @@
 (comment (assoc-some {:a :A} :b nil :c :C :d nil :e :E))
 
 (defn get-subvec
-  "Like `subvec` but:
-    - Never throws; snaps to valid start and end indexes.
-    - Returns nil rather than an empty vector."
+  "Like `subvec` but never throws (snaps to valid start and end indexes)."
   ([v ^long start]
    (let [start (if (< start 0) 0 start)
          vlen  (count v)]
      (if (>= start vlen)
-       nil
+       []
        (subvec v start vlen))))
 
   ([v ^long start ^long end]
@@ -978,7 +979,7 @@
          vlen  (long (count v))
          end   (if (> end vlen) vlen end)]
      (if (>= start end)
-       nil
+       []
        (subvec v start end)))))
 
 (defn get-subvector
@@ -992,12 +993,12 @@
              start (if (< start 0) 0 start)]
          (subvec v start vlen))
        (if (>= start vlen)
-         nil
+         []
          (subvec v start vlen)))))
 
   ([v ^long start ^long length]
    (if (<= length 0)
-     nil
+     []
      (let [vlen (long (count v))]
        (if (< start 0)
          (let [start (+ start vlen)
@@ -1009,7 +1010,7 @@
          (let [end (+ start length)
                end (if (> end vlen) vlen end)]
            (if (>= start end)
-             nil
+             []
              (subvec v start end))))))))
 
 (comment
@@ -1029,8 +1030,8 @@
   (vsplit-last  [:a :b :c]))
 
 (compile-if have-transducers?
-  (defn takev [n coll] (if (vector? coll) (or (get-subvector coll 0 n) []) (into [] (take n) coll)))
-  (defn takev [n coll] (if (vector? coll) (or (get-subvector coll 0 n) []) (vec (take n coll)))))
+  (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
+  (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (vec (take n coll)))))
 
 (defn nnil-set [x] (disj (set* x) nil))
 (defn #+clj distinct-elements? #+cljs ^boolean distinct-elements?
@@ -1983,26 +1984,25 @@
 (comment (qb 1000 (str-?index "hello there" "there")))
 
 (defn get-substr
-  "Like `subs` but provides consistent clj/s behaviour:
-    - Never throws; snaps to valid start and end indexes.
-    - Returns nil rather than an empty string (\"\")."
+  "Like `subs` but provides consistent clj/s behaviour and never throws
+  (snaps to valid start and end indexes)."
   ([s ^long start]
-   #+cljs (as-?nempty-str (.substring s start))
+   #+cljs (.substring s start)
    #+clj
    (let [start (if (< start 0) 0 start)
          slen  (.length ^String s)]
      (if (>= start slen)
-       nil
+       ""
        (.substring ^String s start slen))))
 
   ([s ^long start ^long end]
-   #+cljs (if (>= start end) nil (.substring s start end))
+   #+cljs (if (>= start end) "" (.substring s start end))
    #+clj
    (let [start (if (< start 0) 0 start)
          slen  (long (.length ^String s))
          end   (if (> end slen) slen end)]
      (if (>= start end)
-       nil
+       ""
        (.substring ^String s start end)))))
 
 (comment
@@ -3071,10 +3071,10 @@
   (def as-pfloat       as-pos-float)
   (def run!*           run!)
   (def every           revery)
-  (def ?subvec<idx     get-subvec)
-  (def ?subvec<len     get-subvector)
-  (def ?substr<idx     get-substr)
-  (def ?substr<len     get-substring)
+  (def ?subvec<idx     (comp not-empty      get-subvec))
+  (def ?subvec<len     (comp not-empty      get-subvector))
+  (def ?substr<idx     (comp as-?nempty-str get-substr))
+  (def ?substr<len     (comp as-?nempty-str get-substring))
   (def dswap!          swap!*)
   (def nano-time       now-nano)
 
