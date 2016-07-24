@@ -1296,6 +1296,15 @@
                            (assoc  m k1 new-val-in))]
              (Swapped. new-val return-val))))))))
 
+(defn -vswapped "Private / for low-level utils."
+  ([x] (if (instance? Swapped x)
+         (let [^Swapped s x] [(.-new-val s) (.-return-val s)])
+         x))
+  ([old-val    f] (-vswapped (f old-val)))
+  ([old-val ks f]
+   (let [^Swapped s (-swapped old-val ks f)]
+     [(.-new-val s) (.-return-val s)])))
+
 (defn- -replace-in
   "Reduces input with
   [<type> <ks> <reset-val-or-swap-fn>] or
