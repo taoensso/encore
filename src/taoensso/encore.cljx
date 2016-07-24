@@ -1116,7 +1116,8 @@
         (assoc m k (f          (get m k)))))))
 
 (defn #+clj contains-in? #+cljs ^boolean contains-in?
-  [coll ks] (contains? (get-in coll (butlast ks)) (last ks)))
+  ([coll ks  ] (contains? (get-in coll (butlast ks)) (last ks)))
+  ([coll ks k] (contains? (get-in coll ks) k)))
 
 (defn dissoc-in
   ([m ks dissoc-k]        (update-in* m ks (fn [m]       (dissoc m dissoc-k))))
