@@ -1221,7 +1221,7 @@
   [atom_ old-val new-val]
   `(if-cljs
      (do (reset! ~atom_ ~new-val) true) ; No compare for our uses here
-     (.compareAndSet ~(with-meta atom_ {:tag 'clojure.lang.IAtom})
+     (.compareAndSet ~(with-meta atom_ {:tag 'clojure.lang.Atom})
        ~old-val ~new-val)))
 
 ;; Fastest possible simple swap with k, new-in return
