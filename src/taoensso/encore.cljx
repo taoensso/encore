@@ -954,12 +954,12 @@
 
 (do
   (defn assoc-some "Assocs each kv iff its value is not nil."
-    ([m k v      ] (if (nil? v) (if (nil? m) {} (assoc m k v))))
+    ([m k v      ] (if (nil? v) (if (nil? m) {} m) (assoc m k v)))
     ([m k v & kvs] (reduce-kvs (fn [acc k v] (assoc-some acc k v))
                      (assoc-some m k v) kvs)))
 
   (defn assoc-when "Assocs each kv iff its val is truthy."
-    ([m k v      ] (if-not v (if (nil? m) {} (assoc m k v))))
+    ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
     ([m k v & kvs] (reduce-kvs (fn [acc k v] (assoc-when acc k v))
                      (assoc-when m k v) kvs))))
 
