@@ -1225,7 +1225,7 @@
        ~old-val ~new-val)))
 
 ;; Fastest possible simple swap with k, new-in return
-(defn- -swap-cache! "Used by memoization utils." [atom_ k f]
+(defn -swap-cache! "Used by memoization utils." [atom_ k f]
   #+cljs (let [om @atom_ nv (f (get om k)) nm (assoc om k nv)] (reset! atom_ nm) nv)
   #+clj
   (loop []
