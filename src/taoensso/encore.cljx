@@ -2927,11 +2927,9 @@
   )
 
 ;;;; Timeouts
-
-;;; TODO
-;; - Recurring timeouts (fixed rate + fixed delay).
-;; - core.async impl?
-;; - Hashed timer wheel impl?
+;; Considered also adding `call-at-interval` but decided against it since the
+;; API we'd want for that would be less interesting and more impl specific;
+;; i.e. the cost/benefit would be poor.
 
 (do
   (defprotocol   ITimeoutImpl (-schedule-timeout [_ msecs f]))
