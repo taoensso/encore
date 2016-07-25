@@ -696,18 +696,25 @@
 (comment (explode-keyword :foo.bar/baz))
 
 (defn merge-keywords
-  ([ks          ] (merge-keywords ks false))
-  ([ks no-slash?]
-   (let [parts (reduce (fn [acc in] (if in (into acc (explode-keyword in)) acc))
-                 [] ks)]
-     (when (seq parts)
-       (if no-slash?
-         (keyword (str/join "." parts))
-         (let [ppop (pop parts)]
-           (keyword (when (seq ppop) (str/join "." ppop))
-             (peek parts))))))))
+  ([ks            ] (merge-keywords ks false))
+  ([ks omit-slash?]
+   (when (seq ks)
+     (let [parts
+           (reduce
+             (fn [acc in]
+               (if (nil? in)
+                 acc
+                 (reduce conj acc (explode-keyword in))))
+             [] ks)]
 
-(comment (merge-keywords [:foo.bar nil "d.e/k" :baz.qux/end nil] :no))
+       (when (seq parts)
+         (if omit-slash?
+           (keyword (str/join "." parts))
+           (let [ppop (pop parts)]
+             (keyword (when (seq ppop) (str/join "." ppop))
+               (peek parts)))))))))
+
+(comment (merge-keywords [:foo.bar nil "d.e/k" :baz.qux/end nil] true))
 
 ;;;; Bytes
 
