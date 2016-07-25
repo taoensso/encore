@@ -1,8 +1,5 @@
 (ns taoensso.encore
-  "Core utils library for Clojure/Script.
-
-  A personal collection of low-level tools for Clojure/Script that
-  emphasizes:
+  "Extended core library for Clojure/Script that emphasizes:
     * Cross platform API compatibility
     * Flexibility
     * Performance
@@ -848,10 +845,10 @@
        ))))
 
 (comment
-  (round* :floor -1.5)
-  (round* :trunc -1.5)
-  (round* :floor 5 1.1234567)
-  (round* :round 5 1.1234567 ))
+  [(round* :floor -1.5)
+   (round* :trunc -1.5)
+   (round* :floor 5 1.1234567)
+   (round* :round 5 1.1234567)])
 
 (do ; Optimized common cases
   (defn round0   ^long [n]            (Math/round    (double n)))
@@ -1126,7 +1123,6 @@
         (assoc m k (update-in* (get m k) ks f))
         (assoc m k (f          (get m k)))))))
 
-
 (defn #+clj contains-in? #+cljs ^boolean contains-in?
   ([coll ks k] (contains? (get-in coll ks) k))
   ([coll ks  ]
@@ -1139,13 +1135,14 @@
   ([m ks dissoc-k & more] (update-in* m ks (fn [m] (apply dissoc m dissoc-k more)))))
 
 (comment
-  (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
-  (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
-  (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a]))
+  [(dissoc-in    {:a :A} [] :a)
+   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
+   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
+   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a])])
 
 (defn interleave-all "Greedy version of `interleave`."
-  ([] '())
-  ([c1] (lazy-seq c1))
+  ([     ] '())
+  ([c1   ] (lazy-seq c1))
   ([c1 c2]
      (lazy-seq
       (let [s1 (seq c1) s2 (seq c2)]
@@ -1235,6 +1232,7 @@
   [atom_ old-val new-val]
   `(if-cljs
      (do (reset! ~atom_ ~new-val) true) ; No compare for our uses here
+     ;; Note IAtom requires Clojure 1.7+
      (.compareAndSet ~(with-meta atom_ {:tag 'clojure.lang.Atom})
        ~old-val ~new-val)))
 
@@ -1311,7 +1309,9 @@
                            (assoc  m k1 new-val-in))]
              (Swapped. new-val return-val))))))))
 
-(defn -vswapped "Private / for low-level utils."
+(defn -vswapped
+  "Private / for low-level utils.
+  Equivalent to but faster than (comp -unswapped -swapped)."
   ([x] (if (instance? Swapped x)
          (let [^Swapped s x] [(.-new-val s) (.-return-val s)])
          x))
@@ -1593,7 +1593,8 @@
   )
 
 (defn memoize-last
-  "Great for Reactjs render op caching on mobile devices, etc."
+  "Like `memoize` but only caches the fn's most recent call.
+  Great for Reactjs render op caching on mobile devices, etc."
   [f]
   (let [cache_ (atom {})]
     (fn [& args]
@@ -2088,9 +2089,9 @@
   Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
                  http://dev.clojure.org/jira/browse/CLJS-911.
 
-  (Note that ClojureScript 1.7.145 introduced a partial fix for CLJS-911.
+  Note that ClojureScript 1.7.145 introduced a partial fix for CLJS-911.
   A full fix could unfortunately not be introduced w/o breaking compatibility
-  with the previously incorrect behaviour. CLJS-794 also remains unresolved.)"
+  with the previously incorrect behaviour. CLJS-794 also remains unresolved."
   [s match replacement]
   #+clj (str/replace s match replacement)
   #+cljs
@@ -2242,7 +2243,7 @@
          #+clj
          (let [pq (java.util.PriorityQueue. coll-size
                     (fn [x y] (cmp (keyfn (sentinel->nil x))
-                                  (keyfn (sentinel->nil y)))))]
+                                   (keyfn (sentinel->nil y)))))]
            (run! #(.add pq (nil->sentinel %)) coll)
            (repeatedly-into [] n #(sentinel->nil (.poll pq)))))))))
 
@@ -3007,8 +3008,8 @@
         * [blocking] deref ; @(after-timeout 500 \"result\")
         * `realized?`
         * `future-cancel`, `future-cancelled?`"
-  ([             msecs f] (call-after-timeout default-timeout-impl_ msecs f))
-  ([ impl_ ^long msecs f]
+  ([            msecs f] (call-after-timeout default-timeout-impl_ msecs f))
+  ([impl_ ^long msecs f]
    #+clj
    (let [result__ (atom -tout-pending)
          #+clj latch #+clj (java.util.concurrent.CountDownLatch. 1)
