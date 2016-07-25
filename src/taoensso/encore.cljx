@@ -106,7 +106,7 @@
 
 (do
   (declare parse-version)
-  (def             encore-version [2 67 2])
+  (def             encore-version [2 68 0])
   (defn assert-min-encore-version [min-version]
     (let [[xc yc zc] encore-version
           [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
