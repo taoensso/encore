@@ -1062,8 +1062,12 @@
 (comment [(seq-kvs {:a :A :b :B}) (mapply str 1 2 3 {:a :A})])
 
 (defn into-all "Like `into` but supports multiple \"from\"s."
-  ([to from       ]              (into to from))
-  ([to from & more] (reduce into (into to from) more)))
+  ([to from       ] (into to from))
+  ([to from & more]
+   (persistent!
+     (reduce (fn [acc in] (reduce conj! acc in))
+       (transient to)
+       (cons from more)))))
 
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection."
