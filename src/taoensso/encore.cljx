@@ -2960,9 +2960,13 @@
         :timeout/cancelled
         @result_))))
 
+(defprotocol IPollableFuture
+  (future-poll [_]))
+
 (deftype TimeoutFuture
   [result__ #+clj ^java.util.concurrent.CountDownLatch latch]
 
+  IPollableFuture (future-poll [_] (tout-result @result__))
   #+cljs IDeref #+cljs (-deref [_] (tout-result @result__))
 
   #+clj clojure.lang.IDeref
