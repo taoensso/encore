@@ -1325,7 +1325,7 @@
   Equivalent to but faster than (comp -unswapped -swapped)."
   ([x] (if (instance? Swapped x)
          (let [^Swapped s x] [(.-new-val s) (.-return-val s)])
-         x))
+         [x x]))
   ([old-val    f] (-vswapped (f old-val)))
   ([old-val ks f]
    (let [^Swapped s (-swapped old-val ks f)]
