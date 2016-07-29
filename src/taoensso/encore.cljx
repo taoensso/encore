@@ -2255,7 +2255,7 @@
          (let [pq (java.util.PriorityQueue. coll-size
                     (fn [x y] (cmp (keyfn (sentinel->nil x))
                                    (keyfn (sentinel->nil y)))))]
-           (run! #(.add pq (nil->sentinel %)) coll)
+           (run! #(.offer pq (nil->sentinel %)) coll)
            (repeatedly-into [] n #(sentinel->nil (.poll pq)))))))))
 
 (comment [(top 20 [2 3 5 3 88 nil]) (sort [2 3 5 3 88 nil])])
