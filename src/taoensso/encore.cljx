@@ -83,7 +83,7 @@
    [taoensso.encore :as enc-macros :refer
     [have have! have? compile-if if-not if-lets when-lets defonce cond cond!
      catching -cas! now-dt* now-udt* now-nano* -gc-now? name-with-attrs
-     -vol! -vol-reset! -vol-swap! deprecated]]))
+     -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
 ;; TODO Could really do with a portable ^boolean hint
 
@@ -1185,7 +1185,9 @@
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))
         (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
 
-(let [not-found #+clj (Object.) #+cljs (js-obj)]
+(defmacro new-object [] `(if-cljs (cljs.core/js-obj) (Object.)))
+
+(let [not-found (new-object)]
   (defn -merge-with [nest? f maps]
     (reduce
       (fn [acc in]
@@ -2235,7 +2237,7 @@
          {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))}
          [x y] (compare y x))
 
-(let [sentinel #+clj (Object.) #+cljs (js-obj)
+(let [sentinel (new-object)
       nil->sentinel (fn [x] (if (nil? x) sentinel x))
       sentinel->nil (fn [x] (if (identical? x sentinel) nil x))
       identity identity]
@@ -2961,8 +2963,8 @@
       (DefaultTimeoutImpl.
         #+clj (java.util.Timer. "encore/timer" true))))
 
-  (def ^:private -tout-pending   #+clj (Object.) #+cljs (js-obj))
-  (def ^:private -tout-cancelled #+clj (Object.) #+cljs (js-obj))
+  (def ^:private -tout-pending   (new-object))
+  (def ^:private -tout-cancelled (new-object))
   (defn- tout-result [result_]
     (if (kw-identical? result_ -tout-pending)
       :timeout/pending
@@ -3302,7 +3304,7 @@
     (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
       (subvec v start-idx* end-idx*)))
 
-  (def  sentinel #+clj (Object.) #+cljs (js-obj))
+  (def  sentinel (new-object))
   (defn sentinel?     [x] (identical? x sentinel))
   (defn nil->sentinel [x] (if (nil? x) sentinel x))
   (defn sentinel->nil [x] (if (sentinel? x) nil x))
