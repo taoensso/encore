@@ -2975,37 +2975,42 @@
 (defprotocol IPollableFuture
   (future-poll [_]))
 
-(deftype TimeoutFuture
-  [result__ #+clj ^java.util.concurrent.CountDownLatch latch]
+#+cljs
+(defprotocol IFuture
+  (future-done?      [_])
+  (future-cancelled? [_])
+  (future-cancel     [_]))
 
+#+cljs
+(deftype TimeoutFuture [result__]
   IPollableFuture (future-poll [_] (tout-result @result__))
-  #+cljs IDeref #+cljs (-deref [_] (tout-result @result__))
+  IDeref          (-deref      [_] (tout-result @result__))
+  IPending        (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
+  IFuture
+  (future-done?      [_]      (kw-identical? @result__ -tout-cancelled))
+  (future-cancelled? [_] (not (kw-identical? @result__ -tout-pending)))
+  (future-cancel     [_] (compare-and-set! result__ -tout-pending -tout-cancelled)))
 
-  #+clj clojure.lang.IDeref
-  #+clj (deref [_] (.await latch) (tout-result @result__))
-
-  #+clj clojure.lang.IBlockingDeref
-  #+clj
+#+clj
+(deftype TimeoutFuture [result__ ^java.util.concurrent.CountDownLatch latch]
+  IPollableFuture       (future-poll [_]                (tout-result @result__))
+  clojure.lang.IDeref   (deref       [_] (.await latch) (tout-result @result__))
+  clojure.lang.IPending (isRealized  [_] (not (kw-identical? @result__ -tout-pending)))
+  clojure.lang.IBlockingDeref
   (deref [_ timeout-ms timeout-val]
     (if (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
       (tout-result @result__)
       timeout-val))
 
-  #+clj clojure.lang.IPending ; (realized? _)
-  #+clj (isRealized [_] (zero? (.getCount latch)))
-
-  #+cljs IPending ; (realized? _)
-  #+cljs (-realized? [_] (not (kw-identical? @result__ -tout-pending)))
-
-  #+clj java.util.concurrent.Future
-  #+clj (isCancelled [_] (kw-identical? @result__ -tout-cancelled))
-  #+clj (isDone [_] (not (kw-identical? @result__ -tout-pending)))
-  #+clj (cancel [_ _interrupt?]
-          (if (compare-and-set! result__ -tout-pending -tout-cancelled)
-            (do
-              (.countDown latch)
-              true)
-            false)))
+  java.util.concurrent.Future
+  (isCancelled [_]      (kw-identical? @result__ -tout-cancelled))
+  (isDone      [_] (not (kw-identical? @result__ -tout-pending)))
+  (cancel      [_ interrupt?]
+    (if (compare-and-set! result__ -tout-pending -tout-cancelled)
+      (do
+        (.countDown latch)
+        true)
+      false)))
 
 (defn call-after-timeout
   "Alpha, subject to change.
@@ -3018,9 +3023,8 @@
   See `ITimeoutImpl` for extending to arbitrary timer implementations.
 
   [1] Provides support for:
-        * [blocking] deref ; @(after-timeout 500 \"result\")
-        * `realized?`
-        * `future-cancel`, `future-cancelled?`"
+    * [blocking] deref ; @(after-timeout 500 \"result\").
+    * `realized?`, `future-done?`, `future-cancelled?`, `future-cancel`."
   ([            msecs f] (call-after-timeout default-timeout-impl_ msecs f))
   ([impl_ ^long msecs f]
    #+clj
