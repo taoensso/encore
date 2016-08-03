@@ -2983,6 +2983,14 @@
   (future-cancelled? [_])
   (future-cancel     [_]))
 
+(do ; Cross-platform API
+  (def tf-fn         future-fn)
+  (def tf-poll       future-poll)
+  (def tf-realized?  realized?)
+  (def tf-done?      future-done?)
+  (def tf-cancelled? future-cancelled?)
+  (def tf-cancel     future-cancel))
+
 #+cljs
 (deftype TimeoutFuture [f result__]
   IFnFuture       (future-fn   [_] f)
