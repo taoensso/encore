@@ -2972,7 +2972,7 @@
         @result_))))
 
 (defprotocol IFnFuture
-  (future-fn [_] #_[_ bound?]))
+  (future-fn [_]))
 
 (defprotocol IPollableFuture
   (future-poll [_]))
@@ -3021,6 +3021,8 @@
   Returns a TimeoutFuture[1] that will execute `f` after given msecs.
   `f` must be non-blocking or cheap.
 
+  Does NOT do any automatic binding conveyance.
+
   Performance depends on the provided timer implementation (`impl_`).
   The default implementation offers O(logn) add, O(1) cancel, O(1) tick.
 
@@ -3029,23 +3031,14 @@
   [1] Provides support for:
     * [blocking] deref ; @(after-timeout 500 \"result\").
     * `realized?`, `future-done?`, `future-cancelled?`, `future-cancel`."
+
+  ;; Why no auto binding convyance? Explicit manual conveyance plays better
+  ;; with cljs, and means less surprise with `future-fn`.
   ([            msecs f] (call-after-timeout default-timeout-impl_ msecs f))
   ([impl_ ^long msecs f]
    #+clj
    (let [result__ (atom -tout-pending)
          #+clj latch #+clj (java.util.concurrent.CountDownLatch. 1)
-
-         bound-f
-         #+cljs f
-         #+clj ; As in core.async ioc-macros
-         (let [frame1 (clojure.lang.Var/getThreadBindingFrame)]
-           (fn []
-             (let [frame2 (clojure.lang.Var/getThreadBindingFrame)]
-               (try
-                 (clojure.lang.Var/resetThreadBindingFrame frame1)
-                 (f)
-                 (finally (clojure.lang.Var/resetThreadBindingFrame frame2))))))
-
          cas-f
          (fn []
            (let [result_ (delay (f))]
@@ -3056,7 +3049,7 @@
      (let [impl (force default-timeout-impl_)]
        (-schedule-timeout impl msecs cas-f))
 
-     (TimeoutFuture. bound-f result__ #+clj latch))))
+     (TimeoutFuture. f result__ #+clj latch))))
 
 (defmacro after-timeout
   "Alpha, subject to change.
@@ -3067,8 +3060,8 @@
 (comment
   @(after-timeout 500 (println "foo") "bar")
   (def ^:dynamic *foo* nil)
-  (binding [*foo* "bar"]
-    ((future-fn (after-timeout 200 (println "foo") *foo*)))))
+  (binding [*foo* "bar"] ; Note no auto conveyance
+    ((future-fn (after-timeout 200 (println *foo*) *foo*)))))
 
 ;;;; Testing utils
 
