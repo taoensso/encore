@@ -2971,6 +2971,9 @@
         :timeout/cancelled
         @result_))))
 
+(defprotocol IFnFuture
+  (future-fn [_] #_[_ bound?]))
+
 (defprotocol IPollableFuture
   (future-poll [_]))
 
@@ -2981,7 +2984,8 @@
   (future-cancel     [_]))
 
 #+cljs
-(deftype TimeoutFuture [result__]
+(deftype TimeoutFuture [f result__]
+  IFnFuture       (future-fn   [_] f)
   IPollableFuture (future-poll [_] (tout-result @result__))
   IDeref          (-deref      [_] (tout-result @result__))
   IPending        (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
@@ -2991,7 +2995,8 @@
   (future-cancel     [_] (compare-and-set! result__ -tout-pending -tout-cancelled)))
 
 #+clj
-(deftype TimeoutFuture [result__ ^java.util.concurrent.CountDownLatch latch]
+(deftype TimeoutFuture [f result__ ^java.util.concurrent.CountDownLatch latch]
+  IFnFuture             (future-fn   [_] f)
   IPollableFuture       (future-poll [_]                (tout-result @result__))
   clojure.lang.IDeref   (deref       [_] (.await latch) (tout-result @result__))
   clojure.lang.IPending (isRealized  [_] (not (kw-identical? @result__ -tout-pending)))
@@ -3029,18 +3034,29 @@
    #+clj
    (let [result__ (atom -tout-pending)
          #+clj latch #+clj (java.util.concurrent.CountDownLatch. 1)
-         #+clj frame #+clj (clojure.lang.Var/cloneThreadBindingFrame)
-         f (fn []
-             #+clj (clojure.lang.Var/resetThreadBindingFrame frame)
-             (let [result_ (delay (f))]
-               (when (compare-and-set! result__ -tout-pending result_)
-                 @result_
-                 #+clj (.countDown latch))))]
+
+         bound-f
+         #+cljs f
+         #+clj ; As in core.async ioc-macros
+         (let [frame1 (clojure.lang.Var/getThreadBindingFrame)]
+           (fn []
+             (let [frame2 (clojure.lang.Var/getThreadBindingFrame)]
+               (try
+                 (clojure.lang.Var/resetThreadBindingFrame frame1)
+                 (f)
+                 (finally (clojure.lang.Var/resetThreadBindingFrame frame2))))))
+
+         cas-f
+         (fn []
+           (let [result_ (delay (f))]
+             (when (compare-and-set! result__ -tout-pending result_)
+               @result_
+               #+clj (.countDown latch))))]
 
      (let [impl (force default-timeout-impl_)]
-       (-schedule-timeout impl msecs f))
+       (-schedule-timeout impl msecs cas-f))
 
-     (TimeoutFuture. result__ #+clj latch))))
+     (TimeoutFuture. bound-f result__ #+clj latch))))
 
 (defmacro after-timeout
   "Alpha, subject to change.
@@ -3048,7 +3064,11 @@
   Body must be non-blocking or cheap."
   [msecs & body] `(call-after-timeout ~msecs (fn [] ~@body)))
 
-(comment @(after-timeout 500 (println "foo") "bar"))
+(comment
+  @(after-timeout 500 (println "foo") "bar")
+  (def ^:dynamic *foo* nil)
+  (binding [*foo* "bar"]
+    ((future-fn (after-timeout 200 (println "foo") *foo*)))))
 
 ;;;; Testing utils
 
