@@ -2971,11 +2971,10 @@
         :timeout/cancelled
         @result_))))
 
-(defprotocol IFnFuture
-  (future-fn [_]))
-
-(defprotocol IPollableFuture
-  (future-poll [_]))
+(defprotocol ITimeoutFuture
+  (tf-fn   [_])
+  (tf-udt  [_])
+  (tf-poll [_]))
 
 #+cljs
 (defprotocol IFuture
@@ -2984,28 +2983,33 @@
   (future-cancel     [_]))
 
 (do ; Cross-platform API
-  (def tf-fn         future-fn)
-  (def tf-poll       future-poll)
   (def tf-realized?  realized?)
   (def tf-done?      future-done?)
   (def tf-cancelled? future-cancelled?)
   (def tf-cancel     future-cancel))
 
 #+cljs
-(deftype TimeoutFuture [f result__]
-  IFnFuture       (future-fn   [_] f)
-  IPollableFuture (future-poll [_] (tout-result @result__))
-  IDeref          (-deref      [_] (tout-result @result__))
-  IPending        (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
+(deftype TimeoutFuture [f result__ udt]
+  ITimeoutFuture
+  (tf-fn   [_] f)
+  (tf-udt  [_] udt)
+  (tf-poll [_] (tout-result @result__))
+
+  IDeref   (-deref      [_] (tout-result @result__))
+  IPending (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
   IFuture
   (future-done?      [_]      (kw-identical? @result__ -tout-cancelled))
   (future-cancelled? [_] (not (kw-identical? @result__ -tout-pending)))
   (future-cancel     [_] (compare-and-set! result__ -tout-pending -tout-cancelled)))
 
 #+clj
-(deftype TimeoutFuture [f result__ ^java.util.concurrent.CountDownLatch latch]
-  IFnFuture             (future-fn   [_] f)
-  IPollableFuture       (future-poll [_]                (tout-result @result__))
+(deftype TimeoutFuture
+  [f result__ ^long udt ^java.util.concurrent.CountDownLatch latch]
+  ITimeoutFuture
+  (tf-fn   [_] f)
+  (tf-udt  [_] udt)
+  (tf-poll [_] (tout-result @result__))
+
   clojure.lang.IDeref   (deref       [_] (.await latch) (tout-result @result__))
   clojure.lang.IPending (isRealized  [_] (not (kw-identical? @result__ -tout-pending)))
   clojure.lang.IBlockingDeref
@@ -3023,6 +3027,9 @@
         (.countDown latch)
         true)
       false)))
+
+#+clj  (defn          timeout-future? [x] (instance? TimeoutFuture x))
+#+cljs (defn ^boolean timeout-future? [x] (instance? TimeoutFuture x))
 
 (defn call-after-timeout
   "Alpha, subject to change.
@@ -3042,10 +3049,12 @@
 
   ;; Why no auto binding convyance? Explicit manual conveyance plays better
   ;; with cljs, and means less surprise with `future-fn`.
-  ([            msecs f] (call-after-timeout default-timeout-impl_ msecs f))
-  ([impl_ ^long msecs f]
+  ([      msecs f] (call-after-timeout default-timeout-impl_ msecs f))
+  ([impl_ msecs f]
    #+clj
-   (let [result__ (atom -tout-pending)
+   (let [msecs (long msecs)
+         udt   (+ (now-udt*) msecs) ; Approx instant to run
+         result__ (atom -tout-pending)
          #+clj latch #+clj (java.util.concurrent.CountDownLatch. 1)
          cas-f
          (fn []
@@ -3057,7 +3066,7 @@
      (let [impl (force default-timeout-impl_)]
        (-schedule-timeout impl msecs cas-f))
 
-     (TimeoutFuture. f result__ #+clj latch))))
+     (TimeoutFuture. f result__ udt #+clj latch))))
 
 (defmacro after-timeout
   "Alpha, subject to change.
