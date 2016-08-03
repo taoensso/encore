@@ -4,7 +4,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/encore "2.68.1"] ; Stable
+[com.taoensso/encore "2.69.0"] ; Stable
 ```
 
 > Please consider helping to [support my continued open-source Clojure/Script work]? 
