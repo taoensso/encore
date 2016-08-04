@@ -1284,6 +1284,17 @@
         v1
         (recur)))))
 
+(defn- multi-swap-in!* [atom_ ks f more]
+  ;; Note lack of `swapped` support
+  (loop []
+    (let [m0 @atom_
+          m1 (reduce-kvs (fn [acc ks f] (update-in* acc ks f)) m0
+               (cons ks (cons f more)))]
+
+      (if (-cas! atom_ m0 m1)
+        [m0 m1]
+        (recur)))))
+
 (defn swap-val!* "Low-level util, prefer `swap-in!*`."
   ([atom_ k           f] (swap-val!* atom_ k nil f))
   ([atom_ k not-found f]
@@ -1301,6 +1312,7 @@
 (defn swap-in!*
   "Like `swap!` but supports `update-in*` semantics, returns
   [<old-key-val> <new-key-val>]."
+  ([atom_ ks f & more] (multi-swap-in!* atom_ ks f more))
   ([atom_ f]
    (loop []
      (let [v0 @atom_
@@ -1323,17 +1335,7 @@
              [v0 v1]
              (recur))))
        (swap-val!* atom_ (nth ks 0) nil f))
-     (swap-in!* atom_ f)))
-
-  ([atom_ ks f & more] ; As `swap-in`
-   (loop []
-     (let [m0 @atom_
-           m1 (reduce-kvs (fn [acc ks f] (update-in* acc ks f)) m0
-                (cons ks (cons f more)))]
-
-       (if (-cas! atom_ m0 m1)
-         [m0 m1]
-         (recur))))))
+     (swap-in!* atom_ f))))
 
 (defn swap-val! "Low-level util, prefer `swap-in!`."
   ([atom_ k           f] (swap-val! atom_ k nil f))
@@ -1353,6 +1355,7 @@
 (defn swap-in!
   "Like `swap!` but supports `update-in*` semantics, returns <new-key-val>
   or an arbitrary return value via `swapped`."
+  ([atom_ ks f & more] (multi-swap-in!* atom_ ks f more))
   ([atom_ f]
    (loop []
      (let [v0 @atom_
@@ -1376,17 +1379,7 @@
              (.-returnv s1)
              (recur))))
        (swap-val! atom_ (nth ks 0) nil f))
-     (swap-in! atom_ f)))
-
-  ([atom_ ks f & more] ; As `swap-in`
-   (loop []
-     (let [m0 @atom_
-           m1 (reduce-kvs (fn [acc ks f] (update-in* acc ks f)) m0
-                (cons ks (cons f more)))]
-
-       (if (-cas! atom_ m0 m1)
-         [m0 m1]
-         (recur))))))
+     (swap-in! atom_ f))))
 
 (defn reset-in!
   "Like `reset!` but supports `update-in*` semantics."
