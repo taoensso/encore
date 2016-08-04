@@ -1266,6 +1266,7 @@
   [atom_ old-val new-val]
   `(if-cljs
      (do (reset! ~atom_ ~new-val) true) ; No compare for our uses here
+     ;; TODO Note IAtom requires Clojure 1.7+
      (.compareAndSet ~(with-meta atom_ {:tag 'clojure.lang.Atom})
        ~old-val ~new-val)))
 
@@ -1296,7 +1297,7 @@
      (if (next ks-seq)
        (loop []
          (let [m0 @atom_
-               v0 (get-in m0 ks)
+               v0 (get-in m0 ks #_not-found)
                v1 (if (kw-identical? f  :swap/dissoc) f (f v0))
                m1 (if (kw-identical? v1 :swap/dissoc)
                     (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
@@ -1308,7 +1309,7 @@
        (let [k1 (nth ks 0)]
          (loop []
            (let [m0 @atom_
-                 v0 (get m0 k1)
+                 v0 (get m0 k1 #_not-found)
                  v1 (if (kw-identical? f  :swap/dissoc) f (f v0))
                  m1 (if (kw-identical? v1 :swap/dissoc)
                       (dissoc m0 k1)
@@ -1345,7 +1346,7 @@
      (if (next ks-seq)
        (loop []
          (let [m0 @atom_
-               v0 (get-in m0 ks)
+               v0 (get-in m0 ks #_not-found)
                s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
                v1 (.-newv s1)
                m1 (if (kw-identical? v1 :swap/dissoc)
@@ -1358,7 +1359,7 @@
        (let [k1 (nth ks 0)]
          (loop []
            (let [m0 @atom_
-                 v0 (get m0 k1)
+                 v0 (get m0 k1 #_not-found)
                  s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
                  v1 (.-newv s1)
                  m1 (if (kw-identical? v1 :swap/dissoc)
