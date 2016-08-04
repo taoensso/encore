@@ -1284,17 +1284,6 @@
         v1
         (recur)))))
 
-(defn- multi-swap-in!* [atom_ ks f more]
-  ;; Note lack of `swapped` support
-  (loop []
-    (let [m0 @atom_
-          m1 (reduce-kvs (fn [acc ks f] (update-in* acc ks f)) m0
-               (cons ks (cons f more)))]
-
-      (if (-cas! atom_ m0 m1)
-        [m0 m1]
-        (recur)))))
-
 (defn swap-val!* "Low-level util, prefer `swap-in!*`."
   ([atom_ k           f] (swap-val!* atom_ k nil f))
   ([atom_ k not-found f]
@@ -1308,6 +1297,32 @@
        (if (-cas! atom_ m0 m1)
          [v0 v1]
          (recur))))))
+
+(defn swap-val! "Low-level util, prefer `swap-in!`."
+  ([atom_ k           f] (swap-val! atom_ k nil f))
+  ([atom_ k not-found f]
+   (loop []
+     (let [m0 @atom_
+           v0 (get m0 k not-found)
+           s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
+           v1 (.-newv s1)
+           m1 (if (kw-identical? v1 :swap/dissoc)
+                (dissoc m0 k)
+                (assoc  m0 k v1))]
+       (if (-cas! atom_ m0 m1)
+         (.-returnv s1)
+         (recur))))))
+
+(defn- multi-swap-in!* [atom_ ks f more]
+  ;; Note lack of `swapped` support
+  (loop []
+    (let [m0 @atom_
+          m1 (reduce-kvs (fn [acc ks f] (update-in* acc ks f)) m0
+               (cons ks (cons f more)))]
+
+      (if (-cas! atom_ m0 m1)
+        [m0 m1]
+        (recur)))))
 
 (defn swap-in!*
   "Like `swap!` but supports `update-in*` semantics, returns
@@ -1336,21 +1351,6 @@
              (recur))))
        (swap-val!* atom_ (nth ks 0) nil f))
      (swap-in!* atom_ f))))
-
-(defn swap-val! "Low-level util, prefer `swap-in!`."
-  ([atom_ k           f] (swap-val! atom_ k nil f))
-  ([atom_ k not-found f]
-   (loop []
-     (let [m0 @atom_
-           v0 (get m0 k not-found)
-           s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
-           v1 (.-newv s1)
-           m1 (if (kw-identical? v1 :swap/dissoc)
-                (dissoc m0 k)
-                (assoc  m0 k v1))]
-       (if (-cas! atom_ m0 m1)
-         (.-returnv s1)
-         (recur))))))
 
 (defn swap-in!
   "Like `swap!` but supports `update-in*` semantics, returns <new-key-val>
