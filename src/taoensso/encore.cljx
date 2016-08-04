@@ -2973,9 +2973,8 @@
         @result_))))
 
 (defprotocol ITimeoutFuture
-  (tf-fn   [_])
-  (tf-udt  [_])
-  (tf-poll [_]))
+  (tf-state [_])
+  (tf-poll  [_]))
 
 #+cljs
 (defprotocol IFuture
@@ -2992,9 +2991,8 @@
 #+cljs
 (deftype TimeoutFuture [f result__ udt]
   ITimeoutFuture
-  (tf-fn   [_] f)
-  (tf-udt  [_] udt)
-  (tf-poll [_] (tout-result @result__))
+  (tf-state [_] {:fn f :udt udt})
+  (tf-poll  [_] (tout-result @result__))
 
   IDeref   (-deref      [_] (tout-result @result__))
   IPending (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
@@ -3007,9 +3005,8 @@
 (deftype TimeoutFuture
   [f result__ ^long udt ^java.util.concurrent.CountDownLatch latch]
   ITimeoutFuture
-  (tf-fn   [_] f)
-  (tf-udt  [_] udt)
-  (tf-poll [_] (tout-result @result__))
+  (tf-state [_] {:fn f :udt udt})
+  (tf-poll  [_] (tout-result @result__))
 
   clojure.lang.IDeref   (deref       [_] (.await latch) (tout-result @result__))
   clojure.lang.IPending (isRealized  [_] (not (kw-identical? @result__ -tout-pending)))
