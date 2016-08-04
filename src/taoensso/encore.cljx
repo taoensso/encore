@@ -1262,15 +1262,18 @@
 
   (comment (qb 1e6 (.-newv (swapped "foo")))))
 
+(compile-if clojure.lang.IAtom
+  (def ^:private ^:const atom-tag 'clojure.lang.IAtom)
+  (def ^:private ^:const atom-tag  'clojure.lang.Atom))
+
 (defmacro -cas! "Micro optimization."
   [atom_ old-val new-val]
   `(if-cljs
      (do (reset! ~atom_ ~new-val) true) ; No compare for our uses here
-     ;; TODO Note IAtom requires Clojure 1.7+
-     (.compareAndSet ~(with-meta atom_ {:tag 'clojure.lang.Atom})
+     (.compareAndSet ~(with-meta atom_ {:tag atom-tag})
        ~old-val ~new-val)))
 
-(defn -swap-k!
+(defn -swap-val!
   "Used internally by memoization utils."
   [atom_ k f]
   (loop []
@@ -1534,7 +1537,7 @@
             :else
             @(or
                (get @cache_ xs)
-               (-swap-k! cache_ xs
+               (-swap-val! cache_ xs
                  (fn [?dv] (or ?dv (delay (apply f xs))))))))))
 
   #+cljs
@@ -1681,7 +1684,7 @@
              (let [fresh? (kw-identical? a1 :mem/fresh)
                    args   (if fresh? (next args) args)
                    ^SimpleCacheEntry e
-                   (-swap-k! cache_ args
+                   (-swap-val! cache_ args
                      (fn [?e]
                        (if (or (nil? ?e) fresh?
                                (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
@@ -1758,7 +1761,7 @@
                    ;;; We always adjust counters, even on reads:
                    ^long tick (swap! tick_ (fn [^long n] (inc n)))
                    ^TickedCacheEntry e
-                   (-swap-k! cache_ args
+                   (-swap-val! cache_ args
                      (fn [?e]
                        #+clj (let [l @latch_] (when l (.await ^CountDownLatch l)))
                        (if (or (nil? ?e) fresh?
@@ -3121,7 +3124,7 @@
   (def parse-int       as-?int)
   (def parse-float     as-?float)
   (def swapped*        swapped)
-  (def swap-val!       -swap-k!)
+  (def swap-val!       -swap-val!)
   (def memoize-a0_     memoize_)
   (def memoize-a1_     memoize_)
   (def a0-memoize_     memoize_)
@@ -3152,9 +3155,10 @@
   (def dswap!          swap-in!*)
   (def nano-time       now-nano)
   (def swap!*          swap-in!*)
-  (def -swap-cache!    -swap-k!)
+  (def -swap-cache!    -swap-val!)
   (def -unswapped      swapped-vec)
   (def -vswapped       swapped-vec)
+  (def -swap-k!        -swap-val!)
 
   (defmacro have-in       [a1 & an] `(have  ~a1 :in ~@an))
   (defmacro have-in!      [a1 & an] `(have! ~a1 :in ~@an))
@@ -3301,7 +3305,7 @@
   (defn memoized [cache f & args]
     (if-not cache ; {<args> <delay-val>}
       (apply f args)
-      @(-swap-k! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
+      @(-swap-val! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
 
   (defn- translate-signed-idx [^long signed-idx ^long max-idx]
     (if (>= signed-idx 0)
