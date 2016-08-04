@@ -1324,6 +1324,20 @@
         [m0 m1]
         (recur)))))
 
+(defn pull-val! "Removes and returns value mapped to key."
+  ([atom_ k          ] (pull-val! atom_ k nil))
+  ([atom_ k not-found]
+   (let [[m0] (swap-val!* atom_ k :swap/dissoc)]
+     (get m0 k not-found))))
+
+(def reset-val!?
+  "Maps value to key and returns true iff the mapped value changed or
+  was created."
+  (let [not-found (new-object)]
+    (fn [atom_ k new-val]
+      (let [[v0 v1] (swap-val!* atom_ k not-found (fn [_] new-val))]
+        (if (= v0 v1) false true)))))
+
 (defn swap-in!*
   "Like `swap!` but supports `update-in*` semantics, returns
   [<old-key-val> <new-key-val>]."
