@@ -1284,6 +1284,31 @@
         v1
         (recur)))))
 
+(defn swap-val!* "Low-level util, prefer `swap-in!*`."
+  ([atom_ k f]
+   (loop []
+     (let [m0 @atom_
+           v0 (get m0 k)
+           v1 (if (kw-identical? f  :swap/dissoc) f (f v0))
+           m1 (if (kw-identical? v1 :swap/dissoc)
+                (dissoc m0 k)
+                (assoc  m0 k v1))]
+       (if (-cas! atom_ m0 m1)
+         [v0 v1]
+         (recur)))))
+
+  ([atom_ k not-found f]
+   (loop []
+     (let [m0 @atom_
+           v0 (get m0 k not-found)
+           v1 (if (kw-identical? f  :swap/dissoc) f (f v0))
+           m1 (if (kw-identical? v1 :swap/dissoc)
+                (dissoc m0 k)
+                (assoc  m0 k v1))]
+       (if (-cas! atom_ m0 m1)
+         [v0 v1]
+         (recur))))))
+
 (defn swap-in!*
   "Like `swap!` but supports `update-in*` semantics, returns
   [<old-key-val> <new-key-val>]."
@@ -1308,19 +1333,7 @@
            (if (-cas! atom_ m0 m1)
              [v0 v1]
              (recur))))
-
-       (let [k1 (nth ks 0)]
-         (loop []
-           (let [m0 @atom_
-                 v0 (get m0 k1 #_not-found)
-                 v1 (if (kw-identical? f  :swap/dissoc) f (f v0))
-                 m1 (if (kw-identical? v1 :swap/dissoc)
-                      (dissoc m0 k1)
-                      (assoc  m0 k1 v1))]
-             (if (-cas! atom_ m0 m1)
-               [v0 v1]
-               (recur))))))
-
+       (swap-val!* atom_ (nth ks 0) f))
      (swap-in!* atom_ f)))
 
   ([atom_ ks f & more] ; As `swap-in`
@@ -1331,6 +1344,33 @@
 
        (if (-cas! atom_ m0 m1)
          [m0 m1]
+         (recur))))))
+
+(defn swap-val! "Low-level util, prefer `swap-in!`."
+  ([atom_ k f]
+   (loop []
+     (let [m0 @atom_
+           v0 (get m0 k)
+           s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
+           v1 (.-newv s1)
+           m1 (if (kw-identical? v1 :swap/dissoc)
+                (dissoc m0 k)
+                (assoc  m0 k v1))]
+       (if (-cas! atom_ m0 m1)
+         (.-returnv s1)
+         (recur)))))
+
+  ([atom_ k not-found f]
+   (loop []
+     (let [m0 @atom_
+           v0 (get m0 k not-found)
+           s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
+           v1 (.-newv s1)
+           m1 (if (kw-identical? v1 :swap/dissoc)
+                (dissoc m0 k)
+                (assoc  m0 k v1))]
+       (if (-cas! atom_ m0 m1)
+         (.-returnv s1)
          (recur))))))
 
 (defn swap-in!
@@ -1358,20 +1398,7 @@
            (if (-cas! atom_ m0 m1)
              (.-returnv s1)
              (recur))))
-
-       (let [k1 (nth ks 0)]
-         (loop []
-           (let [m0 @atom_
-                 v0 (get m0 k1 #_not-found)
-                 s1 (swapped (if (kw-identical? f :swap/dissoc) f (f v0)))
-                 v1 (.-newv s1)
-                 m1 (if (kw-identical? v1 :swap/dissoc)
-                      (dissoc m0 k1)
-                      (assoc  m0 k1 v1))]
-             (if (-cas! atom_ m0 m1)
-               (.-returnv s1)
-               (recur))))))
-
+       (swap-val! atom_ (nth ks 0) f))
      (swap-in! atom_ f)))
 
   ([atom_ ks f & more] ; As `swap-in`
@@ -3124,7 +3151,6 @@
   (def parse-int       as-?int)
   (def parse-float     as-?float)
   (def swapped*        swapped)
-  (def swap-val!       -swap-val!)
   (def memoize-a0_     memoize_)
   (def memoize-a1_     memoize_)
   (def a0-memoize_     memoize_)
