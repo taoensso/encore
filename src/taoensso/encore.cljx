@@ -3063,7 +3063,6 @@
   ;; with cljs, and means less surprise with `future-fn`.
   ([      msecs f] (call-after-timeout default-timeout-impl_ msecs f))
   ([impl_ msecs f]
-   #+clj
    (let [msecs (long msecs)
          udt   (+ (now-udt*) msecs) ; Approx instant to run
          result__ (atom -tout-pending)
