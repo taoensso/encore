@@ -1330,13 +1330,13 @@
    (let [[v0] (swap-val!* atom_ k not-found :swap/dissoc)]
      v0)))
 
-(def reset-val!?
-  "Maps value to key and returns true iff the mapped value changed or
-  was created."
-  (let [not-found (new-object)]
-    (fn [atom_ k new-val]
-      (let [[v0 v1] (swap-val!* atom_ k not-found (fn [_] new-val))]
-        (if (= v0 v1) false true)))))
+(let [not-found (new-object)]
+  (defn reset-val!?
+    "Maps value to key and returns true iff the mapped value changed or
+    was created."
+    [atom_ k new-val]
+    (let [[v0 v1] (swap-val!* atom_ k not-found (fn [_] new-val))]
+      (if (= v0 v1) false true))))
 
 (defn swap-in!*
   "Like `swap!` but supports `update-in*` semantics, returns
@@ -2971,7 +2971,7 @@
 
   (defonce default-timeout-impl_
     "Simple one-timeout timeout implementation provided by platform timer.
-    O(logn) add, O(1) cancel, O(1) tick.
+    O(logn) add, O(1) cancel, O(1) tick. Fns must be non-blocking or cheap.
     Similar efficiency to core.async timers (binary heap vs DelayQueue)."
     (delay
       (DefaultTimeoutImpl.
@@ -2987,7 +2987,7 @@
         @result_))))
 
 (defprotocol ITimeoutFuture
-  (tf-state      [_] "Returns timeout's public state map. Contents may vary by implementation.")
+  (tf-state      [_] "Returns a map of timeout's public state.")
   (tf-poll       [_] "Returns :timeout/pending, :timeout/cancelled, or the timeout's completed result.")
   (tf-done?      [_] "Returns true iff the timeout is not pending (i.e. has a completed result or is cancelled).")
   (tf-pending?   [_] "Returns true iff the timeout is pending.")
@@ -3040,7 +3040,6 @@
 (defn call-after-timeout
   "Alpha, subject to change.
   Returns a TimeoutFuture that will execute `f` after given msecs.
-  `f` must be non-blocking or cheap.
 
   Does NOT do any automatic binding conveyance.
 
