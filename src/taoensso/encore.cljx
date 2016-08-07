@@ -3064,7 +3064,7 @@
                @result_
                #+clj (.countDown latch))))]
 
-     (let [impl (force default-timeout-impl_)]
+     (let [impl (force impl_)]
        (-schedule-timeout impl msecs cas-f))
 
      (TimeoutFuture. f result__ udt #+clj latch))))
