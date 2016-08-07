@@ -2989,8 +2989,9 @@
 (defprotocol ITimeoutFuture
   (tf-state      [_] "Returns timeout's public state map. Contents may vary by implementation.")
   (tf-poll       [_] "Returns :timeout/pending, :timeout/cancelled, or the timeout's completed result.")
-  (tf-done?      [_] "Returns true iff the timeout is not pending (i.e. has a completed result or has been cancelled).")
-  (tf-cancelled? [_] "Returns true iff the timeout has been cancelled.")
+  (tf-done?      [_] "Returns true iff the timeout is not pending (i.e. has a completed result or is cancelled).")
+  (tf-pending?   [_] "Returns true iff the timeout is pending.")
+  (tf-cancelled? [_] "Returns true iff the timeout is cancelled.")
   (tf-cancel!    [_] "Returns true iff the timeout was successfully cancelled (i.e. was previously pending)."))
 
 #+cljs
@@ -2999,6 +3000,7 @@
   (tf-state      [_] {:fn f :udt udt})
   (tf-poll       [_] (tout-result @result__))
   (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
+  (tf-pending?   [_]      (kw-identical? @result__ -tout-pending))
   (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
   (tf-cancel!    [_] (compare-and-set! result__ -tout-pending -tout-cancelled))
 
@@ -3012,6 +3014,7 @@
   (tf-state      [_] {:fn f :udt udt})
   (tf-poll       [_] (tout-result @result__))
   (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
+  (tf-pending?   [_]      (kw-identical? @result__ -tout-pending))
   (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
   (tf-cancel!    [_]
     (if (compare-and-set! result__ -tout-pending -tout-cancelled)
