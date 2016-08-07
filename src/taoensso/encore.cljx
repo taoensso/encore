@@ -2954,7 +2954,7 @@
   (qb 1e5 (nsf? "foo")) ; 20.44
   )
 
-;;;; Timeouts
+;;;; Scheduling
 ;; Considered also adding `call-at-interval` but decided against it since the
 ;; API we'd want for that would be less interesting and more impl specific;
 ;; i.e. the cost/benefit would be poor.
@@ -2970,7 +2970,7 @@
                (.schedule timer tt (long msecs)))))
 
   (defonce default-timeout-impl_
-    "Simple timeout implementation provided by platform.
+    "Simple one-timeout timeout implementation provided by platform timer.
     O(logn) add, O(1) cancel, O(1) tick.
     Similar efficiency to core.async timers (binary heap vs DelayQueue)."
     (delay
@@ -2987,43 +2987,39 @@
         @result_))))
 
 (defprotocol ITimeoutFuture
-  (tf-state [_])
-  (tf-poll  [_]))
-
-#+cljs
-(defprotocol IFuture
-  (future-done?      [_])
-  (future-cancelled? [_])
-  (future-cancel     [_]))
-
-(do ; Cross-platform API
-  (def tf-realized?  realized?)
-  (def tf-done?      future-done?)
-  (def tf-cancelled? future-cancelled?)
-  (def tf-cancel     future-cancel))
+  (tf-state      [_] "Returns timeout's public state map. Contents may vary by implementation.")
+  (tf-poll       [_] "Returns :timeout/pending, :timeout/cancelled, or the timeout's completed result.")
+  (tf-done?      [_] "Returns true iff the timeout is not pending (i.e. has a completed result or has been cancelled).")
+  (tf-cancelled? [_] "Returns true iff the timeout has been cancelled.")
+  (tf-cancel!    [_] "Returns true iff the timeout was successfully cancelled (i.e. was previously pending)."))
 
 #+cljs
 (deftype TimeoutFuture [f result__ udt]
   ITimeoutFuture
-  (tf-state [_] {:fn f :udt udt})
-  (tf-poll  [_] (tout-result @result__))
+  (tf-state      [_] {:fn f :udt udt})
+  (tf-poll       [_] (tout-result @result__))
+  (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
+  (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
+  (tf-cancel!    [_] (compare-and-set! result__ -tout-pending -tout-cancelled))
 
-  IDeref   (-deref      [_] (tout-result @result__))
-  IPending (-realized?  [_] (not (kw-identical? @result__ -tout-pending)))
-  IFuture
-  (future-done?      [_]      (kw-identical? @result__ -tout-cancelled))
-  (future-cancelled? [_] (not (kw-identical? @result__ -tout-pending)))
-  (future-cancel     [_] (compare-and-set! result__ -tout-pending -tout-cancelled)))
+  IPending (-realized?  [t] (tf-done? t))
+  IDeref   (-deref      [t] (tf-poll  t)))
 
 #+clj
 (deftype TimeoutFuture
   [f result__ ^long udt ^java.util.concurrent.CountDownLatch latch]
   ITimeoutFuture
-  (tf-state [_] {:fn f :udt udt})
-  (tf-poll  [_] (tout-result @result__))
+  (tf-state      [_] {:fn f :udt udt})
+  (tf-poll       [_] (tout-result @result__))
+  (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
+  (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
+  (tf-cancel!    [_]
+    (if (compare-and-set! result__ -tout-pending -tout-cancelled)
+      (do (.countDown latch) true)
+      false))
 
+  clojure.lang.IPending (isRealized  [t] (tf-done? t))
   clojure.lang.IDeref   (deref       [_] (.await latch) (tout-result @result__))
-  clojure.lang.IPending (isRealized  [_] (not (kw-identical? @result__ -tout-pending)))
   clojure.lang.IBlockingDeref
   (deref [_ timeout-ms timeout-val]
     (if (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
@@ -3031,21 +3027,16 @@
       timeout-val))
 
   java.util.concurrent.Future
-  (isCancelled [_]      (kw-identical? @result__ -tout-cancelled))
-  (isDone      [_] (not (kw-identical? @result__ -tout-pending)))
-  (cancel      [_ interrupt?]
-    (if (compare-and-set! result__ -tout-pending -tout-cancelled)
-      (do
-        (.countDown latch)
-        true)
-      false)))
+  (isCancelled [t]   (tf-cancelled? t))
+  (isDone      [t]   (tf-done?      t))
+  (cancel      [t _] (tf-cancel!    t)))
 
 #+clj  (defn          timeout-future? [x] (instance? TimeoutFuture x))
 #+cljs (defn ^boolean timeout-future? [x] (instance? TimeoutFuture x))
 
 (defn call-after-timeout
   "Alpha, subject to change.
-  Returns a TimeoutFuture[1] that will execute `f` after given msecs.
+  Returns a TimeoutFuture that will execute `f` after given msecs.
   `f` must be non-blocking or cheap.
 
   Does NOT do any automatic binding conveyance.
@@ -3053,11 +3044,7 @@
   Performance depends on the provided timer implementation (`impl_`).
   The default implementation offers O(logn) add, O(1) cancel, O(1) tick.
 
-  See `ITimeoutImpl` for extending to arbitrary timer implementations.
-
-  [1] Provides support for:
-    * [blocking] deref ; @(after-timeout 500 \"result\").
-    * `realized?`, `future-done?`, `future-cancelled?`, `future-cancel`."
+  See `ITimeoutImpl` for extending to arbitrary timer implementations."
 
   ;; Why no auto binding convyance? Explicit manual conveyance plays better
   ;; with cljs, and means less surprise with `future-fn`.
@@ -3089,7 +3076,7 @@
   @(after-timeout 500 (println "foo") "bar")
   (def ^:dynamic *foo* nil)
   (binding [*foo* "bar"] ; Note no auto conveyance
-    ((future-fn (after-timeout 200 (println *foo*) *foo*)))))
+    ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
 
 ;;;; Testing utils
 
