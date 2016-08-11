@@ -744,6 +744,23 @@
     (String. (ba-concat (.getBytes "foo") (.getBytes "bar")))
     (let [[x y] (ba-split (.getBytes "foobar") 5)] [(String. x) (String. y)])))
 
+;;;; Volatiles
+
+(do
+  ;; Back-compatible volatiles, private for now
+  ;; Note: benching seems to consistently show that atoms are actually no
+  ;; slower than volatiles when used in the same way (i.e. w/o contention
+  ;; or watches)?
+  (compile-if (volatile! nil)
+    (do
+      (defmacro -vol!       [val]           `(volatile!     ~val))
+      (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
+      (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args)))
+    (do
+      (defmacro -vol!       [val]           `(atom         ~val))
+      (defmacro -vol-reset! [vol_ val]      `(reset! ~vol_ ~val))
+      (defmacro -vol-swap!  [vol_ f & args] `(swap!  ~vol_ ~f ~@args)))))
+
 ;;;; Reduce
 
 (defn preserve-reduced "As `core/preserving-reduced`."
@@ -776,6 +793,14 @@
             (recur acc (unchecked-inc idx))))))))
 
 (comment (reduce-n conj [] 100))
+
+(defn reduce-indexed
+  "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`."
+  [rf init coll]
+  (let [i (-vol! -1)]
+    (reduce (fn [acc in] (rf acc (-vol-swap! i inc) in)) init coll)))
+
+(comment (reduce-indexed (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c]))
 
 #+cljs
 (defn reduce-obj "Like `reduce-kv` but for JavaScript objects."
@@ -1505,23 +1530,6 @@
       (fn []   (* 1000000 (now-udt*)))))
 
   (defmacro now-nano* [] `(if-cljs (now-nano) (System/nanoTime))))
-
-;;;; Volatiles
-
-(do
-  ;; Back-compatible volatiles, private for now
-  ;; Note: benching seems to consistently show that atoms are actually no
-  ;; slower than volatiles when used in the same way (i.e. w/o contention
-  ;; or watches)?
-  (compile-if (volatile! nil)
-    (do
-      (defmacro -vol!       [val]           `(volatile!     ~val))
-      (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
-      (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args)))
-    (do
-      (defmacro -vol!       [val]           `(atom         ~val))
-      (defmacro -vol-reset! [vol_ val]      `(reset! ~vol_ ~val))
-      (defmacro -vol-swap!  [vol_ f & args] `(swap!  ~vol_ ~f ~@args)))))
 
 ;;;; Memoization
 
