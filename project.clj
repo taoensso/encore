@@ -15,7 +15,7 @@
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
    [org.clojure/tools.reader "0.10.0"]
-   [com.taoensso/truss       "1.3.4"]]
+   [com.taoensso/truss       "1.3.5"]]
 
   :plugins
   [[lein-pprint  "1.1.2"]
