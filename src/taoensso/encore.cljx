@@ -1536,29 +1536,6 @@
 (defn memoize_
   "Like `core/memoize` but faster, non-racy, and supports invalidation."
   [f]
-
-  #_(let [cache_ (atom {})]
-      (fn [& xs]
-        (let [x1 (first xs)]
-          (cond
-            (kw-identical? x1 :mem/del)
-            (let [xn (next  xs)
-                  x2 (first xn)]
-              (if (kw-identical? x2 :mem/all)
-                (reset! cache_ {})
-                (swap!  cache_ dissoc xn))
-              nil)
-
-            (kw-identical? x1 :mem/fresh)
-            @(let [xn (next xs)
-                   dv (delay (apply f xn))] (swap! cache_ assoc xn dv) dv)
-
-            :else
-            @(or
-               (get @cache_ xs)
-               (-swap-val! cache_ xs
-                 (fn [?dv] (or ?dv (delay (apply f xs))))))))))
-
   #+cljs
   (let [cache_ (volatile! {})
         get-sentinel (js-obj)]
