@@ -832,6 +832,13 @@
 
 ;;;; Math
 
+(defn idx-fn
+  "Returns a new stateful index fn that returns: 0, 1, 2, ..."
+  []
+  #+cljs (let [idx_ (atom -1)] (fn [] (swap! idx_ inc)))
+  #+clj  (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
+           (fn [] (.getAndIncrement idx_))))
+
 (def ^:const max-long #+clj Long/MAX_VALUE #+cljs  9007199254740991)
 (def ^:const min-long #+clj Long/MIN_VALUE #+cljs -9007199254740991)
 
