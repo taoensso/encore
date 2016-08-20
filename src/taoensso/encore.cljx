@@ -1156,32 +1156,25 @@
   (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
 
 (defn update-in*
-  "Like `update-in` but resolves an ambiguity with empty `ks`, adds support
-  for `:swap/dissoc` vals."
+  "Like `update-in` but resolves an ambiguity with empty `ks`,
+  adds support for `not-found`, `:swap/dissoc` vals."
   ;; Recall no `korks` support due to ambiguity: nil => [] or [nil]
-  ([m ks f]
+  ([m ks           f] (update-in* m ks nil f))
+  ([m ks not-found f]
    (if-let [ks-seq (seq ks)]
      (let [k (nth ks 0)]
        (if-let [ks (next ks-seq)]
-         (assoc m k (update-in* (get m k) ks f))
+         (assoc m k (update-in* (get m k) ks not-found f))
          (if (kw-identical? f :swap/dissoc)
            (dissoc m k)
-           (let [v (f (get m k))]
+           (let [v (f (get m k not-found))]
              (if (kw-identical? v :swap/dissoc)
                (dissoc m k)
                (assoc  m k v))))))
      ;; Resolve nil => [nil] ambiguity in `update-in`, `assoc-in`, etc.:
-     (f m)))
+     (f m))))
 
-  ([m] m)
-  ([m ks f & more]
-   (let [m (update-in* m ks f)]
-     (reduce-kvs update-in* m more))))
-
-(comment
-  (update-in* {:a :A :b :B}
-    [:a] (fn [_] "foo")
-    [:b] (fn [_] "bar")))
+(comment (update-in* {:a :A :b :B} [:a] (fn [_] "boo")))
 
 (defn #+clj contains-in? #+cljs ^boolean contains-in?
   ([coll ks k] (contains? (get-in coll ks) k))
@@ -1191,8 +1184,8 @@
      false)))
 
 (defn dissoc-in
-  ([m ks dissoc-k]        (update-in* m ks (fn [m]       (dissoc m dissoc-k))))
-  ([m ks dissoc-k & more] (update-in* m ks (fn [m] (apply dissoc m dissoc-k more)))))
+  ([m ks dissoc-k]        (update-in* m ks nil (fn [m]       (dissoc m dissoc-k))))
+  ([m ks dissoc-k & more] (update-in* m ks nil (fn [m] (apply dissoc m dissoc-k more)))))
 
 (comment
   [(dissoc-in    {:a :A} [] :a)
@@ -3344,6 +3337,6 @@
           m ; Support conditional ops
           (let [[type ks valf] ?op
                 f (if (kw-identical? type :reset) (fn [_] valf) valf)]
-            (update-in* m ks f))))
+            (update-in* m ks nil f))))
       m
       ops)))
