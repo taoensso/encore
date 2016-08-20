@@ -1472,17 +1472,12 @@
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
 
 (comment
-  [(let [a_ (atom {:a :A :b :B})] ; Returns new-val (default)
-     [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a :A :b :B})] ; Returns old-val
-     [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b :B}})] ; Returns new-val-in (default)
-     [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a {:b :B}})] ; Returns old-val-in
-     [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b 100}})] (swap-in! a_ [:a :b] inc)) ; => 101
-   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})]
-     (swap-in! a_ [:a :c] :swap/dissoc) @a_)]
+  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
+   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
+   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+   (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
+   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] :swap/dissoc) @a_)]
 
   [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
    [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
