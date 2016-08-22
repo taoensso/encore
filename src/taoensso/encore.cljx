@@ -106,7 +106,7 @@
 
 (do
   (declare parse-version)
-  (def             encore-version [2 79 0])
+  (def             encore-version [2 79 1])
   (defn assert-min-encore-version [min-version]
     (let [[xc yc zc] encore-version
           [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
@@ -2244,7 +2244,7 @@
     in O(N.logn) time. For comparison, (take n (sort-by ...)) is O(N.logN)."
     ([n           coll] (top-into [] n identity compare coll))
     ([n keyfn     coll] (top-into [] n keyfn    compare coll))
-    ([n keyfn cmp coll] (top-into []))))
+    ([n keyfn cmp coll] (top-into [] n keyfn    cmp     coll))))
 
 (comment [(top 20 [2 3 5 3 88 nil]) (sort [2 3 5 3 88 nil])])
 
