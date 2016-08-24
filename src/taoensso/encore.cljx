@@ -29,13 +29,13 @@
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
-    [defonce if-not cond format bytes?
-     run! some? ident? float? boolean? uri? indexed?
-     int? pos-int? neg-int? nat-int?
-     simple-ident?   qualified-ident?
-     simple-symbol?  qualified-symbol?
-     simple-keyword? qualified-keyword?
-     merge merge-with])
+   [if-let when-let when if-not cond defonce
+    run! some? ident? float? boolean? uri? indexed? bytes?
+    int? pos-int? neg-int? nat-int?
+    simple-ident?   qualified-ident?
+    simple-symbol?  qualified-symbol?
+    simple-keyword? qualified-keyword?
+    format update-in merge merge-with])
 
   #+clj
   (:require
@@ -81,11 +81,12 @@
   #+cljs
   (:require-macros
    [taoensso.encore :as enc-macros :refer
-    [have have! have? compile-if if-not if-lets when-lets defonce cond cond!
-     catching -cas! now-dt* now-udt* now-nano* -gc-now? name-with-attrs
-     -vol! -vol-reset! -vol-swap! deprecated new-object]]))
+    [have have! have? compile-if
+     if-let when-let when if-not cond defonce
+     cond! catching -cas! now-dt* now-udt* now-nano* -gc-now?
+     name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
-;; TODO Could really do with a portable ^boolean hint
+(def encore-version [2 79 1])
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
   (set! *unchecked-math* :warn-on-boxed)
@@ -98,27 +99,9 @@
   (defmacro have!  [& args] `(taoensso.truss/have!  ~@args))
   (defmacro have?  [& args] `(taoensso.truss/have?  ~@args))
   (defmacro have!? [& args] `(taoensso.truss/have!? ~@args))
-  (defn      get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
+  (defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
   (defmacro with-dynamic-assertion-data [& args]
     `(taoensso.truss/with-dynamic-assertion-data ~@args)))
-
-;;;; Version check (for dependency conflicts, etc.)
-
-(do
-  (declare parse-version)
-  (def             encore-version [2 79 1])
-  (defn assert-min-encore-version [min-version]
-    (let [[xc yc zc] encore-version
-          [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
-          [xm ym zm] (mapv #(or % 0) [xm ym zm])]
-
-      (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
-        (throw
-          (ex-info "Insufficient `com.taoensso/encore` version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution)."
-            {:min-version  (str/join "." [xm ym zm])
-             :your-version (str/join "." [xc yc zc])}))))))
-
-(comment (assert-min-encore-version 3.10))
 
 ;;;; Core macros
 
@@ -150,6 +133,92 @@
 (defmacro if-clj  [then else] (if (:ns &env) else then))
 (defmacro if-cljs [then else] (if (:ns &env) then else))
 
+(defmacro if-let
+  "Like `core/if-let` but can bind multiple values for `then` iff all tests
+  are truthy, supports internal `:let`s."
+  ([bindings then     ] `(if-let ~bindings ~then nil))
+  ([bindings then else]
+   (let [s (seq bindings)]
+     (if s
+       (let [[b1 b2 & bnext] s]
+         (if (= b1 :let)
+           `(let      ~b2  (if-let ~(vec bnext) ~then ~else))
+           `(let [b2# ~b2]
+              (if b2#
+                (let [~b1 b2#]
+                  (if-let ~(vec bnext) ~then ~else))
+                ~else))))
+       then ; (if-let [] true false) => true
+       ))))
+
+(defmacro when-let
+  "Like `core/when-let` but can bind multiple values for `body` iff all tests
+  are truthy, supports internal `:let`s."
+  [bindings & body] `(if-let ~bindings (do ~@body)))
+
+(defmacro when
+  "Like `core/when` but acts as `when-let` when given a binding vector test expr."
+  [test-or-bindings & body]
+  (if (vector? test-or-bindings)
+    `(if-let ~test-or-bindings (do ~@body) nil)
+    `(if     ~test-or-bindings (do ~@body) nil)))
+
+(defmacro if-not
+  "Like `core/if-not` but acts as `if-let` when given a binding vector test expr."
+  ;; Also avoids unnecessary `(not test)`
+  ([test-or-bindings then]
+   (if (vector? test-or-bindings)
+     `(if-let ~test-or-bindings nil ~then)
+     `(if     ~test-or-bindings nil ~then)))
+
+  ([test-or-bindings then else]
+   (if (vector? test-or-bindings)
+     `(if-let ~test-or-bindings ~else ~then)
+     `(if     ~test-or-bindings ~else ~then))))
+
+(comment
+  (if-let   [a :a b (= a :a)] [a b] "else")
+  (if-let   [a :a b (= a :b)] [a b] "else")
+  (when-let [a :a b nil] "true")
+  (when-let [:let [a :a b :b] c (str a b)] c))
+
+(defmacro cond
+  "Like `core/cond` but supports implicit (final) `else` clause, and special
+  test keywords: :else, :let, :do, :when, :when-not, :when-let.
+  :let support inspired by https://github.com/Engelberg/better-cond."
+  ;; Also avoids unnecessary `(if :else ...)`, etc.
+  [& clauses]
+  (when-let [[test expr & more] (seq clauses)]
+    (if-not (next clauses)
+      test ; Implicit else
+      (case test
+        (true :else :default) expr               ; Faster than (if <truthy> ...)
+        (false nil)               `(cond ~@more) ; Faster than (if <falsey> ...)
+        :do       `(do       ~expr (cond ~@more))
+        :let      `(let      ~expr (cond ~@more))
+        :when     `(when     ~expr (cond ~@more))
+        :when-not `(when-not ~expr (cond ~@more))
+        :when-let `(when-let ~expr (cond ~@more))
+        (if (keyword? test)
+          (throw ; Undocumented, but throws at compile-time so easy to catch
+            (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
+              {:test-form test :expr-form expr}))
+
+          (if (vector? test) ; Experimental
+            `(if-let ~test ~expr (cond ~@more))
+
+            ;; Experimental, assumes `not` = `core/not`:
+            (if (and (list? test) (= (first test) 'not))
+              `(if ~(second test) (cond ~@more) ~expr)
+              `(if ~test ~expr    (cond ~@more)))))))))
+
+(comment
+  [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(cond nil "a" nil "b" :else "c"))
+   (macroexpand-all '(cond nil "a" nil "b" (println "bar")))
+   (macroexpand-all '(cond :when true :let [x "x"] :else x))
+   (macroexpand-all '(cond false 0 (not false) 1 2))])
+
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
   support for `defn` style `?docstring` and `?attrs-map`."
@@ -170,126 +239,22 @@
           (cljs.core/defonce ~sym ~@body)
        (clojure.core/defonce ~sym ~@body))))
 
-(defmacro declare-remote
-  "Declares given ns-qualified symbols, preserving metadata. Useful for
-  circular dependencies."
-  [& syms]
-  (let [original-ns (str *ns*)]
-    `(do ~@(map (fn [s]
-                  (let [ns (namespace s)
-                        v  (name      s)
-                        m  (meta      s)]
-                    `(do (in-ns  '~(symbol ns))
-                         (declare ~(with-meta (symbol v) m))))) syms)
-         (in-ns '~(symbol original-ns)))))
+;;;; Core fns we'll redefine but need in this ns
 
-(def -core-merge #+clj clojure.core/merge #+cljs cljs.core/merge)
-(declare merge)
+(def -core-merge     #+clj clojure.core/merge     #+cljs cljs.core/merge)
+(def -core-update-in #+clj clojure.core/update-in #+cljs cljs.core/update-in)
+(declare merge update-in)
 
-#+clj ; Not currently possible with cljs, unfortunately
-(defmacro defalias "Defines an alias for a var, preserving its metadata."
-  ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
-  ([sym src      ] `(defalias ~sym                 ~src nil))
-  ([sym src attrs]
-   (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
-     `(let [src-var# (var ~src)
-            dst-var# (def ~sym (.getRawRoot src-var#))]
-        (alter-meta! dst-var#
-          #(-core-merge %
-             (dissoc (meta src-var#) :column :line :file :ns :test :name)
-             ~attrs))
-        dst-var#))))
+;;;; Secondary macros
 
-(defmacro if-not "Like `core/if-not` but w/o the unnecessary `not` cost."
-  ([test then     ] `(if ~test nil   ~then))
-  ([test then else] `(if ~test ~else ~then)))
-
-(defmacro if-lets
-  "Like `if-let` but binds multiple values for `then` iff all tests are true,
-  supports internal `:let`s."
-  ([bindings then     ] `(if-lets ~bindings ~then nil))
-  ([bindings then else]
-   (if-let [[b1 b2 & bnext] (seq bindings)]
-     (if (= b1 :let)
-       `(let         ~b2  (if-lets ~(vec bnext) ~then ~else))
-       `(if-let [~b1 ~b2] (if-lets ~(vec bnext) ~then ~else) ~else))
-     then ; (if-lets [] true false) => true
-     )))
-
-(defmacro when-lets
-  "Like `when-let` but binds multiple values for `body` iff all tests are
-  true, supports internal `:let`s."
-  [bindings & body] `(if-lets ~bindings (do ~@body)))
-
-(comment
-  (if-lets   [a :a b (= a :a)] [a b] "else")
-  (if-lets   [a :a b (= a :b)] [a b] "else")
-  (when-lets [a :a b nil] "true")
-  (when-lets [:let [a :a b :b] c (str a b)] c))
-
-(defmacro cond
-  "Like `core/cond` but can yield more efficient expansions in some cases,
-  supports implicit (final) `else` clause, and supports special test
-  keywords: :else, :let, :do, :when, :when-not, :when-let, :when-lets.
-
-    (cond
-      false 0
-      :when true       ; Returns nil, or continues cond
-      :let  [foo :bar] ; Establishes bindings and continues cond
-      foo              ; Implicit (final) `else` clause, equivalent to `:else foo`
-     ) => :bar
-
-  :let support inspired by https://github.com/Engelberg/better-cond."
-  [& clauses]
-  (when-let [[test expr & more] (seq clauses)]
-    (if-not (next clauses)
-      test ; Implicit else
-      (case test
-        (true :else :default)   expr               ; Faster than (if <truthy> ...)
-        (false nil)                 `(cond ~@more) ; Faster than (if <falsey> ...)
-        :do        `(do        ~expr (cond ~@more))
-        :let       `(let       ~expr (cond ~@more))
-        :when      `(when      ~expr (cond ~@more))
-        :when-not  `(when-not  ~expr (cond ~@more))
-        :when-let  `(when-let  ~expr (cond ~@more))
-        :when-lets `(when-lets ~expr (cond ~@more))
-        (if (keyword? test)
-          ;; Undocumented, but throws at compile-time so easy to catch:
-          (throw (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
-                   {:test-form test :expr-form expr}))
-
-          (if (vector? test) ; Experimental
-            `(if-lets ~test ~expr (cond ~@more))
-
-            (if (and (list? test) (= (first test) 'not)) ; Experimental
-              #_(= (try (eval 'not) (catch UnsupportedOperationException _)) not)
-              ;; Assumes `not` = `core/not`:
-              `(if ~(second test) (cond ~@more) ~expr)
-              `(if ~test ~expr    (cond ~@more)))))))))
-
-(comment
-  [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
-   (macroexpand-all '(cond nil "a" nil "b" :else "c"))
-   (macroexpand-all '(cond nil "a" nil "b" (println "bar")))
-   (macroexpand-all '(cond :when true :let [x "x"] :else x))
-   (macroexpand-all '(cond false 0 (not false) 1 2))])
-
-(defmacro cond! "Like `cond` but throws on non-match like `case` and `condp`."
+(defmacro cond!
+  "Like `cond` but throws on non-match like `case` and `condp`."
   [& clauses]
   (if (odd? (count clauses))
     `(cond ~@clauses) ; Has implicit else clause
     `(cond ~@clauses :else (throw (ex-info "No matching `encore/cond!` clause" {})))))
 
 (comment [(cond false "false") (cond! false "false")])
-
-(defmacro doto-cond "Cross between `doto`, `cond->` and `as->`."
-  [[sym x] & clauses]
-  (assert (even? (count clauses)))
-  (let [g (gensym)
-        pstep (fn [[test-expr step]] `(when-let [~sym ~test-expr] (-> ~g ~step)))]
-    `(let [~g ~x]
-       ~@(map pstep (partition 2 clauses))
-       ~g)))
 
 #+clj
 (defmacro case-eval
@@ -304,11 +269,44 @@
 (do
   (defmacro do-nil   [& body] `(do ~@body nil))
   (defmacro do-false [& body] `(do ~@body false))
-  (defmacro do-true  [& body] `(do ~@body true))
+  (defmacro do-true  [& body] `(do ~@body true)))
 
-  (defmacro defonce* "Alias" [& args]  `(taoensso.encore/defonce ~@args))
-  (defmacro if-not*  "Alias" [& args]  `(taoensso.encore/if-not  ~@args))
-  (defmacro cond*    "Alias" [& args]  `(taoensso.encore/cond    ~@args)))
+(defmacro doto-cond "Cross between `doto`, `cond->` and `as->`."
+  [[sym x] & clauses]
+  (assert (even? (count clauses)))
+  (let [g (gensym)
+        pstep (fn [[test-expr step]]
+                `(when-let [~sym ~test-expr] (-> ~g ~step)))]
+    `(let [~g ~x]
+       ~@(map pstep (partition 2 clauses))
+       ~g)))
+
+(defmacro declare-remote
+  "Declares given ns-qualified symbols, preserving metadata. Useful for
+  circular dependencies."
+  [& syms]
+  (let [original-ns (str *ns*)]
+    `(do ~@(map (fn [s]
+                  (let [ns (namespace s)
+                        v  (name      s)
+                        m  (meta      s)]
+                    `(do (in-ns  '~(symbol ns))
+                         (declare ~(with-meta (symbol v) m))))) syms)
+         (in-ns '~(symbol original-ns)))))
+
+#+clj ; Not currently possible with cljs, unfortunately
+(defmacro defalias "Defines an alias for a var, preserving its metadata."
+  ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
+  ([sym src      ] `(defalias ~sym                 ~src nil))
+  ([sym src attrs]
+   (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
+     `(let [src-var# (var ~src)
+            dst-var# (def ~sym (.getRawRoot src-var#))]
+        (alter-meta! dst-var#
+          #(-core-merge %
+             (dissoc (meta src-var#) :column :line :file :ns :test :name)
+             ~attrs))
+        dst-var#))))
 
 ;;;; Edn
 
@@ -420,6 +418,7 @@
 (comment (caught-error-data (/ 5 0)))
 
 ;;;; Type preds, etc.
+;; TODO Could really do with a portable ^boolean hint
 ;; Some of these have slowly been getting added to Clojure core; make sure
 ;; to :exclude any official preds using the same name
 
@@ -946,6 +945,21 @@
 
 (comment [(parse-version "40.32.34.8-foo") (parse-version 10.3)])
 
+(defn assert-min-encore-version
+  "Version check for dependency conflicts, etc."
+  [min-version]
+  (let [[xc yc zc] encore-version
+        [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
+        [xm ym zm] (mapv #(or % 0) [xm ym zm])]
+
+    (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
+      (throw
+        (ex-info "Insufficient `com.taoensso/encore` version. You may have a Leiningen dependency conflict (see http://goo.gl/qBbLvC for solution)."
+          {:min-version  (str/join "." [xm ym zm])
+           :your-version (str/join "." [xc yc zc])})))))
+
+(comment (assert-min-encore-version 3.10))
+
 ;;;; Collections
 
 #+clj  (defn          queue? [x] (instance? clojure.lang.PersistentQueue x))
@@ -1155,26 +1169,26 @@
   (ks-nnil? #{:a :b} {:a :A :b :B  :c nil})
   (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
 
-(defn update-in*
-  "Like `update-in` but resolves an ambiguity with empty `ks`,
+(defn update-in
+  "Like `core/update-in` but resolves an ambiguity with empty `ks`,
   adds support for `not-found`, `:swap/dissoc` vals."
   ;; Recall no `korks` support due to ambiguity: nil => [] or [nil]
-  ([m ks           f] (update-in* m ks nil f))
+  ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
    (if-let [ks-seq (seq ks)]
      (let [k (nth ks 0)]
        (if-let [ks (next ks-seq)]
-         (assoc m k (update-in* (get m k) ks not-found f))
+         (assoc m k (update-in (get m k) ks not-found f))
          (if (kw-identical? f :swap/dissoc)
            (dissoc m k)
            (let [v (f (get m k not-found))]
              (if (kw-identical? v :swap/dissoc)
                (dissoc m k)
                (assoc  m k v))))))
-     ;; Resolve nil => [nil] ambiguity in `update-in`, `assoc-in`, etc.:
+     ;; Resolve nil => [nil] ambiguity in `core/update-in`, `assoc-in`, etc.:
      (f m))))
 
-(comment (update-in* {:a :A :b :B} [:a] (fn [_] "boo")))
+(comment (update-in {:a :A :b :B} [:a] (fn [_] "boo")))
 
 (defn #+clj contains-in? #+cljs ^boolean contains-in?
   ([coll ks k] (contains? (get-in coll ks) k))
@@ -1184,8 +1198,8 @@
      false)))
 
 (defn dissoc-in
-  ([m ks dissoc-k]        (update-in* m ks nil (fn [m]       (dissoc m dissoc-k))))
-  ([m ks dissoc-k & more] (update-in* m ks nil (fn [m] (apply dissoc m dissoc-k more)))))
+  ([m ks dissoc-k]        (update-in m ks nil (fn [m]       (dissoc m dissoc-k))))
+  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (apply dissoc m dissoc-k more)))))
 
 (comment
   [(dissoc-in    {:a :A} [] :a)
@@ -1449,7 +1463,7 @@
 
 (let [return (fn [v0 v1] v1)]
   (defn swap-in!
-    "Like `swap!` but supports `update-in*` semantics,
+    "Like `swap!` but supports `update-in` semantics,
     returns <new-key-val> or <swapped-return-val>."
     ([atom_              f] (-swap-k0! return atom_              f))
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
@@ -1457,7 +1471,7 @@
 
 (let [return (fn [v0 v1] v0)]
   (defn reset-in!
-    "Like `reset!` but supports `update-in*` semantics,
+    "Like `reset!` but supports `update-in` semantics,
     returns <old-key-val>."
     ([atom_              val] (-reset-k0! return atom_              val))
     ([atom_ ks           val] (-reset-kn! return atom_ ks nil       val))
@@ -1465,7 +1479,7 @@
 
 (let [return (fn [v0 v1] [v0 v1])]
   (defn swap-in!*
-    "Like `swap!` but supports `update-in*` semantics,
+    "Like `swap!` but supports `update-in` semantics,
     returns [<old-key-val> <new-key-val>]."
     ([atom_              f] (-swap-k0! return atom_              f))
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
@@ -2714,7 +2728,7 @@
   (defn set-body      [resp body]    (assoc     (->body-in-map resp) :body   body))
   (defn set-status    [resp code]    (assoc     (->body-in-map resp) :status code))
   (defn merge-headers [resp headers] (update-in (->body-in-map resp) [:headers]
-                                       merge headers)))
+                                       (fn [m] (merge m headers)))))
 
 (comment (merge-headers {:body "foo"} {"BAR" "baz"})
          (merge-headers "foo"         {"bar" "baz"}))
@@ -3129,14 +3143,20 @@
   (def -unswapped      swapped-vec)
   (def -vswapped       swapped-vec)
   (def -swap-k!        -swap-val!)
+  (def update-in*      update-in)
 
-  (defmacro have-in       [a1 & an] `(have  ~a1 :in ~@an))
-  (defmacro have-in!      [a1 & an] `(have! ~a1 :in ~@an))
-  (defmacro cond-throw    [& args]  `(cond!         ~@args))
-  (defmacro catch-errors* [& args]  `(catching      ~@args))
-  (defmacro use-fixtures* [& args]  `(use-fixtures  ~@args))
-  (defmacro nano-time*    [& args]  `(now-nano*     ~@args))
-  (defmacro qbench        [& args]  `(quick-bench   ~@args))
+  (defmacro if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
+  (defmacro when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
+  (defmacro if-not*       [& args]  `(taoensso.encore/if-not        ~@args))
+  (defmacro cond*         [& args]  `(taoensso.encore/cond          ~@args))
+  (defmacro defonce*      [& args]  `(taoensso.encore/defonce       ~@args))
+  (defmacro have-in       [a1 & an] `(taoensso.encore/have  ~a1 :in ~@an))
+  (defmacro have-in!      [a1 & an] `(taoensso.encore/have! ~a1 :in ~@an))
+  (defmacro cond-throw    [& args]  `(taoensso.encore/cond!         ~@args))
+  (defmacro catch-errors* [& args]  `(taoensso.encore/catching      ~@args))
+  (defmacro use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
+  (defmacro nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
+  (defmacro qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
   (defmacro catch-errors  [& body]
     `(catching [(do ~@body) nil] e# [nil e#]))
 
@@ -3342,6 +3362,6 @@
           m ; Support conditional ops
           (let [[type ks valf] ?op
                 f (if (kw-identical? type :reset) (fn [_] valf) valf)]
-            (update-in* m ks nil f))))
+            (update-in m ks nil f))))
       m
       ops)))
