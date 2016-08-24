@@ -268,10 +268,10 @@
 
 (defmacro or-when
   "Experimental. Useful for conditional binding transformations, etc."
-  [else test-or-bindings then]
+  [else test-or-bindings & body]
   (if (vector? test-or-bindings)
-    `(if-let ~test-or-bindings ~then ~else)
-    `(if     ~test-or-bindings ~then ~else)))
+    `(if-let ~test-or-bindings (do ~@body) ~else)
+    `(if     ~test-or-bindings (do ~@body) ~else)))
 
 (do
   (defmacro do-nil   [& body] `(do ~@body nil))
