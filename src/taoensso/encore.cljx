@@ -266,13 +266,6 @@
        ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
        ~(when default default))))
 
-(defmacro or-when
-  "Experimental. Useful for conditional binding transformations, etc."
-  [else test-or-bindings & body]
-  (if (vector? test-or-bindings)
-    `(if-let ~test-or-bindings (do ~@body) ~else)
-    `(if     ~test-or-bindings (do ~@body) ~else)))
-
 (do
   (defmacro do-nil   [& body] `(do ~@body nil))
   (defmacro do-false [& body] `(do ~@body false))
