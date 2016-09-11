@@ -1797,17 +1797,11 @@
 
 (comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
 
-(defn limiter ; rate-limiter
-  "Takes {<spec-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
-  limiter (fn check-limits! [req-id]) -> nil (all limits pass), or
-  [<worst-spec-id> <worst-backoff-msecs> {<spec-id> <backoff-msecs>}].
-
-  Limiter fn commands:
-    :rl/peek  <req-id> - Check limits w/o side effects.
-    :rl/reset <req-id> - Reset all limits for given req-id."
+(defn limiter*
+  "Experimental. Like `limiter` but returns [<state-atom> <limiter-fn>]."
   [specs]
   (if (empty? specs)
-    (constantly nil)
+    [nil (constantly nil)]
     (let [latch_ (atom nil) ; Used to pause writes during gc
           reqs_  (atom nil) ; {<rid> {<sid> <LimitEntry>}}
           specs  (coerce-limit-specs specs) ; {<sid> <LimitSpec>}
@@ -1896,25 +1890,38 @@
                           nil
                           (recur)))))))))]
 
-      (fn check-limits!
-        ([          ] (f1 nil    false))
-        ([    req-id] (f1 req-id false))
-        ([cmd req-id]
-         (cond
-           (kw-identical? cmd :rl/reset)
-           (do
-             (if (kw-identical? req-id :rl/all)
-               (reset! reqs_ nil)
-               (swap!  reqs_ dissoc req-id))
-             nil)
+      [reqs_
+       (fn check-limits!
+         ([          ] (f1 nil    false))
+         ([    req-id] (f1 req-id false))
+         ([cmd req-id]
+          (cond
+            (kw-identical? cmd :rl/reset)
+            (do
+              (if (kw-identical? req-id :rl/all)
+                (reset! reqs_ nil)
+                (swap!  reqs_ dissoc req-id))
+              nil)
 
-           (kw-identical? cmd :rl/peek)
-           (f1 req-id true)
+            (kw-identical? cmd :rl/peek)
+            (f1 req-id true)
 
-           :else
-           (throw
-             (ex-info "Unrecognized rate limiter command"
-               {:given cmd :req-id req-id}))))))))
+            :else
+            (throw
+              (ex-info "Unrecognized rate limiter command"
+                {:given cmd :req-id req-id})))))])))
+
+(defn limiter ; rate-limiter
+  "Takes {<spec-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
+  limiter (fn check-limits! [req-id]) -> nil (all limits pass), or
+  [<worst-spec-id> <worst-backoff-msecs> {<spec-id> <backoff-msecs>}].
+
+  Limiter fn commands:
+    :rl/peek  <req-id> - Check limits w/o side effects.
+    :rl/reset <req-id> - Reset all limits for given req-id."
+  [specs]
+  (let [[_ f] (limiter* specs)]
+    f))
 
 (comment
   (def rl1
