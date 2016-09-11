@@ -1798,7 +1798,7 @@
 (comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
 
 (defn limiter*
-  "Experimental. Like `limiter` but returns [<state-atom> <limiter-fn>]."
+  "Experimental. Like `limiter` but returns [<limiter> <state_>]."
   [specs]
   (if (empty? specs)
     [nil (constantly nil)]
@@ -1821,10 +1821,11 @@
                               (let [new-entries
                                     (reduce-kv
                                       (fn [acc sid ^LimitEntry e]
-                                        (let [^LimitSpec s (get specs sid)]
+                                        (if-let [^LimitSpec s (get specs sid)]
                                           (if (>= instant (+ (.-udt0 e) (.-ms s)))
                                             (dissoc acc sid)
-                                            acc)))
+                                            acc)
+                                          (dissoc acc sid)))
                                       entries ; {<sid <LimitEntry>}
                                       entries)]
                                 (if (empty? new-entries)
@@ -1846,7 +1847,7 @@
                         nil
                         (reduce-kv
                           (fn [^LimitHits acc sid ^LimitEntry e]
-                            (let [^LimitSpec s (get specs sid)]
+                            (if-let [^LimitSpec s (get specs sid)]
                               (if (< (.-n e) (.-n s))
                                 acc
                                 (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
@@ -1861,7 +1862,8 @@
                                       :else
                                       (LimitHits. (assoc (.-m acc) sid tdelta)
                                         (.-worst-sid acc)
-                                        (.-worst-ms  acc))))))))
+                                        (.-worst-ms  acc))))))
+                              acc))
                           nil
                           entries))]
 
