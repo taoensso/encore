@@ -20,7 +20,7 @@
   :plugins
   [[lein-pprint  "1.1.2"]
    [lein-ancient "0.6.10"]
-   [lein-codox   "0.9.6"]]
+   [lein-codox   "0.10.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -34,8 +34,8 @@
    :dev
    [:1.9 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.9.227"]
-      [org.clojure/core.async    "0.2.385"]]
+     [[org.clojure/clojurescript "1.9.229"]
+      [org.clojure/core.async    "0.2.391"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
