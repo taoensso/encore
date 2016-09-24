@@ -2419,26 +2419,25 @@
 
 #+clj
 (defn future-pool
-  "Experimental. Returns a fixed-size future pool:
+  "Experimental. Returns a simple semaphore-limited wrapper of Clojure's
+   standard `future`:
     (fn
       [f] - Blocks to acquire a future, then executes (f) on that future.
       [ ] - Blocks to acquire all futures, then immediately releases them.
             Useful for blocking till all outstanding work completes.
   Timeout variants are also provided."
-  [^long n]
-  (let [s    (java.util.concurrent.Semaphore. n)
+  ;; TODO Actually use a real independent pool, not urgent
+  [n]
+  (let [n    (long n)
+        s    (java.util.concurrent.Semaphore. n)
         msecs java.util.concurrent.TimeUnit/MILLISECONDS
         fp-call
         (fn [f]
-          (when-not (fn? f)
-            (.release s)
-            (throw (ex-info "Not a fn" {:given f :type (type f)})))
-          (future
-            (try
-              (f)
-              (catch Throwable _ nil)
-              (finally (.release s))))
-          true)]
+          (if (fn? f)
+            (future (try (f) (finally (.release s))))
+            (do
+              (.release s)
+              (throw (ex-info "Not a fn" {:given f :type (type f)})))))]
 
     (fn fp
       ([ ] (.acquire s n) (.release s n) true)
