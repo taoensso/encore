@@ -82,7 +82,7 @@
   (:require-macros
    [taoensso.encore :as enc-macros :refer
     [have have! have? compile-if
-     if-let when-let when if-not cond defonce
+     if-let if-not when when-not when-let cond defonce
      cond! catching -cas! now-dt* now-udt* now-nano* -gc-now?
      name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
