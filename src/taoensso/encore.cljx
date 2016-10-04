@@ -2551,7 +2551,7 @@
 
   (def ^:private js-form-data? (if (exists? js/FormData) (fn [x] (instance? js/FormData x)) (fn [x] nil)))
   (def ^:private js-file?      (if (exists? js/File)     (fn [x] (instance? js/File     x)) (fn [x] nil)))
-  (def ^:private coerce-xhr-params "Returns [<uri> <?data> <mime-type>]"
+  (def ^:private coerce-xhr-params "Returns [<uri> <?data>]"
     (let [url-encode
           (fn [uri params]
             (let [uri-with-query
@@ -2561,19 +2561,17 @@
                         uri
                         (str uri "?" qstr)))
                     uri)]
-              [uri-with-query nil :url-encoded]))
+              [uri-with-query nil]))
 
           adaptive-encode
           (fn [uri params]
-            (cond
-              (js-form-data? params) [uri params :form-data]
-              ;; TODO Any other params types we want to support?
-              (and    (exists? js/FormData) (rsome js-file? (vals params)))
-              (let [form-data (js/FormData.)]
-                (doseq [[k v] params] (.append form-data k v))
-                [uri form-data :form-data])
-
-              :else (url-encode uri params)))]
+            (if-not (exists? js/FormData)
+              (url-encode uri params)
+              (if (js-form-data? params)
+                [uri params]
+                (let [form-data (js/FormData.)]
+                  (doseq [[k v] params] (.append form-data (name k) v))
+                  [uri form-data]))))]
 
       (fn [uri method params]
         (have? [:or nil? map?] params)
@@ -2615,8 +2613,8 @@
       (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
             xhr-method (case method :get "GET" :post "POST" :put "PUT")
 
-            [xhr-uri xhr-?data mime-type]
-            (coerce-xhr-params uri method (map-keys name params))
+            [xhr-uri xhr-?data]
+            (coerce-xhr-params uri method params)
 
             xhr-headers
             (let [headers (map-keys #(str/lower-case (name %)) headers)
