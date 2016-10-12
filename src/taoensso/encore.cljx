@@ -2557,7 +2557,7 @@
   (def ^:private js-file?      (if (exists? js/File)     (fn [x] (instance? js/File     x)) (fn [x] nil)))
   (def ^:private coerce-xhr-params "Returns [<uri> <?data>]"
     (let [url-encode
-          (fn
+          (fn url-encode
             ([params]
              (when (seq params)
                (-> params clj->js gstructs/Map. gquery-data/createFromMap .toString)))
