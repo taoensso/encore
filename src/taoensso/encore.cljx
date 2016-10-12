@@ -2553,25 +2553,30 @@
   (def ^:private js-file?      (if (exists? js/File)     (fn [x] (instance? js/File     x)) (fn [x] nil)))
   (def ^:private coerce-xhr-params "Returns [<uri> <?data>]"
     (let [url-encode
-          (fn [uri params]
-            (let [uri-with-query
-                  (if (seq params)
-                    (let [qstr (-> params clj->js gstructs/Map. gquery-data/createFromMap .toString)]
-                      (if (str/blank? qstr)
-                        uri
-                        (str uri "?" qstr)))
-                    uri)]
-              [uri-with-query nil]))
+          (fn
+            ([params]
+             (when (seq params)
+               (-> params clj->js gstructs/Map. gquery-data/createFromMap .toString)))
+
+            ([uri params]
+             (let [qstr (url-encode params)
+                   uri-with-query (if (str/blank? qstr) uri (str uri "?" qstr))]
+               [uri-with-query nil])))
 
           adaptive-encode
           (fn [uri params]
-            (if-not (exists? js/FormData)
-              (url-encode uri params)
-              (if (js-form-data? params)
-                [uri params]
-                (let [form-data (js/FormData.)]
-                  (doseq [[k v] params] (.append form-data (name k) v))
-                  [uri form-data]))))]
+            (cond
+              (js-form-data? params) [uri params]
+              :do (have? map? params)
+
+              (and    (exists? js/FormData) (rsome js-file? (vals params)))
+              (let [form-data (js/FormData.)]
+                (doseq [[k v] params] (.append form-data (name k) v))
+                [uri form-data])
+
+              ;; Avoiding FormData as default since default Compojure
+              ;; middleware doesn't seem to keywordize FormData keys?
+              :else [uri (url-encode params)]))]
 
       (fn [uri method params]
         (have? [:or nil? map?] params)
