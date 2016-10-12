@@ -989,10 +989,14 @@
     (defn vec* [x] (if (vector? x) x (vec x)))
     (defn set* [x] (if (set?    x) x (set x)))))
 
+;; #+cljs (defn oset [o k v] (aset (if (nil? o) #js{} o) k v))
+;; #+cljs (defn oget [o k] (if (nil? o) nil (aget o k)))
+
 #+cljs
 (defn oget
   "Like `aget` for JS objects, Ref. https://goo.gl/eze8hY.
   Unlike `aget`, returns nil for missing keys instead of throwing."
+  ;; TODO Clojure 1.6+: some?, when-some
   ([o k]          (when      o                 (gobj/get o k  nil)))
   ([o k1 k2]      (when-let [o (oget o k1)]    (gobj/get o k2 nil)))
   ([o k1 k2 & ks] (when-let [o (oget o k1 k2)] (apply oget o ks))))
