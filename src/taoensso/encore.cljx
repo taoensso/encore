@@ -84,8 +84,9 @@
     [have have! have? compile-if
      if-let if-some if-not when when-not when-some when-let cond defonce
      cond! catching -cas! now-dt* now-udt* now-nano* -gc-now?
-     name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object
-     get-encore-version]]))
+     name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
+
+(def encore-version [2 83 3])
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
   (set! *unchecked-math* :warn-on-boxed)
@@ -978,38 +979,18 @@
 
 (comment [(parse-version "40.32.34.8-foo") (parse-version 10.3)])
 
-#+clj
-(defn get-pom-version
-  "Returns POM version string for given Maven dependency, or nil."
-  [dep-sym]
-  (let [path (clojure.core/format "META-INF/maven/%s/%s/pom.properties"
-               (or (namespace dep-sym)
-                   (name      dep-sym))
-               (name dep-sym))]
-    (when-let [props (io/resource path)]
-      (with-open [stream (io/input-stream props)]
-        (let [props (doto (java.util.Properties.) (.load stream))]
-          (.getProperty props "version"))))))
-
-(defmacro get-encore-version []
-  (:version (parse-version (get-pom-version 'com.taoensso/encore))))
-
-(def encore-version (get-encore-version))
-
 (defn assert-min-encore-version
   "Version check for dependency conflicts, etc."
   [min-version]
-  (if (nil? encore-version)
-    (throw (ex-info "Unknown `com.taoensso/encore` version: couldn't find POM version property" {}))
-    (let [[xc yc zc] encore-version
-          [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
-          [xm ym zm] (mapv #(or % 0) [xm ym zm])]
+  (let [[xc yc zc] encore-version
+        [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
+        [xm ym zm] (mapv #(or % 0) [xm ym zm])]
 
-      (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
-        (throw
-          (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see http://goo.gl/qBbLvC for solutions."
-            {:min-version  (str/join "." [xm ym zm])
-             :your-version (str/join "." [xc yc zc])}))))))
+    (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
+      (throw
+        (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see http://goo.gl/qBbLvC for solutions."
+          {:min-version  (str/join "." [xm ym zm])
+           :your-version (str/join "." [xc yc zc])})))))
 
 (comment (assert-min-encore-version 3.10))
 
