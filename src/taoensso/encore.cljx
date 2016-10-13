@@ -29,7 +29,7 @@
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
-   [if-let if-not when when-not when-let cond defonce
+   [if-let if-some if-not when when-not when-some when-let cond defonce
     run! some? ident? float? boolean? uri? indexed? bytes?
     int? pos-int? neg-int? nat-int?
     simple-ident?   qualified-ident?
@@ -82,7 +82,7 @@
   (:require-macros
    [taoensso.encore :as enc-macros :refer
     [have have! have? compile-if
-     if-let if-not when when-not when-let cond defonce
+     if-let if-some if-not when when-not when-some when-let cond defonce
      cond! catching -cas! now-dt* now-udt* now-nano* -gc-now?
      name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
@@ -139,7 +139,7 @@
   ([bindings then     ] `(if-let ~bindings ~then nil))
   ([bindings then else]
    (let [s (seq bindings)]
-     (if s
+     (if s ; (if-let [] true false) => true
        (let [[b1 b2 & bnext] s]
          (if (= b1 :let)
            `(let      ~b2  (if-let ~(vec bnext) ~then ~else))
@@ -148,8 +148,24 @@
                 (let [~b1 b2#]
                   (if-let ~(vec bnext) ~then ~else))
                 ~else))))
-       then ; (if-let [] true false) => true
-       ))))
+       then))))
+
+(defmacro if-some
+  "Like `core/if-some` but can bind multiple values for `then` iff all tests
+  are non-nil, supports internal `:let`s."
+  ([bindings then] `(if-some ~bindings ~then nil))
+  ([bindings then else]
+   (let [s (seq bindings)]
+     (if s ; (if-some [] true false) => true
+       (let [[b1 b2 & bnext] s]
+         (if (= b1 :let)
+           `(let      ~b2  (if-some ~(vec bnext) ~then ~else))
+           `(let [b2# ~b2]
+              (if (nil? b2#)
+                ~else
+                (let [~b1 b2#]
+                  (if-some ~(vec bnext) ~then ~else))))))
+       then))))
 
 (defmacro if-not
   "Like `core/if-not` but acts like `if-let` when given a binding vector
@@ -181,6 +197,12 @@
     `(if-let ~test-or-bindings nil (do ~@body))
     `(if     ~test-or-bindings nil (do ~@body))))
 
+(defmacro when-some
+  [test-or-bindings & body]
+  (if (vector? test-or-bindings)
+    `(if-some       ~test-or-bindings  (do ~@body) nil)
+    `(if      (nil? ~test-or-bindings) nil (do ~@body))))
+
 (defmacro when-let
   "Like `core/when-let` but can bind multiple values for `body` iff all tests
   are truthy, supports internal `:let`s."
@@ -190,12 +212,13 @@
 (comment
   (if-let   [a :a b (= a :a)] [a b] "else")
   (if-let   [a :a b (= a :b)] [a b] "else")
+  (if-some  [a :a b (= a :b)] [a b] "else")
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
 
 (defmacro cond
   "Like `core/cond` but supports implicit (final) `else` clause, and special
-  test keywords: :else, :let, :do, :when, :when-not.
+  test keywords: :else, :let, :do, :when, :when-not, :when-some.
   :let support inspired by https://github.com/Engelberg/better-cond."
   ;; Also avoids unnecessary `(if :else ...)`, etc.
   [& clauses]
@@ -204,11 +227,12 @@
       test ; Implicit else
       (case test
         (true :else :default) expr               ; Faster than (if <truthy> ...)
-        (false nil)               `(cond ~@more) ; Faster than (if <falsey> ...)
-        :do       `(do       ~expr (cond ~@more))
-        :let      `(let      ~expr (cond ~@more))
-        :when     `(when     ~expr (cond ~@more))
-        :when-not `(when-not ~expr (cond ~@more))
+        (false nil)                 `(cond ~@more) ; Faster than (if <falsey> ...)
+        :do        `(do        ~expr (cond ~@more))
+        :let       `(let       ~expr (cond ~@more))
+        :when      `(when      ~expr (cond ~@more))
+        :when-not  `(when-not  ~expr (cond ~@more))
+        :when-some `(when-some ~expr (cond ~@more))
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
             (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
