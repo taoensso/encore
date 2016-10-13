@@ -1019,7 +1019,7 @@
   ([o k not-found] (gobj/get o k not-found)))
 
 #+cljs
-(let [sentinel (js/obj)]
+(let [sentinel (js-obj)]
   (defn oget-in "Like `get-in` for JS objects."
     ([o ks] (oget-in o ks nil))
     ([o ks not-found]
