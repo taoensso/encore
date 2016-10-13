@@ -1142,7 +1142,6 @@
   (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
   (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (vec (take n coll)))))
 
-(defn nnil-set [x] (disj (set* x) nil))
 (defn #+clj distinct-elements? #+cljs ^boolean distinct-elements?
   [x] (or (set? x) (= (count x) (count (set* x)))))
 
@@ -3234,6 +3233,8 @@
   (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
   (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
     [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
+
+  (defn nnil-set [x] (disj (set* x) nil))
 
   ;;; Arg order changed for easier partials
   (defn keys=      [m ks] (ks=      ks m))
