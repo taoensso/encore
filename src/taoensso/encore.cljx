@@ -2449,6 +2449,29 @@
 
 (comment (slurp-file-resource "log4j.properties"))
 
+#+clj
+(defn get-pom-version
+  "Returns POM version string for given Maven dependency, or nil."
+  [dep-sym]
+  (let [path (clojure.core/format "META-INF/maven/%s/%s/pom.properties"
+               (or (namespace dep-sym)
+                   (name      dep-sym))
+               (name dep-sym))]
+    (when-let [props (io/resource path)]
+      (with-open [stream (io/input-stream props)]
+        (let [props (doto (java.util.Properties.) (.load stream))]
+          (.getProperty props "version"))))))
+
+(comment (get-pom-version 'com.taoensso/encore))
+
+#+clj
+(defn get-hostname "Returns local hostname string, or nil."
+  []
+  (try (.getHostName (java.net.InetAddress/getLocalHost))
+       (catch java.net.UnknownHostException _ nil)))
+
+(comment (get-hostname))
+
 ;;;; Async
 
 #+clj
