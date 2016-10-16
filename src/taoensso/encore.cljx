@@ -1050,19 +1050,35 @@
 (do
   (defn assoc-some "Assocs each kv iff its value is not nil."
     ([m k v      ] (if (nil? v) (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-some (assoc-some m k v) kvs)))
+    ([m k v & kvs] (reduce-kvs assoc-some (assoc-some m k v) kvs))
+    ([m kvs]
+     (reduce-kv
+       (fn [m k v] (if (nil? v) m (assoc m k v)))
+       (if (nil? m) {} m)
+       kvs)))
 
   (defn assoc-when "Assocs each kv iff its val is truthy."
     ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-when (assoc-when m k v) kvs)))
+    ([m k v & kvs] (reduce-kvs assoc-when (assoc-when m k v) kvs))
+    ([m kvs]
+     (reduce-kv
+       (fn [acc k v] (if-not v m (assoc m k v)))
+       (if (nil? m) {} m)
+       kvs)))
 
   (defn assoc-nx "Assocs each kv iff its key doesn't already exist."
     ([m k v] (if (contains? m k) m (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-default (assoc-default m k v) kvs))))
+    ([m k v & kvs] (reduce-kvs assoc-nx (assoc-nx m k v) kvs))
+    ([m kvs]
+     (reduce-kv
+       (fn [m k v] (if (contains? m k) m (assoc m k v)))
+       (if (nil? m) {} m)
+       kvs))))
 
 (comment
   (assoc-some {:a :A} :b nil :c :C :d nil :e :E)
-  (reduce-kv assoc-default {:a :A} {:a :a :b :b}))
+  (assoc-some {:a :A} {:b :B :c nil :d :D :e false})
+  (reduce-kv assoc-nx {:a :A} {:a :a :b :b}))
 
 (defn get-subvec
   "Like `subvec` but never throws (snaps to valid start and end indexes)."
