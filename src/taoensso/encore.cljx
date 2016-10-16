@@ -1050,7 +1050,12 @@
 (do
   (defn assoc-some "Assocs each kv iff its value is not nil."
     ([m k v      ] (if (nil? v) (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-some (assoc-some m k v) kvs))
+    ([m k v & kvs]
+     (reduce-kvs
+       (fn [m k v] (if (nil? v) m (assoc m k v)))
+       (assoc-some m k v)
+       kvs))
+
     ([m kvs]
      (reduce-kv
        (fn [m k v] (if (nil? v) m (assoc m k v)))
@@ -1059,13 +1064,19 @@
 
   (defn assoc-when "Assocs each kv iff its val is truthy."
     ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-when (assoc-when m k v) kvs))
+    ([m k v & kvs]
+     (reduce-kvs
+       (fn [m k v] (if-not v m (assoc m k v)))
+       (assoc-when m k v)
+       kvs))
+
     ([m kvs]
      (reduce-kv
        (fn [acc k v] (if-not v m (assoc m k v)))
        (if (nil? m) {} m)
        kvs)))
 
+  ;; Handy as l>r merge
   (defn assoc-nx "Assocs each kv iff its key doesn't already exist."
     ([m k v] (if (contains? m k) m (assoc m k v)))
     ([m k v & kvs] (reduce-kvs assoc-nx (assoc-nx m k v) kvs))
