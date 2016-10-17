@@ -796,6 +796,7 @@
 
 ;;;; Reduce
 
+;; (defn ensure-reduced [x] (if (reduced? x) x (reduced x)))
 (defn preserve-reduced "As `core/preserving-reduced`."
   [rf]
   (fn [acc in]
@@ -823,15 +824,16 @@
         (let [acc (rf acc idx)]
           (if (reduced? acc)
             @acc
-            (recur acc (unchecked-inc idx))))))))
+            (recur acc (unchecked-inc ^long idx))))))))
 
 (comment (reduce-n conj [] 100))
 
-(defn reduce-indexed
-  "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`."
-  [rf init coll]
-  (let [i (-vol! -1)]
-    (reduce (fn [acc in] (rf acc (-vol-swap! i inc) in)) init coll)))
+(let [inc (fn [n] (inc ^long n))] ; For var deref, boxing
+  (defn reduce-indexed
+    "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`."
+    [rf init coll]
+    (let [i (-vol! -1)]
+      (reduce (fn [acc in] (rf acc (-vol-swap! i inc) in)) init coll))))
 
 (comment (reduce-indexed (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c]))
 
@@ -865,12 +867,13 @@
 
 ;;;; Math
 
-(defn idx-fn
-  "Returns a new stateful index fn that returns: 0, 1, 2, ..."
-  []
-  #+cljs (let [idx_ (atom -1)] (fn [] (swap! idx_ inc)))
-  #+clj  (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
-           (fn [] (.getAndIncrement idx_))))
+(let [inc (fn [n] (inc ^long n))]
+  (defn idx-fn
+    "Returns a new stateful index fn that returns: 0, 1, 2, ..."
+    []
+    #+cljs (let [idx_ (-vol! -1)] (fn [] (-vol-swap! idx_ inc)))
+    #+clj  (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
+             (fn [] (.getAndIncrement idx_)))))
 
 (def ^:const max-long #+clj Long/MAX_VALUE #+cljs  9007199254740991)
 (def ^:const min-long #+clj Long/MIN_VALUE #+cljs -9007199254740991)
@@ -950,7 +953,6 @@
 #+cljs (def js-?win (when (exists? js/window) js/window))
 
 (defn force-ref "Like `force` for refs." [x] (if (derefable? x) (deref x) x))
-
 (defn merge-meta   [x m] (with-meta x (merge (meta x) m)))
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
 
@@ -2514,7 +2516,7 @@
       [ ] - Blocks to acquire all futures, then immediately releases them.
             Useful for blocking till all outstanding work completes.
   Timeout variants are also provided."
-  ;; TODO Actually use a real independent pool, not urgent
+  ;; TODO Actually use an independent pool, not urgent
   [n]
   (let [n    (long n)
         s    (java.util.concurrent.Semaphore. n)
