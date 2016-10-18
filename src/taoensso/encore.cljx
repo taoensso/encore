@@ -92,16 +92,9 @@
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
-;;;; Truss aliases (for back compatibility, convenience)
-
-(do
-  (defmacro have   [& args] `(taoensso.truss/have   ~@args))
-  (defmacro have!  [& args] `(taoensso.truss/have!  ~@args))
-  (defmacro have?  [& args] `(taoensso.truss/have?  ~@args))
-  (defmacro have!? [& args] `(taoensso.truss/have!? ~@args))
-  (defn get-dynamic-assertion-data [] (truss/get-dynamic-assertion-data))
-  (defmacro with-dynamic-assertion-data [& args]
-    `(taoensso.truss/with-dynamic-assertion-data ~@args)))
+(do ; Bootstrap Truss aliases
+  (defmacro have  [& args] `(taoensso.truss/have  ~@args))
+  (defmacro have? [& args] `(taoensso.truss/have? ~@args)))
 
 ;;;; Core macros
 
@@ -341,6 +334,17 @@
              (dissoc (meta src-var#) :column :line :file :ns :test :name)
              ~attrs))
         dst-var#))))
+
+;;;; Truss aliases (for back compatibility, convenience)
+
+#+clj
+(do
+  (defalias have                        taoensso.truss/have)
+  (defalias have!                       taoensso.truss/have!)
+  (defalias have?                       taoensso.truss/have?)
+  (defalias have!?                      taoensso.truss/have!?)
+  (defalias get-dynamic-assertion-data  taoensso.truss/get-dynamic-assertion-data)
+  (defalias with-dynamic-assertion-data taoensso.truss/with-dynamic-assertion-data))
 
 ;;;; Edn
 
