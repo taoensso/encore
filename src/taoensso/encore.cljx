@@ -2965,6 +2965,7 @@
        (intern '~ns (with-meta '~stub-sym dst-meta#)
          (.getRawRoot src-var#)))))
 
+#+clj
 (defmacro defstub
   "Experimental. Declares a stub var that can be initialized from any
   namespace with `unstub-<stub-name>`. Separates a var's declaration
@@ -2979,8 +2980,11 @@
          (defn ~unstub-sym [~'f]        (-vol-reset! ~'stubfn_ (-assert-unstub-val ~'f))))
        (let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
          (defmacro ~(with-meta unstub-sym {:doc "Initializes stub var to alias given symbol's var"})
-           [~'sym] `(-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
-                      ~stub-var# ~~'sym))))))
+           [~'sym]
+           `(if-cljs
+              nil ; Appears to be necessary with Cljs >= 1.8.40
+              (-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
+                ~stub-var# ~~'sym)))))))
 
 (comment
   (defn- -foo ^long [y] (* y y))
