@@ -2321,6 +2321,7 @@
       nil->sentinel (fn [x] (if (nil? x) sentinel x))
       sentinel->nil (fn [x] (if (identical? x sentinel) nil x))]
 
+  ;; TODO Define lowest-level API in terms of reducing fn
   (defn top-into
     "Conjoins the top `n` items from `coll` of N items into `to` in
     O(N.logn) time. For comparsion, (take n (sort-by ...)) is O(N.logN)."
