@@ -2321,35 +2321,44 @@
       nil->sentinel (fn [x] (if (nil? x) sentinel x))
       sentinel->nil (fn [x] (if (identical? x sentinel) nil x))]
 
-  ;; TODO Define lowest-level API in terms of reducing fn
-  (defn top-into
-    "Conjoins the top `n` items from `coll` of N items into `to` in
-    O(N.logn) time. For comparsion, (take n (sort-by ...)) is O(N.logN)."
-    ([to n           coll] (top-into to n identity compare coll))
-    ([to n keyfn     coll] (top-into to n keyfn    compare coll))
-    ([to n keyfn cmp coll]
+  (defn reduce-top
+    "Reduces the top `n` items from `coll` of N items into in O(N.logn) time.
+    For comparsion, (take n (sort-by ...)) is O(N.logN)."
+    ([n           rf init coll] (reduce-top n identity compare rf init coll))
+    ([n keyfn     rf init coll] (reduce-top n keyfn    compare rf init coll))
+    ([n keyfn cmp rf init coll]
      (let [coll-size (count coll)
            n (long (min coll-size (long n)))]
+
        (if-not (pos? n)
-         to
-         #+cljs (into to (take n) (sort-by keyfn cmp coll)) ; TODO Real impl.
+         init
+         #+cljs ; TODO Real impl.
+         (transduce (take n) (completing rf) init
+           (sort-by keyfn cmp coll))
+
          #+clj
-         (let [pq
-               (java.util.PriorityQueue. coll-size
-                 (fn [x y]
-                   (cmp
-                     (keyfn (sentinel->nil x))
-                     (keyfn (sentinel->nil y)))))]
+         (let [pq (java.util.PriorityQueue. coll-size
+                    (fn [x y] (cmp (keyfn (sentinel->nil x))
+                               (keyfn (sentinel->nil y)))))]
 
            (run! #(.offer pq (nil->sentinel %)) coll)
-           (repeatedly-into to n #(sentinel->nil (.poll pq))))))))
+           (reduce-n (fn [acc _] (rf acc (sentinel->nil (.poll pq))))
+             init n)))))))
 
-  (defn top
-    "Returns a sorted vector of the top `n` items from `coll` of N items
-    in O(N.logn) time. For comparison, (take n (sort-by ...)) is O(N.logN)."
-    ([n           coll] (top-into [] n identity compare coll))
-    ([n keyfn     coll] (top-into [] n keyfn    compare coll))
-    ([n keyfn cmp coll] (top-into [] n keyfn    cmp     coll))))
+(defn top-into
+  "Conjoins the top `n` items from `coll` into `to` using `reduce-top`."
+  ([to n           coll] (top-into to n identity compare coll))
+  ([to n keyfn     coll] (top-into to n keyfn    compare coll))
+  ([to n keyfn cmp coll]
+   (if (editable? to)
+     (persistent! (reduce-top n keyfn cmp conj! (transient to) coll))
+     (do          (reduce-top n keyfn cmp conj             to  coll)))))
+
+(defn top
+  "Returns a sorted vector of the top `n` items from `coll` using `reduce-top`."
+  ([n           coll] (top-into [] n identity compare coll))
+  ([n keyfn     coll] (top-into [] n keyfn    compare coll))
+  ([n keyfn cmp coll] (top-into [] n keyfn    cmp     coll)))
 
 (comment [(top 20 [2 3 5 3 88 nil]) (sort [2 3 5 3 88 nil])])
 
