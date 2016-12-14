@@ -13,7 +13,7 @@
     **foo** - Dynamic var.
     foo!    - Fn with side effects, or that should otherwise be used cautiously.
     foo?    - Truthy val or fn that returns truthy val.
-    foo!?   - Fn that has side effetcs (or requires caution) and that returns
+    foo!?   - Fn that has side effects (or requires caution) and that returns
               a truthy val. Note: !?, not ?!.
     foo$    - Fn that's notably expensive to compute (e.g. hits db).
     foo_    - Dereffable val (e.g. atom, volatile, delay, etc.).
