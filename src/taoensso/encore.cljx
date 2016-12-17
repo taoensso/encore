@@ -123,8 +123,8 @@
 ;;; (:ns &env) is nnil iff compiling for ClojureScript, giving us a way to
 ;;; write macros that produce different Clj/Cljs code (not something that
 ;;; .cljx or .cljc currently provide support for):
-(defmacro if-clj  [then else] (if (:ns &env) else then))
-(defmacro if-cljs [then else] (if (:ns &env) then else))
+(defmacro if-clj  [then & [else]] (if (:ns &env) else then))
+(defmacro if-cljs [then & [else]] (if (:ns &env) then else))
 
 (defmacro if-let
   "Like `core/if-let` but can bind multiple values for `then` iff all tests
