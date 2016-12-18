@@ -828,7 +828,7 @@
         (let [acc (rf acc idx)]
           (if (reduced? acc)
             @acc
-            (recur acc (unchecked-inc ^long idx))))))))
+            (recur acc (unchecked-inc idx))))))))
 
 (comment (reduce-n conj [] 100))
 
