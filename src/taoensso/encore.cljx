@@ -219,7 +219,7 @@
     (if-not (next clauses)
       test ; Implicit else
       (case test
-        (true :else :default) expr               ; Faster than (if <truthy> ...)
+        (true :else :default)   expr               ; Faster than (if <truthy> ...)
         (false nil)                 `(cond ~@more) ; Faster than (if <falsey> ...)
         :do        `(do        ~expr (cond ~@more))
         :let       `(let       ~expr (cond ~@more))
@@ -456,9 +456,9 @@
 (comment (caught-error-data (/ 5 0)))
 
 ;;;; Type preds, etc.
-;; TODO Could really do with a portable ^boolean hint
-;; Some of these have slowly been getting added to Clojure core; make sure
-;; to :exclude any official preds using the same name
+;; - TODO Could really do with a portable ^boolean hint
+;; - Some of these have slowly been getting added to Clojure core; make sure
+;;   to :exclude any official preds using the same name
 
 #+clj
 (do
@@ -1157,6 +1157,7 @@
   )
 
 (defn vnext        [v] (when (> (count v) 1) (subvec v 1)))
+(defn vrest        [v] (if   (> (count v) 1) (subvec v 1) []))
 (defn vsplit-last  [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
 (defn vsplit-first [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (subvec v 1))]))))
 
