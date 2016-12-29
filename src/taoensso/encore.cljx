@@ -2486,7 +2486,7 @@
   (let [;; {<rname> [<content_> <last-modified-udt>]}
         cache_ (atom {})]
     (fn [rname]
-      (when-let [curr-udt (get-file-resource-?last-modified rname)]
+      (let [curr-udt (or (get-file-resource-?last-modified rname) -1)]
         (force
           (swap-in! cache_ [rname]
             (fn [[?prev-content_ ?prev-udt :as ?v]]
