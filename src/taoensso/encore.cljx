@@ -1238,6 +1238,15 @@
   (defn remove-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k) (dissoc m k) m)) m m)))
   (defn remove-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m))))
 
+(defn keys-by
+  "Returns {(f x) x} map for xs in `coll`."
+  [f coll]
+  (persistent!
+    (reduce (fn [acc x] (assoc! acc (f x) x))
+      (transient {}) coll)))
+
+(comment (keys-by :foo [{:foo 1} {:foo 2}]))
+
 (do
   (defn #+clj ks=      #+cljs ^boolean ks=      [ks m] (=             (set (keys m)) (set* ks)))
   (defn #+clj ks<=     #+cljs ^boolean ks<=     [ks m] (set/subset?   (set (keys m)) (set* ks)))
