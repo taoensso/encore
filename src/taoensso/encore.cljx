@@ -266,6 +266,16 @@
           (cljs.core/defonce ~sym ~@body)
        (clojure.core/defonce ~sym ~@body))))
 
+#+clj
+(defn compiling-cljs?
+  "Return truthy iff currently generating Cljs code."
+  []
+  (when-let [n (find-ns 'cljs.analyzer)]
+    (when-let [v (ns-resolve n '*cljs-file*)]
+      @v)))
+
+(comment (compiling-cljs?))
+
 ;;;; Core fns we'll redefine but need in this ns
 
 (def -core-merge     #+clj clojure.core/merge     #+cljs cljs.core/merge)
