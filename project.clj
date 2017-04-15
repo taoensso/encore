@@ -15,7 +15,7 @@
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
    [org.clojure/tools.reader "0.10.0"]
-   [com.taoensso/truss       "1.3.7"]]
+   [com.taoensso/truss       "1.5.0"]]
 
   :plugins
   [[lein-pprint  "1.1.2"]
@@ -34,8 +34,8 @@
    :dev
    [:1.9 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.9.495"]
-      [org.clojure/core.async    "0.3.441"]]
+     [[org.clojure/clojurescript "1.9.521"]
+      [org.clojure/core.async    "0.3.442"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
