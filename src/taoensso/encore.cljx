@@ -128,7 +128,7 @@
 
 (defmacro if-let
   "Like `core/if-let` but can bind multiple values for `then` iff all tests
-  are truthy, supports internal `:let`s."
+  are truthy, supports internal unconditional `:let`s."
   ([bindings then     ] `(if-let ~bindings ~then nil))
   ([bindings then else]
    (let [s (seq bindings)]
@@ -145,7 +145,7 @@
 
 (defmacro if-some
   "Like `core/if-some` but can bind multiple values for `then` iff all tests
-  are non-nil, supports internal `:let`s."
+  are non-nil, supports internal unconditional `:let`s."
   ([bindings then] `(if-some ~bindings ~then nil))
   ([bindings then else]
    (let [s (seq bindings)]
@@ -198,7 +198,7 @@
 
 (defmacro when-let
   "Like `core/when-let` but can bind multiple values for `body` iff all tests
-  are truthy, supports internal `:let`s."
+  are truthy, supports internal unconditional `:let`s."
   ;; Now a feature subset of all-case `when`
   [bindings & body] `(if-let ~bindings (do ~@body)))
 
@@ -212,7 +212,10 @@
 (defmacro cond
   "Like `core/cond` but supports implicit (final) `else` clause, and special
   test keywords: :else, :let, :do, :when, :when-not, :when-some.
-  :let support inspired by https://github.com/Engelberg/better-cond."
+  :let support inspired by https://github.com/Engelberg/better-cond.
+
+  Simple, flexible way to eliminate deeply-nested control flow code."
+
   ;; Also avoids unnecessary `(if :else ...)`, etc.
   [& clauses]
   (when-let [[test expr & more] (seq clauses)]
