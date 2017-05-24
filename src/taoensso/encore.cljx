@@ -2706,7 +2706,7 @@
               :else [uri (url-encode params)]))]
 
       (fn [uri method params]
-        (have? [:or nil? map?] params)
+        (have? [:or nil? map? js-form-data?] params)
         (case method
           :get  (url-encode      uri params)
           :post (adaptive-encode uri params)
