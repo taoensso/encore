@@ -2818,8 +2818,8 @@
                          (.getLastErrorCode xhr)
                          :unknown)))})))))
 
-        ;; Experimental, untested, undocumented opt
         (when-let [pf (:progress-fn opts)]
+          (.setProgressEventsEnabled xhr true)
           (gevents/listen xhr goog.net.EventType/PROGRESS
             (fn [ev]
               (let [length-computable? (.-lengthComputable ev)
