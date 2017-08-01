@@ -2754,7 +2754,24 @@
                                  (get headers "x-requested-with" "XMLHTTPRequest"))]
               ;; `x-www-form-urlencoded`/`multipart/form-data` content-type
               ;; will be added by Closure if a custom content-type isn't provided
-              (clj->js headers))]
+              (clj->js headers))
+
+            ?progress-listener
+            (when-let [pf (:progress-fn opts)]
+              (.setProgressEventsEnabled xhr true)
+              (gevents/listen xhr goog.net.EventType/PROGRESS
+                              (fn [ev]
+                                (let [length-computable? (.-lengthComputable ev)
+                                      loaded (.-loaded ev)
+                                      total  (.-total  ev)
+                                      ?ratio (when (and length-computable? (not= total 0))
+                                               (/ loaded total))]
+                                  (pf
+                                   {:?ratio ?ratio
+                                    :length-computable? length-computable?
+                                    :loaded loaded
+                                    :total  total
+                                    :ev     ev})))))]
 
         (doto xhr
           (gevents/listenOnce goog.net.EventType/READY
@@ -2797,6 +2814,9 @@
 
                         [-status ?content-type ?content]))]
 
+                (when ?progress-listener
+                  (gevents/unlistenByKey ?progress-listener))
+
                 (callback-fn
                   {:raw-resp      resp
                    :xhr           xhr ; = (.-target resp)
@@ -2817,22 +2837,6 @@
                              goog.net.ErrorCode/TIMEOUT    :timeout}
                          (.getLastErrorCode xhr)
                          :unknown)))})))))
-
-        ;; Experimental, untested, undocumented opt
-        (when-let [pf (:progress-fn opts)]
-          (gevents/listen xhr goog.net.EventType/PROGRESS
-            (fn [ev]
-              (let [length-computable? (.-lengthComputable ev)
-                    loaded (.-loaded ev)
-                    total  (.-total  ev)
-                    ?ratio (when (and length-computable? (not= total 0))
-                             (/ loaded total))]
-                (pf
-                  {:?ratio ?ratio
-                   :length-computable? length-computable?
-                   :loaded loaded
-                   :total  total
-                   :ev     ev})))))
 
         (.setTimeoutInterval xhr (or timeout-ms 0)) ; nil = 0 = no timeout
         (when with-credentials?
