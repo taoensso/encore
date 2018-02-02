@@ -14,12 +14,12 @@
 
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
-   [org.clojure/tools.reader "1.1.1"]
+   [org.clojure/tools.reader "1.2.1"]
    [com.taoensso/truss       "1.5.0"]]
 
   :plugins
   [[lein-pprint  "1.2.0"]
-   [lein-ancient "0.6.14"]
+   [lein-ancient "0.6.15"]
    [lein-codox   "0.10.3"]]
 
   :profiles
@@ -35,7 +35,7 @@
    [:1.9 :test :server-jvm
     {:dependencies
      [[org.clojure/clojurescript "1.9.946"]
-      [org.clojure/core.async    "0.3.465"]]
+      [org.clojure/core.async    "0.4.474"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
