@@ -14,7 +14,7 @@
 
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
-   [org.clojure/tools.reader "1.2.1"]
+   [org.clojure/tools.reader "1.2.2"]
    [com.taoensso/truss       "1.5.0"]]
 
   :plugins
@@ -34,7 +34,7 @@
    :dev
    [:1.9 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.9.946"]
+     [[org.clojure/clojurescript "1.10.238"]
       [org.clojure/core.async    "0.4.474"]]
 
      :plugins
