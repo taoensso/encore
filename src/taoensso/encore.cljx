@@ -2407,6 +2407,11 @@
 (comment #=(ms   :years 88 :months 3 :days 33)
          #=(secs :years 88 :months 3 :days 33))
 
+(defmacro msecs "Compile-time version of `ms`" [& opts]
+  (eval `(taoensso.encore/ms ~@opts)))
+
+(comment (macroexpand '(msecs :weeks 3)))
+
 (defmacro thread-local-proxy
   [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
 
