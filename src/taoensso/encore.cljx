@@ -2907,7 +2907,7 @@
   #+cljs [s]
   (when s
     #+clj  (-> (str s)
-               (java.net.URLEncoder/encode (or encoding "UTF-8"))
+               (java.net.URLEncoder/encode (str (or encoding "UTF-8")))
                (str/replace "*" "%2A")
                (str/replace "+" "%2B"))
     #+cljs (-> (str s)
@@ -2920,8 +2920,8 @@
 (defn url-decode "Stolen from http://goo.gl/99NSR1"
   [s & [encoding]]
   (when s
-    #+clj  (java.net.URLDecoder/decode s (or encoding "UTF-8"))
-    #+cljs (js/decodeURIComponent s)))
+    #+clj  (java.net.URLDecoder/decode (str s) (str (or encoding "UTF-8")))
+    #+cljs (js/decodeURIComponent      (str s))))
 
 (comment (url-decode (url-encode "Hello there~*+")))
 
