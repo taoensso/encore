@@ -14,13 +14,13 @@
 
   :dependencies
   [[org.clojure/clojure      "1.5.1"]
-   [org.clojure/tools.reader "1.2.2"]
+   [org.clojure/tools.reader "1.3.0"]
    [com.taoensso/truss       "1.5.0"]]
 
   :plugins
   [[lein-pprint  "1.2.0"]
    [lein-ancient "0.6.15"]
-   [lein-codox   "0.10.3"]]
+   [lein-codox   "0.10.4"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -34,7 +34,7 @@
    :dev
    [:1.9 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.10.238"]
+     [[org.clojure/clojurescript "1.10.339"]
       [org.clojure/core.async    "0.4.474"]]
 
      :plugins
