@@ -2902,20 +2902,18 @@
 
 (comment (redirect-resp :temp "/foo" "boo!"))
 
-(defn url-encode "Stolen from http://goo.gl/99NSR1"
+(defn url-encode "Based on https://goo.gl/fBqy6e"
   #+clj  [s & [encoding]]
   #+cljs [s]
   (when s
     #+clj  (-> (str s)
                (java.net.URLEncoder/encode (str (or encoding "UTF-8")))
-               (str/replace "*" "%2A")
-               (str/replace "+" "%2B"))
+               (str/replace "*" "%2A") ; Cautious, https://stackoverflow.com/a/25149577/1982742
+               (str/replace "+" "%20") ; Cautious, https://stackoverflow.com/a/40292770/1982742
+               )
     #+cljs (-> (str s)
                (js/encodeURIComponent s)
-               (str/replace "*" "%2A")
-               (str/replace "'" "%27"))))
-
-(comment (mapv url-encode ["foo+bar" 47]))
+               (str/replace "*" "%2A"))))
 
 (defn url-decode "Stolen from http://goo.gl/99NSR1"
   [s & [encoding]]
@@ -2923,7 +2921,9 @@
     #+clj  (java.net.URLDecoder/decode (str s) (str (or encoding "UTF-8")))
     #+cljs (js/decodeURIComponent      (str s))))
 
-(comment (url-decode (url-encode "Hello there~*+")))
+(comment
+  (url-decode (url-encode "Hello there"))
+  (url-decode "hello+there"))
 
 (defn format-query-string [m]
   (let [param (fn [k v]  (str (url-encode (as-qname k)) "="
