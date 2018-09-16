@@ -2881,14 +2881,16 @@
 (comment (normalize-headers {:headers {"Foo1" "bar1" "FOO2" "bar2" "foo3" "bar3"}}))
 
 #+clj
-(let [->body-in-map (fn [x] (when x (if-not (map? x) {:body x} x)))]
-  (defn set-body      [resp body]    (assoc     (->body-in-map resp) :body   body))
-  (defn set-status    [resp code]    (assoc     (->body-in-map resp) :status code))
-  (defn merge-headers [resp headers] (update-in (->body-in-map resp) [:headers]
-                                       (fn [m] (merge m headers)))))
+(do
+  (defn ring-resp-map      [x] (when x (if (map? x) x {:body x})))
+  (defn ring-set-body      [body    resp] (assoc (ring-resp-map resp) :body    body))
+  (defn ring-set-status    [code    resp] (assoc (ring-resp-map resp) :status  code))
+  (defn ring-set-headers   [headers resp] (assoc (ring-resp-map resp) :headers headers))
+  (defn ring-merge-headers [headers resp] (assoc (ring-resp-map resp) :headers
+                                                (merge (get resp :headers) headers))))
 
-(comment (merge-headers {:body "foo"} {"BAR" "baz"})
-         (merge-headers "foo"         {"bar" "baz"}))
+(comment (ring-merge-headers {"BAR" "baz"} {:body "foo"})
+         (ring-merge-headers {"bar" "baz"} "foo"        ))
 
 #+clj
 (defn redirect-resp
@@ -3303,6 +3305,10 @@
   (def -vswapped       swapped-vec)
   (def -swap-k!        -swap-val!)
   (def update-in*      update-in)
+
+  #+clj (defn set-body      [resp body]    (ring-set-body      body    resp))
+  #+clj (defn set-status    [resp code]    (ring-set-status    code    resp))
+  #+clj (defn merge-headers [resp headers] (ring-merge-headers headers resp))
 
   (defmacro if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
   (defmacro when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
