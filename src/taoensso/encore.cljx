@@ -643,6 +643,13 @@
     (when (string? x)
       (if #+clj (.isEmpty ^String x) #+cljs (= x "") nil x)))
 
+  (defn as-?nblank-trim [x]
+    (when (string? x)
+      (let [s (str/trim x)]
+        (if #+clj (.isEmpty ^String s) #+cljs (= s "") nil s))))
+
+  (comment (as-?nblank-trim " foo  "))
+
   (defn as-?int #_as-?long [x]
     (cond (number? x) (long x)
           (string? x)
@@ -698,23 +705,24 @@
            {:given x :type (type x)})))
 
 (do
-  (defn as-nzero             [x] (or (as-?nzero      x) (-as-throw :nzero      x)))
-  (defn as-nblank            [x] (or (as-?nblank     x) (-as-throw :nblank     x)))
-  (defn as-nempty-str        [x] (or (as-?nempty-str x) (-as-throw :nempty-str x)))
-  (defn as-kw                [x] (or (as-?kw         x) (-as-throw :kw         x)))
-  (defn as-name              [x] (or (as-?name       x) (-as-throw :name       x)))
-  (defn as-qname             [x] (or (as-?qname      x) (-as-throw :qname      x)))
-  (defn as-email             [x] (or (as-?email      x) (-as-throw :email      x)))
-  (defn as-nemail            [x] (or (as-?nemail     x) (-as-throw :nemail     x)))
-  (defn as-udt         ^long [x] (or (as-?udt        x) (-as-throw :udt        x)))
-  (defn as-int         ^long [x] (or (as-?int        x) (-as-throw :int        x)))
-  (defn as-nat-int     ^long [x] (or (as-?nat-int    x) (-as-throw :nat-int    x)))
-  (defn as-pos-int     ^long [x] (or (as-?pos-int    x) (-as-throw :pos-int    x)))
-  (defn as-float     ^double [x] (or (as-?float      x) (-as-throw :float      x)))
-  (defn as-nat-float ^double [x] (or (as-?nat-float  x) (-as-throw :nat-float  x)))
-  (defn as-pos-float ^double [x] (or (as-?pos-float  x) (-as-throw :pos-float  x)))
-  (defn as-pval      ^double [x] (or (as-?pval       x) (-as-throw :pval       x)))
-  (defn as-bool              [x] (let [?b (as-?bool  x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
+  (defn as-nzero             [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
+  (defn as-nblank            [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
+  (defn as-nblank-trim       [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
+  (defn as-nempty-str        [x] (or (as-?nempty-str  x) (-as-throw :nempty-str  x)))
+  (defn as-kw                [x] (or (as-?kw          x) (-as-throw :kw          x)))
+  (defn as-name              [x] (or (as-?name        x) (-as-throw :name        x)))
+  (defn as-qname             [x] (or (as-?qname       x) (-as-throw :qname       x)))
+  (defn as-email             [x] (or (as-?email       x) (-as-throw :email       x)))
+  (defn as-nemail            [x] (or (as-?nemail      x) (-as-throw :nemail      x)))
+  (defn as-udt         ^long [x] (or (as-?udt         x) (-as-throw :udt         x)))
+  (defn as-int         ^long [x] (or (as-?int         x) (-as-throw :int         x)))
+  (defn as-nat-int     ^long [x] (or (as-?nat-int     x) (-as-throw :nat-int     x)))
+  (defn as-pos-int     ^long [x] (or (as-?pos-int     x) (-as-throw :pos-int     x)))
+  (defn as-float     ^double [x] (or (as-?float       x) (-as-throw :float       x)))
+  (defn as-nat-float ^double [x] (or (as-?nat-float   x) (-as-throw :nat-float   x)))
+  (defn as-pos-float ^double [x] (or (as-?pos-float   x) (-as-throw :pos-float   x)))
+  (defn as-pval      ^double [x] (or (as-?pval        x) (-as-throw :pval        x)))
+  (defn as-bool              [x] (let [?b (as-?bool   x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
 ;;;; Validation
 
