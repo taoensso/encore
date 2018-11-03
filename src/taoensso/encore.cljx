@@ -229,6 +229,8 @@
         :when-some   `(when-some   ~expr     (cond ~@more))
         :return-when `(if-let  [x# ~expr] x# (cond ~@more)) ; Undocumented
         :return-some `(if-some [x# ~expr] x# (cond ~@more)) ; Undocumented
+        :if-let      `(if-let      ~expr ~(first more) (cond ~@(next more))) ; Undocumented
+        :if-some     `(if-some     ~expr ~(first more) (cond ~@(next more))) ; Undocumented
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
             (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
@@ -1734,7 +1736,7 @@
 (deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
 
 (declare top)
-(defn memoize*
+(defn memoize* ; TODO Rename `memoize`
   "Like `core/memoize` but:
     * Often faster, depending on opts.
     * Prevents race conditions on writes.
