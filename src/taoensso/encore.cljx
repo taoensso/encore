@@ -220,13 +220,15 @@
     (if-not (next clauses)
       test ; Implicit else
       (case test
-        (true :else :default)   expr               ; Faster than (if <truthy> ...)
-        (false nil)                 `(cond ~@more) ; Faster than (if <falsey> ...)
-        :do        `(do        ~expr (cond ~@more))
-        :let       `(let       ~expr (cond ~@more))
-        :when      `(when      ~expr (cond ~@more))
-        :when-not  `(when-not  ~expr (cond ~@more))
-        :when-some `(when-some ~expr (cond ~@more))
+        (true :else :default)       expr                   ; Faster than (if <truthy> ...)
+        (false nil)                         `(cond ~@more) ; Faster than (if <falsey> ...)
+        :do          `(do          ~expr     (cond ~@more))
+        :let         `(let         ~expr     (cond ~@more))
+        :when        `(when        ~expr     (cond ~@more))
+        :when-not    `(when-not    ~expr     (cond ~@more))
+        :when-some   `(when-some   ~expr     (cond ~@more))
+        :return-when `(if-let  [x# ~expr] x# (cond ~@more)) ; Undocumented
+        :return-some `(if-some [x# ~expr] x# (cond ~@more)) ; Undocumented
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
             (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
