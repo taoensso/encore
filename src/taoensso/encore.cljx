@@ -2451,7 +2451,7 @@
     (fn [pattern locale timezone]
       (let [pattern
             (case pattern
-              :iso8601 "yyyy-MM-dd HH:mm:ss.SSSZ"
+              :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSX"
               :rss2    "EEE, dd MMM yyyy HH:mm:ss z"
               pattern)
 
