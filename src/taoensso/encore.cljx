@@ -1436,6 +1436,18 @@
      (.compareAndSet ~(with-meta atom_ {:tag atom-tag})
        ~old-val ~new-val)))
 
+(defn reset!?
+  "Atomically swaps value of `atom_` to `val` and returns
+  true iff the atom's value actually changed. See also `reset-in!?`."
+  [atom_ val]
+  (loop []
+    (let [old @atom_]
+      (if (-cas! atom_ old val)
+        (if (= old val) false true)
+        (recur)))))
+
+(comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
+
 (defn -swap-val!
   "Used internally by memoization utils."
   [atom_ k f]
