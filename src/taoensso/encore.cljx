@@ -81,7 +81,7 @@
    [taoensso.encore :as enc-macros :refer
     [have have! have? compile-if
      if-let if-some if-not when when-not when-some when-let cond defonce
-     cond! catching -cas! now-dt* now-udt* now-nano* -gc-now?
+     cond! catching -if-cas! now-dt* now-udt* now-nano* -gc-now?
      name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
 (def encore-version [2 102 0])
@@ -1429,12 +1429,13 @@
   (def ^:private ^:const atom-tag 'clojure.lang.IAtom)
   (def ^:private ^:const atom-tag  'clojure.lang.Atom))
 
-(defmacro -cas! "Micro optimization."
-  [atom_ old-val new-val]
+(defmacro -if-cas! "Micro optimization, mostly for cljs."
+  [atom_ old-val new-val then & [?else]]
   `(if-cljs
-     (do (reset! ~atom_ ~new-val) true) ; No compare for our uses here
-     (.compareAndSet ~(with-meta atom_ {:tag atom-tag})
-       ~old-val ~new-val)))
+     (do (reset! ~atom ~new-val) ~then)
+     (if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
+       ~then
+       ~?else)))
 
 (defn reset!?
   "Atomically swaps value of `atom_` to `val` and returns
@@ -1442,7 +1443,7 @@
   [atom_ val]
   (loop []
     (let [old @atom_]
-      (if (-cas! atom_ old val)
+      (-if-cas! atom_ old val
         (if (= old val) false true)
         (recur)))))
 
@@ -1455,7 +1456,7 @@
     (let [m0 @atom_
           v1 (f (get m0 k))
           m1 (assoc  m0 k v1)]
-      (if (-cas! atom_ m0 m1)
+      (-if-cas! atom_ m0 m1
         v1
         (recur)))))
 
@@ -1466,7 +1467,7 @@
             s1  (f v0)
             sw? (instance? Swapped s1)
             v1  (if sw? (.-newv ^Swapped s1) s1)]
-        (if (-cas! atom_ v0 v1)
+        (-if-cas! atom_ v0 v1
           (if sw?
             (.-returnv ^Swapped s1)
             (return v0 v1))
@@ -1475,7 +1476,7 @@
   (defn- -reset-k0! [return atom_ v1]
     (loop []
       (let [v0 @atom_]
-        (if (-cas! atom_ v0 v1)
+        (-if-cas! atom_ v0 v1
           (return v0 v1)
           (recur)))))
 
@@ -1484,7 +1485,7 @@
       (loop []
         (let [m0 @atom_
               m1 (dissoc m0 k)]
-          (if (-cas! atom_ m0 m1)
+          (-if-cas! atom_ m0 m1
             (return (get m0 k not-found) :swap/dissoc)
             (recur))))
 
@@ -1497,7 +1498,7 @@
               m1  (if (kw-identical? v1 :swap/dissoc)
                     (dissoc m0 k)
                     (assoc  m0 k v1))]
-          (if (-cas! atom_ m0 m1)
+          (-if-cas! atom_ m0 m1
             (if sw?
               (.-returnv ^Swapped s1)
               (return v0 v1))
@@ -1507,7 +1508,7 @@
     (loop []
       (let [m0 @atom_
             m1 (assoc m0 k v1)]
-        (if (-cas! atom_ m0 m1)
+        (-if-cas! atom_ m0 m1
           (return (get m0 k not-found) v1)
           (recur)))))
 
@@ -1519,7 +1520,7 @@
           (loop []
             (let [m0 @atom_
                   m1 (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)]
-              (if (-cas! atom_ m0 m1)
+              (-if-cas! atom_ m0 m1
                 (return (get-in m0 ks not-found) :swap/dissoc)
                 (recur))))
 
@@ -1532,7 +1533,7 @@
                   m1  (if (kw-identical? v1 :swap/dissoc)
                         (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
                         (do                     (assoc-in  m0 ks v1)))]
-              (if (-cas! atom_ m0 m1)
+              (-if-cas! atom_ m0 m1
                 (if sw?
                   (.-returnv ^Swapped s1)
                   (return v0 v1))
@@ -1547,7 +1548,7 @@
         (loop []
           (let [m0 @atom_
                 m1 (assoc-in m0 ks v1)]
-            (if (-cas! atom_ m0 m1)
+            (-if-cas! atom_ m0 m1
               (return (get-in m0 ks not-found) v1)
               (recur))))
 
@@ -1781,20 +1782,21 @@
 
              (when (-gc-now?)
                (let [latch #+clj (CountDownLatch. 1) #+cljs nil]
-                 (when (-cas! latch_ nil latch)
-                   (swap! cache_
-                     (fn [m]
-                       (persistent!
-                         (reduce-kv
-                           (fn [acc k ^SimpleCacheEntry e]
-                             (if (> (- instant (.-udt e)) ttl-ms)
-                               (dissoc! acc k)
-                               acc))
-                           (transient (or m {}))
-                           m))))
+                 (-if-cas! latch_ nil latch
+                   (do
+                     (swap! cache_
+                       (fn [m]
+                         (persistent!
+                           (reduce-kv
+                             (fn [acc k ^SimpleCacheEntry e]
+                               (if (> (- instant (.-udt e)) ttl-ms)
+                                 (dissoc! acc k)
+                                 acc))
+                             (transient (or m {}))
+                             m))))
 
-                   #+clj (.countDown latch)
-                   #+clj (reset! latch_ nil))))
+                     #+clj (.countDown latch)
+                     #+clj (reset! latch_ nil)))))
 
              (let [fresh? (kw-identical? a1 :mem/fresh)
                    args   (if fresh? (next args) args)
@@ -1835,40 +1837,41 @@
            (let [instant (if ttl-ms? (now-udt*) 0)]
              (when (-gc-now?)
                (let [latch #+clj (CountDownLatch. 1) #+cljs nil]
-                 (when (-cas! latch_ nil latch)
-                   ;; First prune ttl-expired stuff
-                   (when ttl-ms?
-                     (swap! cache_
-                       (fn [m]
-                         (persistent!
-                           (reduce-kv
-                             (fn [acc k ^TickedCacheEntry e]
-                               (if (> (- instant (.-udt e)) ttl-ms)
-                                 (dissoc! acc k)
-                                 acc))
-                             (transient (or m {}))
-                             m)))))
+                 (-if-cas! latch_ nil latch
+                   (do
+                     ;; First prune ttl-expired stuff
+                     (when ttl-ms?
+                       (swap! cache_
+                         (fn [m]
+                           (persistent!
+                             (reduce-kv
+                               (fn [acc k ^TickedCacheEntry e]
+                                 (if (> (- instant (.-udt e)) ttl-ms)
+                                   (dissoc! acc k)
+                                   acc))
+                               (transient (or m {}))
+                               m)))))
 
-                   ;; Then prune by ascending (worst) tick-sum:
-                   (let [snapshot @cache_
-                         n-to-gc  (- (count snapshot) cache-size)]
+                     ;; Then prune by ascending (worst) tick-sum:
+                     (let [snapshot @cache_
+                           n-to-gc  (- (count snapshot) cache-size)]
 
-                     (when (> n-to-gc 64)
-                       (let [ks-to-gc
-                             (top n-to-gc
-                               (fn [k]
-                                 (let [e ^TickedCacheEntry (get snapshot k)]
-                                   (+ (.-tick-lru e) (.-tick-lfu e))))
-                               (keys snapshot))]
+                       (when (> n-to-gc 64)
+                         (let [ks-to-gc
+                               (top n-to-gc
+                                 (fn [k]
+                                   (let [e ^TickedCacheEntry (get snapshot k)]
+                                     (+ (.-tick-lru e) (.-tick-lfu e))))
+                                 (keys snapshot))]
 
-                         (swap! cache_
-                           (fn [m]
-                             (persistent!
-                               (reduce (fn [acc in] (dissoc! acc in))
-                                 (transient (or m {})) ks-to-gc)))))))
+                           (swap! cache_
+                             (fn [m]
+                               (persistent!
+                                 (reduce (fn [acc in] (dissoc! acc in))
+                                   (transient (or m {})) ks-to-gc)))))))
 
-                   #+clj (.countDown latch)
-                   #+clj (reset! latch_ nil))))
+                     #+clj (.countDown latch)
+                     #+clj (reset! latch_ nil)))))
 
              (let [fresh?(kw-identical? a1 :mem/fresh)
                    args  (if fresh? (next args) args)
@@ -1939,31 +1942,31 @@
 
               (when (and (not peek?) (-gc-now?))
                 (let [latch #+clj (CountDownLatch. 1) #+cljs nil]
-                  (when (-cas! latch_ nil latch)
+                  (-if-cas! latch_ nil latch
+                    (do
+                      (swap! reqs_
+                        (fn [reqs] ; {<rid> <entries>}
+                          (persistent!
+                            (reduce-kv
+                              (fn [acc rid entries]
+                                (let [new-entries
+                                      (reduce-kv
+                                        (fn [acc sid ^LimitEntry e]
+                                          (if-let [^LimitSpec s (get specs sid)]
+                                            (if (>= instant (+ (.-udt0 e) (.-ms s)))
+                                              (dissoc acc sid)
+                                              acc)
+                                            (dissoc acc sid)))
+                                        entries ; {<sid <LimitEntry>}
+                                        entries)]
+                                  (if (empty? new-entries)
+                                    (dissoc! acc rid)
+                                    (assoc!  acc rid new-entries))))
+                              (transient (or reqs {}))
+                              reqs))))
 
-                    (swap! reqs_
-                      (fn [reqs] ; {<rid> <entries>}
-                        (persistent!
-                          (reduce-kv
-                            (fn [acc rid entries]
-                              (let [new-entries
-                                    (reduce-kv
-                                      (fn [acc sid ^LimitEntry e]
-                                        (if-let [^LimitSpec s (get specs sid)]
-                                          (if (>= instant (+ (.-udt0 e) (.-ms s)))
-                                            (dissoc acc sid)
-                                            acc)
-                                          (dissoc acc sid)))
-                                      entries ; {<sid <LimitEntry>}
-                                      entries)]
-                                (if (empty? new-entries)
-                                  (dissoc! acc rid)
-                                  (assoc!  acc rid new-entries))))
-                            (transient (or reqs {}))
-                            reqs))))
-
-                    #+clj (.countDown latch)
-                    #+clj (reset! latch_ nil))))
+                      #+clj (.countDown latch)
+                      #+clj (reset! latch_ nil)))))
 
               ;; Need to atomically check if all limits pass before
               ;; committing to any n increments:
@@ -2016,7 +2019,7 @@
                               entries
                               specs)]
 
-                        (if (-cas! reqs_ reqs (assoc reqs rid new-entries))
+                        (-if-cas! reqs_ reqs (assoc reqs rid new-entries)
                           nil
                           (recur)))))))))]
 
