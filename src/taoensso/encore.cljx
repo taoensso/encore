@@ -803,7 +803,25 @@
 
   (comment
     (String. (ba-concat (.getBytes "foo") (.getBytes "bar")))
-    (let [[x y] (ba-split (.getBytes "foobar") 5)] [(String. x) (String. y)])))
+    (let [[x y] (ba-split (.getBytes "foobar") 5)] [(String. x) (String. y)]))
+
+  (declare reduce-n)
+  (defn const-ba=
+    "Constant-time `ba=`.
+    Useful to prevent timing attacks, etc."
+    [ba1 ba2]
+    (when (and ba1 ba2)
+      (let [len1 (alength ^bytes ba1)]
+        (when (== len1 (alength ^bytes ba2))
+          (reduce-n
+            (fn [acc ^long idx]
+              (if (==
+                    (aget ^bytes ba1 idx)
+                    (aget ^bytes ba2 idx))
+                acc
+                false))
+            true
+            len1))))))
 
 ;;;; Volatiles
 
@@ -2360,6 +2378,32 @@
   (let [br "\n\n"]
     (into-str :a :b br :c (for [n (range 5)] [n br])
       (when true [:d :e [:f :g]]))))
+
+(defn const-str=
+  "Constant-time string equality checker.
+  Useful to prevent timing attacks, etc."
+  [s1 s2]
+  (when (and s1 s2)
+
+    #+clj
+    (const-ba=
+      (.getBytes ^String s1 "UTF-8")
+      (.getBytes ^String s2 "UTF-8"))
+
+    #+cljs
+    (let [v1 (vec   s1)
+          v2 (vec   s2)
+          n1 (count v1)]
+      (when (== n1 (count v2))
+        (reduce-n
+          (fn [acc idx]
+            (if (= (get v1 idx) (get v2 idx))
+              acc
+              false))
+          true
+          n1)))))
+
+(comment (const-str= "foo" "bar"))
 
 ;;;; Sorting
 
