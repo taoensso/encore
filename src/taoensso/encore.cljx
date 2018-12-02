@@ -35,7 +35,8 @@
     simple-ident?   qualified-ident?
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
-    format update-in merge merge-with])
+    format update-in merge merge-with
+    memoize])
 
   #+clj
   (:require
@@ -1749,7 +1750,7 @@
 (deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
 
 (declare top)
-(defn memoize* ; TODO Rename `memoize`
+(defn memoize
   "Like `core/memoize` but:
     * Often faster, depending on opts.
     * Prevents race conditions on writes.
@@ -1893,17 +1894,17 @@
 
 (comment
   (do
-    (def f0 (memoize         (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f1 (memoize*        (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f2 (memoize* 5000   (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f3 (memoize* 2 nil  (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f4 (memoize* 2 5000 (fn [& [x]] (if x x (Thread/sleep 600))))))
+    (def f0 (clojure.core/memoize (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f1 (memoize              (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f2 (memoize 5000         (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f3 (memoize 2 nil        (fn [& [x]] (if x x (Thread/sleep 600)))))
+    (def f4 (memoize 2 5000       (fn [& [x]] (if x x (Thread/sleep 600))))))
 
   (qb 1e5 (f0 :x) (f1 :x) (f2 :x) (f3 :x) (f4 :x))
   ;; [22.43 17.42 62.45 61.78 68.23]
 
-  (let [f0 (memoize  (fn [] (Thread/sleep 5) (print "f0\n")))
-        f1 (memoize* (fn [] (Thread/sleep 5) (print "f1\n")))]
+  (let [f0 (clojure.core/memoize (fn [] (Thread/sleep 5) (print "f0\n")))
+        f1 (memoize              (fn [] (Thread/sleep 5) (print "f1\n")))]
     (println "---")
     (dotimes [_ 10]
       (future (f1)) ; Never prints >once
@@ -2528,7 +2529,7 @@
   since last call."
   (let [udts_ (atom {}) ; {<rnames> <udt-or-udts>}
         swap! (fn [ks v] (swap-in! udts_ ks (fn [?v] (swapped v (when (not= v ?v) v)))))
-        rnames->rgroup (memoize (fn [rnames] (into (sorted-set) rnames)))]
+        rnames->rgroup (memoize_ (fn [rnames] (into (sorted-set) rnames)))]
     (fn [rnames & [?id]]
       (let [rgroup (rnames->rgroup rnames)]
         (swap! [?id rgroup] (mapv get-file-resource-?last-modified rgroup))))))
@@ -3302,6 +3303,7 @@
   (def a1-memoize_     memoize_)
   (def memoize-1       memoize-last)
   (def memoize1        memoize-last)
+  (def memoize*        memoize)
   (def nnil?           some?)
   (def nneg-num?       nat-num?)
   (def nneg-int?       nat-int?)
