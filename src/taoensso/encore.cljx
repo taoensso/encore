@@ -2445,35 +2445,34 @@
   [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
 
 #+clj
-(def ^:private -simple-date-format
+(defn- -simple-date-format
   "Returns a SimpleDateFormat ThreadLocal proxy."
-  (memoize_
-    (fn [pattern locale timezone]
-      (let [pattern
-            (case pattern
-              :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSX"
-              :rss2    "EEE, dd MMM yyyy HH:mm:ss z"
-              pattern)
+  [pattern locale timezone]
+  (let [pattern
+        (case pattern
+          :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+          :rss2    "EEE, dd MMM yyyy HH:mm:ss z"
+          pattern)
 
-            locale
-            (if (kw-identical? locale :jvm-default)
-              nil ; (Locale/getDefault)
-              locale)
+        locale
+        (if (kw-identical? locale :jvm-default)
+          nil ; (Locale/getDefault)
+          locale)
 
-            timezone
-            (if (kw-identical? timezone :jvm-default)
-              nil ; (TimeZone/getDefault)
-              (if (kw-identical? timezone :utc)
-                (TimeZone/getTimeZone "UTC")
-                timezone))]
+        timezone
+        (if (kw-identical? timezone :jvm-default)
+          nil ; (TimeZone/getDefault)
+          (if (kw-identical? timezone :utc)
+            (TimeZone/getTimeZone "UTC")
+            timezone))]
 
-        (thread-local-proxy
-          (let [^SimpleDateFormat sdf
-                (if locale
-                  (SimpleDateFormat. ^String pattern ^Locale locale)
-                  (SimpleDateFormat. ^String pattern))]
-            (when timezone (.setTimeZone sdf ^TimeZone timezone))
-            sdf))))))
+    (thread-local-proxy
+      (let [^SimpleDateFormat sdf
+            (if locale
+              (SimpleDateFormat. ^String pattern ^Locale locale)
+              (SimpleDateFormat. ^String pattern))]
+        (when timezone (.setTimeZone sdf ^TimeZone timezone))
+        sdf))))
 
 #+clj
 (defn simple-date-format*
