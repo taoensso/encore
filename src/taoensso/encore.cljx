@@ -125,6 +125,23 @@
 (defmacro if-clj  [then & [else]] (if (:ns &env) else then))
 (defmacro if-cljs [then & [else]] (if (:ns &env) then else))
 
+(defmacro when-let [bindings & body]
+  (let [s (seq bindings)]
+    (if s ; (if-let [] true false) => true
+      (let [[b1 b2 & bnext] s]
+        (if (= b1 :let)
+          `(let      ~b2  (when-let ~(vec bnext) ~@body))
+          `(let [b2# ~b2]
+             (if b2#
+               (let [~b1 b2#]
+                 (when-let ~(vec bnext) ~@body))))))
+      `(do ~@body))))
+
+;; Alt. impln. that trades away perf for decreased expansion size
+(defmacro if-let
+  ([bindings then     ]             `(when-let ~bindings         ~then))
+  ([bindings then else] `(or (::then (when-let ~bindings {::then ~then})) ~else)))
+
 (defmacro if-let
   "Like `core/if-let` but can bind multiple values for `then` iff all tests
   are truthy, supports internal unconditional `:let`s."
