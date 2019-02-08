@@ -4,12 +4,12 @@
   #+clj
   (:require
    [clojure.test    :as test :refer [is]]
-   [taoensso.encore :as enc  :refer [have?]])
+   [taoensso.encore :as enc  :refer [have? if-cljs]])
 
   #+cljs
   (:require
    [cljs.test       :as test :refer-macros [is]]
-   [taoensso.encore :as enc  :refer-macros [have?]]))
+   [taoensso.encore :as enc  :refer-macros [have? if-cljs]]))
 
 (defmacro expect
   ([             expr] `(is                        ~expr))
