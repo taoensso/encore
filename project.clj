@@ -30,11 +30,12 @@
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
    :1.8  {:dependencies [[org.clojure/clojure "1.8.0"]]}
    :1.9  {:dependencies [[org.clojure/clojure "1.9.0"]]}
+   :1.10 {:dependencies [[org.clojure/clojure "1.10.0"]]}
    :test {:dependencies [[org.clojure/test.check "0.9.0"]]}
    :dev
-   [:1.9 :test :server-jvm
+   [:1.10 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.10.439"]
+     [[org.clojure/clojurescript "1.10.516"]
       [org.clojure/core.async    "0.4.490"]]
 
      :plugins
@@ -83,7 +84,7 @@
 
   :aliases
   {"test-all"   ["do" "clean," "cljx" "once,"
-                 "with-profile" "+1.9:+1.8:+1.7:+1.6:+1.5" "test,"
+                 "with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "test,"
                  ;; "with-profile" "+test" "cljsbuild" "test"
                  ]
    "build-once" ["do" "clean," "cljx" "once," "cljsbuild" "once" "main"]
