@@ -2953,12 +2953,12 @@
 
 #+clj
 (do
-  (defn ring-resp-map      [x] (when x (if (map? x) x {:body x})))
-  (defn ring-set-body      [body    resp] (assoc (ring-resp-map resp) :body    body))
-  (defn ring-set-status    [code    resp] (assoc (ring-resp-map resp) :status  code))
-  (defn ring-set-headers   [headers resp] (assoc (ring-resp-map resp) :headers headers))
-  (defn ring-merge-headers [headers resp] (assoc (ring-resp-map resp) :headers
-                                                (merge (get resp :headers) headers))))
+  (defn ring-resp-map        [x] (when x (if (map? x) x {:body x})))
+  (defn ring-set-body        [body    resp] (assoc (ring-resp-map resp) :body    body))
+  (defn ring-set-status      [code    resp] (assoc (ring-resp-map resp) :status  code))
+  (defn ring-set-headers     [headers resp] (assoc (ring-resp-map resp) :headers headers))
+  (defn ring-default-headers [headers resp] (assoc (ring-resp-map resp) :headers (merge headers (get resp :headers))))
+  (defn ring-merge-headers   [headers resp] (assoc (ring-resp-map resp) :headers (merge (get resp :headers) headers))))
 
 (comment (ring-merge-headers {"BAR" "baz"} {:body "foo"})
          (ring-merge-headers {"bar" "baz"} "foo"        ))
