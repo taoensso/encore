@@ -20,7 +20,7 @@
   :plugins
   [[lein-pprint  "1.2.0"]
    [lein-ancient "0.6.15"]
-   [lein-codox   "0.10.5"]]
+   [lein-codox   "0.10.6"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -35,7 +35,7 @@
    :dev
    [:1.10 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.10.516"]
+     [[org.clojure/clojurescript "1.10.520"]
       [org.clojure/core.async    "0.4.490"]]
 
      :plugins
