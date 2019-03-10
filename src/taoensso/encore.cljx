@@ -988,6 +988,10 @@
 
 (comment (exp-backoff 128))
 
+(defn chance [p] (< ^double (rand) (double p)))
+
+(comment (chance 0.25))
+
 ;;;; Misc
 
 ;; js/foo      - `foo` in global object/ns (depends on *target*)
