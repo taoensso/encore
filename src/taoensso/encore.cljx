@@ -862,17 +862,22 @@
     (reduce (fn [acc [k v]] (rf acc k v)) init (partition-all 2 kvs))))
 
 (compile-if clojure.lang.LongRange ; Clojure 1.7+ (no Cljs support yet)
-  (defn reduce-n [rf init ^long n] (reduce rf init (range n)))
-  (defn reduce-n [rf init ^long n]
-    (loop [acc init idx 0]
-      (if (== idx n)
-        acc
-        (let [acc (rf acc idx)]
-          (if (reduced? acc)
-            @acc
-            (recur acc (unchecked-inc idx))))))))
+  (defn reduce-n
+    ([rf init       end] (reduce rf init (range       end)))
+    ([rf init start end] (reduce rf init (range start end))))
 
-(comment (reduce-n conj [] 100))
+  (defn reduce-n
+    ([rf init                   end] (reduce-n rf init 0 end))
+    ([rf init ^long start ^long end]
+     (loop [acc init idx start]
+       (if (>= idx n)
+         acc
+         (let [acc (rf acc idx)]
+           (if (reduced? acc)
+             @acc
+             (recur acc (unchecked-inc idx)))))))))
+
+(comment (reduce-n conj [] 10 100))
 
 (let [inc (fn [n] (inc ^long n))] ; For var deref, boxing
   (defn reduce-indexed
