@@ -870,7 +870,7 @@
     ([rf init                   end] (reduce-n rf init 0 end))
     ([rf init ^long start ^long end]
      (loop [acc init idx start]
-       (if (>= idx n)
+       (if (>= idx end)
          acc
          (let [acc (rf acc idx)]
            (if (reduced? acc)
