@@ -1070,22 +1070,22 @@
     (defn vec* [x] (if (vector? x) x (vec x)))
     (defn set* [x] (if (set?    x) x (set x)))))
 
-#+cljs (defn oset [o k v] (gobj/set (if (nil? o) (js-obj) o) k v))
+#+cljs (defn oset [o k v] (gobj/set (if (nil? o) (js-obj) o) (name k) v))
 #+cljs
 (defn oget "Like `get` for JS objects, Ref. https://goo.gl/eze8hY."
-  ([o k          ] (gobj/get o k nil))
-  ([o k not-found] (gobj/get o k not-found)))
+  ([o k          ] (gobj/get o (name k) nil))
+  ([o k not-found] (gobj/get o (name k) not-found)))
 
 #+cljs
 (let [sentinel (js-obj)]
   ;; Could also use `gobg/getValueByKeys`
   (defn oget-in "Like `get-in` for JS objects."
-    ([o ks] (oget-in o ks nil))
+    ([o ks] (oget-in o         ks nil))
     ([o ks not-found]
      (loop [o o
             ks (seq ks)]
        (if ks
-         (let [o (gobj/get o (first ks) sentinel)]
+         (let [o (gobj/get o (name (first ks)) sentinel)]
            (if (identical? o sentinel)
              not-found
              (recur o (next ks))))
