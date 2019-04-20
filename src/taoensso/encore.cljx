@@ -1073,13 +1073,15 @@
 #+cljs (defn oset [o k v] (gobj/set (if (nil? o) (js-obj) o) (name k) v))
 #+cljs
 (defn oget "Like `get` for JS objects, Ref. https://goo.gl/eze8hY."
-  ([o k          ] (gobj/get o (name k) nil))
-  ([o k not-found] (gobj/get o (name k) not-found)))
+  ([  k          ] (gobj/get js/window (name k)))
+  ([o k          ] (gobj/get o         (name k) nil))
+  ([o k not-found] (gobj/get o         (name k) not-found)))
 
 #+cljs
 (let [sentinel (js-obj)]
   ;; Could also use `gobg/getValueByKeys`
   (defn oget-in "Like `get-in` for JS objects."
+    ([  ks] (oget-in js/window ks nil))
     ([o ks] (oget-in o         ks nil))
     ([o ks not-found]
      (loop [o o
