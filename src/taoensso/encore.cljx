@@ -85,7 +85,7 @@
      cond! catching -if-cas! now-dt* now-udt* now-nano* -gc-now?
      name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]]))
 
-(def encore-version [2 108 1])
+(def encore-version [2 109 0])
 
 (comment "ℕ ℤ ℝ ∞ ≠ ∈ ∉"
   (set! *unchecked-math* :warn-on-boxed)
