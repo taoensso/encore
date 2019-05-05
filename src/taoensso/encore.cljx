@@ -2976,15 +2976,18 @@
 
 #+clj
 (defn redirect-resp
-  ([url] (redirect-resp :temp url nil))
-  ([type url & [flash]]
-     {:status  (case type (301 :permanent :perm)     301
-                          (302 :temporary :temp nil) 302)
-      :headers {"location" url}
-      :body    nil
-      :flash   flash}))
+  ([url               ] (redirect-resp :temp url nil))
+  ([kind url & [flash]]
+   {:headers {"location" url}
+    :body    nil
+    :flash   flash
+    :status
+    (case kind
+      (301 :permanent :perm)     301
+      (302 :temporary :temp nil) 302
+      kind)}))
 
-(comment (redirect-resp :temp "/foo" "boo!"))
+(comment (redirect-resp 303 "/foo" "boo!"))
 
 (defn url-encode "Based on https://goo.gl/fBqy6e"
   #+clj  [s & [encoding]]
