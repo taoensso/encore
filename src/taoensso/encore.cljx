@@ -1353,6 +1353,25 @@
    (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
    (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a])])
 
+(defn node-paths
+  ([          m      ] (node-paths associative? m nil))
+  ([node-pred m      ] (node-paths node-pred    m nil))
+  ([node-pred m basis]
+   (let [basis (or basis [])]
+     (persistent!
+       (reduce-kv
+         (fn [acc k v]
+           (if-not (node-pred v)
+             (conj! acc (conj basis k v))
+             (let [paths-from-basis (node-paths node-pred v (conj basis k))]
+               (reduce (fn [acc in] (conj! acc in)) acc paths-from-basis))))
+         (transient [])
+         m)))))
+
+(comment
+  (node-paths associative? {:a1 :A1 :a2 {:b1 :B1 :b2 {:c1 :C1 :c2 :C2}}} [:h])
+  (node-paths [:a1 :a2 [:b1 :b2 [:c1 :c2] :b3] :a3 :a4]))
+
 (defn interleave-all "Greedy version of `interleave`."
   ([     ] '())
   ([c1   ] (lazy-seq c1))
