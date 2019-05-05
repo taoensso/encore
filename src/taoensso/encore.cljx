@@ -1285,13 +1285,13 @@
 
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
-(do ; Note `mapv`-like nil->{} semantics, no transients
-  (defn map-vals       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m k (f v))) m m)))
-  (defn map-keys       [f m] (if (nil? m) {} (reduce-kv (fn [m k v] (assoc m (f k) v)) {} m)))
-  (defn filter-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k) m (dissoc m k))) m m)))
-  (defn filter-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) m (dissoc m k))) m m)))
-  (defn remove-keys [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k) (dissoc m k) m)) m m)))
-  (defn remove-vals [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred v) (dissoc m k) m)) m m))))
+(let [p! persistent!, t transient] ; Note `mapv`-like nil->{} semantics
+  (defn map-vals       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m k (f v))) (t m) m))))
+  (defn map-keys       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (t {}) m))))
+  (defn filter-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) m (dissoc! m k))) (t m) m))))
+  (defn filter-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) m (dissoc! m k))) (t m) m))))
+  (defn remove-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) (dissoc! m k) m)) (t m) m))))
+  (defn remove-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) (dissoc! m k) m)) (t m) m)))))
 
 (defn keys-by
   "Returns {(f x) x} map for xs in `coll`."
