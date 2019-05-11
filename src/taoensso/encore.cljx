@@ -1272,7 +1272,7 @@
     ([] (distinct)) ; core now has a distinct transducer
     ([keyfn]
      (fn [rf]
-       (let [seen_ (volatile! #{})]
+       (let [seen_ (volatile! (transient #{}))]
          (fn
            ([]    (rf))
            ([acc] (rf acc))
@@ -1280,7 +1280,7 @@
             (let [k (keyfn input)]
               (if (contains? @seen_ k)
                 acc
-                (do (vswap! seen_ conj k)
+                (do (vswap! seen_ conj! k)
                     (rf acc input)))))))))))
 
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
