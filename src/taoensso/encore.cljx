@@ -842,7 +842,7 @@
 
 ;;;; Reduce
 
-;; (defn ensure-reduced [x] (if (reduced? x) x (reduced x)))
+(defn   convey-reduced [x] (if (reduced? x) (reduced x) x)) ; Double-wrap
 (defn preserve-reduced "As `core/preserving-reduced`."
   [rf]
   (fn [acc in]
