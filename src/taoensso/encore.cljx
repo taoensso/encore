@@ -979,7 +979,8 @@
 (do ; Optimized common cases
   (defn round0   ^long [n]            (Math/round    (double n)))
   (defn round1 ^double [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
-  (defn round2 ^double [n] (/ (double (Math/round (* (double n) 100.0))) 100.0)))
+  (defn round2 ^double [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
+  (defn perc     ^long [n divisor] (Math/round (* (/ (double n) (double divisor)) 100.0))))
 
 (defn exp-backoff "Returns binary exponential backoff value for n<=36."
   ([^long n-attempt] (exp-backoff n-attempt nil))
