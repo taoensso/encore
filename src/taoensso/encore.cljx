@@ -931,8 +931,8 @@
   #+clj
   (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
     (fn counter
-      ([       ] (.getAndIncrement idx_))
-      ([^long n] (.getAndAdd       idx_ n)))))
+      ([ ] (.getAndIncrement idx_))
+      ([n] (.getAndAdd       idx_ (long n))))))
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
