@@ -881,12 +881,15 @@
 
 (let [inc (fn [n] (inc ^long n))] ; For var deref, boxing
   (defn reduce-indexed
-    "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`."
+    "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`.
+    As `reduce-kv` against vector coll, but works on any seqable coll type."
     [rf init coll]
     (let [i (-vol! -1)]
       (reduce (fn [acc in] (rf acc (-vol-swap! i inc) in)) init coll))))
 
-(comment (reduce-indexed (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c]))
+(comment
+  (reduce-indexed (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c])
+  (reduce-kv      (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c]))
 
 #+cljs
 (defn reduce-obj "Like `reduce-kv` but for JavaScript objects."
