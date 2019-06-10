@@ -918,13 +918,20 @@
 
 ;;;; Math
 
-(let [inc (fn [n] (inc ^long n))]
-  (defn idx-fn
-    "Returns a new stateful index fn that returns: 0, 1, 2, ..."
-    []
-    #+cljs (let [idx_ (-vol! -1)] (fn [] (-vol-swap! idx_ inc)))
-    #+clj  (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
-             (fn [] (.getAndIncrement idx_)))))
+(defn counter []
+  #+cljs
+  (let [idx_ (-vol! -1)]
+    (fn counter
+      ([ ] (-vol-swap! idx_ (fn [c] (+ c 1))))
+      ([n] (-vol-swap! idx_ (fn [c] (+ c n))))))
+
+  #+clj
+  (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
+    (fn counter
+      ([       ] (.getAndIncrement idx_))
+      ([^long n] (.getAndAdd       idx_ n)))))
+
+(comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
 (def ^:const max-long #+clj Long/MAX_VALUE #+cljs  9007199254740991)
 (def ^:const min-long #+clj Long/MIN_VALUE #+cljs -9007199254740991)
@@ -3411,6 +3418,7 @@
   (def -vswapped       swapped-vec)
   (def -swap-k!        -swap-val!)
   (def update-in*      update-in)
+  (def idx-fn          counter)
 
   #+clj (defn set-body      [resp body]    (ring-set-body      body    resp))
   #+clj (defn set-status    [resp code]    (ring-set-status    code    resp))
