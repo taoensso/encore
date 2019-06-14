@@ -2126,6 +2126,71 @@
   (qb 1e6 (rl1)) ; 266.58
   )
 
+;;;; Counters
+
+(deftype RollingCounter [^long msecs #+clj p_ n-skip_ ts_]
+  #+clj clojure.lang.IFn #+cljs IFn
+  (#+clj invoke #+cljs -invoke [this]
+    #+clj (when-let [p @p_] @p) ; Block iff latched
+    (swap! ts_ (let [t1 (now-udt*)] (fn [v] (conj v t1))))
+    this ; Return to allow optional deref
+    )
+
+  #+clj clojure.lang.IDeref #+cljs IDeref
+  (#+clj deref #+cljs -deref [_]
+    #+clj (when-let [p @p_] @p) ; Block iff latched
+
+    (let [t1 (now-udt*)
+          ^long n-skip0  @n-skip_
+          ts             @ts_
+          n-total  (count ts)
+          ^long n-window
+          (reduce
+            (fn [^long n ^long t0]
+              (if (<= (- t1 t0) msecs)
+                (inc n)
+                (do  n)))
+            0
+            (subvec ts n-skip0))
+
+          n-skip1 (- n-total n-window)]
+
+      ;; (println {:n-total n-total :n-window n-window :n-skip0 n-skip0 :n-skip1 n-skip1})
+      (when (<            n-skip0 n-skip1)
+        (-if-cas! n-skip_ n-skip0 n-skip1
+          (when (> n-skip1 10000) ; Time to gc, amortised cost
+            #+cljs
+            (do
+              (swap! ts_ (fn [v]  (subvec v n-skip1)))
+              (reset! n-skip_ 0))
+
+            #+clj
+            (let [p (promise)]
+              (-if-cas! p_ nil p ; Latch
+                (do
+                  (swap! ts_ (fn [v] (subvec v n-skip1)))
+                  (reset!  n-skip_ 0)
+                  (reset!  p_ nil)
+                  (deliver p  nil)))))))
+
+      n-window)))
+
+(defn rolling-counter
+  "Experimental. Returns a RollingCounter that you can:
+    - Invoke to increment count in last `msecs` window
+    - Deref  to get       count in last `msecs` window"
+  [msecs]
+  (RollingCounter.
+    (long (have pos-int? msecs))
+    #+clj (atom nil)
+    (atom 0)
+    (atom [])))
+
+(comment
+  (def myrc (rolling-counter 4000))
+  (dotimes [_ 100000] (myrc))
+  @myrc)
+
 ;;;; Strings
 
 #+clj  (defn          str-builder? [x] (instance?            StringBuilder x))
