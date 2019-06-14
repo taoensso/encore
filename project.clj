@@ -36,7 +36,7 @@
    [:1.10 :test :server-jvm
     {:dependencies
      [[org.clojure/clojurescript "1.10.520"]
-      [org.clojure/core.async    "0.4.490"]]
+      [org.clojure/core.async    "0.4.500"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
