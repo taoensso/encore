@@ -2177,8 +2177,8 @@
 
 (defn rolling-counter
   "Experimental. Returns a RollingCounter that you can:
-    - Invoke to increment count in last `msecs` window
-    - Deref  to get       count in last `msecs` window"
+    - Invoke to increment count in last `msecs` window and return RollingCounter.
+    - Deref  to return    count in last `msecs` window."
   [msecs]
   (RollingCounter.
     (long (have pos-int? msecs))
