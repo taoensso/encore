@@ -2228,9 +2228,9 @@
   (defn str-join
     "Faster, transducer-based generalization of `clojure.string/join` with `xform`
     support"
-    ([                coll] (str-join nil       nil coll))
-    ([separator       coll] (str-join separator nil coll))
-    ([separator xform coll]
+    (^String [                coll] (str-join nil       nil coll))
+    (^String [separator       coll] (str-join separator nil coll))
+    (^String [separator xform coll]
      (if (and separator (not= separator ""))
        (let [sep-xform (interpose separator)
              str-rf*   (completing str-rf str)]
