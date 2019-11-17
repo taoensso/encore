@@ -72,7 +72,6 @@
    [goog.net.XhrIo      :as gxhr]
    [goog.net.XhrIoPool  :as gxhr-pool]
    [goog.Uri.QueryData  :as gquery-data]
-   [goog.structs        :as gstructs]
    [goog.net.EventType]
    [goog.net.ErrorCode]
    [taoensso.truss :as truss])
@@ -2867,7 +2866,7 @@
           (fn url-encode
             ([params]
              (when (seq params)
-               (-> params clj->js gstructs/Map. gquery-data/createFromMap .toString)))
+               (-> params clj->js gquery-data/createFromMap .toString)))
 
             ([uri params]
              (let [qstr (url-encode params)
