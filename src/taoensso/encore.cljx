@@ -100,13 +100,14 @@
 (defmacro compile-if
   "Evaluates `test`. If it returns logical true (and doesn't throw), expands
   to `then`, otherwise expands to `else`."
+  {:style/indent 1}
   ([test then     ] `(compile-if ~test ~then nil)) ; Back compatibility
   ([test then else]
    (if (try (eval test) (catch Throwable _ false))
      `(do ~then)
      `(do ~else))))
 
-#+clj (defmacro compile-when [test & body] `(compile-if ~test (do ~@body) nil))
+#+clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil))
 
 #+clj
 (compile-if (completing (fn []))
@@ -127,6 +128,7 @@
 (defmacro if-let
   "Like `core/if-let` but can bind multiple values for `then` iff all tests
   are truthy, supports internal unconditional `:let`s."
+  {:style/indent 1}
   ([bindings then     ] `(if-let ~bindings ~then nil))
   ([bindings then else]
    (let [s (seq bindings)]
@@ -144,6 +146,7 @@
 (defmacro if-some
   "Like `core/if-some` but can bind multiple values for `then` iff all tests
   are non-nil, supports internal unconditional `:let`s."
+  {:style/indent 1}
   ([bindings then] `(if-some ~bindings ~then nil))
   ([bindings then else]
    (let [s (seq bindings)]
@@ -162,6 +165,7 @@
   "Like `core/if-not` but acts like `if-let` when given a binding vector
   as test expr."
   ;; Also avoids unnecessary `(not test)`
+  {:style/indent 1}
   ([test-or-bindings then]
    (if (vector? test-or-bindings)
      `(if-let ~test-or-bindings nil ~then)
@@ -175,6 +179,7 @@
 (defmacro when
   "Like `core/when` but acts like `when-let` when given a binding vector
   as test expr."
+  {:style/indent 1}
   [test-or-bindings & body]
   (if (vector? test-or-bindings)
     `(if-let ~test-or-bindings (do ~@body) nil)
@@ -183,12 +188,14 @@
 (defmacro when-not
   "Like `core/when-not` but acts like `when-let` when given a binding vector
   as test expr."
+  {:style/indent 1}
   [test-or-bindings & body]
   (if (vector? test-or-bindings)
     `(if-let ~test-or-bindings nil (do ~@body))
     `(if     ~test-or-bindings nil (do ~@body))))
 
 (defmacro when-some
+  {:style/indent 1}
   [test-or-bindings & body]
   (if (vector? test-or-bindings)
     `(if-some       ~test-or-bindings  (do ~@body) nil)
@@ -197,6 +204,7 @@
 (defmacro when-let
   "Like `core/when-let` but can bind multiple values for `body` iff all tests
   are truthy, supports internal unconditional `:let`s."
+  {:style/indent 1}
   ;; Now a feature subset of all-case `when`
   [bindings & body] `(if-let ~bindings (do ~@body)))
 
@@ -265,6 +273,7 @@
 
 (defmacro defonce
   "Like `core/defonce` but supports optional docstring and attrs map."
+  {:style/indent 1}
   [sym & args]
   (let [[sym body] (name-with-attrs sym args)]
     `(if-cljs
@@ -301,6 +310,7 @@
 #+clj
 (defmacro case-eval
   "Like `case` but evals test constants for their compile-time value."
+  {:style/indent 1}
   [expr & clauses]
   (let [default (when (odd? (count clauses)) (last clauses))
         clauses (if default (butlast clauses) clauses)]
@@ -313,7 +323,9 @@
   (defmacro do-false [& body] `(do ~@body false))
   (defmacro do-true  [& body] `(do ~@body true)))
 
-(defmacro doto-cond "Cross between `doto`, `cond->` and `as->`."
+(defmacro doto-cond
+  "Cross between `doto`, `cond->` and `as->`."
+  {:style/indent 1}
   [[sym x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
