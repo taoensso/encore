@@ -1298,8 +1298,9 @@
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
 (let [p! persistent!, t transient] ; Note `mapv`-like nil->{} semantics
-  (defn map-vals       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m k (f v))) (t m) m))))
-  (defn map-keys       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (t {}) m))))
+  (defn invert-map       [m]                 (p! (reduce-kv (fn [m k v] (assoc! m v    k))  (t {}) m)))
+  (defn map-keys       [f m]                 (p! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (t {}) m)))
+  (defn map-vals       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m k (f v))) (t  m) m))))
   (defn filter-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) m (dissoc! m k))) (t m) m))))
   (defn filter-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) m (dissoc! m k))) (t m) m))))
   (defn remove-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) (dissoc! m k) m)) (t m) m))))
