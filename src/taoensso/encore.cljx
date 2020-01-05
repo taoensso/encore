@@ -1149,6 +1149,21 @@
        (if (nil? m) {} m)
        kvs)))
 
+  (defn dis-assoc-some
+    "Assocs each kv if its value is not nil, otherwise dissocs it."
+    ([m k v      ] (if (nil? v) (if (nil? m) {} (dissoc m k)) (assoc m k v)))
+    ([m k v & kvs]
+     (reduce-kvs
+       (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v)))
+       (assoc-some m k v)
+       kvs))
+
+    ([m kvs]
+     (reduce-kv
+       (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v)))
+       (if (nil? m) {} m)
+       kvs)))
+
   ;; Handy as l>r merge
   (defn assoc-nx "Assocs each kv iff its key doesn't already exist."
     ([m k v] (if (contains? m k) m (assoc m k v)))
@@ -1162,6 +1177,7 @@
 (comment
   (assoc-some {:a :A} :b nil :c :C :d nil :e :E)
   (assoc-some {:a :A} {:b :B :c nil :d :D :e false})
+  (dis-assoc-some {:a :A :b :B} {:a :a :b nil})
   (reduce-kv assoc-nx {:a :A} {:a :a :b :b}))
 
 (defn get-subvec
