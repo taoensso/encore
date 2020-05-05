@@ -2212,6 +2212,9 @@
 
 ;;;; Strings
 
+#+clj  (def ^String system-newline (System/getProperty "line.separator"))
+#+cljs (def         system-newline "\n")
+
 #+clj  (defn          str-builder? [x] (instance?            StringBuilder x))
 #+cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer x))
 
