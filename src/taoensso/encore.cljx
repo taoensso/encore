@@ -86,7 +86,7 @@
 
 (def encore-version [2 120 0])
 
-(comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒ →"
+(comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
