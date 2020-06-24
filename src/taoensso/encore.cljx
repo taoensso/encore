@@ -2544,7 +2544,7 @@
   (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstance "SHA1SRNG"))))
 
 #+clj
-(defn srng
+(defn secure-rng
   "Returns a thread-local `java.security.SecureRandom`.
   Favours security over performance. Automatically re-seeds occasionally.
   May block while waiting on system entropy!"
@@ -2557,37 +2557,81 @@
     rng))
 
 (defn secure-rand-bytes
-  "Returns `size` random bytes using `srng` or `js/Crypto`."
+  "Returns `size` random bytes using `secure-rng` or `js/Crypto`."
   #+clj ^bytes [size]
   #+cljs       [size]
-  #+clj  (let [ba (byte-array     size)] (.nextBytes       (srng)    ba) ba)
+  #+clj  (let [ba (byte-array     size)] (.nextBytes (secure-rng)    ba) ba)
   #+cljs (let [ba (js/Uint8Array. size)] (.getRandomValues js/Crypto ba) ba))
 
 (comment
   (qb  1e6 (secure-rand-bytes 21)) ; 1021.07
   (do (seq (secure-rand-bytes 21))))
 
-(let [chars (mapv str "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
-      mask  0x3f]
+(def           ^:const nanoid-alphabet "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
+(def ^:private          parse-alphabet
+  "Ref.
+    Java impl.: https://bit.ly/3dtYv73,
+      JS impl.: https://bit.ly/3fYv1zT,
+    Motivation: https://bit.ly/2VhWuEO"
+  (memoize_
+    (fn [alphabet len]
+      (let [an   (count alphabet)
+            len  (long  len)
+            _    (when (or (< an 1) (> an 256)) (throw (ex-info "`alphabet`: must be ℕ∈[1,256]" {})))
+            _    (when (<= len 0)               (throw (ex-info      "`len`: must be ℕ∈[0,∞)"   {})))
+            ;;   (2 << (int) Math.floor(Math.log(alphabet.length - 1) / Math.log(2))) - 1;
+            mask (dec (bit-shift-left 2 (int (Math/floor (/ (Math/log (dec an)) (Math/log 2))))))
+            ;;   (int) Math.ceil(1.6 * mask * size / alphabet.length);
+            step (long (Math/ceil (/ (* (* 1.6 mask) len) an)))]
+
+        [mask step (mapv str alphabet)]))))
+
+(comment (qb 1e6 (parse-alphabet nanoid-alphabet 21)))
+
+(defn secure-rand-id
+  "Experimental.
+  Given `alphabet` (a string of possible characters), returns a securely
+  random string of length `len`. Based on https://bit.ly/3dtYv73."
+  #+clj [alphabet ^long len] #+cljs [alphabet len]
+  (let [#+clj [^byte mask step v] #+cljs [mask step v]
+        (parse-alphabet alphabet len)
+
+        an (count v)
+        sb (str-builder)]
+
+    (loop []
+      (let [ba (secure-rand-bytes step)
+            result
+            (reduce-n
+              (fn [acc idx]
+                (let [alpha-idx (bit-and mask (aget ba idx))]
+                  (if (>= alpha-idx an)
+                    acc ; Out of alphabet range
+                    (let [acc (sb-append acc (v alpha-idx))]
+                      (if (== (count acc) len)
+                        (reduced (str acc))
+                        (do           acc))))))
+              sb
+              step)]
+        (if (string? result) result (recur))))))
+
+(let [alphabet (mapv str nanoid-alphabet)
+      mask     0x3f]
 
   (defn nanoid
-    "Experimental.
-    Returns a secure Nano ID, similar to a UUID v4:
-    - Similar uniqueness  (126 bits by default).
-    - Smaller string size (21 vs 36 by default).
-
-    Ref. https://github.com/ai/nanoid."
-    ([    ] (nanoid 21))
-    ([size]
-     (let [ba (secure-rand-bytes size) #_(byte-array [81 -125 -54 -45 -108 99])]
+    "Experimental. Optimized variant of `secure-rand-id` that returns Nano IDs
+    as in https://github.com/ai/nanoid."
+    ([   ] (nanoid 21))
+    ([len]
+     (let [ba (secure-rand-bytes len) #_(byte-array [81 -125 -54 -45 -108 99])]
        (str
          (reduce-n
            (fn [acc idx]
-             (sb-append acc (chars (bit-and mask (aget ba idx)))))
+             (sb-append acc (alphabet (bit-and mask (aget ba idx)))))
            (str-builder)
            (alength ba)))))))
 
-(comment (qb 1e5 (uuid-str) (nanoid))) ; [83.17 196.38]
+(comment (qb 1e5 (secure-rand-id nanoid-alphabet 21) (nanoid) (uuid-str))) ; [343.31 205.98 82.86]
 
 ;;;; Sorting
 
@@ -3516,6 +3560,7 @@
 
 (deprecated
   #+cljs (def get-window-location get-win-loc)
+  #+clj  (def srng                secure-rng)
   (def backport-run!   run!)
   (def fq-name         as-qname)
   (def qname           as-qname)
