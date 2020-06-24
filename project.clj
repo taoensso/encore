@@ -18,7 +18,7 @@
    [com.taoensso/truss       "1.5.0"]]
 
   :plugins
-  [[lein-pprint  "1.2.0"]
+  [[lein-pprint  "1.3.2"]
    [lein-ancient "0.6.15"]
    [lein-codox   "0.10.7"]]
 
@@ -35,13 +35,13 @@
    :dev
    [:1.10 :test :server-jvm
     {:dependencies
-     [[org.clojure/clojurescript "1.10.597"]
-      [org.clojure/core.async    "0.6.532"]]
+     [[org.clojure/clojurescript "1.10.773"]
+      [org.clojure/core.async    "1.2.603"]]
 
      :plugins
      [;; These must be in :dev, Ref. https://github.com/lynaghk/cljx/issues/47:
       [com.keminglabs/cljx "0.6.0"]
-      [lein-cljsbuild      "1.1.7"]]}]}
+      [lein-cljsbuild      "1.1.8"]]}]}
 
   ;; :jar-exclusions [#"\.cljx|\.DS_Store"]
 
