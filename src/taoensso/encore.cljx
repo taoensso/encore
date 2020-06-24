@@ -2507,6 +2507,8 @@
     (into-str :a :b br :c (for [n (range 5)] [n br])
       (when true [:d :e [:f :g]]))))
 
+;;;; Security, etc.
+
 (defn const-str=
   "Constant-time string equality checker.
   Useful to prevent timing attacks, etc."
@@ -2532,6 +2534,60 @@
           n1)))))
 
 (comment (const-str= "foo" "bar"))
+
+(defmacro thread-local-proxy
+  [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
+
+#+clj
+(compile-if (fn [] (java.security.SecureRandom/getInstanceStrong)) ; Java 8+, blocking
+  (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstanceStrong)))
+  (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstance "SHA1SRNG"))))
+
+#+clj
+(defn srng
+  "Returns a thread-local `java.security.SecureRandom`.
+  Favours security over performance. Automatically re-seeds occasionally.
+  May block while waiting on system entropy!"
+  ^java.security.SecureRandom []
+  (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
+    ;; Occasionally supplement current seed for extra security.
+    ;; Otherwise an attacker could *theoretically* observe large amounts of
+    ;; srng output to determine initial seed, Ref. https://goo.gl/MPM91w
+    (when (< (.nextDouble rng) 2.44140625E-4) (.setSeed rng (.generateSeed rng 8)))
+    rng))
+
+(defn secure-rand-bytes
+  "Returns `size` random bytes using `srng` or `js/Crypto`."
+  #+clj ^bytes [size]
+  #+cljs       [size]
+  #+clj  (let [ba (byte-array     size)] (.nextBytes       (srng)    ba) ba)
+  #+cljs (let [ba (js/Uint8Array. size)] (.getRandomValues js/Crypto ba) ba))
+
+(comment
+  (qb  1e6 (secure-rand-bytes 21)) ; 1021.07
+  (do (seq (secure-rand-bytes 21))))
+
+(let [chars (mapv str "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
+      mask  0x3f]
+
+  (defn nanoid
+    "Experimental.
+    Returns a secure Nano ID, similar to a UUID v4:
+    - Similar uniqueness  (126 bits by default).
+    - Smaller string size (21 vs 36 by default).
+
+    Ref. https://github.com/ai/nanoid."
+    ([    ] (nanoid 21))
+    ([size]
+     (let [ba (secure-rand-bytes size) #_(byte-array [81 -125 -54 -45 -108 99])]
+       (str
+         (reduce-n
+           (fn [acc idx]
+             (sb-append acc (chars (bit-and mask (aget ba idx)))))
+           (str-builder)
+           (alength ba)))))))
+
+(comment (qb 1e5 (uuid-str) (nanoid))) ; [83.17 196.38]
 
 ;;;; Sorting
 
@@ -2613,9 +2669,6 @@
   (eval `(taoensso.encore/ms ~@opts)))
 
 (comment (macroexpand '(msecs :weeks 3)))
-
-(defmacro thread-local-proxy
-  [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
 
 #+clj
 (defn- -simple-date-format
