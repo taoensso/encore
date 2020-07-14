@@ -2591,7 +2591,15 @@
 (defn secure-rand-id
   "Experimental.
   Given `alphabet` (a string of possible characters), returns a securely
-  random string of length `len`. Based on https://bit.ly/3dtYv73."
+  random string of length `len`.
+
+  Trying to do this the obvious/naive way (by repeatedly generating a secure
+  random number and mapping it to an alphabet character with modulo) actually
+  introduces bias into ids that can be exploited by an attacker.
+
+  The method used here is designed to eliminate that bias.
+  Based on https://bit.ly/3dtYv73."
+
   #+clj [alphabet ^long len] #+cljs [alphabet len]
   (let [#+clj [^byte mask step v] #+cljs [mask step v]
         (parse-alphabet alphabet len)
