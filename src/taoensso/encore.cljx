@@ -3369,68 +3369,105 @@
 
 ;;;; ns filter
 
-(def compile-ns-filter "Returns (fn [?ns]) -> truthy."
-  (let [compile1
-        (fn [x] ; ns-pattern
+(def compile-str-filter
+  "Compiles given spec/s and returns a fast (fn str-match? [?in-str])
+  predicate to act as an allowlist (whitelist) and/or denylist (blacklist).
+
+  Predicate is case sensitive, and will return truthy iff input string both:
+    - Does     match ?allowspec, AND
+    - Does NOT match  ?denyspec.
+
+  [1] specs may be:
+    - :any or :none keywords.
+    - A regex pattern.
+    - A string, in which any \"*\"s will act as wildcards (#\".*\").
+      If you need literal \"*\"s, use an explicit regex pattern instead.
+    - A vector or set of specs.
+
+  Single-arity spec may be {:allow <spec> :deny <spec>}, otherwise it will
+  be treated as an allowspec.
+
+  Input string use cases incl.: namespace strings, class names, etc.
+
+  Performance tip: in the common case where `?in-str` domain is finite, you may
+  want to also memoize the returned predicate."
+
+  (let [compile
+        (fn self [spec] ; Returns (fn [in-str]) -> truthy
           (cond
-            (re-pattern? x) (fn [ns-str] (re-find x ns-str))
-            (string? x)
-            (if (str-contains? x "*")
+            (or (vector? spec) (set? spec))
+            (if (empty?  spec)
+              (fn [in-str] false)
+              (let [match-fns (mapv self spec)
+                    [m1 & mn] match-fns]
+                (if mn
+                  (fn [in-str] (rsome #(% in-str) match-fns))
+                  (fn [in-str] (m1 in-str)))))
+
+            ;; Disabled due to ambiguity: meant as splitter or literal?
+            ;; Prefer reading spec strings as unambiguous edn.
+            ;; (and (string? spec) (str-contains? ","))
+            ;; (self (mapv str/trim (str/split spec #",")))
+
+            (#{:any "*"} spec) (fn [in-str] true)
+            (#{:none   } spec) (fn [in-str] false)
+            (re-pattern? spec) (fn [in-str] (re-find spec in-str))
+            (string?     spec)
+            (if (str-contains? spec "*")
               (let [re
                     (re-pattern
-                      (-> (str "^" x "$")
+                      (-> (str "^" spec "$")
                           (str/replace "." "\\.")
                           (str/replace "*" "(.*)")))]
-                (fn [ns-str] (re-find re ns-str)))
-              (fn [ns-str] (= ns-str x)))
+                (fn [in-str] (re-find re in-str)))
+              (fn [in-str] (= in-str spec)))
 
-            :else (throw (ex-info "Unexpected ns-pattern type"
-                           {:given x :type (type x)}))))]
+            :else
+            (throw
+              (ex-info "Unexpected compile spec type"
+                {:given spec :type (type spec)}))))]
 
     (fn self
-      ([ns-pattern] ; Useful for user-level matching
-       (let [x ns-pattern]
+      ([spec] ; Convenience, calls 2-arity
+       (cond
+         (map? spec) ; Explicit {:allow _ :deny _}, etc.
+         (self
+           (or (:allow spec) (:whitelist spec))
+           (or (:deny  spec) (:blacklist spec)))
+
+         :else (self spec nil)))
+
+      ([?allowspec ?denyspec]
+       (let [allow (when-let [as ?allowspec] (compile as))
+             deny  (when-let [ds ?denyspec]  (compile ds))]
+
          (cond
-           (map? x) (self (:whitelist x) (:blacklist x))
-           (or (vector? x) (set? x)) (self x nil)
-           (= x "*") (fn [?ns] true)
+           (and allow deny)
+           (fn [?in-str]
+             (let [in-str (str ?in-str)]
+               (if (allow in-str)
+                 (if (deny in-str)
+                   false
+                   true)
+                 false)))
+
+           allow (fn [?in-str] (if (allow (str ?in-str)) true false))
+           deny  (fn [?in-str] (if (deny  (str ?in-str)) true false))
            :else
-           (let [match? (compile1 x)]
-             (fn [?ns] (if (match? (str ?ns)) true))))))
-
-      ([whitelist blacklist]
-       (let [white
-             (when (seq whitelist)
-               (let [match-fns (mapv compile1 whitelist)
-                     [m1 & mn] match-fns]
-                 (if mn
-                   (fn [ns-str] (rsome #(% ns-str) match-fns))
-                   (fn [ns-str] (m1 ns-str)))))
-
-             black
-             (when (seq blacklist)
-               (let [match-fns (mapv compile1 blacklist)
-                     [m1 & mn] match-fns]
-                 (if mn
-                   (fn [ns-str] (not (rsome #(% ns-str) match-fns)))
-                   (fn [ns-str] (not (m1 ns-str))))))]
-         (cond
-           (and white black)
-           (fn [?ns]
-             (let [ns-str (str ?ns)]
-               (if (white ns-str)
-                 (if (black ns-str)
-                   true))))
-
-           white (fn [?ns] (if (white (str ?ns)) true))
-           black (fn [?ns] (if (black (str ?ns)) true))
-           :else (fn [?ns] true) ; Common case
-           ))))))
+           (throw
+             (ex-info "compile-str-filter: `?allowspec` and `?denyspec` cannot both be nil" {}))))))))
 
 (comment
-  (def nsf? (compile-ns-filter #{"foo.*" "bar"}))
-  (qb 1e5 (nsf? "foo")) ; 20.44
-  )
+  (def sf? (compile-str-filter #{"foo.*" "bar"}))
+  (enc/qb 1e5 (sf? "foo")) ; 26
+
+  (-> "foo" ((compile-str-filter nil)))           :ex
+  (-> "foo" ((compile-str-filter :any)))          true
+  (-> "foo" ((compile-str-filter #{"foo*"})))     true
+  (-> "foo" ((compile-str-filter ["bar" "foo"]))) true
+  (-> "foo" ((compile-str-filter ["bar" "f*"])))  true
+  (-> "foo" ((compile-str-filter {:allow :any :deny :any}))) false
+  (-> "foo" ((compile-str-filter {:allow "foo*"}))) true)
 
 ;;;; Scheduling
 ;; Considered also adding `call-at-interval` but decided against it since the
@@ -3615,6 +3652,15 @@
   (def -swap-k!        -swap-val!)
   (def update-in*      update-in)
   (def idx-fn          counter)
+
+  ;; Used by old versions of Timbre, Tufte
+  (defn compile-ns-filter
+    "Deprecated, prefer `compile-str-filter` instead."
+    ([target            ] (compile-ns-filter target))
+    ([allowlist denylist]
+     (if (or allowlist denylist)
+       (compile-str-filter allowlist denylist)
+       (compile-str-filter :any      nil))))
 
   #+clj (defn set-body      [resp body]    (ring-set-body      body    resp))
   #+clj (defn set-status    [resp code]    (ring-set-status    code    resp))
