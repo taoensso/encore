@@ -2779,8 +2779,8 @@
 
 ;;;; IO
 
-#+clj (defn  get-sys-val [id] (or (System/getProperty id) (System/getenv id)))
-#+clj (defn read-sys-val [id] (when-let [s (get-sys-val id)] (read-edn s)))
+#+clj (defn  get-sys-val ([id] (get-sys-val  id id)) ([prop-id env-id] (or (System/getProperty prop-id) (System/getenv env-id))))
+#+clj (defn read-sys-val ([id] (read-sys-val id id)) ([prop-id env-id] (when-let [s (get-sys-val prop-id env-id)] (read-edn s))))
 
 #+clj
 (defn slurp-resource
