@@ -3396,8 +3396,10 @@
         (fn self [spec] ; Returns (fn [in-str]) -> truthy
           (cond
             (or (vector? spec) (set? spec))
-            (if (empty?  spec)
-              (fn [in-str] false)
+            (cond
+              (empty?           spec) (fn [in-str] false)
+              (rsome #(= % "*") spec) (fn [in-str] true)
+              :else
               (let [match-fns (mapv self spec)
                     [m1 & mn] match-fns]
                 (if mn
@@ -3409,10 +3411,10 @@
             ;; (and (string? spec) (str-contains? ","))
             ;; (self (mapv str/trim (str/split spec #",")))
 
-            (#{:any "*"} spec) (fn [in-str] true)
-            (#{:none   } spec) (fn [in-str] false)
-            (re-pattern? spec) (fn [in-str] (re-find spec in-str))
-            (string?     spec)
+            (#{:any   "*"} spec) (fn [in-str] true)
+            (#{:none #_""} spec) (fn [in-str] false)
+            (re-pattern?   spec) (fn [in-str] (re-find spec in-str))
+            (string?       spec)
             (if (str-contains? spec "*")
               (let [re
                     (re-pattern
