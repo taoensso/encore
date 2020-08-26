@@ -3658,7 +3658,7 @@
   ;; Used by old versions of Timbre, Tufte
   (defn compile-ns-filter
     "Deprecated, prefer `compile-str-filter` instead."
-    ([target            ] (compile-ns-filter target))
+    ([target            ] (compile-ns-filter target nil))
     ([allowlist denylist]
      (if (or allowlist denylist)
        (compile-str-filter allowlist denylist)
