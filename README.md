@@ -21,9 +21,15 @@
 
 **Please note**: this is a library intended mostly for my own use or **for advanced users** who are comfortable reading the source code to see what's available + how to use it.
 
-## Experiencing a dependency conflict?
+## Recommended steps after any significant dependency update
 
-Please see [here](https://github.com/ptaoussanis/encore/blob/master/DEP-CONFLICT.md) for help.
+> These are a good idea when updated **any** dependency, not just encore!
+
+1. Run `lein deps :tree` (or equivalent) to check for possible **dependency conflicts**.
+2. Run `lein clean` (or equivalent) to ensure no **stale build artifacts** remain.
+3. Please test carefully before running in production!
+
+Some info on how to resolve dependency conflicts [here](https://github.com/ptaoussanis/encore/blob/master/DEP-CONFLICT.md).
 
 ## Contacting me / contributions
 
