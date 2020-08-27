@@ -1766,35 +1766,30 @@
         cache_ (java.util.concurrent.ConcurrentHashMap.)]
 
     (fn
-      ([ ] ; Micro-optimised case
-       @(or (.get cache_ nil-sentinel)
-            (let [dv (delay (f))]
-              (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
+      ([ ] @(or (.get cache_ nil-sentinel)
+                (let [dv (delay (f))]
+                  (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
 
-      ([x] ; Micro-optimised case
-       (let [xs (clojure.lang.PersistentList. x) #_(list x)]
-         @(or (.get cache_ xs)
-              (let [dv (delay (f x))]
-                (or (.putIfAbsent cache_ xs dv) dv)))))
+      ([& xs]
+       (let [x1 (first xs)]
 
-      ([x1 & xs]
-       (cond
-         (kw-identical? x1 :mem/del)
-         (let [xn (next  xs)
-               x2 (first xn)]
-           (if (kw-identical? x2 :mem/all)
-             (.clear  cache_)
-             (.remove cache_ (or xn nil-sentinel)))
-           nil)
+        (cond
+          (kw-identical? x1 :mem/del)
+          (let [xn (next  xs)
+                x2 (first xn)]
+            (if (kw-identical? x2 :mem/all)
+              (.clear  cache_)
+              (.remove cache_ (or xn nil-sentinel)))
+            nil)
 
-         (kw-identical? x1 :mem/fresh)
-         @(let [xn (next xs)
-                dv (delay (apply f xn))] (.put cache_ (or xn nil-sentinel) dv) dv)
+          (kw-identical? x1 :mem/fresh)
+          @(let [xn (next xs)
+                 dv (delay (apply f xn))] (.put cache_ (or xn nil-sentinel) dv) dv)
 
-         :else
-         @(or (.get cache_ xs)
-            (let [dv (delay (apply f xs))]
-              (or (.putIfAbsent cache_ xs dv) dv))))))))
+          :else
+          @(or (.get cache_ xs)
+               (let [dv (delay (apply f xs))]
+                 (or (.putIfAbsent cache_ xs dv) dv)))))))))
 
 (comment
   (do
