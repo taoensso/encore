@@ -2000,6 +2000,61 @@
       (future (f1)) ; Never prints >once
       (future (f0)))))
 
+(defn fmemoize
+  "Fastest-possible Clj memoize. Non-racy, 0-3 arity only.
+  Cljs just passes through to `core/memoize`."
+  [f]
+  #+cljs (cljs.core/memoize f)
+  #+clj
+  ;; Non-racey just as fast as racey, and protects against nils in maps
+  (let [cache0_ (java.util.concurrent.atomic.AtomicReference. nil)
+        cache1_ (java.util.concurrent.ConcurrentHashMap.)
+        cachen_ (java.util.concurrent.ConcurrentHashMap.)]
+
+    (fn
+      ([ ]
+       @(or
+          (.get cache0_)
+          (let [dv (delay (f))]
+            (if (.compareAndSet cache0_ nil dv)
+              dv
+              (.get cache0_)))))
+
+      ([x]
+       @(or
+          (.get cache1_ x)
+          (let [dv (delay (f x))]
+            (or (.putIfAbsent cache1_ x dv) dv))))
+
+      ([x1 x2]
+       (let [xs [x1 x2]]
+         @(or
+            (.get cachen_ xs)
+            (let [dv (delay (f x1 x2))]
+              (or (.putIfAbsent cachen_ xs dv) dv)))))
+
+      ([x1 x2 x3]
+       (let [xs [x1 x2 x3]]
+         @(or
+            (.get cachen_ xs)
+            (let [dv (delay (f x1 x2 x3))]
+              (or (.putIfAbsent cachen_ xs dv) dv))))))))
+
+(comment
+  (let [m0 (memoize  (fn [& args] (count args)))
+        m1 (memoize_ (fn [& args] (count args)))
+        m2 (fmemoize (fn [& args] (count args)))]
+
+    [(qb 1e6 (m0)          (m1)          (m2))
+     (qb 1e6 (m0 "")       (m1 "")       (m2 ""))
+     (qb 1e6 (m0 "" "")    (m1 "" "")    (m2 "" ""))
+     (qb 1e6 (m0 "" "" "") (m1 "" "" "") (m2 "" "" ""))])
+
+  [[ 74.16  57.48  54.42]
+   [284.42 223.74  62.98]
+   [508.04 273.04 102.42]
+   [823.37 366.64 120.19]])
+
 ;;;; Rate limits
 
 (deftype LimitSpec  [^long n ^long ms])
@@ -2585,7 +2640,7 @@
     Java impl.: https://bit.ly/3dtYv73,
       JS impl.: https://bit.ly/3fYv1zT,
     Motivation: https://bit.ly/2VhWuEO"
-  (memoize_
+  (fmemoize
     (fn [alphabet len]
       (let [an   (count alphabet)
             len  (long  len)
@@ -2818,7 +2873,7 @@
   since last call."
   (let [udts_ (atom {}) ; {<rnames> <udt-or-udts>}
         swap! (fn [ks v] (swap-in! udts_ ks (fn [?v] (swapped v (when (not= v ?v) v)))))
-        rnames->rgroup (memoize_ (fn [rnames] (into (sorted-set) rnames)))]
+        rnames->rgroup (fmemoize (fn [rnames] (into (sorted-set) rnames)))]
     (fn [rnames & [?id]]
       (let [rgroup (rnames->rgroup rnames)]
         (swap! [?id rgroup] (mapv get-file-resource-?last-modified rgroup))))))
