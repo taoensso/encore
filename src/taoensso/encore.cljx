@@ -3656,13 +3656,16 @@
   (def idx-fn          counter)
 
   ;; Used by old versions of Timbre, Tufte
-  (defn compile-ns-filter
-    "Deprecated, prefer `compile-str-filter` instead."
-    ([target            ] (compile-ns-filter target nil))
-    ([allowlist denylist]
-     (if (or allowlist denylist)
-       (compile-str-filter allowlist denylist)
-       (compile-str-filter :any      nil))))
+  (let [nolist? #(contains? #{nil [] #{}} %)]
+
+    (defn compile-ns-filter
+      "Deprecated, prefer `compile-str-filter` instead."
+      ([ns-pattern         ] (compile-ns-filter ns-pattern nil))
+      ([whitelist blacklist]
+
+       (if (and (nolist? whitelist) (nolist? blacklist))
+         (fn [_] true) ; Unfortunate API choice
+         (compile-str-filter whitelist blacklist)))))
 
   #+clj (defn set-body      [resp body]    (ring-set-body      body    resp))
   #+clj (defn set-status    [resp code]    (ring-set-status    code    resp))
