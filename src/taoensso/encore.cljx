@@ -3459,13 +3459,15 @@
   Performance tip: in the common case where `?in-str` domain is finite, you may
   want to also memoize the returned predicate."
 
-  (let [compile
+  (let [always (fn always [?in-str] true)
+        never  (fn never  [?in-str] false)
+        compile
         (fn self [spec] ; Returns (fn [in-str]) -> truthy
           (cond
             (or (vector? spec) (set? spec))
             (cond
-              (empty?           spec) (fn [in-str] false)
-              (rsome #(= % "*") spec) (fn [in-str] true)
+              (empty?           spec) never
+              (rsome #(= % "*") spec) always
               :else
               (let [match-fns (mapv self spec)
                     [m1 & mn] match-fns]
@@ -3478,8 +3480,8 @@
             ;; (and (string? spec) (str-contains? ","))
             ;; (self (mapv str/trim (str/split spec #",")))
 
-            (#{:any   "*"} spec) (fn [in-str] true)
-            (#{:none #_""} spec) (fn [in-str] false)
+            (#{:any   "*"} spec) always
+            (#{:none #_""} spec) never
             (re-pattern?   spec) (fn [in-str] (re-find spec in-str))
             (string?       spec)
             (if (str-contains? spec "*")
@@ -3511,6 +3513,9 @@
              deny  (when-let [ds ?denyspec]  (compile ds))]
 
          (cond
+           (= deny  always) never ; Micro optimization
+           (= allow never)  never ; Micro optimization
+
            (and allow deny)
            (fn [?in-str]
              (let [in-str (str ?in-str)]
@@ -3520,11 +3525,12 @@
                    true)
                  false)))
 
-           allow (fn [?in-str] (if (allow (str ?in-str)) true false))
-           deny  (fn [?in-str] (if (deny  (str ?in-str)) true false))
+           allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true false)))
+           deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) true false)))
            :else
            (throw
-             (ex-info "compile-str-filter: `?allowspec` and `?denyspec` cannot both be nil" {}))))))))
+             (ex-info "compile-str-filter: `?allowspec` and `?denyspec` cannot both be nil"
+               {:?allowspec ?allowspec :?denyspec ?denyspec}))))))))
 
 (comment
   (def sf? (compile-str-filter #{"foo.*" "bar"}))
