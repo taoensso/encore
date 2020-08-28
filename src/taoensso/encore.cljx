@@ -3436,105 +3436,111 @@
 
 ;;;; ns filter
 
-(def compile-str-filter
-  "Compiles given spec/s and returns a fast (fn str-match? [?in-str])
-  predicate to act as an allowlist (whitelist) and/or denylist (blacklist).
+(let [always (fn always [?in-str] true)
+      never  (fn never  [?in-str] false)
 
-  Predicate is case sensitive, and will return truthy iff input string both:
-    - Does     match ?allowspec, AND
-    - Does NOT match  ?denyspec.
+      wild-str->?re-pattern
+      (fn [s]
+        (when (str-contains? s "*")
+          (re-pattern
+            (-> (str "^" s "$")
+              (str/replace "." "\\.")
+              (str/replace "*" "(.*)")))))
 
-  [1] specs may be:
-    - :any or :none keywords.
-    - A regex pattern.
-    - A string, in which any \"*\"s will act as wildcards (#\".*\").
-      If you need literal \"*\"s, use an explicit regex pattern instead.
-    - A vector or set of specs.
-
-  Single-arity spec may be {:allow <spec> :deny <spec>}, otherwise it will
-  be treated as an allowspec.
-
-  Input string use cases incl.: namespace strings, class names, etc.
-
-  Performance tip: in the common case where `?in-str` domain is finite, you may
-  want to also memoize the returned predicate."
-
-  (let [always (fn always [?in-str] true)
-        never  (fn never  [?in-str] false)
-        compile
-        (fn self [spec] ; Returns (fn [in-str]) -> truthy
+      compile
+      (fn compile [spec cache?] ; Returns (fn match? [in-str])
+        (cond
+          (#{:any "*"    } spec) always
+          (#{:none #{} []} spec) never
+          (re-pattern?     spec) (fn [in-str] (re-find spec in-str))
+          (string?         spec)
           (cond
-            (or (vector? spec) (set? spec))
-            (cond
-              (empty?           spec) never
-              (rsome #(= % "*") spec) always
-              :else
-              (let [match-fns (mapv self spec)
-                    [m1 & mn] match-fns]
-                (if mn
-                  (fn [in-str] (rsome #(% in-str) match-fns))
-                  (fn [in-str] (m1 in-str)))))
+            ;; Ambiguous: "," meant as splitter or literal? Prefer coll.
+            ;; (str-contains? spec ",") (recur (mapv str/trim (str/split spec #",")) cache?)
+            :if-let [re-pattern (wild-str->?re-pattern spec)]
+            (recur re-pattern cache?))
 
-            ;; Disabled due to ambiguity: meant as splitter or literal?
-            ;; Prefer reading spec strings as unambiguous edn.
-            ;; (and (string? spec) (str-contains? ","))
-            ;; (self (mapv str/trim (str/split spec #",")))
-
-            (#{:any   "*"} spec) always
-            (#{:none #_""} spec) never
-            (re-pattern?   spec) (fn [in-str] (re-find spec in-str))
-            (string?       spec)
-            (if (str-contains? spec "*")
-              (let [re
-                    (re-pattern
-                      (-> (str "^" spec "$")
-                          (str/replace "." "\\.")
-                          (str/replace "*" "(.*)")))]
-                (fn [in-str] (re-find re in-str)))
-              (fn [in-str] (= in-str spec)))
-
+          (or (vector? spec) (set? spec))
+          (cond
+            ;; (empty? spec)   never
+            ((set spec) "*")   always
+            (= (count spec) 1) (recur (first spec) cache?)
             :else
-            (throw
-              (ex-info "Unexpected compile spec type"
-                {:given spec :type (type spec)}))))]
+            (let [[fixed-strs re-patterns]
+                  (reduce
+                    (fn [[fixed-strs re-patterns] spec]
+                      (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
+                        [      fixed-strs       (conj re-patterns re-pattern)]
+                        [(conj fixed-strs spec)       re-patterns            ]))
+                    [#{} []]
+                    spec)
 
-    (fn self
-      ([spec] ; Convenience, calls 2-arity
-       (cond
-         (map? spec) ; Explicit {:allow _ :deny _}, etc.
-         (self
-           (or (:allow spec) (:whitelist spec))
-           (or (:deny  spec) (:blacklist spec)))
+                  fx-match (not-empty fixed-strs) ; #{"foo" "bar"}, etc.
+                  re-match
+                  (when-let [re-patterns (not-empty re-patterns)] ; ["foo.*", "bar.*"], etc.
+                    (let [f (fn [in-str] (rsome #(re-find % in-str) re-patterns))]
+                      (if cache? (fmemoize f) f)))]
 
-         :else (self spec nil)))
+              (cond!
+                (and fx-match re-match) (fn [in-str] (or (fx-match in-str) (re-match in-str)))
+                fx-match fx-match
+                re-match re-match)))
 
-      ([?allowspec ?denyspec]
-       (let [allow (when-let [as ?allowspec] (compile as))
-             deny  (when-let [ds ?denyspec]  (compile ds))]
+          :else
+          (throw
+            (ex-info "Unexpected compile spec type"
+              {:given spec :type (type spec)}))))]
 
-         (cond
-           (= deny  always) never ; Micro optimization
-           (= allow never)  never ; Micro optimization
+  (defn compile-str-filter
+    "Compiles given spec and returns a fast (fn conform? [?in-str]).
 
-           (and allow deny)
-           (fn [?in-str]
-             (let [in-str (str ?in-str)]
-               (if (allow in-str)
-                 (if (deny in-str)
-                   false
-                   true)
-                 false)))
+    Spec may be:
+      - A regex pattern. Will conform on match.
+      - A string, in which any \"*\"s will act as wildcards (#\".*\").
+        Will conform on match.
 
-           allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true false)))
-           deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) true false)))
-           :else
-           (throw
-             (ex-info "compile-str-filter: `?allowspec` and `?denyspec` cannot both be nil"
-               {:?allowspec ?allowspec :?denyspec ?denyspec}))))))))
+      - A vector or set of regex patterns or strings.
+        Will conform on any match.
+        If you need literal \"*\"s, use an explicit regex pattern instead.
+
+      - {:allow <allow-spec> :deny <deny-spec> :cache? <bool>}.
+        Will conform iff allow-spec matches AND deny-spec does not.
+
+    Input may be: namespace strings, class names, etc.
+    Useful as string allowlist (whitelist) and/or denylist (blacklist)."
+    [spec]
+    (if-not (map? spec)
+      (recur {:allow spec :deny nil})
+      (let [cache?         (get spec :cache?)
+            allow-spec (or (get spec :allow) (get spec :whitelist))
+            deny-spec  (or (get spec :deny)  (get spec :blacklist))
+
+            allow (when-let [as allow-spec] (compile as cache?))
+            deny  (when-let [ds deny-spec]  (compile ds cache?))]
+
+        (cond
+          (= deny  always) never
+          (= allow never)  never
+
+          (and allow deny)
+          (fn [?in-str]
+            (let [in-str (str ?in-str)]
+              (if (allow in-str)
+                (if (deny in-str)
+                  false
+                  true)
+                false)))
+
+          allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true false)))
+          deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) true false)))
+          :else
+          (throw
+            (ex-info "compile-str-filter: `allow-spec` and `deny-spec` cannot both be nil"
+              {:allow-spec allow-spec :deny-spec deny-spec})))))))
 
 (comment
   (def sf? (compile-str-filter #{"foo.*" "bar"}))
-  (enc/qb 1e5 (sf? "foo")) ; 26
+  (qb 1e5 (sf? "foo")) ; 26
 
   (-> "foo" ((compile-str-filter nil)))           :ex
   (-> "foo" ((compile-str-filter :any)))          true
@@ -3738,7 +3744,7 @@
 
        (if (and (nolist? whitelist) (nolist? blacklist))
          (fn [_] true) ; Unfortunate API choice
-         (compile-str-filter whitelist blacklist)))))
+         (compile-str-filter {:allow whitelist :deny blacklist})))))
 
   #+clj (defn set-body      [resp body]    (ring-set-body      body    resp))
   #+clj (defn set-status    [resp code]    (ring-set-status    code    resp))
