@@ -3458,7 +3458,9 @@
             ;; Ambiguous: "," meant as splitter or literal? Prefer coll.
             ;; (str-contains? spec ",") (recur (mapv str/trim (str/split spec #",")) cache?)
             :if-let [re-pattern (wild-str->?re-pattern spec)]
-            (recur re-pattern cache?))
+
+            (recur re-pattern cache?)
+            :else (fn [in-str] (= in-str spec)))
 
           (or (vector? spec) (set? spec))
           (cond
