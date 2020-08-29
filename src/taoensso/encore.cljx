@@ -3500,14 +3500,19 @@
         Will conform on match.
 
       - A vector or set of regex patterns or strings.
-        Will conform on any match.
+        Will conform on ANY match.
         If you need literal \"*\"s, use an explicit regex pattern instead.
 
       - {:allow <allow-spec> :deny <deny-spec> :cache? <bool>}.
-        Will conform iff allow-spec matches AND deny-spec does not.
+        Will conform iff allow-spec matches AND deny-spec does NOT.
 
     Input may be: namespace strings, class names, etc.
-    Useful as string allowlist (whitelist) and/or denylist (blacklist)."
+    Useful as string allowlist (whitelist) and/or denylist (blacklist).
+
+    Spec examples:
+      #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
+      {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}}"
+
     [spec]
     (if-not (map? spec)
       (recur {:allow spec :deny nil})
