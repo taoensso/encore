@@ -2440,6 +2440,32 @@
   (get-substring "hello world" -8 2)
   (get-substring "hello world" 2 2))
 
+#+clj
+(defn norm-str
+  "Given a Unicode string, returns the normalized de/composed form.
+  It's often a good idea to normalize strings before exchange or storage,
+  especially if you're going to be querying against those string.
+
+  `form` is e/o #{:nfc :nfkc :nfd :nfkd <java.text.NormalizerForm>}.
+  Defaults to :nfc as per W3C recommendation."
+
+  ([     s] (norm-str :nfc s))
+  ([form s]
+   [s]
+   (java.text.Normalizer/normalize s
+     (case form
+       :nfc  java.text.Normalizer$Form/NFC
+       :nfkc java.text.Normalizer$Form/NFKC
+       :nfd  java.text.Normalizer$Form/NFD
+       :nfkd java.text.Normalizer$Form/NFKD
+       (if (instance? java.text.Normalizer$Form form)
+         form
+         (throw
+           (ex-info "Unrecognized normalization form"
+             {:form form :type (type form)})))))))
+
+(comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
+
 (defn str-replace
   "Like `str/replace` but provides consistent clj/s behaviour.
 
