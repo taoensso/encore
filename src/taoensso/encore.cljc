@@ -82,7 +82,7 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* -gc-now?
-        name-with-attrs -vol! -vol-reset! -vol-swap! deprecated new-object]])))
+        name-with-attrs deprecated new-object]])))
 
 (def encore-version [3 0 0])
 
@@ -841,23 +841,6 @@
                true
                len1)))))))
 
-;;;; Volatiles
-
-(do
-  ;; Back-compatible volatiles, private for now
-  ;; Note: benching seems to consistently show that atoms are actually no
-  ;; slower than volatiles when used in the same way (i.e. w/o contention
-  ;; or watches)?
-  (compile-if (volatile! nil)
-    (do
-      (defmacro -vol!       [val]           `(volatile!     ~val))
-      (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
-      (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args)))
-    (do
-      (defmacro -vol!       [val]           `(atom         ~val))
-      (defmacro -vol-reset! [vol_ val]      `(reset! ~vol_ ~val))
-      (defmacro -vol-swap!  [vol_ f & args] `(swap!  ~vol_ ~f ~@args)))))
-
 ;;;; Reduce
 
 (defn   convey-reduced [x] (if (reduced? x) (reduced x) x)) ; Double-wrap
@@ -942,10 +925,10 @@
 
 (defn counter []
   #?(:cljs
-     (let [idx_ (-vol! -1)]
+     (let [idx_ (volatile! -1)]
        (fn counter
-         ([ ] (-vol-swap! idx_ (fn [c] (+ c 1))))
-         ([n] (-vol-swap! idx_ (fn [c] (+ c n)))))))
+         ([ ] (vswap! idx_ (fn [c] (+ c 1))))
+         ([n] (vswap! idx_ (fn [c] (+ c n)))))))
 
   #?(:clj
      (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
@@ -2072,10 +2055,10 @@
     (cond!
       (map?    x) (reduce-kv (fn [acc sid [n ms]] (assoc acc sid (limit-spec n ms))) {} x)
       (vector? x)
-      (let [i (-vol! -1)]
+      (let [i (volatile! -1)]
         (reduce
           (fn [acc [n ms ?id]] ; ?id for back compatibility
-            (assoc acc (or ?id (-vol-swap! i (fn [i] (inc ^long i))))
+            (assoc acc (or ?id (vswap! i (fn [i] (inc ^long i))))
               (limit-spec n ms))) {} x)))))
 
 (comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
@@ -2530,8 +2513,8 @@
   (let [sep separator]
     (if (str/blank? sep)
       (str (reduce str-rf "" coll))
-      (let [acc-ends-with-sep?_ (-vol! false)
-            acc-empty?_         (-vol! true)]
+      (let [acc-ends-with-sep?_ (volatile! false)
+            acc-empty?_         (volatile! true)]
         (str
           (reduce
             (fn [acc in]
@@ -2542,8 +2525,8 @@
                     acc-ends-with-sep?  @acc-ends-with-sep?_
                     acc-empty?          @acc-empty?_]
 
-                (-vol-reset! acc-ends-with-sep?_ in-ends-with-sep?)
-                (when acc-empty? (-vol-reset! acc-empty?_ in-empty?))
+                (vreset! acc-ends-with-sep?_ in-ends-with-sep?)
+                (when acc-empty? (vreset! acc-empty?_ in-empty?))
 
                 (if acc-ends-with-sep?
                   (if in-starts-with-sep?
@@ -3400,7 +3383,7 @@
 ;;;; Stubs
 
 (do
-  #?(:cljs (defn -new-stubfn_ [name] (-vol! (fn [& args]  (throw (ex-info (str "Attempting to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
+  #?(:cljs (defn -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "Attempting to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
   #?(:cljs (defn -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "Unstub value must be a fn"     {:given f :type (type f)}))))
      :clj  (defn -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "Unstub value must be a symbol" {:given s :type (type s)})))))
   #?(:clj
@@ -3427,7 +3410,7 @@
            -unstub-sym (symbol (str "-unstub-" (name stub-sym)))]
        `(if-cljs ; No declare/intern support
             (let [~'stubfn_ (-new-stubfn_ ~(name stub-sym))]
-              (defn ~-unstub-sym [~'f]        (-vol-reset! ~'stubfn_ (-assert-unstub-val ~'f)))
+              (defn ~-unstub-sym [~'f]        (vreset! ~'stubfn_ (-assert-unstub-val ~'f)))
               (defn  ~unstub-sym [~'f]        (~-unstub-sym ~'f))
               (defn    ~stub-sym [~'& ~'args] (apply      @~'stubfn_ ~'args)))
           (let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
@@ -3810,6 +3793,10 @@
   (defmacro qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
   (defmacro catch-errors  [& body]
     `(catching [(do ~@body) nil] e# [nil e#]))
+
+ (defmacro -vol!       [val]           `(volatile!     ~val))
+ (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
+ (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn undefined->nil [x] (if (undefined? x) nil x)))
