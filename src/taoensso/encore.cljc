@@ -3721,9 +3721,13 @@
 
 #?(:clj
    (defmacro deprecated
-     "Elides body when `TAOENSSO_ELIDE_DEPRECATED` sys val is truthy."
+     "Elides body when `taoensso.elide-deprecated` JVM property or
+     `TAOENSSO_ELIDE_DEPRECATED` environment variable is e/o #{\"true\" \"TRUE\"}."
      [& body]
-     (when-not (get-sys-val "TAOENSSO_ELIDE_DEPRECATED")
+     (if (#{"true" "TRUE"}
+           (get-sys-val "taoensso.elide-deprecated"
+                        "TAOENSSO_ELIDE_DEPRECATED"))
+       nil ; Elide
        `(do ~@body))))
 
 (deprecated
