@@ -13,7 +13,7 @@
                 }
 
   :dependencies
-  [[org.clojure/tools.reader "1.3.2"]
+  [[org.clojure/tools.reader "1.3.3"]
    [com.taoensso/truss       "1.6.0"]]
 
   :plugins
@@ -32,7 +32,7 @@
    :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
    :1.10     {:dependencies [[org.clojure/clojure       "1.10.1"]]}
    :test     {:dependencies [[org.clojure/test.check    "1.1.0"]
-                             [org.clojure/core.async    "1.2.603"]]}
+                             [org.clojure/core.async    "1.3.610"]]}
    :dev      [:1.10 :test :server-jvm]}
 
   :cljsbuild
