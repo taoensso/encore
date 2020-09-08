@@ -1,15 +1,15 @@
 (ns taoensso.encore.test
   ;; Unfortunately needs to be a separate namespace for now due
   ;; to https://github.com/ptaoussanis/encore/issues/37
-  #+clj
-  (:require
-   [clojure.test    :as test :refer [is]]
-   [taoensso.encore :as enc  :refer [have? if-cljs]])
+  #?(:clj
+     (:require
+      [clojure.test    :as test :refer [is]]
+      [taoensso.encore :as enc  :refer [have? if-cljs]])
 
-  #+cljs
-  (:require
-   [cljs.test       :as test :refer-macros [is]]
-   [taoensso.encore :as enc  :refer-macros [have? if-cljs]]))
+     :cljs
+     (:require
+      [cljs.test       :as test :refer-macros [is]]
+      [taoensso.encore :as enc  :refer-macros [have? if-cljs]])))
 
 (defmacro expect
   ([             expr] `(is                        ~expr))
