@@ -210,10 +210,23 @@
   (when-let [:let [a :a b :b] c (str a b)] c))
 
 (defmacro cond
-  "Like `core/cond` but supports implicit (final) `else` clause, and special
-  test keywords: :else, :let, :do, :when, :when-not, :when-some.
-  :let support inspired by https://github.com/Engelberg/better-cond.
+  "Like `core/cond` but supports implicit final `else` clause, and special
+  clause keywords for advanced behaviour:
 
+  (cond
+    :let [x \"x\"] ; Establish bindings visible to following forms
+
+    :do (println (str \"x value: \" x)) ; Eval expr for side effects
+
+    :if-let [y \"y\"
+             z nil]
+    \"y and z were both truthy\"
+
+    :if-some [y \"y\"
+              z nil]
+    \"y and z were both non-nil\")
+
+  :let support inspired by https://github.com/Engelberg/better-cond.
   Simple, flexible way to eliminate deeply-nested control flow code."
 
   ;; Also avoids unnecessary `(if :else ...)`, etc.
@@ -226,19 +239,19 @@
         (false nil)                         `(cond ~@more) ; Faster than (if <falsey> ...)
         :do          `(do          ~expr     (cond ~@more))
         :let         `(let         ~expr     (cond ~@more))
-        :when        `(when        ~expr     (cond ~@more))
-        :when-not    `(when-not    ~expr     (cond ~@more))
-        :when-some   `(when-some   ~expr     (cond ~@more))
+        :when        `(when        ~expr     (cond ~@more)) ; Undocumented
+        :when-not    `(when-not    ~expr     (cond ~@more)) ; Undocumented
+        :when-some   `(when-some   ~expr     (cond ~@more)) ; Undocumented
         :return-when `(if-let  [x# ~expr] x# (cond ~@more)) ; Undocumented
         :return-some `(if-some [x# ~expr] x# (cond ~@more)) ; Undocumented
-        :if-let      `(if-let      ~expr ~(first more) (cond ~@(next more))) ; Undocumented
-        :if-some     `(if-some     ~expr ~(first more) (cond ~@(next more))) ; Undocumented
+        :if-let      `(if-let      ~expr ~(first more) (cond ~@(next more)))
+        :if-some     `(if-some     ~expr ~(first more) (cond ~@(next more)))
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
             (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
               {:test-form test :expr-form expr}))
 
-          (if (vector? test) ; Experimental
+          (if (vector? test) ; Undocumented
             `(if-let ~test ~expr (cond ~@more))
 
             ;; Experimental, assumes `not` = `core/not`:
@@ -251,7 +264,8 @@
    (macroexpand-all '(cond nil "a" nil "b" :else "c"))
    (macroexpand-all '(cond nil "a" nil "b" (println "bar")))
    (macroexpand-all '(cond :when true :let [x "x"] :else x))
-   (macroexpand-all '(cond false 0 (not false) 1 2))])
+   (macroexpand-all '(cond false 0 (not false) 1 2))
+   (macroexpand-all '(cond [a :A] a))])
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
@@ -2904,8 +2918,7 @@
 
 #?(:clj
    (defn future-pool
-     "Experimental. Returns a simple semaphore-limited wrapper of Clojure's
-     standard `future`:
+     "Returns a simple semaphore-limited wrapper of Clojure's standard `future`:
        (fn
          [f] - Blocks to acquire a future, then executes (f) on that future.
          [ ] - Blocks to acquire all futures, then immediately releases them.
