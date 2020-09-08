@@ -1712,8 +1712,8 @@
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
 
 (comment
-  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (assoc m :c :C))) @a_])
+   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (swapped (assoc m :c :C) m))) @a_])
    (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
    (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
    (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
@@ -3418,7 +3418,7 @@
 #?(:clj
    (defmacro defstub
      "Experimental. Declares a stub var that can be initialized from any
-     namespace with `unstub-<stub-name>`. Separates a var's declaration
+     namespace with `unstub-<stub-name>`. Decouples a var's declaration
      (location) and its initialization (value). Handy for defining vars in a
      shared ns from elsewhere (e.g. a private or cyclic ns)."
      [sym]
