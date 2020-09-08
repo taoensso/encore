@@ -444,7 +444,7 @@
   [x]
   (when-let [data-map
              (or (ex-data x) ; ExceptionInfo
-                 (when (instance? #?(:clj Throwable :cljs js/Error) x) {}))]
+                 (when (instance? #?(:clj Throwable :cljs :default) x) {}))]
     (conj
       #?(:clj
          (let [^Throwable t x] ; (catch Throwable t <...>)
@@ -467,15 +467,14 @@
 
 (defmacro catching "Cross-platform try/catch/finally."
   ;; We badly need something like http://dev.clojure.org/jira/browse/CLJ-1293
-  ;; TODO js/Error instead of :default as temp workaround for http://goo.gl/UW7773
   ([try-expr                     ] `(catching ~try-expr ~'_ nil))
   ([try-expr error-sym catch-expr]
    `(if-cljs
-      (try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
+      (try ~try-expr (catch :default  ~error-sym ~catch-expr))
       (try ~try-expr (catch Throwable ~error-sym ~catch-expr))))
   ([try-expr error-sym catch-expr finally-expr]
    `(if-cljs
-      (try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
+      (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
       (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
 (comment
