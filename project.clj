@@ -33,6 +33,7 @@
    :1.10     {:dependencies [[org.clojure/clojure       "1.10.1"]]}
    :test     {:dependencies [[org.clojure/test.check    "1.1.0"]
                              [org.clojure/core.async    "1.3.610"]]}
+   :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
    :dev      [:1.10 :test :server-jvm]}
 
   :cljsbuild
