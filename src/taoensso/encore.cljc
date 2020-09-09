@@ -108,12 +108,6 @@
         `(do ~else)))))
 
 #?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
-
-#?(:clj
-   (compile-if (completing (fn []))
-     (def have-transducers? true)
-     (def have-transducers? false)))
-
 #?(:clj
    (compile-if (do (require 'clojure.core.async) true)
      (def have-core-async? true)
@@ -852,31 +846,15 @@
         (reduced result)
         result))))
 
-(compile-if have-transducers?
-  (defn reduce-kvs
-    "Like `reduce-kv` but takes a flat sequence of kv pairs."
-    [rf init kvs]
-    (transduce (partition-all 2)
-      (completing (fn [acc [k v]] (rf acc k v))) init kvs))
+(defn reduce-kvs
+  "Like `reduce-kv` but takes a flat sequence of kv pairs."
+  [rf init kvs]
+  (transduce (partition-all 2)
+    (completing (fn [acc [k v]] (rf acc k v))) init kvs))
 
-  (defn reduce-kvs [rf init kvs]
-    (reduce (fn [acc [k v]] (rf acc k v)) init (partition-all 2 kvs))))
-
-(compile-if clojure.lang.LongRange ; Clojure 1.7+ (no Cljs support yet)
-  (defn reduce-n
-    ([rf init       end] (reduce rf init (range       end)))
-    ([rf init start end] (reduce rf init (range start end))))
-
-  (defn reduce-n
-    ([rf init                   end] (reduce-n rf init 0 end))
-    ([rf init ^long start ^long end]
-     (loop [acc init idx start]
-       (if (>= idx end)
-         acc
-         (let [acc (rf acc idx)]
-           (if (reduced? acc)
-             @acc
-             (recur acc (unchecked-inc idx)))))))))
+(defn reduce-n
+  ([rf init       end] (reduce rf init (range       end)))
+  ([rf init start end] (reduce rf init (range start end))))
 
 (comment (reduce-n conj [] 10 100))
 
@@ -1075,14 +1053,8 @@
          :cljs    cljs.core.PersistentQueue.EMPTY)))
 
 (defn queue* [& items] (queue items))
-
-(compile-if have-transducers?
-  (do ; Clojure 1.7-alpha5+ introduced similar native behaviour
-    (def vec* vec)
-    (def set* set))
-  (do
-    (defn vec* [x] (if (vector? x) x (vec x)))
-    (defn set* [x] (if (set?    x) x (set x)))))
+(defn ensure-vec [x] (if (vector? x) x (vec x)))
+(defn ensure-set [x] (if (set?    x) x (set x)))
 
 #?(:cljs (defn oset [o k v] (gobj/set (if (nil? o) (js-obj) o) (name k) v)))
 #?(:cljs
@@ -1261,12 +1233,10 @@
 
 (comment (let [v [:a :b]] (qb 1e6 (fsplit-last vector v) [(butlast v) (last v)])))
 
-(compile-if have-transducers?
-  (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
-  (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (vec (take n coll)))))
+(defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
 
 (defn #?(:clj distinct-elements? :cljs ^boolean distinct-elements?)
-  [x] (or (set? x) (= (count x) (count (set* x)))))
+  [x] (or (set? x) (= (count x) (count (ensure-set x)))))
 
 (def seq-kvs "(seq-kvs {:a :A}) => (:a :A)." (partial reduce concat))
 (defn mapply "Like `apply` but calls `seq-kvs` on final arg."
@@ -1291,27 +1261,24 @@
 
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
-(compile-if have-transducers?
-  (defn into!
-       ([to       from] (reduce          conj! to from))
-       ([to xform from] (transduce xform conj! to from)))
-  (defn into! [to from] (reduce          conj! to from)))
+(defn into!
+  ([to       from] (reduce          conj! to from))
+  ([to xform from] (transduce xform conj! to from)))
 
-(compile-if have-transducers?
-  (defn xdistinct
-    ([] (distinct)) ; core now has a distinct transducer
-    ([keyfn]
-     (fn [rf]
-       (let [seen_ (volatile! (transient #{}))]
-         (fn
-           ([]    (rf))
-           ([acc] (rf acc))
-           ([acc input]
-            (let [k (keyfn input)]
-              (if (contains? @seen_ k)
-                acc
-                (do (vswap! seen_ conj! k)
-                    (rf acc input)))))))))))
+(defn xdistinct
+  ([] (distinct)) ; core now has a distinct transducer
+  ([keyfn]
+   (fn [rf]
+     (let [seen_ (volatile! (transient #{}))]
+       (fn
+         ([]    (rf))
+         ([acc] (rf acc))
+         ([acc input]
+          (let [k (keyfn input)]
+            (if (contains? @seen_ k)
+              acc
+              (do (vswap! seen_ conj! k)
+                  (rf acc input))))))))))
 
 (comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
 
@@ -1334,9 +1301,9 @@
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
 (do
-  (defn #?(:clj ks=      :cljs ^boolean ks=)      [ks m] (=             (set (keys m)) (set* ks)))
-  (defn #?(:clj ks<=     :cljs ^boolean ks<=)     [ks m] (set/subset?   (set (keys m)) (set* ks)))
-  (defn #?(:clj ks>=     :cljs ^boolean ks>=)     [ks m] (set/superset? (set (keys m)) (set* ks)))
+  (defn #?(:clj ks=      :cljs ^boolean ks=)      [ks m] (=             (set (keys m)) (ensure-set ks)))
+  (defn #?(:clj ks<=     :cljs ^boolean ks<=)     [ks m] (set/subset?   (set (keys m)) (ensure-set ks)))
+  (defn #?(:clj ks>=     :cljs ^boolean ks>=)     [ks m] (set/superset? (set (keys m)) (ensure-set ks)))
   (defn #?(:clj ks-nnil? :cljs ^boolean ks-nnil?) [ks m] (revery?     #(some? (get m %))     ks)))
 
 (comment
@@ -2301,22 +2268,21 @@
          (reduce str    (range 512))
     (str (reduce str-rf (range 512)))))
 
-(compile-if have-transducers?
-  (defn str-join
-    "Faster, transducer-based generalization of `clojure.string/join` with `xform`
+(defn str-join
+  "Faster, transducer-based generalization of `clojure.string/join` with `xform`
     support"
-    (^String [                coll] (str-join nil       nil coll))
-    (^String [separator       coll] (str-join separator nil coll))
-    (^String [separator xform coll]
-     (if (and separator (not= separator ""))
-       (let [sep-xform (interpose separator)
-             str-rf*   (completing str-rf str)]
-         (if xform
-           (transduce (comp xform sep-xform) str-rf* coll)
-           (transduce             sep-xform  str-rf* coll)))
+  (^String [                coll] (str-join nil       nil coll))
+  (^String [separator       coll] (str-join separator nil coll))
+  (^String [separator xform coll]
+   (if (and separator (not= separator ""))
+     (let [sep-xform (interpose separator)
+           str-rf*   (completing str-rf str)]
        (if xform
-         (transduce xform (completing str-rf str) coll)
-         (str (reduce str-rf coll)))))))
+         (transduce (comp xform sep-xform) str-rf* coll)
+         (transduce             sep-xform  str-rf* coll)))
+     (if xform
+       (transduce xform (completing str-rf str) coll)
+       (str (reduce str-rf coll))))))
 
 (comment
   (qb 1e5
@@ -3762,6 +3728,9 @@
   (def -swap-k!        -swap-val!)
   (def update-in*      update-in)
   (def idx-fn          counter)
+  (def vec*            ensure-vec)
+  (def set*            ensure-set)
+  (def have-transducers? true)
 
   ;; Used by old versions of Timbre, Tufte
   (let [nolist? #(contains? #{nil [] #{}} %)]
@@ -3817,7 +3786,7 @@
   (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
     [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
 
-  (defn nnil-set [x] (disj (set* x) nil))
+  (defn nnil-set [x] (disj (ensure-set x) nil))
 
   ;;; Arg order changed for easier partials
   (defn keys=      [m ks] (ks=      ks m))
