@@ -34,7 +34,9 @@
    :test     {:dependencies [[org.clojure/test.check    "1.1.0"]
                              [org.clojure/core.async    "1.3.610"]]}
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
-   :dev      [:1.10 :test :server-jvm]}
+   :dev      [:1.10 :test :server-jvm :depr]}
+
+  :test-paths ["test" "src"]
 
   :cljsbuild
   {:test-commands
