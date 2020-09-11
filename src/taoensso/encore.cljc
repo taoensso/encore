@@ -2846,6 +2846,28 @@
 #?(:clj (defn read-sys-val ([id] (read-sys-val id id)) ([prop-id env-id] (when-let [s (get-sys-val prop-id env-id)] (read-edn s)))))
 
 #?(:clj
+   (defn get-sys-bool
+     "If `prop-id` JVM property or `env-id` environment variable are set:
+       - Returns `true`  if set value is e/o #{\"1\" \"t\" \"true\" \"T\" \"TRUE\"}
+       - Returns `false` if set value is e/o #{\"0\" \"f\" \"false\"\"F\" \"FALSE\"}
+       - Otherwise throws
+
+     Returns `default` if neither property nor environment variable is set."
+     [default prop-id env-id]
+     (if-let [sv (get-sys-val prop-id env-id)]
+       (case  sv
+         ("1" "t" "true"  "T" "TRUE")  true
+         ("0" "f" "false" "F" "FALSE") false
+         (throw
+           (ex-info "Unexpected `get-sys-bool` value"
+             {:value   sv
+              :prop-id prop-id
+              :env-id  env-id
+              :default default})))
+
+       default)))
+
+#?(:clj
    (defn slurp-resource
      "Returns slurped named resource on classpath, or nil when resource not found."
      [rname]
@@ -3686,9 +3708,9 @@
      "Elides body when `taoensso.elide-deprecated` JVM property or
      `TAOENSSO_ELIDE_DEPRECATED` environment variable is e/o #{\"true\" \"TRUE\"}."
      [& body]
-     (if (#{"true" "TRUE"}
-           (get-sys-val "taoensso.elide-deprecated"
-                        "TAOENSSO_ELIDE_DEPRECATED"))
+     (if (get-sys-bool false
+           "taoensso.elide-deprecated"
+           "TAOENSSO_ELIDE_DEPRECATED")
        nil ; Elide
        `(do ~@body))))
 
