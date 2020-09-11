@@ -8,11 +8,7 @@
 [com.taoensso/encore "2.127.0"] ; Needs Clojure 1.5+
 ```
 
-> Please consider helping to [support my continued open-source Clojure/Script work]? 
-> 
-> Even small contributions can add up + make a big difference to help sustain my time writing, maintaining, and supporting Encore and other Clojure/Script libraries. **Thank you!**
->
-> \- Peter Taoussanis
+> See [here](https://taoensso.com/clojure/backers) if you're interested in helping support my open-source work, thanks! - Peter Taoussanis
 
 # Encore
 
@@ -51,7 +47,6 @@ Copyright &copy; 2014-2020 [Peter Taoussanis].
 [@ptaoussanis]: https://www.taoensso.com
 [More by @ptaoussanis]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
-[support my continued open-source Clojure/Script work]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
 [_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
