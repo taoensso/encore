@@ -2733,7 +2733,7 @@
             :clj
             (let [pq (java.util.PriorityQueue. coll-size
                        (fn [x y] (cmp (keyfn (sentinel->nil x))
-                                   (keyfn (sentinel->nil y)))))]
+                                      (keyfn (sentinel->nil y)))))]
 
               (run! #(.offer pq (nil->sentinel %)) coll)
               (reduce-n (fn [acc _] (rf acc (sentinel->nil (.poll pq))))
