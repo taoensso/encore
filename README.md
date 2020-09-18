@@ -8,6 +8,8 @@
 [com.taoensso/encore "2.127.0"] ; Needs Clojure 1.5+
 ```
 
+<!-- ![build status](https://github.com/ptaoussanis/encore/workflows/build/badge.svg?branch=master) -->
+
 > See [here](https://taoensso.com/clojure/backers) if you're interested in helping support my open-source work, thanks! - Peter Taoussanis
 
 # Encore
