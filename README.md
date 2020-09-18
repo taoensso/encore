@@ -1,7 +1,7 @@
 <a href="https://www.taoensso.com" title="More stuff by @ptaoussanis at www.taoensso.com">
 <img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="400"/></a>
 
-**[CHANGELOG]** | [API] | current [Break Version]:
+**[CHANGELOG][]** | [API][] | current [Break Version][]:
 
 ```clojure
 [com.taoensso/encore "3.1.0"]   ; Needs Clojure 1.7+
@@ -36,7 +36,7 @@ Please use the project's [GitHub issues page] for all questions, ideas, etc. **P
 
 Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
 
-\- [Peter Taoussanis]
+\- [Peter Taoussanis][]
 
 ## License
 
