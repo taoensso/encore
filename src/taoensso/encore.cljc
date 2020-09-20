@@ -73,6 +73,7 @@
       [java.util Date Locale TimeZone]
       [java.text SimpleDateFormat]
       [java.util.concurrent CountDownLatch]
+      [java.io InputStream]
       ;; [org.apache.commons.codec.binary Base64]
       )
 
@@ -819,10 +820,10 @@
          (System/arraycopy ba2 0 out s1 s2)
          out))
 
-     (defn ba-split [^bytes ba ^long idx]
+     (defn ba-split [^bytes ba ^Integer idx]
        (if (zero? idx)
          [nil ba]
-         (let [s (alength ba)]
+         (let [s ^Integer (alength ba)]
            (when (> s idx)
              [(java.util.Arrays/copyOf      ba idx)
               (java.util.Arrays/copyOfRange ba idx s)]))))
@@ -934,8 +935,8 @@
 (def ^:const min-long #?(:clj Long/MIN_VALUE :cljs -9007199254740991))
 
 (defn #?(:clj approx== :cljs ^boolean approx==)
-  ([      x y] (< (Math/abs (- (double x) (double y))) 0.001))
-  ([signf x y] (< (Math/abs (- (double x) (double y))) (double signf))))
+  ([      x y] (< (Math/abs ^Double (- (double x) (double y))) 0.001))
+  ([signf x y] (< (Math/abs ^Double (- (double x) (double y))) (double signf))))
 
 (comment (qb 1e5 (approx== 0.01 3.141592 (/ 22 7))))
 
@@ -958,9 +959,9 @@
   ([             n] (round* :round nil n))
   ([type         n] (round* type   nil n))
   ([type nplaces n]
-   (let [n        (double n)
+   (let [n        ^Double (double n)
          modifier (when nplaces (Math/pow 10.0 nplaces))
-         n*       (if-not modifier n (* n ^double modifier))
+         n*       (if-not modifier n ^Double (* n ^double modifier))
          rounded
          (case type
            ;;; Note same API for both #?(:clj _ :cljs: _)
@@ -981,10 +982,10 @@
    (round* :round 5 1.1234567)])
 
 (do ; Optimized common cases
-  (defn round0   ^long [n]            (Math/round    (double n)))
-  (defn round1 ^double [n] (/ (double (Math/round (* (double n)  10.0)))  10.0))
-  (defn round2 ^double [n] (/ (double (Math/round (* (double n) 100.0))) 100.0))
-  (defn perc     ^long [n divisor] (Math/round (* (/ (double n) (double divisor)) 100.0))))
+  (defn round0   ^long [n]            (Math/round ^Double (double n)))
+  (defn round1 ^double [n] (/ (double (Math/round ^Double (* (double n)  10.0)))  10.0))
+  (defn round2 ^double [n] (/ (double (Math/round ^Double(* (double n) 100.0))) 100.0))
+  (defn perc     ^long [n divisor] (Math/round ^Double (* (/ (double n) (double divisor)) 100.0))))
 
 (defn exp-backoff "Returns binary exponential backoff value for n<=36."
   ([^long n-attempt] (exp-backoff n-attempt nil))
@@ -2510,7 +2511,7 @@
 
                 (if acc-ends-with-sep?
                   (if in-starts-with-sep?
-                    (sb-append acc (.substring in 1))
+                    (sb-append acc (.substring ^String in 1))
                     (sb-append acc in))
 
                   (if in-starts-with-sep?
@@ -2613,7 +2614,7 @@
      Favours security over performance. Automatically re-seeds occasionally.
      May block while waiting on system entropy!"
      ^java.security.SecureRandom []
-     (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
+     (let [^java.security.SecureRandom rng (.get ^ThreadLocal srng*)]
        ;; Occasionally supplement current seed for extra security.
        ;; Otherwise an attacker could *theoretically* observe large amounts of
        ;; srng output to determine initial seed, Ref. https://goo.gl/MPM91w
@@ -2923,7 +2924,7 @@
                   (name dep-sym))]
        (when-let [props (io/resource path)]
          (with-open [stream (io/input-stream props)]
-           (let [props (doto (java.util.Properties.) (.load stream))]
+           (let [props (doto (java.util.Properties.) (.load ^InputStream stream))]
              (.getProperty props "version")))))))
 
 (comment (get-pom-version 'com.taoensso/encore))
@@ -3298,8 +3299,8 @@
 (defn url-encode "Based on https://goo.gl/fBqy6e"
   #?(:clj  [s & [encoding]] :cljs [s])
   (when s
-    #?(:clj  (-> (str s)
-               (java.net.URLEncoder/encode (str (or encoding "UTF-8")))
+    #?(:clj  (-> ^String (str s)
+               (java.net.URLEncoder/encode ^String (str (or encoding "UTF-8")))
                (str/replace "*" "%2A") ; Cautious, https://stackoverflow.com/a/25149577/1982742
                (str/replace "+" "%20") ; Cautious, https://stackoverflow.com/a/40292770/1982742
                )
@@ -3307,10 +3308,11 @@
                (js/encodeURIComponent s)
                (str/replace "*" "%2A")))))
 
+
 (defn url-decode "Stolen from http://goo.gl/99NSR1"
   [s & [encoding]]
   (when s
-    #?(:clj  (java.net.URLDecoder/decode (str s) (str (or encoding "UTF-8")))
+    #?(:clj  (java.net.URLDecoder/decode ^String (str s) ^String (str (or encoding "UTF-8")))
        :cljs (js/decodeURIComponent      (str s)))))
 
 (comment
