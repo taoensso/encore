@@ -712,10 +712,22 @@
       (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
 
   ;; Uses simple regex to test for basic "x@y.z" form:
-  (defn as-?email  [?s] (when ?s (re-find #"^[^\s@]+@[^\s@]+\.\S*[^\.]$" (str/trim ?s))))
-  (defn as-?nemail [?s] (when-let [email (as-?email ?s)] (str/lower-case email)))
-  (comment (mapv as-?nemail ["foo" "foo@" "foo@bar" "Foo@BAR.com"
-                             "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"])))
+  (let [regex #"^[^\s@]+@[^\s@]+\.\S*[^\.]$"]
+    (defn as-?email
+      ([        ?s] (when-let [s (and ?s (str/trim ?s))] (re-find regex s)))
+      ([max-len ?s] (when-let [s (and ?s (str/trim ?s))]
+                      (when (<= (count s) ^long max-len)
+                        (re-find regex s))))))
+
+  (defn as-?nemail
+    ([        ?s] (when-let [email (as-?email         ?s)] (str/lower-case email)))
+    ([max-len ?s] (when-let [email (as-?email max-len ?s)] (str/lower-case email))))
+
+  (comment
+    (do  (as-?nemail 11 "FOO@bar.com"))
+    (mapv as-?nemail
+      ["foo" "foo@" "foo@bar" "Foo@BAR.com"
+       "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"])))
 
 (defn- try-pred [pred x] (catching (pred x) _ false))
 (defn #?(:clj when? :cljs ^boolean when?) [pred x] (when (try-pred pred x) x))
@@ -743,8 +755,15 @@
   (defn as-kw                [x] (or (as-?kw          x) (-as-throw :kw          x)))
   (defn as-name              [x] (or (as-?name        x) (-as-throw :name        x)))
   (defn as-qname             [x] (or (as-?qname       x) (-as-throw :qname       x)))
-  (defn as-email             [x] (or (as-?email       x) (-as-throw :email       x)))
-  (defn as-nemail            [x] (or (as-?nemail      x) (-as-throw :nemail      x)))
+
+  (defn as-email
+    ([  x] (or (as-?email   x) (-as-throw :email x)))
+    ([n x] (or (as-?email n x) (-as-throw :email x))))
+
+  (defn as-nemail
+    ([  x] (or (as-?nemail   x) (-as-throw :nemail x)))
+    ([n x] (or (as-?nemail n x) (-as-throw :nemail x))))
+
   (defn as-udt         ^long [x] (or (as-?udt         x) (-as-throw :udt         x)))
   (defn as-int         ^long [x] (or (as-?int         x) (-as-throw :int         x)))
   (defn as-nat-int     ^long [x] (or (as-?nat-int     x) (-as-throw :nat-int     x)))
