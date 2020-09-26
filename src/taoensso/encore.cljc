@@ -246,6 +246,8 @@
         :return-some `(if-some [x# ~expr] x# (cond ~@more)) ; Undocumented
         :if-let      `(if-let      ~expr ~(first more) (cond ~@(next more)))
         :if-some     `(if-some     ~expr ~(first more) (cond ~@(next more)))
+        :if-not      `(if-not      ~expr ~(first more) (cond ~@(next more))) ; Undocumented
+
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
             (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
@@ -265,7 +267,11 @@
    (macroexpand-all '(cond nil "a" nil "b" (println "bar")))
    (macroexpand-all '(cond :when true :let [x "x"] :else x))
    (macroexpand-all '(cond false 0 (not false) 1 2))
-   (macroexpand-all '(cond [a :A] a))])
+   (macroexpand-all '(cond [a :A] a))]
+
+  (cond
+    :if-not [n "Stu"] "Don't have a name"
+    :else             (str n " Smith")))
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
