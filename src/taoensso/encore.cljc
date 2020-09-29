@@ -940,20 +940,39 @@
 
 ;;;; Math
 
+#?(:clj
+   (deftype Counter [^java.util.concurrent.atomic.AtomicLong n_]
+     clojure.lang.IDeref (deref [_] (.get n_))
+     clojure.lang.IFn
+     (invoke [_    ] (.getAndIncrement n_))
+     (invoke [_ add] (.getAndAdd       n_ (long add)))
+     (invoke [_ action n]
+       (case action
+         :=+ (.getAndAdd n_ (long n))
+         :+= (.addAndGet n_ (long n)))))
+
+   :cljs
+   (deftype Counter [n_]
+     IDeref (-deref [_] @n_)
+     IFn
+     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (inc   1))) n))
+     (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
+     (-invoke [_ action n]
+       (case action
+         :=+ (let [n @n_] (vswap! n_ (fn [c] (inc   1))) n)
+         :+= (do          (vswap! n_ (fn [c] (inc   1))))))))
+
 (defn counter
+  "Returns a fast atomic Counter with `init` initial int value:
+    - @<counter>          ->        return current value
+    - (<counter>        ) -> add 1, return old     value
+    - (<counter>     <n>) -> add n, return old     value
+    - (<counter> :+= <n>) -> add n, return new     value"
+
   ([    ] (counter 0))
   ([init]
-   #?(:cljs
-      (let [idx_ (volatile! init)]
-        (fn counter
-          ([ ] (let [idx @idx_] (vswap! idx_ (fn [c] (+ c 1))) idx))
-          ([n] (let [idx @idx_] (vswap! idx_ (fn [c] (+ c n))) idx)))))
-
-   #?(:clj
-      (let [idx_ (java.util.concurrent.atomic.AtomicLong. init)]
-        (fn counter
-          ([ ] (.getAndIncrement idx_))
-          ([n] (.getAndAdd       idx_ (long n))))))))
+   #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. init))
+      :cljs (Counter. (volatile!                               init)))))
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
