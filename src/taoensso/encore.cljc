@@ -940,18 +940,20 @@
 
 ;;;; Math
 
-(defn counter []
-  #?(:cljs
-     (let [idx_ (volatile! -1)]
-       (fn counter
-         ([ ] (vswap! idx_ (fn [c] (+ c 1))))
-         ([n] (vswap! idx_ (fn [c] (+ c n)))))))
+(defn counter
+  ([    ] (counter 0))
+  ([init]
+   #?(:cljs
+      (let [idx_ (volatile! init)]
+        (fn counter
+          ([ ] (let [idx @idx_] (vswap! idx_ (fn [c] (+ c 1))) idx))
+          ([n] (let [idx @idx_] (vswap! idx_ (fn [c] (+ c n))) idx)))))
 
-  #?(:clj
-     (let [idx_ (java.util.concurrent.atomic.AtomicLong.)]
-       (fn counter
-         ([ ] (.getAndIncrement idx_))
-         ([n] (.getAndAdd       idx_ (long n)))))))
+   #?(:clj
+      (let [idx_ (java.util.concurrent.atomic.AtomicLong. init)]
+        (fn counter
+          ([ ] (.getAndIncrement idx_))
+          ([n] (.getAndAdd       idx_ (long n))))))))
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
