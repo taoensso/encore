@@ -720,7 +720,7 @@
   ;; Uses simple regex to test for basic "x@y.z" form:
   (let [regex #"^[^\s@]+@[^\s@]+\.\S*[^\.]$"]
     (defn as-?email
-      ([        ?s] (when-let [s (and ?s (str/trim ?s))] (re-find regex s)))
+      ([        ?s] (as-?email 320 ?s))
       ([max-len ?s] (when-let [s (and ?s (str/trim ?s))]
                       (when (<= (count s) ^long max-len)
                         (re-find regex s))))))
