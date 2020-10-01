@@ -109,9 +109,17 @@
 
 #?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
 #?(:clj
-   (compile-if (do (require 'clojure.core.async) true)
+   (compile-if
+     ;; Avoiding for edge case where user cares about startup time and has
+     ;; `core.async` as dependency but it never gets required anywhere else
+     ;; (do (require 'clojure.core.async) true)
+     (do (or
+           (io/resource "clojure/core/async.clj")
+           (io/resource "clojure/core/async.cljc")))
      (def have-core-async? true)
      (def have-core-async? false)))
+
+(comment (require '[clojure.core.async] :verbose))
 
 ;;; (:ns &env) is nnil iff compiling for ClojureScript, giving us a way to
 ;;; write macros that produce different Clj/Cljs code (not something that
@@ -649,9 +657,17 @@
          (let [n (double x)] (and (>= n 0.0) (<= n 1.0)))))))
 
 (compile-if have-core-async?
-  #?(:clj  (defn          chan? [x] (instance? clojure.core.async.impl.channels.ManyToManyChannel x))
-     :cljs (defn ^boolean chan? [x] (instance?    cljs.core.async.impl.channels.ManyToManyChannel x)))
-  (do      (defn          chan? [x] nil)))
+  (let [c ; Silly work-around for edge case described at `have-core-async`?
+        (delay
+          #?(:cljs cljs.core.async.impl.channels.ManyToManyChannel
+             :clj
+             (do
+               (require       'clojure.core.async)
+               (Class/forName "clojure.core.async.impl.channels.ManyToManyChannel"))))]
+
+    #?(:clj  (defn          chan? [x] (instance? @c x))
+       :cljs (defn ^boolean chan? [x] (instance? @c x))))
+  (do        (defn          chan? [x] nil)))
 
 (do
   ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
