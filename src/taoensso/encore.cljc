@@ -891,20 +891,21 @@
   (transduce (partition-all 2)
     (completing (fn [acc [k v]] (rf acc k v))) init kvs))
 
+;; No longer so interesting with Clojure 1.7+
 (defn reduce-n
-  ([rf init       end] (reduce rf init (range       end)))
-  ([rf init start end] (reduce rf init (range start end))))
+  ([rf init       end     ] (reduce rf init (range       end)))
+  ([rf init start end     ] (reduce rf init (range start end)))
+  ([rf init start end step] (reduce rf init (range start end step))))
 
-(comment (reduce-n conj [] 10 100))
+(comment (reduce-n conj [] 100 10 -1))
 
 (declare counter)
-(let [inc (fn [n] (inc ^long n))] ; For var deref, boxing
-  (defn reduce-indexed
-    "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`.
+(defn reduce-indexed
+  "Like `reduce` but takes (rf [acc idx in]) with idx as in `map-indexed`.
     As `reduce-kv` against vector coll, but works on any seqable coll type."
-    [rf init coll]
-    (let [c (counter)]
-      (reduce (fn [acc in] (rf acc (c) in)) init coll))))
+  [rf init coll]
+  (let [c (counter)]
+    (reduce (fn [acc in] (rf acc (c) in)) init coll)))
 
 (comment
   (reduce-indexed (fn [acc idx in] (assoc acc idx in)) {} [:a :b :c])
