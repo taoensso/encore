@@ -964,9 +964,14 @@
      (invoke [_    ] (.getAndIncrement n_))
      (invoke [_ add] (.getAndAdd       n_ (long add)))
      (invoke [_ action n]
-       (case action
-         :=+ (.getAndAdd n_ (long n))
-         :+= (.addAndGet n_ (long n)))))
+       (let [n (long n)]
+         (case action
+           (:add)           (do (.addAndGet n_ n) nil)
+           (:set)           (do (.set       n_ n))
+           (:set= :set-get) (do (.set       n_ n) n)
+           (:=set :get-set) (do (.getAndSet n_ n))
+           (:=+   :get-add) (do (.getAndAdd n_ n))
+           (:+=   :add-get) (do (.addAndGet n_ n))))))
 
    :cljs
    (deftype Counter [n_]
@@ -976,16 +981,20 @@
      (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
      (-invoke [_ action n]
        (case action
-         :=+ (let [n @n_] (vswap! n_ (fn [c] (inc   1))) n)
-         :+= (do          (vswap! n_ (fn [c] (inc   1))))))))
+         (:add)           (do          (vswap!  n_ (fn [c] (+ c n))) nil)
+         (:set)           (do          (vreset! n_ n) nil)
+         (:set= :set-get) (do          (vreset! n_ n))
+         (:=set :get-set) (let [o @n_] (vreset! n_ n) o)
+         (:=+   :get-add) (let [o @n_] (vswap!  n_ (fn [c] (+ c n))) o)
+         (:+=   :add-get) (do          (vswap!  n_ (fn [c] (+ c n))))))))
 
 (defn counter
   "Returns a fast atomic Counter with `init` initial int value:
-    - @<counter>          ->        return current value
-    - (<counter>        ) -> add 1, return old     value
-    - (<counter>     <n>) -> add n, return old     value
-    - (<counter> :+= <n>) -> add n, return new     value"
+    - (<counter>    ) -> add 1, return old val
+    - (<counter> <n>) -> add n, return old val
 
+    Experimental 3-arity version takes an `action`:
+      :add, :set, :set-get, :get-set, :get-add, :add-get"
   ([    ] (counter 0))
   ([init]
    #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. init))
