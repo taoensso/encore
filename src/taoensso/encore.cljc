@@ -57,6 +57,7 @@
       [cljs.tools.reader.edn :as edn]
       ;;[goog.crypt.base64 :as base64]
       [goog.object         :as gobj]
+      [goog.array          :as garray]
       [goog.string         :as gstr]
       [goog.string.format]
       [goog.string.StringBuffer]
@@ -2782,6 +2783,39 @@
    :clj  (defn rcompare "Reverse comparator."
            {:inline (fn [x y] `(. clojure.lang.Util compare ~y ~x))}
            [x y] (compare y x)))
+
+(defn sortv
+  "Like `core/sort` but:
+    - Returns a vector.
+    - `comparator` can be `:asc`, `:desc`, or an arbitrary comparator.
+    - An optional `keyfn` may be provided, as in `core/sort-by`."
+  ;; A little faster than `(vec (sort ...))` when `coll` very large
+  ([                  coll] (sortv nil :asc       coll))
+  ([       comparator coll] (sortv nil comparator coll))
+  ([?keyfn comparator coll]
+   (if-not (seq coll)
+     []
+     (let [comparator
+           (case comparator
+             :asc                    compare
+             (:dsc :desc) (fn [x y] (compare y x))
+             comparator)
+
+           comparator
+           (if-let [kfn (when (not= ?keyfn identity) ?keyfn)]
+             (fn [x y] (comparator (kfn x) (kfn y)))
+             comparator)
+
+           a (to-array coll)]
+
+       #?(:clj  (java.util.Arrays/sort a ^java.util.Comparator comparator)
+          :cljs (garray/stableSort     a (fn->comparator       comparator)))
+
+       (with-meta (vec a) (meta coll))))))
+
+(comment
+  (sortv second :desc [[1 10] [2 9] [3 8] [4 7] [5 6]])
+  (let [v (vec (range 1e5))] (qb 1e2 (vec (sort v)) (sortv v) (sortv :desc v))))
 
 (let [sentinel (new-object)
       nil->sentinel (fn [x] (if (nil? x) sentinel x))
