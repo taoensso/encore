@@ -83,7 +83,7 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* -gc-now?
-        name-with-attrs deprecated new-object]])))
+        name-with-attrs deprecated new-object defalias]])))
 
 (def encore-version [3 6 0])
 
@@ -371,19 +371,15 @@
                          (declare ~(with-meta (symbol v) m))))) syms)
          (in-ns '~(symbol original-ns)))))
 
-#?(:clj ; Not currently possible with cljs, unfortunately
-   (defmacro defalias "Defines an alias for a var, preserving its metadata."
-     ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
-     ([sym src      ] `(defalias ~sym                 ~src nil))
-     ([sym src attrs]
-      (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
-        `(let [src-var# (var ~src)
-               dst-var# (def ~sym (.getRawRoot src-var#))]
-           (alter-meta! dst-var#
-             #(-core-merge %
-                (dissoc (meta src-var#) :column :line :file :ns :test :name)
-                ~attrs))
-           dst-var#)))))
+(defmacro defalias
+  "Defines an alias for a var, preserving its metadata."
+  ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
+  ([sym src      ] `(defalias ~sym                 ~src nil))
+  ([sym src attrs]
+   (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
+     `(let [attrs# (conj (select-keys (meta (var ~src)) [:doc :arglists :private :macro]) ~attrs)]
+        (alter-meta! (def ~sym @(var ~src)) conj attrs#)
+        (var ~sym)))))
 
 ;;;; Truss aliases (for back compatibility, convenience)
 
