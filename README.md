@@ -10,11 +10,9 @@
 
 <!-- ![build status](https://github.com/ptaoussanis/encore/workflows/build/badge.svg?branch=master) -->
 
-> See [here](https://taoensso.com/clojure/backers) if you're interested in helping support my open-source work, thanks! - Peter Taoussanis
+> See [here][backers] if you're interested in helping support my open-source work, thanks! - Peter Taoussanis
 
-# Encore
-
-### Core utils library for Clojure/Script
+# Encore: core utils library for Clojure/Script
 
 **Or**: What happens when you spend way too much time with Clojure
 
@@ -32,30 +30,28 @@ Some info on how to resolve dependency conflicts [here](https://github.com/ptaou
 
 ## Contacting me / contributions
 
-Please use the project's [GitHub issues page] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors page] for a list of contributors.
+Please use the project's [GitHub issues][] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors][] for a list of contributors.
 
-Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
+Otherwise, you can reach me at [Taoensso.com][taoensso.com]. Happy hacking!
 
-\- [Peter Taoussanis][]
+\- Peter Taoussanis
 
 ## License
 
-Distributed under the [EPL v1.0] \(same as Clojure).  
-Copyright &copy; 2014-2020 [Peter Taoussanis].
+Distributed under the [EPL v1.0][] (same as Clojure).  
+Copyright &copy; 2020 [Peter Taoussanis][taoensso.com].
 
 <!--- Standard links -->
-[Taoensso.com]: https://www.taoensso.com
-[Peter Taoussanis]: https://www.taoensso.com
-[@ptaoussanis]: https://www.taoensso.com
-[More by @ptaoussanis]: https://www.taoensso.com
+[taoensso.com]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
+[backers]: https://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
 [_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
 [CHANGELOG]: https://github.com/ptaoussanis/encore/commits/master
 [API]: http://ptaoussanis.github.io/encore/
-[GitHub issues page]: https://github.com/ptaoussanis/encore/issues
-[GitHub contributors page]: https://github.com/ptaoussanis/encore/graphs/contributors
+[GitHub issues]: https://github.com/ptaoussanis/encore/issues
+[GitHub contributors]: https://github.com/ptaoussanis/encore/graphs/contributors
 [EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/encore/master/LICENSE
 [Hero]: https://raw.githubusercontent.com/ptaoussanis/encore/master/hero.png
 
