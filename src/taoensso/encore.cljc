@@ -82,7 +82,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let cond defonce
-        cond! catching -if-cas! now-dt* now-udt* now-nano* -gc-now?
+        cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
         name-with-attrs deprecated new-object defalias]])))
 
 (def encore-version [3 6 0])
@@ -3510,7 +3510,7 @@
      shared ns from elsewhere (e.g. a private or cyclic ns)."
      [sym]
      (let [   stub-sym  sym
-           unstub-sym (symbol (str  "unstub-" (name stub-sym)))
+            unstub-sym (symbol (str  "unstub-" (name stub-sym)))
            -unstub-sym (symbol (str "-unstub-" (name stub-sym)))]
        `(if-cljs ; No declare/intern support
             (let [~'stubfn_ (-new-stubfn_ ~(name stub-sym))]
@@ -3527,7 +3527,7 @@
                    ;;   1. clj   stub: def var, clj macro
                    ;;   2. cljs  stub: def volatile, 2 fns
                    ;;   3. clj/s stub: def volatile, 2 fns, var, and clj/s macro
-                   (~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
+                    (~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
                  (-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
                    ~stub-var# ~~'x))))))))
 
@@ -4061,8 +4061,7 @@
           ^long start-idx* (translate-signed-idx start-idx xlen)
           end-idx*   (long
                        (cond
-                         max-len (#?(:clj min* :cljs enc-macros/min*)
-                                   (+ start-idx* max-len) xlen)
+                         max-len (min* (+ start-idx* max-len) xlen)
                          end-idx (inc ; Want exclusive
                                    ^long (translate-signed-idx end-idx xlen))
                          :else   xlen))]
