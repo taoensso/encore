@@ -2779,8 +2779,8 @@
       sentinel->nil (fn [x] (if (identical? x sentinel) nil x))]
 
   (defn reduce-top
-    "Reduces the top `n` items from `coll` of N items into in O(N.logn) time.
-    For comparsion, (take n (sort-by ...)) is O(N.logN)."
+    "Reduces the top `n` items from `coll` of N items.
+    Clj impln is O(N.logn) vs O(N.logN) for (take n (sort-by ...))."
     ([n           rf init coll] (reduce-top n identity compare rf init coll))
     ([n keyfn     rf init coll] (reduce-top n keyfn    compare rf init coll))
     ([n keyfn cmp rf init coll]
