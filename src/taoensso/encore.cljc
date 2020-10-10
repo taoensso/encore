@@ -3358,35 +3358,36 @@
      "Small util to help correctly manage (modify) funtional sessions. Please use
      this when writing Ring middleware! It's *so* easy to get this wrong and end up
      with subtle, tough-to-diagnose issues."
-     [req resp f & args]
-     (when resp
-       (let [base (get resp :session (get req :session))
+     [rreq rresp f & args]
+     (when rresp
+       (let [base (get rresp :session (get rreq :session))
              new-session (if args (apply f base args) (f base))]
-         (assoc resp :session new-session)))))
+         (assoc rresp :session new-session)))))
 
 #?(:clj
-   (defn normalize-headers [req-or-resp]
-     (when req-or-resp
-       (assoc req-or-resp :headers (map-keys str/lower-case (:headers req-or-resp))))))
+   (defn normalize-headers [rreq-or-rresp]
+     (when rreq-or-rresp
+       (assoc rreq-or-rresp :headers (map-keys str/lower-case (:headers rreq-or-rresp))))))
 
 (comment (normalize-headers {:headers {"Foo1" "bar1" "FOO2" "bar2" "foo3" "bar3"}}))
 
 #?(:clj
    (do
      (defn ring-resp-map        [x] (when x (if (map? x) x {:body x})))
-     (defn ring-set-body        [body    resp] (assoc (ring-resp-map resp) :body    body))
-     (defn ring-set-status      [code    resp] (assoc (ring-resp-map resp) :status  code))
-     (defn ring-set-headers     [headers resp] (assoc (ring-resp-map resp) :headers headers))
-     (defn ring-default-headers [headers resp] (assoc (ring-resp-map resp) :headers (merge headers (get resp :headers))))
-     (defn ring-merge-headers   [headers resp] (assoc (ring-resp-map resp) :headers (merge (get resp :headers) headers)))))
+     (defn ring-set-body        [body    rresp] (assoc (ring-resp-map rresp) :body    body))
+     (defn ring-set-status      [code    rresp] (assoc (ring-resp-map rresp) :status  code))
+     (defn ring-set-headers     [headers rresp] (assoc (ring-resp-map rresp) :headers headers))
+     (defn ring-default-headers [headers rresp] (assoc (ring-resp-map rresp) :headers (merge headers (get rresp :headers))))
+     (defn ring-merge-headers   [headers rresp] (assoc (ring-resp-map rresp) :headers (merge (get rresp :headers) headers)))))
 
 (comment (ring-merge-headers {"BAR" "baz"} {:body "foo"})
          (ring-merge-headers {"bar" "baz"} "foo"        ))
 
 #?(:clj
-   (defn redirect-resp
-     ([url               ] (redirect-resp :temp url nil))
-     ([kind url & [flash]]
+   (defn ring-redirect-resp
+     ([     url      ] (ring-redirect-resp :temp url nil))
+     ([kind url      ] (ring-redirect-resp kind  url nil))
+     ([kind url flash]
       {:headers {"location" url}
        :body    nil
        :flash   flash
@@ -3396,7 +3397,7 @@
          (302 :temporary :temp nil) 302
          kind)})))
 
-(comment (redirect-resp 303 "/foo" "boo!"))
+(comment (ring-redirect-resp 303 "/foo" "boo!"))
 
 (defn url-encode "Based on https://goo.gl/fBqy6e"
   #?(:clj  [s & [encoding]] :cljs [s])
@@ -3886,9 +3887,10 @@
          (fn [_] true) ; Unfortunate API choice
          (compile-str-filter {:allow whitelist :deny blacklist})))))
 
-  #?(:clj (defn set-body      [resp body]    (ring-set-body      body    resp)))
-  #?(:clj (defn set-status    [resp code]    (ring-set-status    code    resp)))
-  #?(:clj (defn merge-headers [resp headers] (ring-merge-headers headers resp)))
+  #?(:clj (defn set-body      [rresp body]    (ring-set-body      body    rresp)))
+  #?(:clj (defn set-status    [rresp code]    (ring-set-status    code    rresp)))
+  #?(:clj (defn merge-headers [rresp headers] (ring-merge-headers headers rresp)))
+  #?(:clj (def  redirect-resp ring-redirect-resp))
 
   (defmacro if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
   (defmacro when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
