@@ -975,7 +975,7 @@
    (deftype Counter [n_]
      IDeref (-deref [_] @n_)
      IFn
-     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (inc   1))) n))
+     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (+ c   1))) n))
      (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
      (-invoke [_ action n]
        (case action
