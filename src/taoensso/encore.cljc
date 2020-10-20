@@ -83,7 +83,7 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
-        name-with-attrs deprecated new-object defalias]])))
+        name-with-attrs deprecated new-object defalias -thrown]])))
 
 (def encore-version [3 8 1])
 
@@ -3804,6 +3804,50 @@
   (def ^:dynamic *foo* nil)
   (binding [*foo* "bar"] ; Note no auto conveyance
     ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
+
+;;;; Tests
+
+(defmacro -thrown [form] `(try (do ~form nil) (catch #?(:clj Throwable :cljs :default) e# e#)))
+(defn -matching-error
+  ([c ex]
+   (when
+       (instance?
+         (case c
+           :default #?(:clj Exception :cljs js/Error)
+           :any     #?(:clj Throwable :cljs js/Error)
+           c)
+         ex)
+     ex))
+
+  ([c pattern ex]
+   (when
+       (and
+         (-matching-error c ex)
+         (if (map? pattern)
+           (if-let [data (ex-data ex)]
+             (= pattern (select-keys data (keys pattern)))
+             false)
+
+           (boolean (re-find (re-pattern pattern) (ex-message ex)))))
+     ex)))
+
+(comment
+  (-matching-error :default             (Exception.))
+  (-matching-error :default "foo"       (Exception. "foo"))
+  (-matching-error :default "foo"       (ex-info    "foo" {:foo :bar :baz :qux}))
+  (-matching-error :default {:baz :qux} (ex-info    "foo" {:foo :bar :baz :qux})))
+
+(defmacro thrown
+  ([          form] `(when-let [e# (-thrown ~form)]                              e#))
+  ([c         form] `(when-let [e# (-thrown ~form)] (-matching-error ~c          e#)))
+  ([c pattern form] `(when-let [e# (-thrown ~form)] (-matching-error ~c ~pattern e#))))
+
+(comment
+  (thrown                            (/ 4 0))
+  (thrown :default #"Divide by zero" (/ 4 0))
+  (thrown :default #"Nope"           (/ 4 0))
+  (thrown :default #"Test"     (throw (ex-info "Test" {:foo :bar})))
+  (thrown :default {:foo :bar} (throw (ex-info "Test" {:foo :bar}))))
 
 ;;;; DEPRECATED
 
