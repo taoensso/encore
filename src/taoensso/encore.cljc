@@ -83,7 +83,7 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
-        name-with-attrs deprecated new-object defalias -thrown]])))
+        name-with-attrs deprecated new-object defalias]])))
 
 (def encore-version [3 9 0])
 
@@ -3807,8 +3807,8 @@
 
 ;;;; Tests
 
-(defmacro -thrown [form] `(try (do ~form nil) (catch #?(:clj Throwable :cljs :default) e# e#)))
-(defn -matching-error
+(defn -matching-throwable
+  ([  ex] (when ex ex))
   ([c ex]
    (when
        (instance?
@@ -3822,7 +3822,7 @@
   ([c pattern ex]
    (when
        (and
-         (-matching-error c ex)
+         (-matching-throwable c ex)
          (if (map? pattern)
            (if-let [data (ex-data ex)]
              (= pattern (select-keys data (keys pattern)))
@@ -3832,22 +3832,38 @@
      ex)))
 
 (comment
-  (-matching-error :default             (Exception.))
-  (-matching-error :default "foo"       (Exception. "foo"))
-  (-matching-error :default "foo"       (ex-info    "foo" {:foo :bar :baz :qux}))
-  (-matching-error :default {:baz :qux} (ex-info    "foo" {:foo :bar :baz :qux})))
+  (-matching-throwable                            (catching (/ 4 0) t t))
+  (-matching-throwable :default #"Divide by zero" (catching (/ 4 0) t t))
+  (-matching-throwable :default #"Nope"           (catching (/ 4 0) t t))
+  (-matching-throwable :default #"Test"           (ex-info "Test" {:a :b}))
+  (-matching-throwable :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
 
 (defmacro thrown
-  ([          form] `(when-let [e# (-thrown ~form)]                              e#))
-  ([c         form] `(when-let [e# (-thrown ~form)] (-matching-error ~c          e#)))
-  ([c pattern form] `(when-let [e# (-thrown ~form)] (-matching-error ~c ~pattern e#))))
+  "Evaluates `form` and returns ?throwable thrown by form that matches
+  given criteria:
+
+    - `c` may be:
+      - A class (e.g. ArithmeticException, AssertionError, etc.)
+      - `:default` => default platform throwable (Exception or js/Error)
+      - `:any`     => any     platform throwable (Throwable or js/Error)
+
+    - `pattern` may be
+      - A string or Regex against which `ex-message` will be matched.
+      - A map             against which `ex-data`    will be matched.
+
+  Useful for unit tests, e.g.:
+    (is (thrown :default {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))"
+
+  ([          form] `(-matching-throwable             (catching ~form ~'t ~'t)))
+  ([c         form] `(-matching-throwable ~c          (catching ~form ~'t ~'t)))
+  ([c pattern form] `(-matching-throwable ~c ~pattern (catching ~form ~'t ~'t))))
 
 (comment
   (thrown                            (/ 4 0))
   (thrown :default #"Divide by zero" (/ 4 0))
   (thrown :default #"Nope"           (/ 4 0))
-  (thrown :default #"Test"     (throw (ex-info "Test" {:foo :bar})))
-  (thrown :default {:foo :bar} (throw (ex-info "Test" {:foo :bar}))))
+  (thrown :default #"Test" (throw (ex-info "Test" {:a :b})))
+  (thrown :default {:a :b} (throw (ex-info "Test" {:a :b :c :d}))))
 
 ;;;; DEPRECATED
 
