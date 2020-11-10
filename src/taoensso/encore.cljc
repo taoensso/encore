@@ -3807,6 +3807,12 @@
 
 ;;;; Tests
 
+
+(defn- -ex-message ; `ex-message` was only introduced in Clojure 1.10+
+  [ex]
+  #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
+     :cljs (when (instance? js/Error  ex) (.-message              ex))))
+
 (defn -matching-throwable
   ([  ex] (when ex ex))
   ([c ex]
@@ -3828,7 +3834,7 @@
              (= pattern (select-keys data (keys pattern)))
              false)
 
-           (boolean (re-find (re-pattern pattern) (ex-message ex)))))
+           (boolean (re-find (re-pattern pattern) (-ex-message ex)))))
      ex)))
 
 (comment
