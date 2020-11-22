@@ -51,7 +51,7 @@
 
   :aliases
   {"start-dev"  ["with-profile" "+dev" "repl" ":headless"]
-   "deploy-lib" ["do" ["build-once"] ["deploy" "clojars" ["install"]]]
+   "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
    "build-once" ["cljsbuild" "once"]
    "test-cljs"  ["cljsbuild" "test"]
    "test-all"
