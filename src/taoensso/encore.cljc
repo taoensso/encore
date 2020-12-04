@@ -955,51 +955,6 @@
 
 ;;;; Math
 
-#?(:clj
-   (deftype Counter [^java.util.concurrent.atomic.AtomicLong n_]
-     clojure.lang.IDeref (deref [_] (.get n_))
-     clojure.lang.IFn
-     (invoke [_    ] (.getAndIncrement n_))
-     (invoke [_ add] (.getAndAdd       n_ (long add)))
-     (invoke [_ action n]
-       (let [n (long n)]
-         (case action
-           (:add)           (do (.addAndGet n_ n) nil)
-           (:set)           (do (.set       n_ n))
-           (:set= :set-get) (do (.set       n_ n) n)
-           (:=set :get-set) (do (.getAndSet n_ n))
-           (:=+   :get-add) (do (.getAndAdd n_ n))
-           (:+=   :add-get) (do (.addAndGet n_ n))))))
-
-   :cljs
-   (deftype Counter [n_]
-     IDeref (-deref [_] @n_)
-     IFn
-     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (+ c   1))) n))
-     (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
-     (-invoke [_ action n]
-       (case action
-         (:add)           (do          (vswap!  n_ (fn [c] (+ c n))) nil)
-         (:set)           (do          (vreset! n_ n) nil)
-         (:set= :set-get) (do          (vreset! n_ n))
-         (:=set :get-set) (let [o @n_] (vreset! n_ n) o)
-         (:=+   :get-add) (let [o @n_] (vswap!  n_ (fn [c] (+ c n))) o)
-         (:+=   :add-get) (do          (vswap!  n_ (fn [c] (+ c n))))))))
-
-(defn counter
-  "Returns a fast atomic Counter with `init` initial int value:
-    - (<counter>    ) -> add 1, return old val
-    - (<counter> <n>) -> add n, return old val
-
-    Experimental 3-arity version takes an `action`:
-      :add, :set, :set-get, :get-set, :get-add, :add-get"
-  ([    ] (counter 0))
-  ([init]
-   #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. init))
-      :cljs (Counter. (volatile!                               init)))))
-
-(comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
-
 (def ^:const max-long #?(:clj Long/MAX_VALUE :cljs  9007199254740991))
 (def ^:const min-long #?(:clj Long/MIN_VALUE :cljs -9007199254740991))
 
@@ -2253,6 +2208,51 @@
   )
 
 ;;;; Counters
+
+#?(:clj
+   (deftype Counter [^java.util.concurrent.atomic.AtomicLong n_]
+     clojure.lang.IDeref (deref [_] (.get n_))
+     clojure.lang.IFn
+     (invoke [_    ] (.getAndIncrement n_))
+     (invoke [_ add] (.getAndAdd       n_ (long add)))
+     (invoke [_ action n]
+       (let [n (long n)]
+         (case action
+           (:add)           (do (.addAndGet n_ n) nil)
+           (:set)           (do (.set       n_ n))
+           (:set= :set-get) (do (.set       n_ n) n)
+           (:=set :get-set) (do (.getAndSet n_ n))
+           (:=+   :get-add) (do (.getAndAdd n_ n))
+           (:+=   :add-get) (do (.addAndGet n_ n))))))
+
+   :cljs
+   (deftype Counter [n_]
+     IDeref (-deref [_] @n_)
+     IFn
+     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (+ c   1))) n))
+     (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
+     (-invoke [_ action n]
+       (case action
+         (:add)           (do          (vswap!  n_ (fn [c] (+ c n))) nil)
+         (:set)           (do          (vreset! n_ n) nil)
+         (:set= :set-get) (do          (vreset! n_ n))
+         (:=set :get-set) (let [o @n_] (vreset! n_ n) o)
+         (:=+   :get-add) (let [o @n_] (vswap!  n_ (fn [c] (+ c n))) o)
+         (:+=   :add-get) (do          (vswap!  n_ (fn [c] (+ c n))))))))
+
+(defn counter
+  "Returns a fast atomic Counter with `init` initial int value:
+    - (<counter>    ) -> add 1, return old val
+    - (<counter> <n>) -> add n, return old val
+
+    Experimental 3-arity version takes an `action`:
+      :add, :set, :set-get, :get-set, :get-add, :add-get"
+  ([    ] (counter 0))
+  ([init]
+   #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. init))
+      :cljs (Counter. (volatile!                               init)))))
+
+(comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
 (deftype RollingCounter [^long msecs #?(:clj p_) n-skip_ ts_]
   #?(:clj clojure.lang.IFn :cljs IFn)
