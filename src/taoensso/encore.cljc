@@ -2254,52 +2254,66 @@
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
-(deftype RollingCounter [^long msecs #?(:clj p_) n-skip_ ts_]
-  #?(:clj clojure.lang.IFn :cljs IFn)
-  (#?(:clj invoke :cljs -invoke) [this]
-    #?(:clj (when-let [p @p_] @p)) ; Block iff latched
-    (swap! ts_ (let [t1 (now-udt*)] (fn [v] (conj v t1))))
-    this ; Return to allow optional deref
-    )
+(defn- rc-deref [^long msecs ts_ n-skip_ gc-fn]
+  (let [t1 (now-udt*)
+        ^long n-skip0  @n-skip_
+        ts             @ts_
+        n-total  (count ts)
+        ^long n-window
+        (reduce
+          (fn [^long n ^long t0]
+            (if (<= (- t1 t0) msecs)
+              (inc n)
+              (do  n)))
+          0
+          (subvec ts n-skip0))
 
-  #?(:clj clojure.lang.IDeref :cljs IDeref)
-  (#?(:clj deref :cljs -deref) [_]
-    #?(:clj (when-let [p @p_] @p)) ; Block iff latched
+        n-skip1 (- n-total n-window)]
 
-    (let [t1 (now-udt*)
-          ^long n-skip0  @n-skip_
-          ts             @ts_
-          n-total  (count ts)
-          ^long n-window
-          (reduce
-            (fn [^long n ^long t0]
-              (if (<= (- t1 t0) msecs)
-                (inc n)
-                (do  n)))
-            0
-            (subvec ts n-skip0))
+    ;; (println {:n-total n-total :n-window n-window :n-skip0 n-skip0 :n-skip1 n-skip1})
+    (when (<            n-skip0 n-skip1)
+      (-if-cas! n-skip_ n-skip0 n-skip1
+        (when (> n-skip1 10000) ; Time to gc, amortised cost
+          (gc-fn n-skip1))))
 
-          n-skip1 (- n-total n-window)]
+    n-window))
 
-      ;; (println {:n-total n-total :n-window n-window :n-skip0 n-skip0 :n-skip1 n-skip1})
-      (when (<            n-skip0 n-skip1)
-        (-if-cas! n-skip_ n-skip0 n-skip1
-          (when (> n-skip1 10000) ; Time to gc, amortised cost
-            #?(:cljs
+#?(:clj
+   (deftype RollingCounter [^long msecs ts_ n-skip_ p_]
+     clojure.lang.IFn
+     (invoke [this]
+       (when-let [p @p_] @p) ; Block iff latched
+       (swap! ts_ (let [t1 (now-udt*)] (fn [v] (conj v t1))))
+       this ; Return to allow optional deref
+       )
+
+     clojure.lang.IDeref
+     (deref [_]
+       (when-let [p @p_] @p) ; Block iff latched
+       (rc-deref msecs ts_ n-skip_
+         (fn gc [n-skip1]
+           (let [p (promise)]
+             (-if-cas! p_ nil p ; Latch
                (do
-                 (swap! ts_ (fn [v]  (subvec v n-skip1)))
-                 (reset! n-skip_ 0))
+                 (swap! ts_ (fn [v] (subvec v n-skip1)))
+                 (reset!  n-skip_ 0)
+                 (reset!  p_ nil)
+                 (deliver p  nil))))))))
 
-               :clj
-               (let [p (promise)]
-                 (-if-cas! p_ nil p ; Latch
-                   (do
-                     (swap! ts_ (fn [v] (subvec v n-skip1)))
-                     (reset!  n-skip_ 0)
-                     (reset!  p_ nil)
-                     (deliver p  nil))))))))
+   :cljs
+   (deftype RollingCounter [^long msecs ts_ n-skip_]
+     IFn
+     (-invoke [this]
+       (swap! ts_ (let [t1 (now-udt*)] (fn [v] (conj v t1))))
+       this ; Return to allow optional deref
+       )
 
-      n-window)))
+     IDeref
+     (-deref [_]
+       (rc-deref msecs ts_ n-skip_
+         (fn gc [n-skip1]
+           (swap! ts_ (fn [v] (subvec v n-skip1)))
+           (reset! n-skip_ 0))))))
 
 (defn rolling-counter
   "Experimental. Returns a RollingCounter that you can:
@@ -2308,9 +2322,9 @@
   [msecs]
   (RollingCounter.
     (long (have pos-int? msecs))
-    #?(:clj (atom nil))
+    (atom [])
     (atom 0)
-    (atom [])))
+    #?(:clj (atom nil))))
 
 (comment
   (def myrc (rolling-counter 4000))
