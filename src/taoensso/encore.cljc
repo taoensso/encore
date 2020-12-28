@@ -398,12 +398,12 @@
 
 #?(:clj
    (do
-     (defalias have                        taoensso.truss/have)
-     (defalias have!                       taoensso.truss/have!)
-     (defalias have?                       taoensso.truss/have?)
-     (defalias have!?                      taoensso.truss/have!?)
-     (defalias  get-dynamic-assertion-data taoensso.truss/get-dynamic-assertion-data)
-     (defalias with-dynamic-assertion-data taoensso.truss/with-dynamic-assertion-data)))
+     (defalias taoensso.truss/have)
+     (defalias taoensso.truss/have!)
+     (defalias taoensso.truss/have?)
+     (defalias taoensso.truss/have!?)
+     (defalias taoensso.truss/get-dynamic-assertion-data)
+     (defalias taoensso.truss/with-dynamic-assertion-data)))
 
 ;;;; Edn
 
