@@ -372,8 +372,12 @@
          (in-ns '~(symbol original-ns)))))
 
 (defmacro defalias
-  "Defines an alias for a var, preserving its metadata.
-  Cannot alias macros in Cljs."
+  "Defines an alias for qualified source symbol, preserving its metadata:
+    (defalias my-map-alias clojure.core/map)
+
+  Cannot alias Cljs macros.
+  Changes to source are not automatically applied to alias."
+  ;; TODO Any way to support meta from unqualified source in Cljs? Take var directly?
   ([    src        ] `(defalias ~(symbol (name src)) ~src nil))
   ([sym src        ] `(defalias ~sym                 ~src nil))
   ([sym src attrs  ] `(defalias ~sym                 ~src nil (resolve '~src)))
