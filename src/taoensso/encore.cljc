@@ -81,7 +81,7 @@
      (:require-macros
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if
-        if-let if-some if-not when when-not when-some when-let cond defonce
+        if-let if-some if-not when when-not when-some when-let -cond cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
         name-with-attrs deprecated new-object defalias]])))
 
@@ -218,6 +218,51 @@
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
 
+(defmacro -cond [throw? & clauses]
+  (if-let [[test expr & more] (seq clauses)]
+    (if-not (next clauses)
+      test ; Implicit else
+      (case test
+        (true :else :default)       expr                             ; Faster than (if <truthy> ...)
+        (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
+        :do          `(do          ~expr     (-cond ~throw? ~@more))
+        :let         `(let         ~expr     (-cond ~throw? ~@more))
+
+        :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; Undocumented
+        :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; Undocumented
+        :when        `(when        ~expr     (-cond ~throw? ~@more)) ; Undocumented
+        :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; Undocumented
+        :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; Undocumented
+
+        ;;; 3-clause cases
+        (:if-let :if-some :if-not)
+        (if (empty? more) ; Missing 3rd clause
+          (throw
+            (ex-info (str "`encore/cond`: missing `then` clause for special test keyword: " test)
+              {:test-form test :expr-form expr}))
+
+          (case test
+            :if-let  `(if-let  ~expr ~(first more) (-cond ~throw? ~@(next more)))
+            :if-some `(if-some ~expr ~(first more) (-cond ~throw? ~@(next more)))
+            :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))) ; Undocumented
+            ))
+
+        (if (keyword? test)
+          (throw ; Undocumented, but throws at compile-time so easy to catch
+            (ex-info (str "`encore/cond`: unrecognized special test keyword: " test)
+              {:test-form test :expr-form expr}))
+
+          (if (vector? test) ; Undocumented
+            `(if-let ~test ~expr (-cond ~throw? ~@more))
+
+            ;; Experimental, assumes `not` = `core/not`:
+            (if (and (list? test) (= (first test) 'not))
+              `(if ~(second test) (-cond ~throw? ~@more) ~expr)
+              `(if ~test ~expr    (-cond ~throw? ~@more)))))))
+
+    (when throw?
+      `(throw (ex-info "`encore/cond!`: no matching clause" {})))))
+
 (defmacro cond
   "Like `core/cond` but supports implicit final `else` clause, and special
   clause keywords for advanced behaviour:
@@ -239,43 +284,11 @@
   Simple, flexible way to eliminate deeply-nested control flow code."
 
   ;; Also avoids unnecessary `(if :else ...)`, etc.
-  [& clauses]
-  (when-let [[test expr & more] (seq clauses)]
-    (if-not (next clauses)
-      test ; Implicit else
-      (case test
-        (true :else :default)       expr                   ; Faster than (if <truthy> ...)
-        (false nil)                         `(cond ~@more) ; Faster than (if <falsey> ...)
-        :do          `(do          ~expr     (cond ~@more))
-        :let         `(let         ~expr     (cond ~@more))
-        :when        `(when        ~expr     (cond ~@more)) ; Undocumented
-        :when-not    `(when-not    ~expr     (cond ~@more)) ; Undocumented
-        :when-some   `(when-some   ~expr     (cond ~@more)) ; Undocumented
-        :return-when `(if-let  [x# ~expr] x# (cond ~@more)) ; Undocumented
-        :return-some `(if-some [x# ~expr] x# (cond ~@more)) ; Undocumented
-        :if-let      `(if-let      ~expr ~(first more) (cond ~@(next more)))
-        :if-some     `(if-some     ~expr ~(first more) (cond ~@(next more)))
-        :if-not      `(if-not      ~expr ~(first more) (cond ~@(next more))) ; Undocumented
-
-        (if (keyword? test)
-          (throw ; Undocumented, but throws at compile-time so easy to catch
-            (ex-info "Unrecognized `encore/cond` keyword in `test` clause"
-              {:test-form test :expr-form expr}))
-
-          (if (vector? test) ; Undocumented
-            `(if-let ~test ~expr (cond ~@more))
-
-            ;; Experimental, assumes `not` = `core/not`:
-            (if (and (list? test) (= (first test) 'not))
-              `(if ~(second test) (cond ~@more) ~expr)
-              `(if ~test ~expr    (cond ~@more)))))))))
+  [& clauses] `(-cond false ~@clauses))
 
 (defmacro cond!
   "Like `cond` but throws on non-match like `case` and `condp`."
-  [& clauses]
-  (if (odd? (count clauses))
-    `(cond ~@clauses) ; Has implicit else clause
-    `(cond ~@clauses :else (throw (ex-info "No matching `encore/cond!` clause" {})))))
+  [& clauses] `(-cond true ~@clauses))
 
 (comment
   [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
@@ -290,7 +303,25 @@
     :else             (str n " Smith"))
 
   (cond  false "false")
-  (cond! false "false"))
+  (cond! false "false")
+
+  (cond  :if-let [])
+  (cond  :if-let [a :a])
+  (cond  :when   [a :a])
+  (cond! :return-when (when true  "foo"))
+  (cond! :return-when (when false "foo"))
+
+  [(macroexpand-all '(cond  (= 1 0) "a"))
+   (macroexpand-all '(cond! (= 1 0) "a"))
+
+   (macroexpand-all '(cond  :let [a :a] (= 1 0) "a"))
+   (macroexpand-all '(cond! :let [a :a] (= 1 0) "a"))
+
+   (macroexpand-all '(cond  :if-let [a nil] a (= 1 0) "1=0" #_"default"))
+   (macroexpand-all '(cond! :if-let [a nil] a (= 1 0) "1=0" #_"default"))
+
+   (cond  :if-let [a nil] a (= 1 0) "1=0" #_"default")
+   (cond! :if-let [a nil] a (= 1 0) "1=0" #_"default")])
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
