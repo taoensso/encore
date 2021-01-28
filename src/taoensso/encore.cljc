@@ -270,6 +270,13 @@
               `(if ~(second test) (cond ~@more) ~expr)
               `(if ~test ~expr    (cond ~@more)))))))))
 
+(defmacro cond!
+  "Like `cond` but throws on non-match like `case` and `condp`."
+  [& clauses]
+  (if (odd? (count clauses))
+    `(cond ~@clauses) ; Has implicit else clause
+    `(cond ~@clauses :else (throw (ex-info "No matching `encore/cond!` clause" {})))))
+
 (comment
   [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
    (macroexpand-all '(cond nil "a" nil "b" :else "c"))
@@ -280,7 +287,10 @@
 
   (cond
     :if-not [n "Stu"] "Don't have a name"
-    :else             (str n " Smith")))
+    :else             (str n " Smith"))
+
+  (cond  false "false")
+  (cond! false "false"))
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
@@ -320,15 +330,6 @@
 (declare merge update-in)
 
 ;;;; Secondary macros
-
-(defmacro cond!
-  "Like `cond` but throws on non-match like `case` and `condp`."
-  [& clauses]
-  (if (odd? (count clauses))
-    `(cond ~@clauses) ; Has implicit else clause
-    `(cond ~@clauses :else (throw (ex-info "No matching `encore/cond!` clause" {})))))
-
-(comment [(cond false "false") (cond! false "false")])
 
 #?(:clj
    (defmacro case-eval
