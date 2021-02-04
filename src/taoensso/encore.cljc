@@ -1385,6 +1385,21 @@
   (defn remove-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) (dissoc! m k) m)) (t m) m))))
   (defn remove-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) (dissoc! m k) m)) (t m) m)))))
 
+(defn rename-keys
+  "Returns a map like the one given, replacing keys using
+  the given {<old-new> <new-key>} replacements."
+  [replacements m]
+  (persistent!
+   (reduce-kv
+     (fn [m k v]
+       (if-let [rk (replacements k)]
+         (assoc! (dissoc! m k) rk v)
+         m))
+     (transient m)
+     m)))
+
+(comment (rename-keys {:a :X} {:a :A :b :B :c :C}))
+
 (defn keys-by
   "Returns {(f x) x} map for xs in `coll`."
   [f coll]
