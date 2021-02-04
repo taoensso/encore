@@ -18,7 +18,7 @@
 
   :plugins
   [[lein-pprint    "1.3.2"]
-   [lein-ancient   "0.6.15"]
+   [lein-ancient   "0.7.0"]
    [lein-codox     "0.10.7"]
    [lein-cljsbuild "1.1.8"]]
 
