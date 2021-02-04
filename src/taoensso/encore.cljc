@@ -925,17 +925,23 @@
        Useful to prevent timing attacks, etc."
        [ba1 ba2]
        (when (and ba1 ba2)
-         (let [len1 (alength ^bytes ba1)]
-           (when (== len1 (alength ^bytes ba2))
-             (reduce-n
-               (fn [acc ^long idx]
-                 (if (==
-                       (aget ^bytes ba1 idx)
-                       (aget ^bytes ba2 idx))
-                   acc
-                   false))
-               true
-               len1)))))))
+         (let [bax (byte-array [0 1])
+               ^bytes ba1 ba1
+               ^bytes ba2 ba2
+               l1 (alength ba1)
+               l2 (alength ba2)
+               lmax (max l1 l2)
+               lmin (min l1 l2)]
+
+           (reduce-n
+             (fn [acc ^long idx]
+               (if (>= idx lmin)
+                 (and (== (aget bax   0) (aget bax   1)) acc)
+                 (and (== (aget ba1 idx) (aget ba2 idx)) acc)))
+             true
+             lmax))))))
+
+(comment (const-ba= (byte-array [1 2 3 4]) (byte-array [])))
 
 ;;;; Reduce
 
@@ -2718,19 +2724,23 @@
          (.getBytes ^String s2 "UTF-8"))
 
        :cljs
-       (let [v1 (vec   s1)
+       (let [vx ["0" "1"]
+             v1 (vec   s1)
              v2 (vec   s2)
-             n1 (count v1)]
-         (when (== n1 (count v2))
-           (reduce-n
-             (fn [acc idx]
-               (if (= (get v1 idx) (get v2 idx))
-                 acc
-                 false))
-             true
-             n1))))))
+             n1 (count v1)
+             n2 (count v2)
+             nmax (max n1 n2)
+             nmin (min n1 n2)]
 
-(comment (const-str= "foo" "bar"))
+         (reduce-n
+           (fn [acc idx]
+             (if (>= idx nmin)
+               (and (= (get vx   0) (get vx   1)) acc)
+               (and (= (get v1 idx) (get v2 idx)) acc)))
+           true
+           nmax)))))
+
+(comment (const-str= "foo" ""))
 
 (defmacro thread-local-proxy
   [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
