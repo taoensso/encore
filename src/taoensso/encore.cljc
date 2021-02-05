@@ -404,25 +404,20 @@
          (in-ns '~(symbol original-ns)))))
 
 (defmacro defalias
-  "Defines an alias for qualified source symbol, preserving its metadata:
+  "Defines an alias for qualified source symbol, preserving its metadata (clj only):
     (defalias my-map-alias clojure.core/map)
 
   Cannot alias Cljs macros.
   Changes to source are not automatically applied to alias."
-  ;; TODO Any way to support meta from unqualified source in Cljs? Take var directly?
-  ([    src        ] `(defalias ~(symbol (name src)) ~src nil))
-  ([sym src        ] `(defalias ~sym                 ~src nil))
-  ([sym src attrs  ] `(defalias ~sym                 ~src nil (resolve '~src)))
-  ([sym src attrs v] ; Impl. detail
-   (let [src-attrs (eval `(meta ~v))
-         attrs (if (string? attrs) {:doc attrs} attrs) ; Back compatibility
-         attrs (conj (select-keys src-attrs [:doc :arglists :private :macro]) attrs)
-         attrs (conj attrs {:arglists (list 'quote (:arglists attrs))})
-         sym   (with-meta sym attrs)]
+  ;; TODO Any way to reliably preserve cljs metadata? See #53, commit 2a63a29, etc.
 
-     `(if-cljs
-        (def ~sym (deref   ~v)) ; Unfortunately doesn't support macro aliases
-        (def ~sym (var-get ~v))))))
+  ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
+  ([sym src      ] `(defalias ~sym                 ~src nil))
+  ([sym src attrs]
+   (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
+     `(let [attrs# (conj (select-keys (meta (var ~src)) [:doc :arglists :private :macro]) ~attrs)]
+        (alter-meta! (def ~sym @(var ~src)) conj attrs#)
+        (var ~sym)))))
 
 (comment
   (defalias foo map)
