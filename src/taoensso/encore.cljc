@@ -3455,16 +3455,50 @@
 (comment (normalize-headers {:headers {"Foo1" "bar1" "FOO2" "bar2" "foo3" "bar3"}}))
 
 #?(:clj
+   (defn -ring-merge-headers
+     "Experimental."
+     [h1 h2]
+     (reduce-kv
+       (fn [m k2 v2]
+         (if-let [e1 (find h1 k2)]
+           (let [v1 (val e1)
+                 v3
+                 (if (vector? v1)
+                   (if (vector? v2)
+                     (if (:add (meta v2)) ; vec <- vec
+                       (into v1 v2)
+                       (do      v2))
+                     (conj v1 v2))        ; vec <- el
+                   (if (vector? v2)
+                     (if (:add (meta v2)) ; el <- vec
+                       (into [v1] v2)
+                       (do        v2))
+                     #_[v1 v2] v2))       ; el <- el
+                 ]
+
+             (assoc m k2 v3))
+           (assoc   m k2 v2)))
+       h1
+       h2)))
+
+(comment
+  (-ring-merge-headers
+    {"a" "A1" "b"        "B1"  "c" "C1"}
+    {"a" "A2" "b" ^:add ["B2"] "d" "D2"}))
+
+#?(:clj
    (do
      (defn ring-resp-map        [x] (when x (if (map? x) x {:body x})))
      (defn ring-set-body        [body    rresp] (assoc (ring-resp-map rresp) :body    body))
      (defn ring-set-status      [code    rresp] (assoc (ring-resp-map rresp) :status  code))
      (defn ring-set-headers     [headers rresp] (assoc (ring-resp-map rresp) :headers headers))
-     (defn ring-default-headers [headers rresp] (assoc (ring-resp-map rresp) :headers (merge headers (get rresp :headers))))
-     (defn ring-merge-headers   [headers rresp] (assoc (ring-resp-map rresp) :headers (merge (get rresp :headers) headers)))))
+     (defn ring-default-headers [headers rresp] (assoc (ring-resp-map rresp) :headers (-ring-merge-headers headers (get rresp :headers))))
+     (defn ring-merge-headers   [headers rresp] (assoc (ring-resp-map rresp) :headers (-ring-merge-headers (get rresp :headers) headers)))))
 
-(comment (ring-merge-headers {"BAR" "baz"} {:body "foo"})
-         (ring-merge-headers {"bar" "baz"} "foo"        ))
+(comment
+  (ring-merge-headers {"BAR" "baz"} {:body "foo"})
+  (ring-merge-headers {"bar" "baz"} "foo"        )
+  (ring-merge-headers {"bar" ^:add ["baz2"]} {:body "foo" :headers {"bar" "baz1"}}))
 
 #?(:clj
    (defn ring-redirect-resp
