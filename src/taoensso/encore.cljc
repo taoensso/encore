@@ -2774,10 +2774,12 @@
        rng)))
 
 (defn secure-rand-bytes
-  "Returns `size` random bytes using `secure-rng` or `js/Crypto`."
-  #?(:clj ^bytes [size] :cljs [size])
-  #?(:clj  (let [ba (byte-array     size)] (.nextBytes (secure-rng)    ba) ba)
-     :cljs (let [ba (js/Uint8Array. size)] (.getRandomValues js/Crypto ba) ba)))
+  "Returns `size` random bytes using `secure-rng` or `js/window.crypto`."
+  #?(:clj (^bytes [size] (let [ba (byte-array size)] (.nextBytes (secure-rng) ba) ba))
+     :cljs
+     ([size]
+      (when-let [crypto (.-crypto js/window)]
+        (let [ba (js/Uint8Array. size)] (.getRandomValues crypto ba) ba)))))
 
 (comment
   (qb  1e6 (secure-rand-bytes 21)) ; 1021.07
