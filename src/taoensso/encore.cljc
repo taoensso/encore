@@ -1145,9 +1145,36 @@
 (defn ensure-vec [x] (if (vector? x) x (vec x)))
 (defn ensure-set [x] (if (set?    x) x (set x)))
 
-#?(:cljs (defn oset [o k v] (gobj/set (if (nil? o) (js-obj) o) (name k) v)))
 #?(:cljs
-(defn oget "Like `get` for JS objects, Ref. https://goo.gl/eze8hY."
+   (defn oset "Like `assoc` for JS objects."
+     [o k v] (gobj/set (if (nil? o) (js-obj) o) (name k) v)))
+
+#?(:cljs
+   (let [sentinel (js-obj)]
+     (defn oset-in
+       "Experimental. Like `assoc-in` for JS objects."
+       [o ks v]
+       (let [o (if (nil? o) (js-obj) o)]
+         (if-let [ks (seq ks)]
+           (loop [o-next o, ks-next ks]
+             (let [k1 (name (first ks-next))
+                   o-next
+                   (let [o-next* (gobj/get o-next k1 sentinel)]
+                     (if (identical? o-next* sentinel)
+                       (let [new-obj (js-obj)]
+                         (do
+                           (gobj/set o-next k1 new-obj)
+                           (do                 new-obj)))
+                       o-next*))]
+
+               (if-let [ks-next (next ks-next)]
+                 (recur        o-next ks-next)
+                 (do (gobj/set o-next k1 v) o))))
+           ;; Resolve nil => [nil] ambiguity in `assoc-in`
+           o)))))
+
+#?(:cljs
+   (defn oget "Like `get` for JS objects."
   ([  k          ] (gobj/get js/window (name k)))
   ([o k          ] (gobj/get o         (name k) nil))
   ([o k not-found] (gobj/get o         (name k) not-found))))
