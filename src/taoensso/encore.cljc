@@ -1175,9 +1175,9 @@
 
 #?(:cljs
    (defn oget "Like `get` for JS objects."
-  ([  k          ] (gobj/get js/window (name k)))
-  ([o k          ] (gobj/get o         (name k) nil))
-  ([o k not-found] (gobj/get o         (name k) not-found))))
+     ([  k          ] (gobj/get js/window (name k)))
+     ([o k          ] (gobj/get o         (name k) nil))
+     ([o k not-found] (gobj/get o         (name k) not-found))))
 
 #?(:cljs
    (let [sentinel (js-obj)]
