@@ -1411,14 +1411,17 @@
   "Returns a map like the one given, replacing keys using
   the given {<old-new> <new-key>} replacements."
   [replacements m]
-  (persistent!
-   (reduce-kv
-     (fn [m k v]
-       (if-let [rk (replacements k)]
-         (assoc! (dissoc! m k) rk v)
-         m))
-     (transient m)
-     m)))
+  (cond
+    (nil? m) {}
+    (empty? replacements) m
+    (persistent!
+      (reduce-kv
+        (fn [m k v]
+          (if-let [rk (get replacements k)]
+            (assoc! (dissoc! m k) rk v)
+            m))
+        (transient m)
+        m))))
 
 (comment (rename-keys {:a :X} {:a :A :b :B :c :C}))
 
