@@ -1341,13 +1341,15 @@
 (defn- fsplit-last
   "Faster (f (vec (butlast xs)) (last x))."
   [f xs]
-  (loop [butlast [] xs xs]
-    (let [[x1 & xn] xs]
-      (if xn
-        (recur (conj butlast x1) xn)
-        (f butlast x1)))))
+  (if (vector? xs)
+    (let [[vn vl] (vsplit-last xs)] (f vn vl))
+    (loop [butlast [] xs xs]
+      (let [[x1 & xn] xs]
+        (if xn
+          (recur (conj butlast x1) xn)
+          (f butlast x1))))))
 
-(comment (let [v [:a :b]] (qb 1e6 (fsplit-last vector v) [(butlast v) (last v)])))
+(comment (let [v [:a :b :c :d]] (qb 1e6 (fsplit-last vector v) [(butlast v) (last v)])))
 
 (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
 
@@ -1484,12 +1486,17 @@
      false)))
 
 (defn dissoc-in
-  ([m ks dissoc-k]        (update-in m ks nil (fn [m]       (dissoc m dissoc-k))))
-  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (apply dissoc m dissoc-k more)))))
+  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (apply dissoc m dissoc-k more))))
+  ([m ks dissoc-k       ] (update-in m ks nil (fn [m]       (dissoc m dissoc-k))))
+  ([m ks                ]
+   (if (seq ks)
+     (fsplit-last (fn [ks lk] (dissoc-in m ks lk)) ks)
+     m)))
 
 (comment
   [(dissoc-in    {:a :A} [] :a)
    (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
+   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
    (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
    (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a])])
 
