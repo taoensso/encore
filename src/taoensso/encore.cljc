@@ -1449,34 +1449,27 @@
   (ks-nnil? #{:a :b} {:a :A :b :B  :c nil})
   (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
 
+(declare dissoc-in)
 (defn update-in
   "Like `core/update-in` but:.
-    - Resolves an ambiguity with empty `ks` (nil ≠> [nil]).
+    - Empty ks will return (f m), not act like [nil] ks.
     - Adds support for `not-found`.
     - Adds support for special return vals: `:swap/dissoc`, `:swap/abort`."
-  ;; Recall no `korks` support due to ambiguity: nil => [] or [nil]
   ;; Consider alternative impl. that accepts (fn f [old nx?])?
   ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
-   (if-let [ks-seq (seq ks)]
-     (let [k (nth ks 0)]
-       (if-let [ks (next ks-seq)]
-         (assoc m k (update-in (get m k) ks not-found f))
-         (cond
-           (kw-identical? f :swap/dissoc) (dissoc m k)
-           (kw-identical? f :swap/abort)          m
-           :else
-           (let [v (f (get m k not-found))]
-             (cond
-               (kw-identical? v :swap/dissoc) (dissoc m k)
-               (kw-identical? v :swap/abort)          m
-               :else                          (assoc  m k v))))))
-     ;; Resolve nil => [nil] ambiguity in `core/update-in`, `assoc-in`, etc.:
-     (f m))))
+   (if (empty? ks)
+     (f m) #_m ; Also a sensible choice, but (f m) more useful
+     (let [v (f (get-in m ks not-found))]
+       (cond
+         (kw-identical? v :swap/abort)             m
+         (kw-identical? v :swap/dissoc) (dissoc-in m ks)
+         :else                          (assoc-in  m ks v))))))
 
 (comment
-  (update-in {:a :A :b :B} [:a]         (fn [_] "boo"))
-  (update-in {:a :A :b :B} [:c :d] :_nx (fn [in] :swap/abort)))
+  (update-in {:a :A :b :B} [  ] (fn [_] "foo"))
+  (update-in {:a :A :b :B} [:a] (fn [_] "foo"))
+  (update-in {} [:a :b :c] :_nx (fn [in] :swap/abort)))
 
 (defn #?(:clj contains-in? :cljs ^boolean contains-in?)
   ([coll ks k] (contains? (get-in coll ks) k))
