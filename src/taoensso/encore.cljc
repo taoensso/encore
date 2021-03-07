@@ -1445,25 +1445,33 @@
   (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
 
 (defn update-in
-  "Like `core/update-in` but resolves an ambiguity with empty `ks`,
-  adds support for `not-found`, `:swap/dissoc` vals."
+  "Like `core/update-in` but:.
+    - Resolves an ambiguity with empty `ks` (nil ≠> [nil]).
+    - Adds support for `not-found`.
+    - Adds support for special return vals: `:swap/dissoc`, `:swap/abort`."
   ;; Recall no `korks` support due to ambiguity: nil => [] or [nil]
+  ;; Consider alternative impl. that accepts (fn f [old nx?])?
   ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
    (if-let [ks-seq (seq ks)]
      (let [k (nth ks 0)]
        (if-let [ks (next ks-seq)]
          (assoc m k (update-in (get m k) ks not-found f))
-         (if (kw-identical? f :swap/dissoc)
-           (dissoc m k)
+         (cond
+           (kw-identical? f :swap/dissoc) (dissoc m k)
+           (kw-identical? f :swap/abort)          m
+           :else
            (let [v (f (get m k not-found))]
-             (if (kw-identical? v :swap/dissoc)
-               (dissoc m k)
-               (assoc  m k v))))))
+             (cond
+               (kw-identical? v :swap/dissoc) (dissoc m k)
+               (kw-identical? v :swap/abort)          m
+               :else                          (assoc  m k v))))))
      ;; Resolve nil => [nil] ambiguity in `core/update-in`, `assoc-in`, etc.:
      (f m))))
 
-(comment (update-in {:a :A :b :B} [:a] (fn [_] "boo")))
+(comment
+  (update-in {:a :A :b :B} [:a]         (fn [_] "boo"))
+  (update-in {:a :A :b :B} [:c :d] :_nx (fn [in] :swap/abort)))
 
 (defn #?(:clj contains-in? :cljs ^boolean contains-in?)
   ([coll ks k] (contains? (get-in coll ks) k))
