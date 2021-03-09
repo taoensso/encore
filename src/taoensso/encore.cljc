@@ -1656,11 +1656,17 @@
             s1  (f v0)
             sw? (instance? Swapped s1)
             v1  (if sw? (.-newv ^Swapped s1) s1)]
-        (-if-cas! atom_ v0 v1
+
+        (if (kw-identical? v1 :swap/abort)
           (if sw?
             (.-returnv ^Swapped s1)
-            (return v0 v1))
-          (recur)))))
+            (return v0 v0))
+
+          (-if-cas! atom_ v0 v1
+            (if sw?
+              (.-returnv ^Swapped s1)
+              (return v0 v1))
+            (recur))))))
 
   (defn- -reset-k0! [return atom_ v1]
     (loop []
@@ -1683,15 +1689,23 @@
               v0  (get m0 k not-found)
               s1  (f v0)
               sw? (instance? Swapped s1)
-              v1  (if sw? (.-newv ^Swapped s1) s1)
-              m1  (if (kw-identical? v1 :swap/dissoc)
-                    (dissoc m0 k)
-                    (assoc  m0 k v1))]
-          (-if-cas! atom_ m0 m1
+              v1  (if sw? (.-newv ^Swapped s1) s1)]
+
+          (if (kw-identical? v1 :swap/abort)
             (if sw?
               (.-returnv ^Swapped s1)
-              (return v0 v1))
-            (recur))))))
+              (return v0 v0))
+
+            (let [m1
+                  (if (kw-identical? v1 :swap/dissoc)
+                    (dissoc m0 k)
+                    (assoc  m0 k v1))]
+
+              (-if-cas! atom_ m0 m1
+                (if sw?
+                  (.-returnv ^Swapped s1)
+                  (return v0 v1))
+                (recur))))))))
 
   (defn- -reset-k1! [return atom_ k not-found v1]
     (loop []
@@ -1718,15 +1732,23 @@
                   v0  (get-in m0 ks not-found)
                   s1  (f v0)
                   sw? (instance? Swapped s1)
-                  v1  (if sw? (.-newv ^Swapped s1) s1)
-                  m1  (if (kw-identical? v1 :swap/dissoc)
-                        (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
-                        (do                     (assoc-in  m0 ks v1)))]
-              (-if-cas! atom_ m0 m1
+                  v1  (if sw? (.-newv ^Swapped s1) s1)]
+
+              (if (kw-identical? v1 :swap/abort)
                 (if sw?
                   (.-returnv ^Swapped s1)
-                  (return v0 v1))
-                (recur)))))
+                  (return v0 v0))
+
+                (let [m1
+                      (if (kw-identical? v1 :swap/dissoc)
+                        (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
+                        (do                      (assoc-in  m0 ks v1)))]
+
+                  (-if-cas! atom_ m0 m1
+                    (if sw?
+                      (.-returnv ^Swapped s1)
+                      (return v0 v1))
+                    (recur)))))))
 
         (-swap-k1! return atom_ (nth ks 0) not-found f))
       (-swap-k0!   return atom_                      f)))
@@ -1783,6 +1805,8 @@
   (defn swap-in!
     "Like `swap!` but supports `update-in` semantics,
     returns <new-key-val> or <swapped-return-val>."
+    ;; For a potential v2 API, may actually prefer that this return <new-val> by
+    ;; default. `swapped` can always be used to easily return <new-key-val>.
     ([atom_              f] (-swap-k0! return atom_              f))
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
@@ -1809,14 +1833,16 @@
    (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
    (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
    (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
-   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] :swap/dissoc) @a_)]
+   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] :swap/dissoc) @a_)
+   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [x] (swapped :swap/abort x)))]
 
   [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
    [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
    [{:b :B, :c :C} {:a {:b :B, :c :C}}]
    [{:b :B} {:a {:b :B, :c :C}}]
    101
-   {:a {:b :b1}, :d :d1}])
+   {:a {:b :b1}, :d :d1}
+   :b1])
 
 ;;;; Instants
 
