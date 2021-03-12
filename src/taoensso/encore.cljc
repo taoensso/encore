@@ -1415,26 +1415,29 @@
   O(min(n_replacements, n_m))."
   [replacements m]
   (cond
-    (empty? m) {}
+    (nil?   m) {}
+    (empty? m) m ; Preserve metadata
     (empty? replacements) m
-    (if (> (count m) (count replacements))
-      (persistent!
-        (reduce-kv
-          (fn [acc old-k new-k]
-            (if-let [e (find m old-k)]
-              (assoc! (dissoc! acc old-k) new-k (val e))
-              (do              acc)))
-          (transient m)
-          replacements))
 
-      (persistent!
-        (reduce-kv
-          (fn [acc old-k v]
-            (if-let [e (find replacements old-k)]
-              (assoc! (dissoc! acc old-k) (val e) v)
-              (do              acc)))
-          (transient m)
-          (do        m))))))
+    (> (count m) (count replacements))
+    (persistent!
+      (reduce-kv
+        (fn [acc old-k new-k]
+          (if-let [e (find m old-k)]
+            (assoc! (dissoc! acc old-k) new-k (val e))
+            (do              acc)))
+        (transient m)
+        replacements))
+
+    :else
+    (persistent!
+      (reduce-kv
+        (fn [acc old-k v]
+          (if-let [e (find replacements old-k)]
+            (assoc! (dissoc! acc old-k) (val e) v)
+            (do              acc)))
+        (transient m)
+        (do        m)))))
 
 (comment (rename-keys {:a :X} {:a :A :b :B :c :C}))
 
