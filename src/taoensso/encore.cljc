@@ -3856,8 +3856,8 @@
                   true)
                 false)))
 
-          allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true false)))
-          deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) true false)))
+          allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true  false)))
+          deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) false true)))
           :else
           (throw
             (ex-info "compile-str-filter: `allow-spec` and `deny-spec` cannot both be nil"
@@ -3873,7 +3873,10 @@
   (-> "foo" ((compile-str-filter ["bar" "foo"]))) true
   (-> "foo" ((compile-str-filter ["bar" "f*"])))  true
   (-> "foo" ((compile-str-filter {:allow :any :deny :any}))) false
-  (-> "foo" ((compile-str-filter {:allow "foo*"}))) true)
+  (-> "foo" ((compile-str-filter {:allow "foo*"}))) true
+  (-> "foo" ((compile-str-filter {:deny  "foo*"}))) false
+  (-> "foo" ((compile-str-filter {:allow "*" :deny "foo*"}))) false
+  )
 
 ;;;; Scheduling
 ;; Considered also adding `call-at-interval` but decided against it since the
