@@ -13,7 +13,7 @@
                 }
 
   :dependencies
-  [[org.clojure/tools.reader "1.3.3"]
+  [[org.clojure/tools.reader "1.3.5"]
    [com.taoensso/truss       "1.6.0"]]
 
   :plugins
@@ -26,11 +26,11 @@
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :provided {:dependencies [[org.clojure/clojure       "1.7.0"]
-                             [org.clojure/clojurescript "1.10.773"]]}
+                             [org.clojure/clojurescript "1.10.844"]]}
    :1.7      {:dependencies [[org.clojure/clojure       "1.7.0"]]}
    :1.8      {:dependencies [[org.clojure/clojure       "1.8.0"]]}
    :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
-   :1.10     {:dependencies [[org.clojure/clojure       "1.10.1"]]}
+   :1.10     {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :test     {:dependencies [[org.clojure/test.check    "1.1.0"]
                              [org.clojure/core.async    "1.3.610"]]}
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
