@@ -11,6 +11,7 @@ pom.xml*
 /checkouts/
 /logs/
 /docs/
+/.clj-kondo/.cache
 /doc/
 .idea/
 *.iml
