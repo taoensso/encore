@@ -26,13 +26,13 @@
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :provided {:dependencies [[org.clojure/clojure       "1.7.0"]
-                             [org.clojure/clojurescript "1.10.893"]]}
+                             [org.clojure/clojurescript "1.11.4"]]}
    :1.7      {:dependencies [[org.clojure/clojure       "1.7.0"]]}
    :1.8      {:dependencies [[org.clojure/clojure       "1.8.0"]]}
    :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
    :1.10     {:dependencies [[org.clojure/clojure       "1.10.3"]]}
-   :test     {:dependencies [[org.clojure/test.check    "1.1.0"]
-                             [org.clojure/core.async    "1.4.627"]]}
+   :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
+                             [org.clojure/core.async    "1.5.648"]]}
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
    :dev      [:1.10 :test :server-jvm :depr]}
 
