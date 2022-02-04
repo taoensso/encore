@@ -4,7 +4,7 @@
 **[CHANGELOG][]** | [API][] | current [Break Version][]:
 
 ```clojure
-[com.taoensso/encore "3.20.0"]  ; Needs Clojure 1.7+
+[com.taoensso/encore "3.21.0"]  ; Needs Clojure 1.7+
 [com.taoensso/encore "2.127.0"] ; Needs Clojure 1.5+
 ```
 
