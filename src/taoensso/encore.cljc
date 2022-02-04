@@ -36,7 +36,7 @@
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
-    memoize])
+    memoize abs])
 
   #?(:clj
      (:require
