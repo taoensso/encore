@@ -623,8 +623,8 @@
 
 #?(:clj
    (do
-     (defn nneg?           [x] (not (neg? x)))
-     (defn zero-num?       [x] (= x 0))
+     (defn           nneg? [x] (not (neg?    x)))
+     (defn       zero-num? [x] (and (number? x) (zero? x)))
      ;; (defn regular-num? [x])
 
      (defn float? [x] (or (instance? Double x) (instance? Float x)))
