@@ -31,10 +31,11 @@
    :1.8      {:dependencies [[org.clojure/clojure       "1.8.0"]]}
    :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
    :1.10     {:dependencies [[org.clojure/clojure       "1.10.3"]]}
+   :1.11     {:dependencies [[org.clojure/clojure       "1.11.1"]]}
    :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
                              [org.clojure/core.async    "1.5.648"]]}
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
-   :dev      [:1.10 :test :server-jvm :depr]}
+   :dev      [:1.11 :test :server-jvm :depr]}
 
   :test-paths ["test" "src"]
 
