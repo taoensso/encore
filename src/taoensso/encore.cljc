@@ -2806,17 +2806,21 @@
   ([max-length] (get-substring (uuid-str) 0 max-length))
   ([]
    #?(:clj (str (java.util.UUID/randomUUID))
-      :cljs
-      (let [hex  (fn [] (.toString (rand-int 16) 16))
-            rhex (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 16))) 16)]
-        (str (hex) (hex) (hex) (hex)
-             (hex) (hex) (hex) (hex) "-"
-             (hex) (hex) (hex) (hex) "-"
-             "4"   (hex) (hex) (hex) "-"
-             rhex  (hex) (hex) (hex) "-"
-             (hex) (hex) (hex) (hex)
-             (hex) (hex) (hex) (hex)
-             (hex) (hex) (hex) (hex))))))
+      :cljs ; Ref. https://github.com/clojure/clojurescript/pull/161
+      (let [ver-triple-hex (.toString (bit-or 0x4000 (bit-and 0x0fff (rand-int 65536))) 16)
+            res-triple-hex (.toString (bit-or 0x8000 (bit-and 0x3fff (rand-int 65536))) 16)
+            quad-hex
+            (fn []
+              (let [unpadded-hex (.toString (rand-int 65536) 16)]
+                (case (count   unpadded-hex)
+                  1 (str "000" unpadded-hex)
+                  2 (str  "00" unpadded-hex)
+                  3 (str   "0" unpadded-hex)
+                  (do          unpadded-hex))))]
+
+        (str (quad-hex) (quad-hex) "-" (quad-hex) "-"
+          ver-triple-hex "-" res-triple-hex "-"
+          (quad-hex) (quad-hex) (quad-hex))))))
 
 (comment (qb 1e4 (uuid-str 5)))
 
