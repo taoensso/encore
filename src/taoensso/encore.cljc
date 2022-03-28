@@ -1733,10 +1733,11 @@
 
 (defn- return-swapped [^Swapped sw m0 m1]
   (let [rv (.-returnv ^Swapped sw)]
-    (cond
-      (kw-identical? rv :swap/old) m0
-      (kw-identical? rv :swap/new) m1
-      :else                        rv)))
+    (case rv
+      :swap/old               m0
+      :swap/new            m1
+      :swap/changed? (not= m1 m0)
+      rv)))
 
 (defn- -swap-k0!
   "Impln. for 0-key swaps"
