@@ -1621,10 +1621,7 @@
 ;; - reset-val!  - Optimized 1-key `reset-in!`
 ;; - reset-val!? - Optimized 1-key `reset-in!?`
 
-;; - swap-in!*   -       `swap-in!`  w/ different return ; Deprecate?
-;; - swap-val!   - 1-key `swap-in!`                      ; Deprecate?
-;; - swap-val!*  - 1-key `swap-in!`  w/ different return ; Deprecate?
-
+;; - swap-val!   - Optimized 1-key `swap-in!`
 ;; - pull-val!
 
 (compile-if clojure.lang.IAtom
@@ -1834,21 +1831,8 @@
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
 
-  (defn swap-val! ; Deprecate?
-    "Low-level util, returns <new-key-val> or <swapped-return-val>."
-    ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
-    ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
-
-(let [return (fn [m0 v0 m1 v1] [v0 v1])]
-  (defn swap-in!* ; Deprecate?
-    "Like `swap!` but supports `update-in` semantics,
-    returns [<old-key-val> <new-key-val>]."
-    ([atom_              f] (-swap-k0! return atom_              f))
-    ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
-    ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
-
-  (defn swap-val!* ; Deprecate?
-    "Low-level util, returns [<old-key-val> <new-key-val>]."
+  (defn swap-val!
+    "Like `swap-in!` but optimized for single-key case."
     ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
     ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
 
@@ -1873,8 +1857,10 @@
   "Removes and returns value mapped to key."
   ([atom_ k          ] (pull-val! atom_ k nil))
   ([atom_ k not-found]
-   (let [[v0] (swap-val!* atom_ k not-found :swap/dissoc)]
-     v0)))
+   (swap-val! atom_ k not-found
+     (fn [v0] (swapped :swap/dissoc v0)))))
+
+(comment (pull-val! (atom {:a :A}) :b :nx))
 
 ;;;; Instants
 
@@ -4153,9 +4139,7 @@
   (def ?subvec<len     (comp not-empty      get-subvector))
   (def ?substr<idx     (comp as-?nempty-str get-substr))
   (def ?substr<len     (comp as-?nempty-str get-substring))
-  (def dswap!          swap-in!*)
   (def nano-time       now-nano)
-  (def swap!*          swap-in!*)
   (def -swap-cache!    -swap-val!)
   (def -unswapped      swapped-vec)
   (def -vswapped       swapped-vec)
@@ -4416,4 +4400,19 @@
                 f (if (kw-identical? type :reset) (fn [_] valf) valf)]
             (update-in m ks nil f))))
       m
-      ops)))
+      ops))
+
+  (let [return (fn [m0 v0 m1 v1] [v0 v1])]
+    (defn swap-in!*
+      "Deprecated, prefer `swap-in!` with `swapped` return value."
+      ([atom_              f] (-swap-k0! return atom_              f))
+      ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
+      ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
+
+    (defn swap-val!*
+      "Deprecated, prefer `swap-val!` with `swapped` return value."
+      ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
+      ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
+
+  (def dswap! swap-in!*)
+  (def swap!* swap-in!*))
