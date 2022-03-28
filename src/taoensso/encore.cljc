@@ -1615,23 +1615,24 @@
      {})]
   [nil {} {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}])
 
-;;;; Swap stuff
+;;;; Swap API
+;; - reset-in! ; Uses -reset-k0!, -k1!, -kn!
+;; - swap-in!  ; Uses  -swap-k0!, -k1!, -kn!
+;;   - Supports `swapped`, `:swap/dissoc`, `:swap/abort`
 
-(do
-  (deftype Swapped [newv returnv])
-  #?(:clj  (defn          swapped? [x] (instance? Swapped x))
-     :cljs (defn ^boolean swapped? [x] (instance? Swapped x)))
-  (defn swapped ^Swapped [new-val return-val] (Swapped. new-val return-val))
-  (defn swapped-vec [x]
-    (if (instance? Swapped x)
-      [(.-newv ^Swapped x) (.-returnv ^Swapped x)]
-      [x x]))
+;; - reset-val!  - 1-key `reset-in!`                     ; Deprecate?
+;; - reset-val!? - 1-key `reset-in!` w/ different return ; Deprecate?
 
-  (comment (qb 1e6 (.-newv (swapped "foo")))))
+;; - swap-in!*   -       `swap-in!`  w/ different return ; Deprecate?
+;; - swap-val!   - 1-key `swap-in!`                      ; Deprecate?
+;; - swap-val!*  - 1-key `swap-in!`  w/ different return ; Deprecate?
+
+;; - reset!?
+;; - pull-val!
 
 (compile-if clojure.lang.IAtom
   (def ^:private ^:const atom-tag 'clojure.lang.IAtom)
-  (def ^:private ^:const atom-tag  'clojure.lang.Atom))
+  (def ^:private ^:const atom-tag 'clojure.lang.Atom))
 
 (defmacro -if-cas! "Micro optimization, mostly for cljs."
   [atom_ old-val new-val then & [?else]]
@@ -1640,6 +1641,218 @@
      (if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
        ~then
        ~?else)))
+
+(defn- -reset-k0!
+  "Impln. for 0-key resets"
+  [return atom_ m1]
+  (loop []
+    (let [m0 @atom_]
+      (-if-cas! atom_ m0 m1
+        (return m0 m1) ; [m0 m1]
+        (recur)))))
+
+(defn- -reset-k1!
+  "Impln. for 1-key resets"
+  [return atom_ k not-found v1]
+  (loop []
+    (let [m0 @atom_
+          m1 (assoc m0 k v1)]
+      (-if-cas! atom_ m0 m1
+        (return (get m0 k not-found) v1) ; [m0/nx v1]
+        (recur)))))
+
+(defn- -reset-kn!
+  "Impln. for n-key resets"
+  [return atom_ ks not-found v1]
+  (if-let [ks-seq (seq ks)]
+    (if (next ks-seq)
+      (loop []
+        (let [m0 @atom_
+              m1 (assoc-in m0 ks v1)]
+          (-if-cas! atom_ m0 m1
+            (return (get-in m0 ks not-found) v1) ; [m0/nx v1]
+            (recur))))
+
+      (-reset-k1! return atom_ (nth ks 0) not-found v1))
+    (-reset-k0!   return atom_                      v1)))
+
+(let [return (fn [v0 v1] v0)]
+  (defn reset-in!
+    "Like `reset!` but supports `update-in` semantics,
+    returns <old-key-val>."
+    ([atom_              val] (-reset-k0! return atom_              val))
+    ([atom_ ks           val] (-reset-kn! return atom_ ks nil       val))
+    ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val))))
+
+(do
+  (deftype       Swapped [newv    returnv])
+  (defn swapped ^Swapped [new-val return-val] (Swapped. new-val return-val))
+  (defn swapped-vec [x]
+    (if (instance? Swapped x)
+      [(.-newv ^Swapped x) (.-returnv ^Swapped x)]
+      [x x]))
+
+  #?(:clj  (defn          swapped? [x] (instance? Swapped x))
+     :cljs (defn ^boolean swapped? [x] (instance? Swapped x)))
+
+  (comment (qb 1e6 (.-newv (swapped "new" "return")))))
+
+(defn- -swap-k0!
+  "Impln. for 0-key swaps"
+  [return atom_ f]
+  (loop []
+    (let [m0  @atom_
+          s1  (f m0)
+          sw? (instance? Swapped s1)
+          m1  (if sw? (.-newv ^Swapped s1) s1)]
+
+      (if (kw-identical? m1 :swap/abort)
+        (if sw?
+          (.-returnv ^Swapped s1) ; rv
+          (return m0 m0)) ; [m0 m1=m0]
+
+        (-if-cas! atom_ m0 m1
+          (if sw?
+            (.-returnv ^Swapped s1) ; rv
+            (return m0 m1)) ; [m0 m1]
+          (recur))))))
+
+(defn- -swap-k1!
+  "Impln. for 1-key swaps"
+  [return atom_ k not-found f]
+  (if (kw-identical? f :swap/dissoc)
+    (loop []
+      (let [m0 @atom_
+            m1 (dissoc m0 k)]
+        (-if-cas! atom_ m0 m1
+          (return (get m0 k not-found) :swap/dissoc) ; [v0/nx :swap/dissoc]
+          (recur))))
+
+    (loop []
+      (let [m0  @atom_
+            v0  (get m0 k not-found) ; nx
+            s1  (f v0)
+            sw? (instance? Swapped s1)
+            v1  (if sw? (.-newv ^Swapped s1) s1)]
+
+        (if (kw-identical? v1 :swap/abort)
+          (if sw?
+            (.-returnv ^Swapped s1) ; rv
+            (return v0 v0))         ; [v0 v1=v0]
+
+          (let [m1
+                (if (kw-identical? v1 :swap/dissoc)
+                  (dissoc m0 k)
+                  (assoc  m0 k v1))]
+
+            (-if-cas! atom_ m0 m1
+              (if sw?
+                (.-returnv ^Swapped s1) ; rv
+                (return v0 v1)) ; [v0 v1]
+              (recur))))))))
+
+(defn- -swap-kn!
+  "Impln. for n-key swaps"
+  [return atom_ ks not-found f]
+  (if-let [ks-seq (seq ks)]
+    (if (next ks-seq)
+
+      (if (kw-identical? f :swap/dissoc)
+        (loop []
+          (let [m0 @atom_
+                m1 (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)]
+            (-if-cas! atom_ m0 m1
+              (return (get-in m0 ks not-found) :swap/dissoc) ; [v0/nx :swap/dissoc]
+              (recur))))
+
+        (loop []
+          (let [m0  @atom_
+                v0  (get-in m0 ks not-found) ; nx
+                s1  (f v0)
+                sw? (instance? Swapped s1)
+                v1  (if sw? (.-newv ^Swapped s1) s1)]
+
+            (if (kw-identical? v1 :swap/abort)
+              (if sw?
+                (.-returnv ^Swapped s1) ; rv
+                (return v0 v0)) ; [v0 v1=v0]
+
+              (let [m1
+                    (if (kw-identical? v1 :swap/dissoc)
+                      (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
+                      (do                      (assoc-in  m0 ks v1)))]
+
+                (-if-cas! atom_ m0 m1
+                  (if sw?
+                    (.-returnv ^Swapped s1) ; rv
+                    (return v0 v1)) ; [v0 v1]
+                  (recur)))))))
+
+      (-swap-k1! return atom_ (nth ks 0) not-found f))
+    (-swap-k0!   return atom_                      f)))
+
+(let [return (fn [v0 v1] v1)]
+  (defn swap-in!
+    "Like `swap!` but supports `update-in` semantics,
+    returns <new-key-val> or <swapped-return-val>."
+    ;; For a potential v2 API, may actually prefer that this return <new-val> by
+    ;; default. `swapped` can always be used to easily return <new-key-val>.
+    ([atom_              f] (-swap-k0! return atom_              f))
+    ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
+    ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
+
+;;
+
+(let [return (fn [v0 v1] v0)]
+  (defn reset-val! ; Deprecate?
+    "Low-level util, returns <old-key-val>."
+    ([atom_ k           val] (-reset-k1! return atom_ k nil       val))
+    ([atom_ k not-found val] (-reset-k1! return atom_ k not-found val))))
+
+(let [not-found (new-object)]
+  (defn reset-val!? ; Deprecate?
+    "Maps value to key and returns true iff the mapped value changed or
+    was created."
+    [atom_ k new-val]
+    (let [v0 (reset-val! atom_ k not-found new-val)]
+      (if (= v0 new-val) false true))))
+
+(let [return (fn [v0 v1] [v0 v1])]
+  (defn swap-in!* ; Deprecate?
+    "Like `swap!` but supports `update-in` semantics,
+    returns [<old-key-val> <new-key-val>]."
+    ([atom_              f] (-swap-k0! return atom_              f))
+    ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
+    ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
+
+(let [return (fn [v0 v1] v1)]
+  (defn swap-val! ; Deprecate?
+    "Low-level util, returns <new-key-val> or <swapped-return-val>."
+    ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
+    ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
+
+(let [return (fn [v0 v1] [v0 v1])]
+  (defn swap-val!* ; Deprecate?
+    "Low-level util, returns [<old-key-val> <new-key-val>]."
+    ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
+    ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
+
+(comment
+  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (assoc m :c :C))) @a_])
+   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
+   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
+   (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
+   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] #_:nx :swap/dissoc) @a_)
+   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [x] (swapped :swap/abort x)))]
+
+  [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
+   [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
+   [{:b :B, :c :C} {:a {:b :B, :c :C}}]
+   [{:b :B} {:a {:b :B, :c :C}}]
+   101
+   {:a {:b :b1}, :d :d1}
+   :b1])
 
 (defn reset!?
   "Atomically swaps value of `atom_` to `val` and returns
@@ -1653,211 +1866,12 @@
 
 (comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
 
-(defn -swap-val!
-  "Used internally by memoization utils."
-  [atom_ k f]
-  (loop []
-    (let [m0 @atom_
-          v1 (f (get m0 k))
-          m1 (assoc  m0 k v1)]
-      (-if-cas! atom_ m0 m1
-        v1
-        (recur)))))
-
-(do
-  (defn- -swap-k0! [return atom_ f]
-    (loop []
-      (let [v0  @atom_
-            s1  (f v0)
-            sw? (instance? Swapped s1)
-            v1  (if sw? (.-newv ^Swapped s1) s1)]
-
-        (if (kw-identical? v1 :swap/abort)
-          (if sw?
-            (.-returnv ^Swapped s1)
-            (return v0 v0))
-
-          (-if-cas! atom_ v0 v1
-            (if sw?
-              (.-returnv ^Swapped s1)
-              (return v0 v1))
-            (recur))))))
-
-  (defn- -reset-k0! [return atom_ v1]
-    (loop []
-      (let [v0 @atom_]
-        (-if-cas! atom_ v0 v1
-          (return v0 v1)
-          (recur)))))
-
-  (defn- -swap-k1! [return atom_ k not-found f]
-    (if (kw-identical? f :swap/dissoc)
-      (loop []
-        (let [m0 @atom_
-              m1 (dissoc m0 k)]
-          (-if-cas! atom_ m0 m1
-            (return (get m0 k not-found) :swap/dissoc)
-            (recur))))
-
-      (loop []
-        (let [m0  @atom_
-              v0  (get m0 k not-found)
-              s1  (f v0)
-              sw? (instance? Swapped s1)
-              v1  (if sw? (.-newv ^Swapped s1) s1)]
-
-          (if (kw-identical? v1 :swap/abort)
-            (if sw?
-              (.-returnv ^Swapped s1)
-              (return v0 v0))
-
-            (let [m1
-                  (if (kw-identical? v1 :swap/dissoc)
-                    (dissoc m0 k)
-                    (assoc  m0 k v1))]
-
-              (-if-cas! atom_ m0 m1
-                (if sw?
-                  (.-returnv ^Swapped s1)
-                  (return v0 v1))
-                (recur))))))))
-
-  (defn- -reset-k1! [return atom_ k not-found v1]
-    (loop []
-      (let [m0 @atom_
-            m1 (assoc m0 k v1)]
-        (-if-cas! atom_ m0 m1
-          (return (get m0 k not-found) v1)
-          (recur)))))
-
-  (defn- -swap-kn! [return atom_ ks not-found f]
-    (if-let [ks-seq (seq ks)]
-      (if (next ks-seq)
-
-        (if (kw-identical? f :swap/dissoc)
-          (loop []
-            (let [m0 @atom_
-                  m1 (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)]
-              (-if-cas! atom_ m0 m1
-                (return (get-in m0 ks not-found) :swap/dissoc)
-                (recur))))
-
-          (loop []
-            (let [m0  @atom_
-                  v0  (get-in m0 ks not-found)
-                  s1  (f v0)
-                  sw? (instance? Swapped s1)
-                  v1  (if sw? (.-newv ^Swapped s1) s1)]
-
-              (if (kw-identical? v1 :swap/abort)
-                (if sw?
-                  (.-returnv ^Swapped s1)
-                  (return v0 v0))
-
-                (let [m1
-                      (if (kw-identical? v1 :swap/dissoc)
-                        (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
-                        (do                      (assoc-in  m0 ks v1)))]
-
-                  (-if-cas! atom_ m0 m1
-                    (if sw?
-                      (.-returnv ^Swapped s1)
-                      (return v0 v1))
-                    (recur)))))))
-
-        (-swap-k1! return atom_ (nth ks 0) not-found f))
-      (-swap-k0!   return atom_                      f)))
-
-  (defn- -reset-kn! [return atom_ ks not-found v1]
-    (if-let [ks-seq (seq ks)]
-      (if (next ks-seq)
-        (loop []
-          (let [m0 @atom_
-                m1 (assoc-in m0 ks v1)]
-            (-if-cas! atom_ m0 m1
-              (return (get-in m0 ks not-found) v1)
-              (recur))))
-
-        (-reset-k1! return atom_ (nth ks 0) not-found v1))
-      (-reset-k0!   return atom_                      v1))))
-
-(let [return (fn [v0 v1] v1)]
-  (defn swap-val!
-    "Low-level util, returns <new-key-val> or <swapped-return-val>."
-    ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
-    ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
-
-(let [return (fn [v0 v1] v0)]
-  (defn reset-val!
-    "Low-level util, returns <old-key-val>."
-    ([atom_ k           val] (-reset-k1! return atom_ k nil       val))
-    ([atom_ k not-found val] (-reset-k1! return atom_ k not-found val))))
-
-(let [return (fn [v0 v1] [v0 v1])]
-  (defn swap-val!*
-    "Low-level util, returns [<old-key-val> <new-key-val>]."
-    ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
-    ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
-
 (defn pull-val!
   "Removes and returns value mapped to key."
   ([atom_ k          ] (pull-val! atom_ k nil))
   ([atom_ k not-found]
    (let [[v0] (swap-val!* atom_ k not-found :swap/dissoc)]
      v0)))
-
-(let [not-found (new-object)]
-  (defn reset-val!?
-    "Maps value to key and returns true iff the mapped value changed or
-    was created."
-    [atom_ k new-val]
-    (let [v0 (reset-val! atom_ k not-found new-val)]
-      (if (= v0 new-val) false true))))
-
-;;
-
-(let [return (fn [v0 v1] v1)]
-  (defn swap-in!
-    "Like `swap!` but supports `update-in` semantics,
-    returns <new-key-val> or <swapped-return-val>."
-    ;; For a potential v2 API, may actually prefer that this return <new-val> by
-    ;; default. `swapped` can always be used to easily return <new-key-val>.
-    ([atom_              f] (-swap-k0! return atom_              f))
-    ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
-    ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
-
-(let [return (fn [v0 v1] v0)]
-  (defn reset-in!
-    "Like `reset!` but supports `update-in` semantics,
-    returns <old-key-val>."
-    ([atom_              val] (-reset-k0! return atom_              val))
-    ([atom_ ks           val] (-reset-kn! return atom_ ks nil       val))
-    ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val))))
-
-(let [return (fn [v0 v1] [v0 v1])]
-  (defn swap-in!*
-    "Like `swap!` but supports `update-in` semantics,
-    returns [<old-key-val> <new-key-val>]."
-    ([atom_              f] (-swap-k0! return atom_              f))
-    ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
-    ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f))))
-
-(comment
-  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
-   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] :swap/dissoc) @a_)
-   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [x] (swapped :swap/abort x)))]
-
-  [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
-   [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
-   [{:b :B, :c :C} {:a {:b :B, :c :C}}]
-   [{:b :B} {:a {:b :B, :c :C}}]
-   101
-   {:a {:b :b1}, :d :d1}
-   :b1])
 
 ;;;; Instants
 
@@ -1979,6 +1993,18 @@
 (deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
 
 (declare top)
+
+(defn -swap-val!
+  "Used internally by memoization utils."
+  [atom_ k f]
+  (loop []
+    (let [m0 @atom_
+          v1 (f (get m0 k))
+          m1 (assoc  m0 k v1)]
+      (-if-cas! atom_ m0 m1
+        v1
+        (recur)))))
+
 (defn memoize
   "Like `core/memoize` but:
     * Often faster, depending on opts.
