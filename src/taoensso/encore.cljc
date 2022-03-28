@@ -1616,18 +1616,19 @@
   [nil {} {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}])
 
 ;;;; Swap API
-;; - reset-in! ; Uses -reset-k0!, -k1!, -kn!
-;; - swap-in!  ; Uses  -swap-k0!, -k1!, -kn!
+;; - reset-in!  ; General case, uses -reset-k0!, -k1!, -kn!
+;; - reset-in!? ; General case, uses -reset-k0!, -k1!, -kn!
+;; - swap-in!   ; General case, uses  -swap-k0!, -k1!, -kn!
 ;;   - Supports `swapped`, `:swap/dissoc`, `:swap/abort`
 
-;; - reset-val!  - 1-key `reset-in!`                     ; Deprecate?
-;; - reset-val!? - 1-key `reset-in!` w/ different return ; Deprecate?
+;; - reset!?     - Optimized 0-key `reset-in!`
+;; - reset-val!  - Optimized 1-key `reset-in!`
+;; - reset-val!? - Optimized 1-key `reset-in!?`
 
 ;; - swap-in!*   -       `swap-in!`  w/ different return ; Deprecate?
 ;; - swap-val!   - 1-key `swap-in!`                      ; Deprecate?
 ;; - swap-val!*  - 1-key `swap-in!`  w/ different return ; Deprecate?
 
-;; - reset!?
 ;; - pull-val!
 
 (compile-if clojure.lang.IAtom
@@ -1677,17 +1678,48 @@
     (-reset-k0!   return atom_                      v1)))
 
 (let [return (fn [m0 v0 m1 v1] v0)]
-  (defn reset-in!
-    "Like `reset!` but supports `update-in` semantics,
-    returns <old-key-val>."
+
+  (defn reset-in! ; General case
+    "Like `reset!` but supports `update-in` semantics, returns <old-key-val>."
     ([atom_              val] (-reset-k0! return atom_              val))
     ([atom_ ks           val] (-reset-kn! return atom_ ks nil       val))
     ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
 
-  (defn reset-val! ; Deprecate?
-    "Low-level util, returns <old-key-val>."
+  (defn reset-val! ; Optimized k1 case
+    "Like `reset-in!` but optimized for single-key case."
     ([atom_ k           val] (-reset-k1! return atom_ k nil       val))
     ([atom_ k not-found val] (-reset-k1! return atom_ k not-found val))))
+
+(let [not-found (new-object)
+      return (fn [m0 v0 m1 v1] (not= v0 v1))]
+  
+  (defn reset-in!? ; General case
+    "Like `reset-in!` but returns true iff the atom's value changed."
+    ([atom_              val] (-reset-k0! return atom_              val))
+    ([atom_ ks           val] (-reset-kn! return atom_ ks not-found val))
+    ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
+
+  (defn reset-val!? ; Optimized k1 case
+    "Like `reset-in!?` but optimized for single-key case."
+    [atom_ k new-val]
+    (let [v0 (reset-val! atom_ k not-found new-val)]
+      (not= v0 new-val))))
+
+(comment
+  (reset-in!? (atom :a) :b)
+  (reset-in!? (atom {:a :A}) [:b] :B))
+
+(defn reset!?
+  "Atomically swaps value of `atom_` to `val` and returns
+  true iff the atom's value changed. See also `reset-in!?`."
+  [atom_ val]
+  (loop []
+    (let [old @atom_]
+      (-if-cas! atom_ old val
+        (not= old val)
+        (recur)))))
+
+(comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
 
 (do
   (deftype       Swapped [newv    returnv])
@@ -1840,28 +1872,6 @@
    101
    {:a {:b :b1}, :d :d1}
    :b1])
-
-;;; Misc swap utils
-
-(let [not-found (new-object)]
-  (defn reset-val!? ; Deprecate?
-    "Maps value to key and returns true iff the mapped value changed or
-    was created."
-    [atom_ k new-val]
-    (let [v0 (reset-val! atom_ k not-found new-val)]
-      (if (= v0 new-val) false true))))
-
-(defn reset!?
-  "Atomically swaps value of `atom_` to `val` and returns
-  true iff the atom's value actually changed. See also `reset-in!?`."
-  [atom_ val]
-  (loop []
-    (let [old @atom_]
-      (-if-cas! atom_ old val
-        (if (= old val) false true)
-        (recur)))))
-
-(comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
 
 (defn pull-val!
   "Removes and returns value mapped to key."
