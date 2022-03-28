@@ -1612,17 +1612,17 @@
   [nil {} {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}])
 
 ;;;; Swap API
-;; - reset-in!  ; General case, uses -reset-k0!, -k1!, -kn!
-;; - reset-in!? ; General case, uses -reset-k0!, -k1!, -kn!
-;; - swap-in!   ; General case, uses  -swap-k0!, -k1!, -kn!
-;;   - Supports `swapped`, `:swap/dissoc`, `:swap/abort`
-
-;; - reset!?     - Optimized 0-key `reset-in!`
-;; - reset-val!  - Optimized 1-key `reset-in!`
-;; - reset-val!? - Optimized 1-key `reset-in!?`
-
-;; - swap-val!   - Optimized 1-key `swap-in!`
-;; - pull-val!
+;; - reset-in!   ; Keys: 0, 1, n (general)
+;; - reset-val!  ; Keys:    1    (optimized)
+;;
+;; - reset-in!?  ; Keys: 0, 1, n (general)
+;; - reset-val!? ; Keys:    1    (optimized)
+;; - reset!?     ; Keys: 0       (optimized)
+;;
+;; - swap-in!    ; Keys: 0, 1, n (general)
+;; - swap-val!   ; Keys:    1    (optimized)
+;;
+;; - pull-val!   ; Keys:    1    (optimized, common transform)
 
 (compile-if clojure.lang.IAtom
   (def ^:private ^:const atom-tag 'clojure.lang.IAtom)
@@ -1686,13 +1686,13 @@
 (let [not-found (new-object)
       return (fn [m0 v0 m1 v1] (not= v0 v1))]
   
-  (defn reset-in!? ; General case
+  (defn reset-in!? ; Keys: 0, 1, n (general)
     "Like `reset-in!` but returns true iff the atom's value changed."
     ([atom_              val] (-reset-k0! return atom_              val))
     ([atom_ ks           val] (-reset-kn! return atom_ ks not-found val))
     ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
 
-  (defn reset-val!? ; Optimized k1 case
+  (defn reset-val!? ; Keys: 1 (optimized)
     "Like `reset-in!?` but optimized for single-key case."
     [atom_ k new-val]
     (let [v0 (reset-val! atom_ k not-found new-val)]
@@ -1702,7 +1702,7 @@
   (reset-in!? (atom :a) :b)
   (reset-in!? (atom {:a :A}) [:b] :B))
 
-(defn reset!?
+(defn reset!? ; Keys: 0 (optimized)
   "Atomically swaps value of `atom_` to `val` and returns
   true iff the atom's value changed. See also `reset-in!?`."
   [atom_ val]
@@ -1822,7 +1822,7 @@
     (-swap-k0!   return atom_                      f)))
 
 (let [return (fn [m0 v0 m1 v1] v1)]
-  (defn swap-in!
+  (defn swap-in! ; Keys: 0, 1, n (general)
     "Like `swap!` but supports `update-in` semantics,
     returns <new-key-val> or <swapped-return-val>."
     ;; For a potential v2 API, may actually prefer that this return <new-val> by
@@ -1831,7 +1831,7 @@
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
 
-  (defn swap-val!
+  (defn swap-val! ; Keys: 1 (optimized)
     "Like `swap-in!` but optimized for single-key case."
     ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
     ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
@@ -1853,7 +1853,7 @@
    {:a {:b :b1}, :d :d1}
    :b1])
 
-(defn pull-val!
+(defn pull-val! ; Keys: 1 (optimized, common transform)
   "Removes and returns value mapped to key."
   ([atom_ k          ] (pull-val! atom_ k nil))
   ([atom_ k not-found]
