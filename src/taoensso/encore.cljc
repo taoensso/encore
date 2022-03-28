@@ -1731,6 +1731,13 @@
 
   (comment (qb 1e6 (.-newv (swapped "new" "return")))))
 
+(defn- return-swapped [^Swapped sw m0 m1]
+  (let [rv (.-returnv ^Swapped sw)]
+    (cond
+      (kw-identical? rv :swap/old) m0
+      (kw-identical? rv :swap/new) m1
+      :else                        rv)))
+
 (defn- -swap-k0!
   "Impln. for 0-key swaps"
   [return atom_ f]
@@ -1742,12 +1749,12 @@
 
       (if (kw-identical? m1 :swap/abort)
         (if sw?
-          (.-returnv ^Swapped s1) ; rv
+          (return-swapped s1 m0 m1) ; rv
           (return m0 m0 m0 m0)) ; [m0 v0 m1 v1]
 
         (-if-cas! atom_ m0 m1
           (if sw?
-            (.-returnv ^Swapped s1) ; rv
+            (return-swapped s1 m0 m1) ; rv
             (return m0 m0 m1 m1)) ; [m0 v0 m1 v1]
           (recur))))))
 
@@ -1771,7 +1778,7 @@
 
         (if (kw-identical? v1 :swap/abort)
           (if sw?
-            (.-returnv ^Swapped s1) ; rv
+            (return-swapped s1 m0 m0) ; rv
             (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
           (let [m1
@@ -1781,7 +1788,7 @@
 
             (-if-cas! atom_ m0 m1
               (if sw?
-                (.-returnv ^Swapped s1) ; rv
+                (return-swapped s1 m0 m1) ; rv
                 (return m0 v0 m1 v1)) ; [m0 v0/nx m1 v1]
               (recur))))))))
 
@@ -1808,7 +1815,7 @@
 
             (if (kw-identical? v1 :swap/abort)
               (if sw?
-                (.-returnv ^Swapped s1) ; rv
+                (return-swapped s1 m0 m0) ; rv
                 (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
               (let [m1
@@ -1818,7 +1825,7 @@
 
                 (-if-cas! atom_ m0 m1
                   (if sw?
-                    (.-returnv ^Swapped s1) ; rv
+                    (return-swapped s1 m0 m1) ; rv
                     (return m0 v0 m1 v1)) ; [m0 v0/nx m1 v1]
                   (recur)))))))
 
@@ -1829,8 +1836,6 @@
   (defn swap-in! ; Keys: 0, 1, n (general)
     "Like `swap!` but supports `update-in` semantics,
     returns <new-key-val> or <swapped-return-val>."
-    ;; For a potential v2 API, may actually prefer that this return <new-val> by
-    ;; default. `swapped` can always be used to easily return <new-key-val>.
     ([atom_              f] (-swap-k0! return atom_              f))
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
@@ -1847,7 +1852,8 @@
    (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
    (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
    (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] #_:nx :swap/dissoc) @a_)
-   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [x] (swapped :swap/abort x)))]
+   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [m] (swapped :swap/abort m)))
+   (swap-in! (atom {:a {:b :b1}}) (fn [m] (swapped (assoc m :c :C) :swap/old)))]
 
   [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
    [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
@@ -1855,7 +1861,8 @@
    [{:b :B} {:a {:b :B, :c :C}}]
    101
    {:a {:b :b1}, :d :d1}
-   :b1])
+   :b1
+   {:a {:b :b1}}])
 
 (defn pull-val! ; Keys: 1 (optimized, common transform)
   "Removes and returns value mapped to key."
