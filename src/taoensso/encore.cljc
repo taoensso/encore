@@ -1683,19 +1683,19 @@
     ([atom_ k           val] (-reset-k1! return atom_ k nil       val))
     ([atom_ k not-found val] (-reset-k1! return atom_ k not-found val))))
 
-(let [not-found (new-object)
+(let [sentinel (new-object)
       return (fn [m0 v0 m1 v1] (not= v0 v1))]
   
   (defn reset-in!? ; Keys: 0, 1, n (general)
     "Like `reset-in!` but returns true iff the atom's value changed."
     ([atom_              val] (-reset-k0! return atom_              val))
-    ([atom_ ks           val] (-reset-kn! return atom_ ks not-found val))
+    ([atom_ ks           val] (-reset-kn! return atom_ ks sentinel  val))
     ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
 
   (defn reset-val!? ; Keys: 1 (optimized)
     "Like `reset-in!?` but optimized for single-key case."
     [atom_ k new-val]
-    (let [v0 (reset-val! atom_ k not-found new-val)]
+    (let [v0 (reset-val! atom_ k sentinel new-val)]
       (not= v0 new-val))))
 
 (comment
@@ -1728,11 +1728,11 @@
   (comment (qb 1e6 (.-newv (swapped "new" "return")))))
 
 (defn- return-swapped [^Swapped sw m0 m1]
-  (let [rv (.-returnv ^Swapped sw)]
+  (let [rv (.-returnv sw)]
     (case rv
-      :swap/old               m0
-      :swap/new            m1
       :swap/changed? (not= m1 m0)
+      :swap/new            m1
+      :swap/old               m0
       rv)))
 
 (defn- -swap-k0!
