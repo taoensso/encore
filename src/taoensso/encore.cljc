@@ -95,6 +95,14 @@
   (defmacro have  [& args] `(taoensso.truss/have  ~@args))
   (defmacro have? [& args] `(taoensso.truss/have? ~@args)))
 
+;;;; TODO v4
+;; - Drop previously deprecated vars
+;; - Transducers first
+;; - Better match naming of late Clojure additions (e.g. nnil->some / sor)
+;; - Consider docstrings catered for public consumption
+;; - Imports from tl-core, tl-math, tl-nodes, etc.
+;; - Unit tests
+
 ;;;; Core macros
 
 #?(:clj
@@ -3791,7 +3799,7 @@
     #?(:cljs (enc-macros/unstub-stub-test identity)
        :clj             (unstub-stub-test identity))))
 
-;;;; ns filter
+;;;; Str filter
 
 (let [always (fn always [?in-str] true)
       never  (fn never  [?in-str] false)
@@ -4406,8 +4414,8 @@
           (next ks)
           (next vs)))))
 
-  (defn filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
-  (defn remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k) m)) m m)))
+  (defn filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v)         m    (dissoc m k))) m m)))
+  (defn remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k)         m))    m m)))
 
   (defn revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
   (defn revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
