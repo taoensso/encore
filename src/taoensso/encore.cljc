@@ -1008,16 +1008,43 @@
            (defn run-kvs! [proc  kvs] (reduce-kvs #(proc %2 %3) nil  kvs) nil)
   #?(:cljs (defn run-obj! [proc  obj] (reduce-obj #(proc %2 %3) nil  obj) nil)))
 
-(do ; Faster `reduce`-based variants
-  (defn rsome      [pred coll] (reduce    (fn [acc in]  (when-let [p (pred in)]  (reduced p)))     nil coll))
-  (defn rsome-kv   [pred coll] (reduce-kv (fn [acc k v] (when-let [p (pred k v)] (reduced p)))     nil coll))
-  (defn rfirst     [pred coll] (reduce    (fn [acc in]  (when        (pred in)   (reduced in)))    nil coll))
-  (defn rfirst-kv  [pred coll] (reduce-kv (fn [acc k v] (when        (pred k v)  (reduced [k v]))) nil coll))
-  (defn revery?    [pred coll] (reduce    (fn [acc in]  (if (pred in)  true (reduced false))) true coll))
-  (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced false))) true coll)))
+(do ; Faster variants using reduce/transduce
+  (let [rf (fn [pred] (fn [acc in] (when-let [p (pred in)] (reduced p))))]
+    (defn rsome
+      ([      pred coll] (reduce                      (rf pred)  nil coll))
+      ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
+
+  (let [rf (fn [pred] (fn [acc  k v]  (when-let [p (pred k v)] (reduced p))))
+        tf (fn [pred] (fn [acc [k v]] (when-let [p (pred k v)] (reduced p))))]
+    (defn rsome-kv
+        ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
+      #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
+
+  (let [rf (fn [pred] (fn [acc in] (when (pred in) (reduced in))))]
+    (defn rfirst
+      ([      pred coll] (reduce                      (rf pred)  nil coll))
+      ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
+
+  (let [rf (fn [pred] (fn [acc  k v]  (when (pred k v) (reduced (get acc k) #_[k v]))))
+        tf (fn [pred] (fn [acc [k v]] (when (pred k v) (reduced (get acc k) #_[k v]))))]
+    (defn rfirst-kv
+        ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
+      #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
+
+  (let [rf (fn [pred] (fn [acc in] (if (pred in) true (reduced false))))]
+    (defn revery?
+      ([      pred coll] (reduce                      (rf pred)  true coll))
+      ([xform pred coll] (transduce xform (completing (rf pred)) true coll))))
+
+  (let [rf (fn [pred] (fn [acc  k v]  (if (pred k v) true (reduced false))))
+        tf (fn [pred] (fn [acc [k v]] (if (pred k v) true (reduced false))))]
+    (defn revery-kv?
+        ([      pred coll] (reduce-kv                   (rf pred)  true coll))
+      #_([xform pred coll] (transduce xform (completing (tf pred)) true coll)))))
 
 (comment
   (qb 1e4
+    (some  #(when (string? %) %) [:a :b :c :d "boo"])
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
     (rfirst        string?       [:a :b :c :d "boo"])))
 
