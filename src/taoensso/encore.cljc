@@ -993,13 +993,9 @@
   (defn rfirst     [pred coll] (reduce    (fn [acc in]  (when        (pred in)   (reduced in)))    nil coll))
   (defn rfirst-kv  [pred coll] (reduce-kv (fn [acc k v] (when        (pred k v)  (reduced [k v]))) nil coll))
   (defn revery?    [pred coll] (reduce    (fn [acc in]  (if (pred in)  true (reduced false))) true coll))
-  (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced false))) true coll))
-  (defn revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
-  (defn revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll)))
+  (defn revery-kv? [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) true (reduced false))) true coll)))
 
 (comment
-  ;; Note that `(every? even? nil)` ≠ `(revery even? nil)`
-  [(every? even? nil) (revery even? nil)]
   (qb 1e4
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
     (rfirst        string?       [:a :b :c :d "boo"])))
@@ -4122,7 +4118,6 @@
   (def as-ufloat       as-nat-float)
   (def as-pfloat       as-pos-float)
   (def run!*           run!)
-  (def every           revery)
   (def ?subvec<idx     (comp not-empty      get-subvec))
   (def ?subvec<len     (comp not-empty      get-subvector))
   (def ?substr<idx     (comp as-?nempty-str get-substr))
@@ -4375,6 +4370,11 @@
 
   (defn filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) m (dissoc m k))) m m)))
   (defn remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k) m)) m m)))
+
+  (defn revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
+  (defn revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
+
+  (def every revery)
 
   (defn replace-in [m & ops]
     (reduce
