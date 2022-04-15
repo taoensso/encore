@@ -403,6 +403,14 @@
                          (declare ~(with-meta (symbol v) m))))) syms)
          (in-ns '~(symbol original-ns)))))
 
+(defn -alias-meta [src-var] (select-keys (meta src-var) [:doc :arglists :private :macro]))
+#?(:clj
+   (defn -link-var [dst src]
+     (add-watch src dst
+       (fn [_ src old new]
+         (alter-var-root dst      (constantly @src))
+         (alter-meta!    dst conj (-alias-meta src))))))
+
 (defmacro defalias
   "Defines an alias for qualified source symbol, preserving its metadata (clj only):
     (defalias my-map-alias clojure.core/map)
@@ -414,16 +422,21 @@
   ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
   ([sym src      ] `(defalias ~sym                 ~src nil))
   ([sym src attrs]
-   (let [attrs (if (string? attrs) {:doc attrs} attrs)] ; Back compatibility
-     `(let [attrs# (conj (select-keys (meta (var ~src)) [:doc :arglists :private :macro]) ~attrs)]
-        (alter-meta! (def ~sym @(var ~src)) conj attrs#)
-        (var ~sym)))))
+   (let [attrs (if (string? attrs) {:doc attrs} attrs) ; Back compatibility
+         link? (:link? attrs) ; Currently undocumented
+         attrs (dissoc attrs :link?)]
+
+     `(if-cljs
+        (def ~sym @(var ~src))
+        (let [attrs# (conj (-alias-meta (var ~src)) ~attrs)]
+          (alter-meta! (def ~sym @(var ~src)) conj attrs#)
+          (when ~link? (-link-var (var ~sym) (var ~src)))
+          (var ~sym))))))
 
 (comment
-  (defalias foo map)
-  (defalias taoensso.truss/have)
-  (meta #'foo)
-  (meta #'have))
+  (defn foo [x] (* x x x))
+  (defalias bar foo {:link? true})
+  (meta #'foo))
 
 ;;;; Truss aliases (for back compatibility, convenience)
 
