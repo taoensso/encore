@@ -1659,6 +1659,31 @@
      {})]
   [nil {} {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}])
 
+(defn submap?
+  "Returns true iff `sub` is a (possibly nested) submap of `m`,
+  i.e. iff every (nested) value in `sub` has the same (nested) value in `m`.
+
+  Warning: uses stack recursion, so supports only limited nesting."
+  [m sub]
+  (reduce-kv
+    (fn [_ k v]
+      (if (map? v)
+        (let [sub* v
+              m* (get m k)]
+          (if-let [match? (and (map? m*) (submap? m* sub*))]
+            true
+            (reduced false)))
+
+        (let [sval v
+              mval (get m k ::nx)]
+          (if-let [match? (= sval mval)]
+            true
+            (reduced false)))))
+    true
+    sub))
+
+(comment (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)
 ;; - reset-val!  ; Keys:    1    (optimized)
