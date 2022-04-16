@@ -3975,6 +3975,38 @@
   (-> "foo" ((compile-str-filter {:allow "*" :deny "foo*"}))) false
   )
 
+;;;; Namespaces
+
+#?(:clj
+   (defn interns-overview
+     "Returns {:keys [public private impl test]}, with each key mapped to
+     an alphabetical list of the relevant vars in given namespace.
+
+     \"impl\" vars are public vars with names that begin with \"-\" or \"_\",
+     a naming convention commonly used to indicate vars intended to be treated
+     as private implementation details even when public."
+     ([  ] (interns-overview *ns*))
+     ([ns]
+      (map-vals sort
+        (reduce-kv
+          (fn [{:keys [public private impl test] :as m} k v]
+            (let [mt (meta v)]
+              (cond
+                (:test    mt) (update m :test    conj k)
+                (:private mt) (update m :private conj k)
+
+                :if-let [impl?
+                         (let [[n1 n2] (name (:name mt))]
+                           (or              (#{\- \_} n1)
+                             (and (= n1 \*) (#{\- \_} n2))))]
+                (update m :impl conj k)
+
+                :else (update m :public conj k))))
+          {}
+          (ns-interns ns))))))
+
+(comment (interns-overview))
+
 ;;;; Scheduling
 ;; Considered also adding `call-at-interval` but decided against it since the
 ;; API we'd want for that would be less interesting and more impl specific;
