@@ -2148,7 +2148,8 @@
      ;; Non-racey just as fast as racey, and protects against nils in maps
      (let [cache0_ (java.util.concurrent.atomic.AtomicReference. nil)
            cache1_ (java.util.concurrent.ConcurrentHashMap.)
-           cachen_ (java.util.concurrent.ConcurrentHashMap.)]
+           cachen_ (java.util.concurrent.ConcurrentHashMap.)
+           nil-sentinel (Object.)]
 
        (fn
          ([ ]
@@ -2160,10 +2161,11 @@
                  (.get cache0_)))))
 
          ([x]
-          @(or
-             (.get cache1_ x)
-             (let [dv (delay (f x))]
-               (or (.putIfAbsent cache1_ x dv) dv))))
+          (let [x* (if (nil? x) nil-sentinel x)]
+            @(or
+               (.get cache1_ x*)
+               (let [dv (delay (f x))]
+                 (or (.putIfAbsent cache1_ x* dv) dv)))))
 
          ([x1 x2]
           (let [xs [x1 x2]]
