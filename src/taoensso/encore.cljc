@@ -235,12 +235,14 @@
         (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
         :do          `(do          ~expr     (-cond ~throw? ~@more))
         :let         `(let         ~expr     (-cond ~throw? ~@more))
+        :binding     `(binding     ~expr     (-cond ~throw? ~@more))
 
-        :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; Undocumented
-        :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; Undocumented
-        :when        `(when        ~expr     (-cond ~throw? ~@more)) ; Undocumented
-        :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; Undocumented
-        :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; Undocumented
+        :with-redefs `(with-redefs ~expr     (-cond ~throw? ~@more)) ; Undocumented
+        :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
+        :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
+        :when        `(when        ~expr     (-cond ~throw? ~@more)) ; ''
+        :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; ''
+        :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; ''
 
         ;;; 3-clause cases
         (:if-let :if-some :if-not)
@@ -276,9 +278,9 @@
   clause keywords for advanced behaviour:
 
   (cond
-    :let [x \"x\"] ; Establish bindings visible to following forms
-
-    :do (println (str \"x value: \" x)) ; Eval expr for side effects
+    :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
+    :binding [*x* \"x\"] ; Establish dynamic binding/s for remaining forms
+    :do      (println (str \"x value: \" x)) ; Eval expr for side effects
 
     :if-let [y \"y\"
              z nil]
