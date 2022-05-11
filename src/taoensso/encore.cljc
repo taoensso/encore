@@ -2264,10 +2264,6 @@
       (future (f2)) ; Never prints >once
       (future (f1)))))
 
-(defn memoize_
-  "Like `core/memoize` but faster, non-racy, and supports invalidation."
-  [f] (memoize f))
-
 ;;;; Rate limits
 
 (deftype LimitSpec  [^long n ^long ms])
@@ -4210,6 +4206,7 @@
   (def memoize-1       memoize-last)
   (def memoize1        memoize-last)
   (def memoize*        memoize)
+  (def memoize_        memoize)
   (def nnil?           some?)
   (def nneg-num?       nat-num?)
   (def nneg-int?       nat-int?)
