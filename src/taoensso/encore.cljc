@@ -2025,92 +2025,6 @@
                (let [dv (delay (f x1 x2 x3))]
                  (or (.putIfAbsent cachen_ xs dv) dv)))))))))
 
-(comment
-  (let [m0 (memoize  (fn [& args] (count args)))
-        m1 (memoize_ (fn [& args] (count args)))
-        m2 (fmemoize (fn [& args] (count args)))]
-
-    [(qb 1e6 (m0)          (m1)          (m2))
-     (qb 1e6 (m0 "")       (m1 "")       (m2 ""))
-     (qb 1e6 (m0 "" "")    (m1 "" "")    (m2 "" ""))
-     (qb 1e6 (m0 "" "" "") (m1 "" "" "") (m2 "" "" ""))])
-
-  [[ 74.16  57.48  54.42]
-   [284.42 223.74  62.98]
-   [508.04 273.04 102.42]
-   [823.37 366.64 120.19]])
-
-(defn memoize_
-  "Like `core/memoize` but faster, non-racy, and supports invalidation."
-  [f]
-  #?(:cljs
-     (let [cache_ (volatile! {})
-           get-sentinel (js-obj)]
-
-       (fn [& xs]
-         (let [x1 (first xs)]
-
-           (cond
-             (kw-identical? x1 :mem/del)
-             (let [xn (next  xs)
-                   x2 (first xn)]
-               (if (kw-identical? x2 :mem/all)
-                 (vreset! cache_ {})
-                 (vswap!  cache_ dissoc xn))
-               nil)
-
-             (kw-identical? x1 :mem/fresh)
-             (let [xn (next xs)
-                   v  (apply f xn)] (vswap! cache_ assoc xn v) v)
-
-             :else
-             (let [v (get @cache_ xs get-sentinel)]
-               (if (identical? v get-sentinel)
-                 (let [v (apply f xs)] (vswap! cache_ assoc xs v) v)
-                 v)))))))
-
-  #?(:clj
-     (let [nil-sentinel (Object.)
-           cache_ (java.util.concurrent.ConcurrentHashMap.)]
-
-       (fn
-         ([ ] @(or (.get cache_ nil-sentinel)
-                   (let [dv (delay (f))]
-                     (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
-
-         ([& xs]
-          (let [x1 (first xs)]
-
-            (cond
-              (kw-identical? x1 :mem/del)
-              (let [xn (next  xs)
-                    x2 (first xn)]
-                (if (kw-identical? x2 :mem/all)
-                  (.clear  cache_)
-                  (.remove cache_ (or xn nil-sentinel)))
-                nil)
-
-              (kw-identical? x1 :mem/fresh)
-              @(let [xn (next xs)
-                     dv (delay (apply f xn))] (.put cache_ (or xn nil-sentinel) dv) dv)
-
-              :else
-              @(or (.get cache_ xs)
-                   (let [dv (delay (apply f xs))]
-                     (or (.putIfAbsent cache_ xs dv) dv))))))))))
-
-(comment
-  (do
-    (def foo (memoize_ (fn [& args] [(rand) args])))
-    (def f0  (memoize  (fn [])))
-    (def f0_ (memoize_ (fn [])))
-    (def f1  (memoize  (fn [x] x)))
-    (def f1_ (memoize_ (fn [x] x))))
-
-  (qb 1e5 (f0   ) (f0_   )) ; [ 5.53  4.85]
-  (qb 1e5 (f1 :x) (f1_ :x)) ; [23.99 17.56]
-  )
-
 (defmacro -gc-now? []
   `(if-clj
      (<= (java.lang.Math/random) ~(/ 1.0 16000))
@@ -2136,16 +2050,71 @@
 
 (defn memoize
   "Like `core/memoize` but:
-    * Often faster, depending on opts.
-    * Prevents race conditions on writes.
-    * Supports auto invalidation & gc with `ttl-ms` opt.
-    * Supports cache size limit & gc with `cache-size` opt.
-    * Supports invalidation by prepending args with `:mem/del` or `:mem/fresh`."
+    - Often faster, depending on opts.
+    - Prevents race conditions on writes.
+    - Supports auto invalidation & gc with `ttl-ms` opt.
+    - Supports cache size limit & gc with `cache-size` opt.
+    - Supports invalidation by prepending args with `:mem/del` or `:mem/fresh`."
 
-  ([f] (memoize_ f)) ; De-raced, commands
+  ([f] ; De-raced, commands
+   #?(:cljs
+      (let [cache_ (volatile! {})
+            get-sentinel (js-obj)]
 
-  ;; De-raced, commands, ttl, gc
-  ([ttl-ms f]
+        (fn [& xs]
+          (let [x1 (first xs)]
+
+            (cond
+              (kw-identical? x1 :mem/del)
+              (let [xn (next  xs)
+                    x2 (first xn)]
+                (if (kw-identical? x2 :mem/all)
+                  (vreset! cache_ {})
+                  (vswap!  cache_ dissoc xn))
+                nil)
+
+              (kw-identical? x1 :mem/fresh)
+              (let [xn (next xs)
+                    v  (apply f xn)] (vswap! cache_ assoc xn v) v)
+
+              :else
+              (let [v (get @cache_ xs get-sentinel)]
+                (if (identical? v get-sentinel)
+                  (let [v (apply f xs)] (vswap! cache_ assoc xs v) v)
+                  v))))))
+
+      :clj
+      (let [nil-sentinel (Object.)
+            cache_ (java.util.concurrent.ConcurrentHashMap.)]
+
+        (fn
+          ([ ] @(or (.get cache_ nil-sentinel)
+                    (let [dv (delay (f))]
+                      (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
+
+          ([& xs]
+           (let [x1 (first xs)]
+
+             (cond
+               (kw-identical? x1 :mem/del)
+               (let [xn (next  xs)
+                     x2 (first xn)]
+                 (if (kw-identical? x2 :mem/all)
+                   (.clear  cache_)
+                   (.remove cache_ (or xn nil-sentinel)))
+                 nil)
+
+               (kw-identical? x1 :mem/fresh)
+               @(let [xn (next xs)
+                      dv (delay (apply f xn))]
+                  (.put cache_ (or xn nil-sentinel) dv) dv)
+
+               :else
+               @(or (.get cache_ xs)
+                  (let [dv (delay (apply f xs))]
+                    (or (.putIfAbsent cache_ xs dv) dv)))))))))) 
+
+  ([ttl-ms f] ; De-raced, commands, ttl, gc
    (have? pos-int? ttl-ms)
    (let [cache_ (atom nil) ; {<args> <SimpleCacheEntry>}
          latch_ (atom nil) ; Used to pause writes during gc
@@ -2196,8 +2165,7 @@
                          ?e)))]
                @(.-delay e))))))))
 
-  ;; De-raced, commands, ttl, gc, max-size
-  ([cache-size ttl-ms f]
+  ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
    (have? [:or nil? pos-int?] ttl-ms)
    (have? pos-int? cache-size)
    (let [tick_      (atom 0)
@@ -2278,21 +2246,27 @@
 
 (comment
   (do
-    (def f0 (clojure.core/memoize (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f1 (memoize              (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f2 (memoize 5000         (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f3 (memoize 2 nil        (fn [& [x]] (if x x (Thread/sleep 600)))))
-    (def f4 (memoize 2 5000       (fn [& [x]] (if x x (Thread/sleep 600))))))
+    (def f0 (fn [& args] (Thread/sleep 600) (rand)))
+    (def f1 (clojure.core/memoize f0))
+    (def f2 (memoize              f0))
+    (def f3 (memoize 5000         f0))
+    (def f4 (memoize 2 nil        f0))
+    (def f5 (memoize 2 5000       f0))
+    (def f6 (fmemoize             f0)))
 
-  (qb 1e5 (f0 :x) (f1 :x) (f2 :x) (f3 :x) (f4 :x))
-  ;; [22.43 17.42 62.45 61.78 68.23]
+  (qb 1e5 (f1)    (f2)    (f3)    (f4)    (f5)    (f6))    ; [ 7.6  6.42 14.77 13.77 19.31 6.7]
+  (qb 1e5 (f1 :x) (f2 :x) (f3 :x) (f4 :x) (f5 :x) (f6 :x)) ; [13.73 8.57 33.92 29.32 37.81 4.6]
 
-  (let [f0 (clojure.core/memoize (fn [] (Thread/sleep 5) (print "f0\n")))
-        f1 (memoize              (fn [] (Thread/sleep 5) (print "f1\n")))]
+  (let [f1 (clojure.core/memoize (fn [] (Thread/sleep 5) (print "f1\n")))
+        f2 (memoize              (fn [] (Thread/sleep 5) (print "f2\n")))]
     (println "---")
     (dotimes [_ 10]
-      (future (f1)) ; Never prints >once
-      (future (f0)))))
+      (future (f2)) ; Never prints >once
+      (future (f1)))))
+
+(defn memoize_
+  "Like `core/memoize` but faster, non-racy, and supports invalidation."
+  [f] (memoize f))
 
 ;;;; Rate limits
 
@@ -4229,10 +4203,10 @@
   (def parse-int       as-?int)
   (def parse-float     as-?float)
   (def swapped*        swapped)
-  (def memoize-a0_     memoize_)
-  (def memoize-a1_     memoize_)
-  (def a0-memoize_     memoize_)
-  (def a1-memoize_     memoize_)
+  (def memoize-a0_     memoize)
+  (def memoize-a1_     memoize)
+  (def a0-memoize_     memoize)
+  (def a1-memoize_     memoize)
   (def memoize-1       memoize-last)
   (def memoize1        memoize-last)
   (def memoize*        memoize)
