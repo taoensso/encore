@@ -1969,6 +1969,77 @@
 
 ;;;; Memoization
 
+(defn memoize-last
+  "Like `core/memoize` but only caches the fn's most recent call.
+  Great for Reactjs render op caching on mobile devices, etc."
+  [f]
+  (let [cache_ (atom {})]
+    (fn [& args]
+      @(or (get @cache_ args)
+           (get (swap! cache_
+                  (fn [cache]
+                    (if (get cache args)
+                      cache
+                      {args (delay (apply f args))})))
+             args)))))
+
+(defn fmemoize
+  "For Clj: fastest possible memoize. Non-racey, 0-3 arity only.
+  For Cljs: just passes through to `core/memoize`."
+  [f]
+  #?(:cljs (cljs.core/memoize f)
+     :clj
+     ;; Non-racey just as fast as racey, and protects against nils in maps
+     (let [cache0_ (java.util.concurrent.atomic.AtomicReference. nil)
+           cache1_ (java.util.concurrent.ConcurrentHashMap.)
+           cachen_ (java.util.concurrent.ConcurrentHashMap.)
+           nil-sentinel (Object.)]
+
+       (fn
+         ([ ]
+          @(or
+             (.get cache0_)
+             (let [dv (delay (f))]
+               (if (.compareAndSet cache0_ nil dv)
+                 dv
+                 (.get cache0_)))))
+
+         ([x]
+          (let [x* (if (nil? x) nil-sentinel x)]
+            @(or
+               (.get cache1_ x*)
+               (let [dv (delay (f x))]
+                 (or (.putIfAbsent cache1_ x* dv) dv)))))
+
+         ([x1 x2]
+          (let [xs [x1 x2]]
+            @(or
+               (.get cachen_ xs)
+               (let [dv (delay (f x1 x2))]
+                 (or (.putIfAbsent cachen_ xs dv) dv)))))
+
+         ([x1 x2 x3]
+          (let [xs [x1 x2 x3]]
+            @(or
+               (.get cachen_ xs)
+               (let [dv (delay (f x1 x2 x3))]
+                 (or (.putIfAbsent cachen_ xs dv) dv)))))))))
+
+(comment
+  (let [m0 (memoize  (fn [& args] (count args)))
+        m1 (memoize_ (fn [& args] (count args)))
+        m2 (fmemoize (fn [& args] (count args)))]
+
+    [(qb 1e6 (m0)          (m1)          (m2))
+     (qb 1e6 (m0 "")       (m1 "")       (m2 ""))
+     (qb 1e6 (m0 "" "")    (m1 "" "")    (m2 "" ""))
+     (qb 1e6 (m0 "" "" "") (m1 "" "" "") (m2 "" "" ""))])
+
+  [[ 74.16  57.48  54.42]
+   [284.42 223.74  62.98]
+   [508.04 273.04 102.42]
+   [823.37 366.64 120.19]])
+
 (defn memoize_
   "Like `core/memoize` but faster, non-racy, and supports invalidation."
   [f]
@@ -2039,20 +2110,6 @@
   (qb 1e5 (f0   ) (f0_   )) ; [ 5.53  4.85]
   (qb 1e5 (f1 :x) (f1_ :x)) ; [23.99 17.56]
   )
-
-(defn memoize-last
-  "Like `memoize` but only caches the fn's most recent call.
-  Great for Reactjs render op caching on mobile devices, etc."
-  [f]
-  (let [cache_ (atom {})]
-    (fn [& args]
-      @(or (get @cache_ args)
-           (get (swap! cache_
-                  (fn [cache]
-                    (if (get cache args)
-                      cache
-                      {args (delay (apply f args))})))
-             args)))))
 
 (defmacro -gc-now? []
   `(if-clj
@@ -2236,63 +2293,6 @@
     (dotimes [_ 10]
       (future (f1)) ; Never prints >once
       (future (f0)))))
-
-(defn fmemoize
-  "Fastest-possible Clj memoize. Non-racy, 0-3 arity only.
-  Cljs just passes through to `core/memoize`."
-  [f]
-  #?(:cljs (cljs.core/memoize f)
-     :clj
-     ;; Non-racey just as fast as racey, and protects against nils in maps
-     (let [cache0_ (java.util.concurrent.atomic.AtomicReference. nil)
-           cache1_ (java.util.concurrent.ConcurrentHashMap.)
-           cachen_ (java.util.concurrent.ConcurrentHashMap.)
-           nil-sentinel (Object.)]
-
-       (fn
-         ([ ]
-          @(or
-             (.get cache0_)
-             (let [dv (delay (f))]
-               (if (.compareAndSet cache0_ nil dv)
-                 dv
-                 (.get cache0_)))))
-
-         ([x]
-          (let [x* (if (nil? x) nil-sentinel x)]
-            @(or
-               (.get cache1_ x*)
-               (let [dv (delay (f x))]
-                 (or (.putIfAbsent cache1_ x* dv) dv)))))
-
-         ([x1 x2]
-          (let [xs [x1 x2]]
-            @(or
-               (.get cachen_ xs)
-               (let [dv (delay (f x1 x2))]
-                 (or (.putIfAbsent cachen_ xs dv) dv)))))
-
-         ([x1 x2 x3]
-          (let [xs [x1 x2 x3]]
-            @(or
-               (.get cachen_ xs)
-               (let [dv (delay (f x1 x2 x3))]
-                 (or (.putIfAbsent cachen_ xs dv) dv)))))))))
-
-(comment
-  (let [m0 (memoize  (fn [& args] (count args)))
-        m1 (memoize_ (fn [& args] (count args)))
-        m2 (fmemoize (fn [& args] (count args)))]
-
-    [(qb 1e6 (m0)          (m1)          (m2))
-     (qb 1e6 (m0 "")       (m1 "")       (m2 ""))
-     (qb 1e6 (m0 "" "")    (m1 "" "")    (m2 "" ""))
-     (qb 1e6 (m0 "" "" "") (m1 "" "" "") (m2 "" "" ""))])
-
-  [[ 74.16  57.48  54.42]
-   [284.42 223.74  62.98]
-   [508.04 273.04 102.42]
-   [823.37 366.64 120.19]])
 
 ;;;; Rate limits
 
