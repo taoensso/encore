@@ -85,7 +85,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
         name-with-attrs deprecated new-object defalias]])))
 
-(def encore-version [3 22 0])
+(def encore-version [3 23 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -100,7 +100,7 @@
 ;; - Transducers first
 ;; - Better match naming of late Clojure additions (e.g. nnil->some / sor)
 ;; - Consider docstrings catered for public consumption
-;; - Imports from tl-core, tl-math, tl-nodes, etc.
+;; - Imports from tl-core, tl-math, tl-nodes, baget, etc.
 ;; - Unit tests
 
 ;;;; Core macros
