@@ -2439,6 +2439,7 @@
            (:=+   :get-add) (do (.getAndAdd n_ n))
            (:+=   :add-get) (do (.addAndGet n_ n))))))
 
+   ;; TODO Could implement with ^:mutable set!, etc.
    :cljs
    (deftype Counter [n_]
      IDeref (-deref [_] @n_)
