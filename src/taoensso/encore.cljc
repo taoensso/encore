@@ -713,10 +713,7 @@
      (defn pos-float? [x] (and (float? x)      (pos? x)))
      (defn neg-float? [x] (and (float? x)      (neg? x)))
 
-     (defn udt?       [x] (and (int? x) (not (neg? x))))
-
-     (defn pnum? [x] (and (number? x) (let [n (double x)] (and (>= n  0.0) (<= n  1.0)))))
-     (defn rnum? [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0))))))
+     (defn udt?       [x] (and (int? x) (not (neg? x)))))
 
    :cljs
    (do
@@ -736,10 +733,15 @@
      (defn ^boolean pos-float? [x] (and (float? x)      (pos? x)))
      (defn ^boolean neg-float? [x] (and (float? x)      (neg? x)))
 
-     (defn ^boolean udt?       [x] (and (int? x) (not (neg? x))))
+     (defn ^boolean udt?       [x] (and (int? x) (not (neg? x))))))
 
-     (defn ^boolean pnum? [x] (and (number? x) (let [n (double x)] (and (>= n  0.0) (<= n  1.0)))))
-     (defn ^boolean rnum? [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0)))))))
+(defn #?(:clj pnum? :cljs ^boolean pnum?)
+  "Returns true iff given number in unsigned unit proportion interval ∈ℝ[0,1]."
+  [x] (and (number? x) (let [n (double x)] (and (>= n 0.0) (<= n 1.0)))))
+
+(defn #?(:clj rnum? :cljs ^boolean rnum?)
+  "Returns true iff given number in signed unit proportion interval ∈ℝ[-1,1]."
+  [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0)))))
 
 (compile-if have-core-async?
   (let [c ; Silly work-around for edge case described at `have-core-async`?
@@ -1083,8 +1085,12 @@
 
 (comment (qb 1e5 (approx== 0.01 3.141592 (/ 22 7))))
 
-;; This must reflect to output correct long/double types:
-(defn clamp [nmin nmax n] (if (< n nmin) nmin (if (> n nmax) nmax n)))
+(defn clamp               [nmin nmax n]                                                             (if (< n nmin) nmin (if (> n nmax) nmax n))) ; Reflects
+(defn clamp-int   ^long   [nmin nmax n] (let [nmin (long   nmin), nmax (long   nmax), n (long   n)] (if (< n nmin) nmin (if (> n nmax) nmax n))))
+(defn clamp-float ^double [nmin nmax n] (let [nmin (double nmin), nmax (double nmax), n (double n)] (if (< n nmin) nmin (if (> n nmax) nmax n))))
+
+(defn    pnum-complement ^double [pnum] (- 1.0 (double pnum)))
+(defn as-pnum-complement ^double [x   ] (- 1.0 (as-pnum   x)))
 
 (do ; These will pass primitives through w/o reflection
   (defmacro <=*    [x y z]       `(let [y# ~y] (and (<= ~x y#) (<= y# ~z))))
