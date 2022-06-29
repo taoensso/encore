@@ -644,22 +644,62 @@
      (defn ^boolean vec2?       [x] (and (vector? x) (= (count x) 2)))
      (defn ^boolean vec3?       [x] (and (vector? x) (= (count x) 3)))))
 
+;;; Number type naming conventions
+;; Since Clojure usu. defaults to larger types (long>integer, double>long),
+;; I'm appropriating the rarely-used smaller type names (int, float) to
+;; refer to types of generic size.
+;;
+;; All fixed-precision:
+;;   - int    - Generic  size: long   or integer, etc.
+;;   - float  - Generic  size: double or float,   etc.
+;;   - long   - Specific size: long   ; Only used when emphasizing specific size
+;;   - double - Specific size: double ; Only used when emphasizing specific size
+
+(defn #?(:clj finite-num? :cljs ^boolean finite-num?)
+  "Returns true iff given a standard finite number (excl. NaN and infinities)."
+  [x]
+  #?(:clj (and (number? x) (Double/isFinite x)) ; Works with other types, incl. ratio
+     :cljs (js/Number.isFinite x)
+     #_
+     (and
+       (not ^boolean (js/isNaN x))
+       #_(not (identical? x js/Infinity))
+       (not (identical? x js/Number.POSITIVE_INFINITY))
+       (not (identical? x js/Number.NEGATIVE_INFINITY)))))
+
+(defn #?(:clj int? :cljs ^boolean int?)
+  "Returns true iff given a standard fixed-precision integer."
+  [x]
+  #?(:clj
+     (or
+       (instance? Long    x)
+       (instance? Integer x)
+       (instance? Short   x)
+       (instance? Byte    x))
+
+     :cljs
+     (and
+       #_(number?   x)
+       (finite-num? x)
+       (== (js/parseFloat x) (js/parseInt x 10)))))
+
+(defn #?(:clj float? :cljs ^boolean float?)
+  "Returns true iff given a standard fixed-precision floating-point."
+  [x]
+  #?(:clj (or (instance? Double x) (instance? Float x))
+     :cljs
+     (and
+       (number?        x)
+       #_(finite?-num? x)
+       (not (== (js/parseFloat x) (js/parseInt x 10))))))
+
+(comment (float? Double/NaN))
+
 #?(:clj
    (do
-     (defn           nneg? [x] (not (neg?    x)))
-     (defn       zero-num? [x] (and (number? x)      (zero? x)))
-     (defn      nzero-num? [x] (and (number? x) (not (zero? x))))
-     ;; (defn regular-num? [x])
-
-     (defn float? [x] (or (instance? Double x) (instance? Float x)))
-     (defn int?   [x]
-       (or
-         (instance? Long    x)
-         (instance? Integer x)
-         ;; (instance? clojure.lang.BigInt x)
-         ;; (instance? BigInteger          x)
-         (instance? Short x)
-         (instance? Byte  x)))
+     (defn      nneg? [x] (not (neg?    x)))
+     (defn  zero-num? [x] (and (number? x)      (zero? x)))
+     (defn nzero-num? [x] (and (number? x) (not (zero? x))))
 
      (defn nat-num?   [x] (and (number? x) (not (neg? x))))
      (defn pos-num?   [x] (and (number? x)      (pos? x)))
@@ -680,31 +720,13 @@
 
    :cljs
    (do
-     (defn ^boolean nneg?        [x] (not (neg? x)))
-     (defn ^boolean zero-num?    [x] (= x 0))
-     (defn ^boolean regular-num? [x]
-       (and
-         (number? x)
-         (not ^boolean (js/isNaN x))
-         (not (identical? x js/Infinity))))
+     (defn ^boolean      nneg? [x] (not (neg? x)))
+     (defn ^boolean  zero-num? [x]           (zero? x))
+     (defn ^boolean nzero-num? [x] (and (not (zero? x))))
 
-     (defn ^boolean float? [x]
-       (and
-         (number? x)
-         (not ^boolean (js/isNaN x))
-         (not (identical? x js/Infinity))
-         (not (== (js/parseFloat x) (js/parseInt x 10)))))
-
-     (defn ^boolean int? [x]
-       (and
-         (number? x)
-         (not ^boolean (js/isNaN x))
-         (not (identical? x js/Infinity))
-         (== (js/parseFloat x) (js/parseInt x 10))))
-
-     (defn ^boolean nat-num?   [x] (and (number? x) (not (neg? x))))
-     (defn ^boolean pos-num?   [x] (and (number? x)      (pos? x)))
-     (defn ^boolean neg-num?   [x] (and (number? x)      (neg? x)))
+     (defn ^boolean nat-num?   [x] (not (neg? x)))
+     (defn ^boolean pos-num?   [x]      (pos? x))
+     (defn ^boolean neg-num?   [x]      (neg? x))
 
      (defn ^boolean nat-int?   [x] (and (int? x) (not (neg? x))))
      (defn ^boolean pos-int?   [x] (and (int? x)      (pos? x)))
@@ -4189,6 +4211,7 @@
        `(do ~@body))))
 
 (deprecated
+  #?(:cljs (def regular-num?        finite-num?))
   #?(:cljs (def get-window-location get-win-loc))
   #?(:clj  (def srng                secure-rng))
   (def backport-run!   run!)
