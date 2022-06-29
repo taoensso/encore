@@ -892,8 +892,13 @@
   (defn as-float     ^double [x] (or (as-?float       x) (-as-throw :float       x)))
   (defn as-nat-float ^double [x] (or (as-?nat-float   x) (-as-throw :nat-float   x)))
   (defn as-pos-float ^double [x] (or (as-?pos-float   x) (-as-throw :pos-float   x)))
-  (defn as-pnum      ^double [x] (or (as-?pnum        x) (-as-throw :pnum        x)))
-  (defn as-rnum      ^double [x] (or (as-?rnum        x) (-as-throw :rnum        x)))
+
+  (defn as-pnum      ^double [x] (or (as-?pnum        x)         (-as-throw :pnum  x))) ; With auto coerce+clamp
+  (defn as-rnum      ^double [x] (or (as-?rnum        x)         (-as-throw :rnum  x))) ; ''
+
+  (defn as-pnum!     ^double [x] (if (pnum? x) (double x) (-as-throw :pnum! x))) ; Without auto coerce+clamp
+  (defn as-rnum!     ^double [x] (if (rnum? x) (double x) (-as-throw :rnum! x))) ; ''
+
   (defn as-bool              [x] (let [?b (as-?bool   x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
 ;;;; Validation
