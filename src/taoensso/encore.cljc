@@ -10,21 +10,31 @@
   documentation for this, sorry.
 
   Quick Taoensso naming conventions:
-    **foo** - Dynamic var.
-    foo!    - Fn with side effects, or that should otherwise be used cautiously.
-    foo?    - Truthy val or fn that returns truthy val.
-    foo!?   - Fn that has side effects (or requires caution) and that returns
-              a truthy val. Note: !?, not ?!.
-    foo$    - Fn that's notably expensive to compute (e.g. hits db).
-    foo_    - Dereffable val (e.g. atom, volatile, delay, etc.).
-    _       - Unnamed val.
-    _foo    - Named but unused val.
-    ?foo    - Optional val (emphasize that val may be nil).
-    foo*    - A variation of `foo` (e.g. `foo*` macro vs `foo` fn).
-    -foo    - Public implementation detail or intermediate (e.g. uncoerced) val.
-    >foo    - Val \"to foo\" (e.g. >sender, >host), or fn to put/coerce/transform.
-    <foo    - Val \"from foo\" (e.g. <sender, <host), or fn to take/coerce/transform.
-    ->foo   - Fn to put/coerce/transform."
+    **foo** - Dynamic var
+    foo!    - Fn with side effects, or that should otherwise be used cautiously
+    foo?    - Truthy val or fn that returns truthy val
+    foo!?   - Fn that has side effects (or requires caution) and that return
+              a truthy val. Note: !?, not ?!
+    foo$    - Fn that's notably expensive to compute (e.g. hits db)
+    foo_    - Dereffable val (e.g. atom, volatile, delay, etc.)
+    foo__   - Dereffable in a dereffable (e.g. delay in an atom), etc.
+    _       - Unnamed val
+    _foo    - Named but unused val
+    ?foo    - Optional val (emphasize that val may be nil)
+    foo*    - A variation of `foo` (e.g. `foo*` macro vs `foo` fn)
+    foo'    - ''
+    -foo    - Public implementation detail or intermediate (e.g. uncoerced) val
+    >foo    - Val \"to   foo\" (e.g. >sender, >host), or fn to  put/coerce/transform
+    <foo    - Val \"from foo\" (e.g. <sender, <host), or fn to take/coerce/transform
+    ->foo   - Fn to put/coerce/transform
+
+  Commit message tags (in priority order):
+    ~      - Work-in-progress (still under development)
+    [mod]  - Modify     behaviour (=>          breaking), [mod!], [mod!!], etc. for attention
+    [fix]  - Fix broken behaviour (=> usu. non-breaking)
+    [new]  - Add new    behaviour (=>      non-breaking)
+    [nop]  - Unmodified behaviour (=>      non-breaking implementation or non-code changes, etc.)
+    [x][y] - Single commit with multiple tags (in priority order), try avoid"
 
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
