@@ -1335,7 +1335,7 @@
     ([m k v & kvs]
      (reduce-kvs
        (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v)))
-       (assoc-some m k v)
+       (dis-assoc-some m k v)
        kvs))
 
     ([m kvs]
