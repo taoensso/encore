@@ -666,7 +666,8 @@
 ;;   - double - Specific size: double ; Only used when emphasizing specific size
 
 (defn #?(:clj finite-num? :cljs ^boolean finite-num?)
-  "Returns true iff given a standard finite number (excl. NaN and infinities)."
+  "Returns true iff given a number (of standard type) that is:
+  finite (excl. NaN and infinities)."
   [x]
   #?(:clj (and (number? x) (Double/isFinite x)) ; Works with other types, incl. ratio
      :cljs (js/Number.isFinite x)
@@ -678,7 +679,8 @@
        (not (identical? x js/Number.NEGATIVE_INFINITY)))))
 
 (defn #?(:clj int? :cljs ^boolean int?)
-  "Returns true iff given a standard fixed-precision integer."
+  "Returns true iff given a number (of standard type) that is:
+  a fixed-precision integer."
   [x]
   #?(:clj
      (or
@@ -694,7 +696,8 @@
        (== (js/parseFloat x) (js/parseInt x 10)))))
 
 (defn #?(:clj float? :cljs ^boolean float?)
-  "Returns true iff given a standard fixed-precision floating-point."
+  "Returns true iff given a number (of standard type) that is:
+  a fixed-precision floating-point (incl. NaN and infinities)."
   [x]
   #?(:clj (or (instance? Double x) (instance? Float x))
      :cljs
