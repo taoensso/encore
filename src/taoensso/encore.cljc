@@ -2758,6 +2758,42 @@
   (get-substring "hello world" -8 2)
   (get-substring "hello world" 2 2))
 
+(defn
+  #?(:clj           case-insensitive-str=
+     :cljs ^boolean case-insensitive-str=)
+
+  "Returns true iff given strings are equal, ignoring case."
+  ;; Implementation detail:
+  ;; Compares normalized chars 1 by 1, so often faster than naive comparison
+  ;; of normalized strings.
+  [s1 s2]
+  #?(:clj (.equalsIgnoreCase ^String s1 ^String s2)
+     :cljs
+     (or
+       (identical? s1 s2)
+       (let [l1 (.-length s1)
+             l2 (.-length s2)]
+         (and
+           (== l1 l2)
+           ;; (= (str/lower-case s1) (str/lower-case s2))
+           ;; Still needs bench comparison:
+           (reduce-n
+             (fn [acc idx]
+               (let [c1 (.toLowerCase (.charAt s1 idx))
+                     c2 (.toLowerCase (.charAt s2 idx))]
+                 (if (= c1 c2) true (reduced false))))
+             true
+             0
+             l1))))))
+
+(comment
+  (qb 1e6
+    (do                 (= "-abcdefghijklmnop" "_abcdefghijklmnop"))
+    (case-insensitive-str= "-abcdefghijklmnop" "_abcdefghijklmnop")
+    (=
+      (str/lower-case "-abcdefghijklmnop")
+      (str/lower-case "_abcdefghijklmnop"))))
+
 #?(:clj
    (defn norm-str
      "Given a Unicode string, returns the normalized de/composed form.
