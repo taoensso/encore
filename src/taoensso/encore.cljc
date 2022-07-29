@@ -2629,7 +2629,7 @@
 
 (defn str-join
   "Faster, transducer-based generalization of `clojure.string/join` with `xform`
-    support"
+  support."
   (^String [                coll] (str-join nil       nil coll))
   (^String [separator       coll] (str-join separator nil coll))
   (^String [separator xform coll]
