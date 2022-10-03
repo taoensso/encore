@@ -1053,35 +1053,35 @@
   #?(:cljs (defn run-obj! [proc  obj] (reduce-obj #(proc %2 %3) nil  obj) nil)))
 
 (do ; Faster variants using reduce/transduce
-  (let [rf (fn [pred] (fn [acc in] (when-let [p (pred in)] (reduced p))))]
+  (let [rf (fn [pred] (fn [_acc in] (when-let [p (pred in)] (reduced p))))]
     (defn rsome
       ([      pred coll] (reduce                      (rf pred)  nil coll))
       ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [acc  k v]  (when-let [p (pred k v)] (reduced p))))
-        tf (fn [pred] (fn [acc [k v]] (when-let [p (pred k v)] (reduced p))))]
+  (let [rf (fn [pred] (fn [_acc  k v]  (when-let [p (pred k v)] (reduced p))))
+        tf (fn [pred] (fn [_acc [k v]] (when-let [p (pred k v)] (reduced p))))]
     (defn rsome-kv
         ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
       #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [acc in] (when (pred in) (reduced in))))]
+  (let [rf (fn [pred] (fn [_acc in] (when (pred in) (reduced in))))]
     (defn rfirst
       ([      pred coll] (reduce                      (rf pred)  nil coll))
       ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [acc  k v]  (when (pred k v) (reduced [k v]))))
-        tf (fn [pred] (fn [acc [k v]] (when (pred k v) (reduced [k v]))))]
+  (let [rf (fn [pred] (fn [_acc  k v]  (when (pred k v) (reduced [k v]))))
+        tf (fn [pred] (fn [_acc [k v]] (when (pred k v) (reduced [k v]))))]
     (defn rfirst-kv
         ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
       #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [acc in] (if (pred in) true (reduced false))))]
+  (let [rf (fn [pred] (fn [_acc in] (if (pred in) true (reduced false))))]
     (defn revery?
       ([      pred coll] (reduce                      (rf pred)  true coll))
       ([xform pred coll] (transduce xform (completing (rf pred)) true coll))))
 
-  (let [rf (fn [pred] (fn [acc  k v]  (if (pred k v) true (reduced false))))
-        tf (fn [pred] (fn [acc [k v]] (if (pred k v) true (reduced false))))]
+  (let [rf (fn [pred] (fn [_acc  k v]  (if (pred k v) true (reduced false))))
+        tf (fn [pred] (fn [_acc [k v]] (if (pred k v) true (reduced false))))]
     (defn revery-kv?
         ([      pred coll] (reduce-kv                   (rf pred)  true coll))
       #_([xform pred coll] (transduce xform (completing (tf pred)) true coll)))))
