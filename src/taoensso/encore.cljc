@@ -1069,8 +1069,8 @@
       ([      pred coll] (reduce                      (rf pred)  nil coll))
       ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [acc  k v]  (when (pred k v) (reduced (get acc k) #_[k v]))))
-        tf (fn [pred] (fn [acc [k v]] (when (pred k v) (reduced (get acc k) #_[k v]))))]
+  (let [rf (fn [pred] (fn [acc  k v]  (when (pred k v) (reduced [k v]))))
+        tf (fn [pred] (fn [acc [k v]] (when (pred k v) (reduced [k v]))))]
     (defn rfirst-kv
         ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
       #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
@@ -1087,6 +1087,8 @@
       #_([xform pred coll] (transduce xform (completing (tf pred)) true coll)))))
 
 (comment
+  (= (rfirst-kv (fn [k v] (number? v)) {:a :b :c 2}) [:c 2])
+
   (qb 1e4
     (some  #(when (string? %) %) [:a :b :c :d "boo"])
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
