@@ -2343,7 +2343,7 @@
 (comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
 
 (defn limiter*
-  "Experimental. Like `limiter` but returns [<limiter> <state_>]."
+  "Experimental. Like `limiter` but returns [<state_> <limiter>]."
   [specs]
   (if (empty? specs)
     [nil (constantly nil)]
@@ -2471,11 +2471,13 @@
     f))
 
 (comment
-  (def rl1
-    (limiter
-      {:2s [1 2000]
-       :5s [2 5000]
-       :1d [5 (ms :days 1)]}))
+  (let [[s_ rl1]
+        (limiter*
+          {:2s [1 2000]
+           :5s [2 5000]
+           :1d [5 (ms :days 1)]})]
+    (def s_  s_)
+    (def rl1 rl1))
 
   (qb 1e6 (rl1)) ; 266.58
   )
