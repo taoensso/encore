@@ -26,7 +26,7 @@
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :provided {:dependencies [[org.clojure/clojure       "1.7.0"]
-                             [org.clojure/clojurescript "1.11.4"]]}
+                             [org.clojure/clojurescript "1.11.60"]]}
    :1.7      {:dependencies [[org.clojure/clojure       "1.7.0"]]}
    :1.8      {:dependencies [[org.clojure/clojure       "1.8.0"]]}
    :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
