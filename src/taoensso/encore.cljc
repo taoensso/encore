@@ -2073,12 +2073,14 @@
                (let [dv (delay (f x1 x2 x3))]
                  (or (.putIfAbsent cachen_ xs dv) dv)))))))))
 
-(defmacro -gc-now? []
+(defmacro -gc-now? [rate]
   `(if-clj
-     (<= (java.lang.Math/random) ~(/ 1.0 16000))
-     (<=       (.random js/Math) ~(/ 1.0 16000))))
+     (<= (java.lang.Math/random) ~rate)
+     (<=       (.random js/Math) ~rate)))
 
-(comment (macroexpand '(-gc-now?)))
+(comment
+  (do           (-gc-now? 0.5))
+  (macroexpand '(-gc-now? 0.5)))
 
 (deftype SimpleCacheEntry [delay ^long udt])
 (deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
@@ -2182,7 +2184,7 @@
            :else
            (let [instant (now-udt*)]
 
-             (when (-gc-now?)
+             (when (-gc-now? 1e-4)
                (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                  (-if-cas! latch_ nil latch
                    (do
@@ -2221,7 +2223,8 @@
          latch_     (atom nil) ; Used to pause writes during gc
          ttl-ms     (long (or ttl-ms 0))
          ttl-ms?    (not (zero? ttl-ms))
-         cache-size (long cache-size)]
+         cache-size (long  cache-size)
+         gc-rate    (max (/ 1.0 cache-size) 1e-4)]
 
      (fn [& args]
        (let [a1 (first args)]
@@ -2236,7 +2239,10 @@
 
            :else
            (let [instant (if ttl-ms? (now-udt*) 0)]
-             (when (-gc-now?)
+             (when (and
+                     (-gc-now? gc-rate)
+                     (>= (count @cache_) (* 1.1 cache-size)))
+
                (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                  (-if-cas! latch_ nil latch
                    (do
@@ -2257,7 +2263,7 @@
                      (let [snapshot @cache_
                            n-to-gc  (- (count snapshot) cache-size)]
 
-                       (when (> n-to-gc 64)
+                       (when (>= n-to-gc (* 0.1 cache-size))
                          (let [ks-to-gc
                                (top n-to-gc
                                  (fn [k]
@@ -2310,7 +2316,12 @@
     (println "---")
     (dotimes [_ 10]
       (future (f2)) ; Never prints >once
-      (future (f1)))))
+      (future (f1))))
+
+  (do ; Test GC
+    (defn f1 [_] (vec (repeatedly 1000 #(str (rand)))))
+    (def  m1 (memoize 500 (ms :days 3) f1))
+    (dotimes [n 1e5] (m1 (rand)))))
 
 ;;;; Rate limits
 
@@ -2343,7 +2354,7 @@
           (fn [rid peek?]
             (let [instant (now-udt*)]
 
-              (when (and (not peek?) (-gc-now?))
+              (when (and (not peek?) (-gc-now? 1.6e-4))
                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                   (-if-cas! latch_ nil latch
                     (do
