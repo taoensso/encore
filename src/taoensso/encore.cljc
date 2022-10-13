@@ -2471,16 +2471,13 @@
     f))
 
 (comment
-  (let [[s_ rl1]
-        (limiter*
-          {:2s [1 2000]
-           :5s [2 5000]
-           :1d [5 (ms :days 1)]})]
+  (let [[s_ rl1] (limiter* {:2s [1 2000] :5s [2 5000]})]
     (def s_  s_)
     (def rl1 rl1))
 
-  (qb 1e6 (rl1)) ; 266.58
-  )
+  (qb 1e6 (rl1)) ; 151.04
+  (dotimes [n 1e6] (rl1 (str (rand)))) ; Test GC
+  (count @s_))
 
 ;;;; Counters
 
