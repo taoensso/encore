@@ -54,6 +54,7 @@
       [clojure.set     :as set]
       [clojure.java.io :as io]
       [clojure.walk    :as walk :refer [macroexpand-all]]
+      [clojure.test    :as test :refer [is]]
       ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
       [taoensso.truss :as truss])
@@ -62,6 +63,7 @@
      (:require
       [clojure.string      :as str]
       [clojure.set         :as set]
+      [clojure.test        :as test :refer [is]]
       ;; [cljs.core.async  :as async]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
@@ -104,6 +106,8 @@
 (do ; Bootstrap Truss aliases
   (defmacro have  [& args] `(taoensso.truss/have  ~@args))
   (defmacro have? [& args] `(taoensso.truss/have? ~@args)))
+
+(comment (test/run-tests 'taoensso.encore))
 
 ;;;; TODO v4
 ;; - Drop previously deprecated vars
@@ -2696,77 +2700,89 @@
 
 (comment (qb 1000 (str-?index "hello there" "there")))
 
-(defn get-substr
-  "Like `subs` but provides consistent clj/s behaviour and never throws
-  (snaps to valid start and end indexes)."
-  ([s ^long start]
-   #?(:cljs (.substring s start)
-      :clj
-      (let [start (if (< start 0) 0 start)
-            slen  (.length ^String s)]
-        (if (>= start slen)
-          ""
-          (.substring ^String s start slen)))))
+(defn get-substr-by-idx
+  "Returns ?substring from given string.
 
-  ([s ^long start ^long end]
-   #?(:cljs (if (>= start end) "" (.substring s start end))
-      :clj
-      (let [start (if (< start 0) 0 start)
-            slen  (long (.length ^String s))
-            end   (if (> end slen) slen end)]
-        (if (>= start end)
-          ""
-          (.substring ^String s start end))))))
+  Like `subs` but:
+    - Provides consistent clj/s behaviour.
+    - Never throws (snaps to valid indexes).
+    - Indexes may be -ive (=> indexed from end of string).
+
+  Returns nil when requested substring would be empty."
+
+  ([s start-idx        ] (get-substr-by-idx s start-idx nil))
+  ([s start-idx end-idx]
+   (when s
+     (let [s #?(:clj ^String s :cljs s)
+           full-len (.length s)
+
+           ^long start-idx (if (nil? start-idx) 0                      start-idx) ; Default
+           start-idx       (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
+           start-idx          (max 0 start-idx) ; Snap left
+
+           ^long end-idx (if (nil? end-idx)    full-len          end-idx) ; Default
+           end-idx       (if (neg? end-idx) (+ full-len end-idx) end-idx) ; Idx from right
+           end-idx   (min full-len end-idx) ; Snap right
+           ]
+
+       (if (>= start-idx end-idx)
+         nil
+         (.substring s start-idx end-idx))))))
+
+(test/deftest _get-substr-by-idx
+  [(is (= (get-substr-by-idx nil            nil)         nil))
+   (is (= (get-substr-by-idx "123456789"    nil) "123456789"))
+   (is (= (get-substr-by-idx "123456789"      1)  "23456789"))
+   (is (= (get-substr-by-idx "123456789"     -3)       "789"))
+   (is (= (get-substr-by-idx "123456789"   -100) "123456789"))
+   (is (= (get-substr-by-idx "123456789"  0 100) "123456789"))
+   (is (= (get-substr-by-idx "123456789"  0   0)         nil))
+   (is (= (get-substr-by-idx "123456789"  0   1) "1"        ))
+   (is (= (get-substr-by-idx "123456789"  0  -1) "12345678" ))
+   (is (= (get-substr-by-idx "123456789"  0  -5) "1234"     ))
+   (is (= (get-substr-by-idx "123456789" -5  -3)      "56"  ))
+   (is (= (get-substr-by-idx "123456789"  4   3)         nil))])
 
 (comment
-  (get-substr "foo" 1)
-  (get-substr "hello world" -10)
-  (get-substr "hello world" 100)
-  (get-substr "hello world" -10 100)
-  (get-substr "hello world" 100 -10)
   (qb 1e5
-    (subs       "hello world"   0  11)
-    (get-substr "hello world" -10 100)))
+    (subs              "hello world"   0 11)
+    (get-substr-by-idx "hello world" -10 11)))
 
-(defn get-substring
-  "Like `get-substr` but:
-    - Takes `length` instead of `end` (index).
-    - -ive `start` => index from right of string."
-  ([s ^long start]
-   #?(:cljs (as-?nempty-str (.substr s start))
-      :clj
-      (let [slen (.length ^String s)]
-        (if (< start 0)
-          (let [start (+ start slen)
-                start (if (< start 0) 0 start)]
-            (.substring ^String s start) slen)
-          (if (>= start slen)
-            nil
-            (.substring ^String s start slen))))))
+(defn get-substr-by-len
+  "Returns ?substring from given string.
+  Like `get-substr-by-idx`, but takes a substring-length 3rd argument."
+  ([s start-idx       ] (get-substr-by-len s start-idx nil))
+  ([s start-idx sub-len]
+   (when s
+     (let [s #?(:clj ^String s :cljs s)
+           full-len (.length s)
+           ^long sub-len (if (nil? sub-len) full-len sub-len)]
 
-  ([s ^long start ^long length]
-   #?(:cljs (as-?nempty-str (.substr s start length))
-      :clj
-      (if (<= length 0)
-        nil
-        (let [slen (long (.length ^String s))]
-          (if (< start 0)
-            (let [start (+ start slen)
-                  start (if (< start 0) 0 start)
-                  end   (+ start length)
-                  end   (if (> end slen) slen end)]
-              (.substring ^String s start end))
+       (if-not (pos? sub-len)
+         nil
+         (let [^long start-idx (if (nil? start-idx) 0                      start-idx) ; Default
+               start-idx       (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
+               start-idx          (max 0 start-idx) ; Snap left
 
-            (let [end (+ start length)
-                  end (if (> end slen) slen end)]
-              (if (>= start end)
-                nil
-                (.substring ^String s start end)))))))))
+               end-idx (+ start-idx sub-len)
+               end-idx (min full-len end-idx) ; Snap right
+               ]
 
-(comment
-  (get-substring "hello world" -8)
-  (get-substring "hello world" -8 2)
-  (get-substring "hello world" 2 2))
+           (if (>= start-idx end-idx)
+             nil
+             (.substring s start-idx end-idx))))))))
+
+(test/deftest _get-substr-by-len
+  [(is (= (get-substr-by-len nil            nil)         nil))
+   (is (= (get-substr-by-len "123456789"    nil) "123456789"))
+   (is (= (get-substr-by-len "123456789"      1)  "23456789"))
+   (is (= (get-substr-by-len "123456789"     -3)       "789"))
+   (is (= (get-substr-by-len "123456789"   -100) "123456789"))
+   (is (= (get-substr-by-len "123456789"  0 100) "123456789"))
+   (is (= (get-substr-by-len "123456789"  0   0)         nil))
+   (is (= (get-substr-by-len "123456789"  0   1) "1"        ))
+   (is (= (get-substr-by-len "123456789"  0  -5)         nil))
+   (is (= (get-substr-by-len "123456789" -5   2)      "56"  ))])
 
 (defn
   #?(:clj           case-insensitive-str=
@@ -2930,7 +2946,7 @@
   "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".
   Ref. http://www.ietf.org/rfc/rfc4122.txt,
        https://gist.github.com/franks42/4159427"
-  ([max-length] (get-substring (uuid-str) 0 max-length))
+  ([max-length] (get-substr-by-len (uuid-str) 0 max-length))
   ([]
    #?(:clj (str (java.util.UUID/randomUUID))
       :cljs
@@ -4321,8 +4337,6 @@
   (def run!*           run!)
   (def ?subvec<idx     (comp not-empty      get-subvec))
   (def ?subvec<len     (comp not-empty      get-subvector))
-  (def ?substr<idx     (comp as-?nempty-str get-substr))
-  (def ?substr<len     (comp as-?nempty-str get-substring))
   (def nano-time       now-nano)
   (def -swap-cache!    -swap-val!)
   (def -unswapped      swapped-vec)
@@ -4337,6 +4351,65 @@
   (def     pval?    pnum?)
   (def as-?pval as-?pnum)
   (def  as-pval  as-pnum)
+
+  (defn get-substr
+    "Deprecated as of Encore v3.26.0, 2022-10-14.
+    Prefer `get-substr-by-idx`."
+    ([s ^long start]
+     #?(:cljs (.substring s start)
+        :clj
+        (let [start (if (< start 0) 0 start)
+              slen  (.length ^String s)]
+          (if (>= start slen)
+            ""
+            (.substring ^String s start slen)))))
+
+    ([s ^long start ^long end]
+     #?(:cljs (if (>= start end) "" (.substring s start end))
+        :clj
+        (let [start (if (< start 0) 0 start)
+              slen  (long (.length ^String s))
+              end   (if (> end slen) slen end)]
+          (if (>= start end)
+            ""
+            (.substring ^String s start end))))))
+
+  (defn get-substring
+    "Deprecated as of Encore v3.26.0, 2022-10-14.
+    Prefer `get-substr-by-len`."
+    ([s ^long start]
+     #?(:cljs (as-?nempty-str (.substr s start))
+        :clj
+        (let [slen (.length ^String s)]
+          (if (< start 0)
+            (let [start (+ start slen)
+                  start (if (< start 0) 0 start)]
+              (.substring ^String s start) slen)
+            (if (>= start slen)
+              nil
+              (.substring ^String s start slen))))))
+
+    ([s ^long start ^long length]
+     #?(:cljs (as-?nempty-str (.substr s start length))
+        :clj
+        (if (<= length 0)
+          nil
+          (let [slen (long (.length ^String s))]
+            (if (< start 0)
+              (let [start (+ start slen)
+                    start (if (< start 0) 0 start)
+                    end   (+ start length)
+                    end   (if (> end slen) slen end)]
+                (.substring ^String s start end))
+
+              (let [end (+ start length)
+                    end (if (> end slen) slen end)]
+                (if (>= start end)
+                  nil
+                  (.substring ^String s start end)))))))))
+
+  (def ?substr<idx (comp as-?nempty-str get-substr))
+  (def ?substr<len (comp as-?nempty-str get-substring))
 
   ;; Used by old versions of Timbre, Tufte
   (let [nolist? #(contains? #{nil [] #{}} %)]
@@ -4535,7 +4608,7 @@
         [0 0] ; Disallow wrapping
         [start-idx* end-idx*])))
 
-  (defn substr "Deprecated, prefer `get-substr` or `get-substring`"
+  (defn substr "Deprecated, prefer `get-substr-by-idx` or `get-substr-by-len`"
     [s start-idx & [?max-len]]
     (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
       #?(:clj  (.substring ^String s start-idx* end-idx*)
