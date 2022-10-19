@@ -54,7 +54,7 @@
       [clojure.set     :as set]
       [clojure.java.io :as io]
       [clojure.walk    :as walk :refer [macroexpand-all]]
-      [clojure.test    :as test :refer [is]]
+      [clojure.test    :as test :refer [deftest is]]
       ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
       [taoensso.truss :as truss])
@@ -63,7 +63,7 @@
      (:require
       [clojure.string      :as str]
       [clojure.set         :as set]
-      [clojure.test        :as test :refer [is]]
+      [clojure.test        :as test :refer [deftest is]]
       ;; [cljs.core.async  :as async]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
@@ -107,7 +107,7 @@
   (defmacro have  [& args] `(taoensso.truss/have  ~@args))
   (defmacro have? [& args] `(taoensso.truss/have? ~@args)))
 
-(comment (test/run-tests 'taoensso.encore))
+(comment (test/run-tests))
 
 ;;;; TODO v4
 ;; - Drop previously deprecated vars
@@ -2729,7 +2729,7 @@
          nil
          (.substring s start-idx end-idx))))))
 
-(test/deftest _get-substr-by-idx
+(deftest _get-substr-by-idx
   [(is (= (get-substr-by-idx nil            nil)         nil))
    (is (= (get-substr-by-idx "123456789"    nil) "123456789"))
    (is (= (get-substr-by-idx "123456789"      1)  "23456789"))
@@ -2751,7 +2751,7 @@
 (defn get-substr-by-len
   "Returns ?substring from given string.
   Like `get-substr-by-idx`, but takes a substring-length 3rd argument."
-  ([s start-idx       ] (get-substr-by-len s start-idx nil))
+  ([s start-idx        ] (get-substr-by-len s start-idx nil))
   ([s start-idx sub-len]
    (when s
      (let [s #?(:clj ^String s :cljs s)
@@ -2772,7 +2772,7 @@
              nil
              (.substring s start-idx end-idx))))))))
 
-(test/deftest _get-substr-by-len
+(deftest _get-substr-by-len
   [(is (= (get-substr-by-len nil            nil)         nil))
    (is (= (get-substr-by-len "123456789"    nil) "123456789"))
    (is (= (get-substr-by-len "123456789"      1)  "23456789"))
@@ -2877,6 +2877,7 @@
 
 (do
   (defn nil->str "nil/undefined -> \"nil\"" [x]
+    ;; Note (undefined? x) not needed for modern Cljs
     #?(:clj  (if                    (nil? x)  "nil" x)
        :cljs (if (or (undefined? x) (nil? x)) "nil" x)))
 
