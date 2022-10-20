@@ -2882,13 +2882,13 @@
        :cljs (if (or (undefined? x) (nil? x)) "nil" x)))
 
   (defn format*
-    (#?(:clj ^String [            fmt args]
-        :cljs        [            fmt args]) (format* nil->str fmt args))
-    (#?(:clj ^String [arg->str-fn fmt args]
-        :cljs        [arg->str-fn fmt args])
+    (#?(:clj ^String [      fmt args]
+        :cljs        [      fmt args]) (format* nil->str fmt args))
+    (#?(:clj ^String [xform fmt args]
+        :cljs        [xform fmt args])
       (if (nil? fmt)
         "" ; Prevent NPE
-        (let [args (mapv arg->str-fn args)]
+        (let [args (if xform (mapv xform args) args)]
           #?(:clj  (String/format     fmt (to-array args))
              :cljs (apply gstr/format fmt           args))))))
 
