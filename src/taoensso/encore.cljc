@@ -1730,13 +1730,19 @@
 
         (let [sval v
               mval (get m k ::nx)]
-          (if-let [match? (= sval mval)]
+
+          (if-let [match?
+                   (if (kw-identical? sval :submap/nx) ; Undocumented
+                     (kw-identical? mval ::nx)
+                     (= sval mval))]
             true
             (reduced false)))))
     true
     sub))
 
-(comment (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+(deftest _submap?
+  [(is (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+   (is (submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
 
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)
