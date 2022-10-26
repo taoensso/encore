@@ -54,7 +54,6 @@
       [clojure.set     :as set]
       [clojure.java.io :as io]
       [clojure.walk    :as walk :refer [macroexpand-all]]
-      [clojure.test    :as test :refer [deftest is]]
       ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
       [taoensso.truss :as truss])
@@ -63,7 +62,6 @@
      (:require
       [clojure.string      :as str]
       [clojure.set         :as set]
-      [clojure.test        :as test :refer [deftest is]]
       ;; [cljs.core.async  :as async]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
@@ -703,33 +701,7 @@
   ([c         form] `(boolean (throws ~c          ~form)))
   ([c pattern form] `(boolean (throws ~c ~pattern ~form))))
 
-(deftest ^:private _throws?
-  (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
-        throw-uncommon (fn [] (throw #?(:clj (Error.) :cljs "Error")))]
-
-    [(is      (throws?                            (throw-common)))
-     (is      (throws? :common                    (throw-common)))
-     (is      (throws? :any                       (throw-common)))
-     (is (not (throws? :common                    (throw-uncommon))))
-     (is      (throws? :any                       (throw-uncommon)))
-
-     (is      (throws? :default #"Shenanigans"    (throw-common)))
-     (is (not (throws? :default #"Brouhaha"       (throw-common))))
-
-     (is      (throws? :default {:a :a1}          (throw-common)))
-     (is (not (throws? :default {:a :a1 :b :b2}   (throw-common))))
-
-     (is      (throws? :default {:a :a1} (throw (ex-info "Test" {:a :a1 :b :b1}))))
-     (is (not (throws? :default {:a :a1} (throw (ex-info "Test" {:a :a2 :b :b1})))))
-
-     ;; Form must throw error, not return it
-    #?(:clj
-       [(is      (throws? Exception (throw (Exception.))))
-        (is (not (throws? Exception        (Exception.))))]
-
-       :cljs
-       [(is      (throws? js/Error (throw (js/Error.))))
-        (is (not (throws? js/Error        (js/Error.))))])]))
+(comment :see-tests)
 
 ;;;; Tests
 
@@ -1904,9 +1876,7 @@
     true
     sub))
 
-(deftest _submap?
-  [(is (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
-   (is (submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
+(comment :see-tests)
 
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)
@@ -2907,19 +2877,7 @@
          nil
          (.substring s start-idx end-idx))))))
 
-(deftest _get-substr-by-idx
-  [(is (= (get-substr-by-idx nil            nil)         nil))
-   (is (= (get-substr-by-idx "123456789"    nil) "123456789"))
-   (is (= (get-substr-by-idx "123456789"      1)  "23456789"))
-   (is (= (get-substr-by-idx "123456789"     -3)       "789"))
-   (is (= (get-substr-by-idx "123456789"   -100) "123456789"))
-   (is (= (get-substr-by-idx "123456789"  0 100) "123456789"))
-   (is (= (get-substr-by-idx "123456789"  0   0)         nil))
-   (is (= (get-substr-by-idx "123456789"  0   1) "1"        ))
-   (is (= (get-substr-by-idx "123456789"  0  -1) "12345678" ))
-   (is (= (get-substr-by-idx "123456789"  0  -5) "1234"     ))
-   (is (= (get-substr-by-idx "123456789" -5  -3)      "56"  ))
-   (is (= (get-substr-by-idx "123456789"  4   3)         nil))])
+(comment :see-tests)
 
 (comment
   (qb 1e5
@@ -2950,17 +2908,7 @@
              nil
              (.substring s start-idx end-idx))))))))
 
-(deftest _get-substr-by-len
-  [(is (= (get-substr-by-len nil            nil)         nil))
-   (is (= (get-substr-by-len "123456789"    nil) "123456789"))
-   (is (= (get-substr-by-len "123456789"      1)  "23456789"))
-   (is (= (get-substr-by-len "123456789"     -3)       "789"))
-   (is (= (get-substr-by-len "123456789"   -100) "123456789"))
-   (is (= (get-substr-by-len "123456789"  0 100) "123456789"))
-   (is (= (get-substr-by-len "123456789"  0   0)         nil))
-   (is (= (get-substr-by-len "123456789"  0   1) "1"        ))
-   (is (= (get-substr-by-len "123456789"  0  -5)         nil))
-   (is (= (get-substr-by-len "123456789" -5   2)      "56"  ))])
+(comment :see-tests)
 
 (defn
   #?(:clj           case-insensitive-str=
