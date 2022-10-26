@@ -1740,7 +1740,7 @@
     true
     sub))
 
-(deftest _submap?
+(deftest ^:private _submap?
   [(is (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
    (is (submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
 
@@ -2743,7 +2743,7 @@
          nil
          (.substring s start-idx end-idx))))))
 
-(deftest _get-substr-by-idx
+(deftest ^:private _get-substr-by-idx
   [(is (= (get-substr-by-idx nil            nil)         nil))
    (is (= (get-substr-by-idx "123456789"    nil) "123456789"))
    (is (= (get-substr-by-idx "123456789"      1)  "23456789"))
@@ -2786,7 +2786,7 @@
              nil
              (.substring s start-idx end-idx))))))))
 
-(deftest _get-substr-by-len
+(deftest ^:private _get-substr-by-len
   [(is (= (get-substr-by-len nil            nil)         nil))
    (is (= (get-substr-by-len "123456789"    nil) "123456789"))
    (is (= (get-substr-by-len "123456789"      1)  "23456789"))
@@ -4262,7 +4262,7 @@
          (-matching-error c ex)
          (if (map? pattern)
            (if-let [data (ex-data ex)]
-             (= pattern (select-keys data (keys pattern)))
+             (submap? data pattern)
              false)
 
            (boolean (re-find (re-pattern pattern) (-ex-message ex)))))
