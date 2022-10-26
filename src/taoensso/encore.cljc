@@ -54,7 +54,7 @@
       [clojure.set     :as set]
       [clojure.java.io :as io]
       [clojure.walk    :as walk :refer [macroexpand-all]]
-      [clojure.test    :as test :refer [deftest is]]
+      [clojure.test    :as test :refer [deftest- is]]
       ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
       [taoensso.truss :as truss])
@@ -63,7 +63,7 @@
      (:require
       [clojure.string      :as str]
       [clojure.set         :as set]
-      [clojure.test        :as test :refer [deftest is]]
+      [clojure.test        :as test :refer [deftest- is]]
       ;; [cljs.core.async  :as async]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
@@ -1740,7 +1740,7 @@
     true
     sub))
 
-(deftest _submap?
+(deftest- _submap?
   [(is (submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
    (is (submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
 
@@ -2743,7 +2743,7 @@
          nil
          (.substring s start-idx end-idx))))))
 
-(deftest _get-substr-by-idx
+(deftest- _get-substr-by-idx
   [(is (= (get-substr-by-idx nil            nil)         nil))
    (is (= (get-substr-by-idx "123456789"    nil) "123456789"))
    (is (= (get-substr-by-idx "123456789"      1)  "23456789"))
@@ -2786,7 +2786,7 @@
              nil
              (.substring s start-idx end-idx))))))))
 
-(deftest _get-substr-by-len
+(deftest- _get-substr-by-len
   [(is (= (get-substr-by-len nil            nil)         nil))
    (is (= (get-substr-by-len "123456789"    nil) "123456789"))
    (is (= (get-substr-by-len "123456789"      1)  "23456789"))
