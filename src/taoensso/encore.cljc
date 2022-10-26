@@ -680,8 +680,6 @@
   ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
   ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t))))
 
-(defmacro thrown [& args] `(throws ~@args)) ; Back compatibility
-
 (defmacro throws?
   "Evals `form` and returns true iff it throws an error that matches given
   criteria:
@@ -4540,6 +4538,8 @@
  (defmacro -vol!       [val]           `(volatile!     ~val))
  (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
  (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
+
+ (defmacro thrown "DEPRECATED, prefer `throws`" [& args] `(throws ~@args)) ; 2022-10-26
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn undefined->nil [x] (if (undefined? x) nil x)))
