@@ -4239,13 +4239,12 @@
 
 ;;;; Tests
 
-
 (defn- -ex-message ; `ex-message` was only introduced in Clojure 1.10+
   [ex]
   #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
      :cljs (when (instance? js/Error  ex) (.-message              ex))))
 
-(defn -matching-throwable
+(defn -matching-error
   ([  ex] (when ex ex))
   ([c ex]
    (when
@@ -4260,7 +4259,7 @@
   ([c pattern ex]
    (when
        (and
-         (-matching-throwable c ex)
+         (-matching-error c ex)
          (if (map? pattern)
            (if-let [data (ex-data ex)]
              (= pattern (select-keys data (keys pattern)))
@@ -4270,15 +4269,15 @@
      ex)))
 
 (comment
-  (-matching-throwable                            (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Divide by zero" (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Nope"           (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Test"           (ex-info "Test" {:a :b}))
-  (-matching-throwable :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
+  (-matching-error                            (catching (/ 4 0) t t))
+  (-matching-error :default #"Divide by zero" (catching (/ 4 0) t t))
+  (-matching-error :default #"Nope"           (catching (/ 4 0) t t))
+  (-matching-error :default #"Test"           (ex-info "Test" {:a :b}))
+  (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
 
-(defmacro thrown
-  "Evaluates `form` and returns ?throwable thrown by form that matches
-  given criteria:
+(defmacro throws
+  "Evaluates `form` and returns ?throwable thrown by it that
+  matches given criteria:
 
     - `c` may be:
       - A class (e.g. ArithmeticException, AssertionError, etc.)
@@ -4292,16 +4291,26 @@
   Useful for unit tests, e.g.:
     (is (thrown :default {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))"
 
-  ([          form] `(-matching-throwable             (catching ~form ~'t ~'t)))
-  ([c         form] `(-matching-throwable ~c          (catching ~form ~'t ~'t)))
-  ([c pattern form] `(-matching-throwable ~c ~pattern (catching ~form ~'t ~'t))))
+  ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
+  ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
+  ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t))))
+
+(defmacro throws?
+  "Like `throws` but returns boolean. I.e. returns true iff
+  `form` throws an error that matches given criteria."
+  ([          form] `(boolean (thrown             ~form)))
+  ([c         form] `(boolean (thrown ~c          ~form)))
+  ([c pattern form] `(boolean (thrown ~c ~pattern ~form))))
 
 (comment
-  (thrown                            (/ 4 0))
-  (thrown :default #"Divide by zero" (/ 4 0))
-  (thrown :default #"Nope"           (/ 4 0))
-  (thrown :default #"Test" (throw (ex-info "Test" {:a :b})))
-  (thrown :default {:a :b} (throw (ex-info "Test" {:a :b :c :d}))))
+  (throws?                            (/ 4 0))
+  (throws? :default #"Divide by zero" (/ 4 0))
+  (throws? :default #"Nope"           (/ 4 0))
+  (throws? :default #"Test" (throw (ex-info "Test" {:a :b})))
+  (throws? :default {:a :b} (throw (ex-info "Test" {:a :b :c :d})))
+  (throws? Exception (Exception.)))
+
+(defmacro thrown [& args] `(throws ~@args))
 
 ;;;; DEPRECATED
 
