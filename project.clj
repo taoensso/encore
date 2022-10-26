@@ -7,10 +7,10 @@
             :distribution :repo
             :comments "Same as Clojure"}
   :min-lein-version "2.3.3"
-  :global-vars {*warn-on-reflection* true
-                *assert*             true
-                ;; *unchecked-math*  :warn-on-boxed
-                }
+  :global-vars
+  {*warn-on-reflection* true
+   *assert*             true
+   *unchecked-math*     false #_:warn-on-boxed}
 
   :dependencies
   [[org.clojure/tools.reader "1.3.6"]
@@ -25,40 +25,45 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :provided {:dependencies [[org.clojure/clojure       "1.7.0"]
-                             [org.clojure/clojurescript "1.11.60"]]}
-   :1.7      {:dependencies [[org.clojure/clojure       "1.7.0"]]}
-   :1.8      {:dependencies [[org.clojure/clojure       "1.8.0"]]}
-   :1.9      {:dependencies [[org.clojure/clojure       "1.9.0"]]}
-   :1.10     {:dependencies [[org.clojure/clojure       "1.10.3"]]}
-   :1.11     {:dependencies [[org.clojure/clojure       "1.11.1"]]}
-   :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
-                             [org.clojure/core.async    "1.5.648"]]}
-   :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
-   :dev      [:1.11 :test :server-jvm :depr]}
+   :provided {:dependencies [[org.clojure/clojurescript "1.11.60"]
+                             [org.clojure/clojure       "1.11.1"]]}
+   :c1.11    {:dependencies [[org.clojure/clojure       "1.11.1"]]}
+   :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
+   :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
 
-  :test-paths ["test" "src"]
+   :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
+   :dev      [:c1.11 :test :server-jvm :depr]
+   :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
+                             [org.clojure/core.async    "1.5.648"]]}}
+
+  :test-paths ["src" "test"]
 
   :cljsbuild
-  {:builds
-   {:main
-    {:source-paths ["src" "test"]
+  {:test-commands {"node" ["node" "target/test.js"]}
+   :builds
+   [{:id :main
+     :source-paths ["src"]
      :compiler
      {:output-to "target/main.js"
-      :optimizations :advanced
-      :pretty-print false}}}
+      :optimizations :advanced}}
 
-   :test-commands {"node" ["node" "target/main.js"]}}
+    {:id :test
+     :source-paths ["src" "test"]
+     :compiler
+     {:output-to "target/test.js"
+      :target :nodejs
+      :optimizations :simple}}]}
 
   :aliases
   {"start-dev"  ["with-profile" "+dev" "repl" ":headless"]
    "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
-   "build-once" ["cljsbuild" "once"]
-   "test-cljs"  ["cljsbuild" "test"]
+   "build-once" ["do" ["clean"] "cljsbuild" "once"]
+
+   "test-cljs"  ["with-profile" "+test" "cljsbuild" "test"]
    "test-all"
    ["do" ["clean"]
-    "with-profile" "+1.10:+1.9:+1.8:+1.7" "test,"
-    "with-profile" "+test" "cljsbuild" "test"]}
+    "with-profile" "+c1.11:+c1.10:+c1.9" "test,"
+    "test-cljs"]}
 
   :repositories
   {"sonatype-oss-public"
