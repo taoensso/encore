@@ -95,7 +95,7 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let -cond cond defonce
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
-        name-with-attrs deprecated new-object defalias]])))
+        name-with-attrs deprecated new-object defalias throws throws?]])))
 
 (def encore-version [3 28 3])
 
@@ -378,11 +378,17 @@
 
 (comment (compiling-cljs?))
 
-;;;; Core fns we'll redefine but need in this ns
+;;;; Core fns
 
 (def -core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
 (def -core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
 (declare merge update-in)
+
+#?(:cljs (defn ^boolean some? [x] (if (nil? x) false true))
+   :clj
+   (defn some?
+     {:inline (fn [x] `(if (identical? ~x nil) false true))}
+     [x] (if (identical? x nil) false true)))
 
 ;;;; Secondary macros
 
@@ -538,53 +544,194 @@
 
 ;;;; Errors
 
+(defmacro catching
+  "Cross-platform try/catch/finally."
+  ;; Very unfortunate that CLJ-1293 has not yet been addressed
+  ([try-expr                                             ] `(catching ~try-expr :all ~'__       nil         nil))
+  ([try-expr            error-sym catch-expr             ] `(catching ~try-expr :all ~error-sym ~catch-expr nil))
+  ([try-expr            error-sym catch-expr finally-expr] `(catching ~try-expr :all ~error-sym ~catch-expr ~finally-expr))
+  ([try-expr error-type error-sym catch-expr finally-expr]
+   (case error-type
+     (:common :default) ; `:default` is a poor name, here only for back compatibility
+     (if (nil? finally-expr)
+       `(if-cljs
+          (try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
+          (try ~try-expr (catch Exception ~error-sym ~catch-expr)))
+       `(if-cljs
+          (try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
+          (try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
+
+     (:all :any)
+     ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
+     (if (nil? finally-expr)
+       `(if-cljs
+          (try ~try-expr (catch :default  ~error-sym ~catch-expr))
+          (try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
+       `(if-cljs
+          (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
+          (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
+
+     ;; Specific error-type provided
+     (if (nil? finally-expr)
+       `(if-cljs
+          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
+          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
+       `(if-cljs
+          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
+          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr)))))))
+
+(comment
+  (macroexpand '(catching (do "foo") e e (println "finally")))
+  (catching (zero? "9")))
+
 (defn error-data
   "Returns data map iff `x` is an error of any type on platform."
-  ;; Note that Clojure 1.7+ now also has `Throwable->map`
+  ;; Note Clojure >= 1.7 now has `Throwable->map` (clj only)
   [x]
   (when-let [data-map
-             (or (ex-data x) ; ExceptionInfo
-                 (when (instance? #?(:clj Throwable :cljs :default) x) {}))]
-    (conj
-      #?(:clj
-         (let [^Throwable t x] ; (catch Throwable t <...>)
-           {:err-type   (type                 t)
-            :err-msg    (.getLocalizedMessage t)
-            :err-cause  (.getCause            t)})
+             (and x
+               (or
+                 (ex-data x) ; ExceptionInfo
+                 #?(:clj  (when (instance? Throwable x) {})
+                    :cljs                               {})))]
 
-         :cljs
-         (let [err x] ; (catch :default t <...)
-           {:err-type  (type      err)
-            :err-msg   (.-message err)
-            :err-cause (.-cause   err)}))
+    (let [base-map
+          #?(:clj
+             (let [^Throwable t x] ; (catch Throwable t <...>)
+               {:err-type   (type                 t)
+                :err-msg    (.getLocalizedMessage t)
+                :err-cause  (.getCause            t)})
 
-      data-map)))
+             :cljs
+             (let [err x] ; (catch :default t <...)
+               {:err-type  (type      err)
+                :err-msg   (.-message err)
+                :err-cause (.-cause   err)}))]
+
+      #_(assoc base-map :err-data data-map)
+      (conj    base-map           data-map))))
 
 (comment
   (error-data (Throwable. "foo"))
   (error-data (Exception. "foo"))
   (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro catching "Cross-platform try/catch/finally."
-  ;; We badly need something like http://dev.clojure.org/jira/browse/CLJ-1293
-  ([try-expr                     ] `(catching ~try-expr ~'_ nil))
-  ([try-expr error-sym catch-expr]
-   `(if-cljs
-      (try ~try-expr (catch :default  ~error-sym ~catch-expr))
-      (try ~try-expr (catch Throwable ~error-sym ~catch-expr))))
-  ([try-expr error-sym catch-expr finally-expr]
-   `(if-cljs
-      (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
-      (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr)))))
-
-(comment
-  (macroexpand '(catching (do "foo") e e (println "finally")))
-  (catching (zero? "9")))
-
-(defmacro caught-error-data "Handy for error-throwing unit tests."
+(defmacro caught-error-data
+  "Handy for error-throwing unit tests."
   [& body] `(catching (do ~@body nil) e# (error-data e#)))
 
 (comment (caught-error-data (/ 5 0)))
+
+(defn- error-message
+  ;; Note Clojure >= 1.10 now has `ex-message`
+  [x]
+  #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
+     :cljs (when (instance? js/Error  x) (.-message              x))))
+
+(declare submap?)
+(defn -matching-error
+  ;; Ref. also CLJ-1293
+  ([  err] err)
+  ([c err]
+   (when-let [match?
+              (if (fn? c) ; Treat as pred
+                (c err)
+                #?(:clj
+                   (case c
+                     (:all        :any) (instance? Throwable err)
+                     (:common :default) (instance? Exception err)
+                     (do                (instance? c         err)))
+
+                   :cljs
+                   (case c
+                     (:all        :any) (some?              err)
+                     (:common :default) (instance? js/Error err)
+                     (do                (instance? c        err)))))]
+     err))
+
+  ([c pattern err]
+   (when-let [match?
+              (and
+                (-matching-error c err)
+                (cond
+                  (nil? pattern) true
+                  (map? pattern)
+                  (if-let [data (ex-data err)]
+                    (submap? data pattern)
+                    false #_(empty? pattern))
+
+                  :else
+                  (boolean
+                    (re-find
+                      (re-pattern pattern)
+                      (error-message err)))))]
+     err)))
+
+(comment
+  (-matching-error                            (catching (/ 4 0) t t))
+  (-matching-error :default #"Divide by zero" (catching (/ 4 0) t t))
+  (-matching-error :default #"Nope"           (catching (/ 4 0) t t))
+  (-matching-error :default #"Test"           (ex-info "Test" {:a :b}))
+  (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
+
+(defmacro throws
+  "Like `throws?`, but returns ?matching-error instead of true/false."
+  ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
+  ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
+  ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t))))
+
+(defmacro thrown [& args] `(throws ~@args)) ; Back compatibility
+
+(defmacro throws?
+  "Evals `form` and returns true iff it throws an error that matches given
+  criteria:
+
+    - `c` may be:
+      - A predicate function, (fn match? [x]) -> bool
+      - A class (e.g. ArithmeticException, AssertionError, etc.)
+      - `:all`    => any    platform error (Throwable or js/Error, etc.)
+      - `:common` => common platform error (Exception or js/Error)
+
+    - `pattern` may be:
+      - A string or Regex against which `ex-message` will be matched.
+      - A map             against which `ex-data`    will be matched.
+
+  Useful for unit tests, e.g.:
+    (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
+
+  See also `throws`."
+
+  ([          form] `(boolean (throws             ~form)))
+  ([c         form] `(boolean (throws ~c          ~form)))
+  ([c pattern form] `(boolean (throws ~c ~pattern ~form))))
+
+(deftest ^:private _throws?
+  (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
+        throw-uncommon (fn [] (throw #?(:clj (Error.) :cljs "Error")))]
+
+    [(is      (throws?                            (throw-common)))
+     (is      (throws? :common                    (throw-common)))
+     (is      (throws? :any                       (throw-common)))
+     (is (not (throws? :common                    (throw-uncommon))))
+     (is      (throws? :any                       (throw-uncommon)))
+
+     (is      (throws? :default #"Shenanigans"    (throw-common)))
+     (is (not (throws? :default #"Brouhaha"       (throw-common))))
+
+     (is      (throws? :default {:a :a1}          (throw-common)))
+     (is (not (throws? :default {:a :a1 :b :b2}   (throw-common))))
+
+     (is      (throws? :default {:a :a1} (throw (ex-info "Test" {:a :a1 :b :b1}))))
+     (is (not (throws? :default {:a :a1} (throw (ex-info "Test" {:a :a2 :b :b1})))))
+
+     ;; Form must throw error, not return it
+    #?(:clj
+       [(is      (throws? Exception (throw (Exception.))))
+        (is (not (throws? Exception        (Exception.))))]
+
+       :cljs
+       [(is      (throws? js/Error (throw (js/Error.))))
+        (is (not (throws? js/Error        (js/Error.))))])]))
 
 ;;;; Type preds, etc.
 ;; - TODO Could really do with a portable ^boolean hint
@@ -593,10 +740,6 @@
 
 #?(:clj
    (do
-     (defn some?
-       {:inline (fn [x] `(if (identical? ~x nil) false true))}
-       [x] (if (identical? x nil) false true))
-
      (defn stringy?    [x] (or (keyword? x) (string? x)))
      (defn ident?      [x] (or (keyword? x) (symbol? x)))
      (defn boolean?    [x] (instance? Boolean                           x))
@@ -628,7 +771,6 @@
 
    :cljs
    (do
-     (defn ^boolean some?       [x] (if (nil? x) false true))
      (defn ^boolean stringy?    [x] (or (keyword? x) (string? x)))
      (defn ^boolean ident?      [x] (or (keyword? x) (symbol? x)))
      (defn ^boolean boolean?    [x] (or (true?    x) (false?  x)))
@@ -4236,72 +4378,6 @@
   (def ^:dynamic *foo* nil)
   (binding [*foo* "bar"] ; Note no auto conveyance
     ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
-
-;;;; Tests
-
-
-(defn- -ex-message ; `ex-message` was only introduced in Clojure 1.10+
-  [ex]
-  #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
-     :cljs (when (instance? js/Error  ex) (.-message              ex))))
-
-(defn -matching-throwable
-  ([  ex] (when ex ex))
-  ([c ex]
-   (when
-       (instance?
-         (case c
-           :default #?(:clj Exception :cljs js/Error)
-           :any     #?(:clj Throwable :cljs js/Error)
-           c)
-         ex)
-     ex))
-
-  ([c pattern ex]
-   (when
-       (and
-         (-matching-throwable c ex)
-         (if (map? pattern)
-           (if-let [data (ex-data ex)]
-             (= pattern (select-keys data (keys pattern)))
-             false)
-
-           (boolean (re-find (re-pattern pattern) (-ex-message ex)))))
-     ex)))
-
-(comment
-  (-matching-throwable                            (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Divide by zero" (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Nope"           (catching (/ 4 0) t t))
-  (-matching-throwable :default #"Test"           (ex-info "Test" {:a :b}))
-  (-matching-throwable :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
-
-(defmacro thrown
-  "Evaluates `form` and returns ?throwable thrown by form that matches
-  given criteria:
-
-    - `c` may be:
-      - A class (e.g. ArithmeticException, AssertionError, etc.)
-      - `:default` => default platform throwable (Exception or js/Error)
-      - `:any`     => any     platform throwable (Throwable or js/Error)
-
-    - `pattern` may be
-      - A string or Regex against which `ex-message` will be matched.
-      - A map             against which `ex-data`    will be matched.
-
-  Useful for unit tests, e.g.:
-    (is (thrown :default {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))"
-
-  ([          form] `(-matching-throwable             (catching ~form ~'t ~'t)))
-  ([c         form] `(-matching-throwable ~c          (catching ~form ~'t ~'t)))
-  ([c pattern form] `(-matching-throwable ~c ~pattern (catching ~form ~'t ~'t))))
-
-(comment
-  (thrown                            (/ 4 0))
-  (thrown :default #"Divide by zero" (/ 4 0))
-  (thrown :default #"Nope"           (/ 4 0))
-  (thrown :default #"Test" (throw (ex-info "Test" {:a :b})))
-  (thrown :default {:a :b} (throw (ex-info "Test" {:a :b :c :d}))))
 
 ;;;; DEPRECATED
 
