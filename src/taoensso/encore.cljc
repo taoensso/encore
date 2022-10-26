@@ -4318,8 +4318,6 @@
       [(is      (throws? js/Error (throw (js/Error.))))
        (is (not (throws? js/Error        (js/Error.))))])])
 
-(defmacro thrown [& args] `(throws ~@args))
-
 ;;;; DEPRECATED
 
 #?(:clj
@@ -4481,6 +4479,8 @@
  (defmacro -vol!       [val]           `(volatile!     ~val))
  (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
  (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
+
+ (defmacro thrown "DEPRECATED, prefer `throws`" [& args] `(throws ~@args)) ; 2022-10-26
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn undefined->nil [x] (if (undefined? x) nil x)))
