@@ -2728,7 +2728,7 @@
   ([s start-idx end-idx]
    (when s
      (let [s #?(:clj ^String s :cljs s)
-           full-len (.length s)
+           full-len #?(:clj (.length s) :cljs (.-length s))
 
            ^long start-idx (if (nil? start-idx) 0                      start-idx) ; Default
            start-idx       (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
@@ -2769,7 +2769,7 @@
   ([s start-idx sub-len]
    (when s
      (let [s #?(:clj ^String s :cljs s)
-           full-len (.length s)
+           full-len #?(:clj (.length s) :cljs (.-length s))
            ^long sub-len (if (nil? sub-len) full-len sub-len)]
 
        (if-not (pos? sub-len)
@@ -4377,7 +4377,7 @@
      #?(:cljs (.substring s start)
         :clj
         (let [start (if (< start 0) 0 start)
-              slen  (.length ^String s)]
+              slen  #?(:clj (.length ^String s) :cljs (.-length s))]
           (if (>= start slen)
             ""
             (.substring ^String s start slen)))))
@@ -4386,7 +4386,7 @@
      #?(:cljs (if (>= start end) "" (.substring s start end))
         :clj
         (let [start (if (< start 0) 0 start)
-              slen  (long (.length ^String s))
+              slen  #?(:clj (long (.length ^String s)) :cljs (.-length s))
               end   (if (> end slen) slen end)]
           (if (>= start end)
             ""
