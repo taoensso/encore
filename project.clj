@@ -34,9 +34,9 @@
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
    :dev      [:c1.11 :test :server-jvm :depr]
    :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
-                             [org.clojure/core.async    "1.5.648"]]}}
+                             [org.clojure/core.async    "1.6.673"]]}}
 
-  :test-paths ["src" "test"]
+  :test-paths ["test" #_"src"]
 
   :cljsbuild
   {:test-commands {"node" ["node" "target/test.js"]}
