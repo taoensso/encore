@@ -706,7 +706,7 @@
 ;;;; Tests
 
 (defn test-fixtures
-  "Given a map {:before ?(fn []) :after ?(fn [])}, returns cross-platform
+  "Given a {:before ?(fn []) :after ?(fn [])} map, returns cross-platform
   test fixtures for use by both `clojure.test` and `cljs.test`:
 
     (let [f (test-fixtures {:before (fn [] (test-setup))})]
@@ -2775,10 +2775,11 @@
   #?(:clj  (^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
      :cljs (               [               str-builder         s] (.append str-builder s)))
   ([str-builder s & more]
-   (sb-append str-builder s)
-   (reduce (fn [acc in] (sb-append acc in)) str-builder more)))
+   (reduce (fn [acc in] (sb-append acc in))
+     (sb-append str-builder s)
+     more)))
 
-(comment (str (sb-append (str-builder "foo") "bar")))
+(comment (str (sb-append (str-builder "a") "b" "c")))
 
 (def str-rf "String builder reducing fn"
   (fn

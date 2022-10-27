@@ -11,10 +11,10 @@
   (remove-ns      'taoensso.encore-tests)
   (test/run-tests 'taoensso.encore-tests))
 
+;;;;
+
 ;; (deftest pass (is (= 1 1)))
 ;; (deftest fail (is (= 1 0)))
-
-;;;;
 
 (deftest _submap?
   [(is (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
