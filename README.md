@@ -4,7 +4,7 @@
 **[CHANGELOG][]** | [API][] | current [Break Version][]:
 
 ```clojure
-[com.taoensso/encore "3.28.3"]
+[com.taoensso/encore "3.31.0"]
 ```
 
 <!-- ![build status](https://github.com/ptaoussanis/encore/workflows/build/badge.svg?branch=master) -->
