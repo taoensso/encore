@@ -731,6 +731,30 @@
        [(is      (throws? js/Error (throw (js/Error.))))
         (is (not (throws? js/Error        (js/Error.))))])]))
 
+;;;; Tests
+
+(defn test-fixtures
+  "Given a map {:before ?(fn []) :after ?(fn [])}, returns cross-platform
+  test fixtures for use by both `clojure.test` and `cljs.test`:
+
+    (let [f (test-fixtures {:before (fn [] (test-setup))})]
+      (clojure.test/use-fixtures f)
+         (cljs.test/use-fixtures f))"
+
+  [fixtures-map]
+  (have? map?                         fixtures-map)
+  ;; (have? [:ks<= #{:before :after}] fixtures-map)
+
+  #?(:cljs fixtures-map ; Cljs supports a map with {:keys [before after]}
+     :clj ; Clj wants a fn
+     (let [{:keys [before after]} fixtures-map]
+       (fn fixtures [f]
+         (when before (before))
+         (f)
+         (when after (after))))))
+
+(comment (test-fixtures {:before (fn [])}))
+
 ;;;; Type preds, etc.
 ;; - TODO Could really do with a portable ^boolean hint
 ;; - Some of these have slowly been getting added to Clojure core; make sure
