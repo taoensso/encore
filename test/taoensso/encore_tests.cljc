@@ -68,6 +68,7 @@
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in xform")
 
+   (is (=   (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
    (is (->> (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc (throw! in)))) [] [:a :b])
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in rf")])
