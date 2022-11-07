@@ -16,6 +16,10 @@
 ;; (deftest pass (is (= 1 1)))
 ;; (deftest fail (is (= 1 0)))
 
+(defn- throw! [x] (throw (ex-info "Error" {:arg {:value x :type (type x)}})))
+
+;;;;
+
 (deftest _submap?
   [(is (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
    (is (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
@@ -47,6 +51,26 @@
        :cljs
        [(is      (enc/throws? js/Error (throw (js/Error.))))
         (is (not (enc/throws? js/Error        (js/Error.))))])]))
+
+(deftest _catching-rf
+  [(is (=   (reduce (enc/catching-rf            (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
+   (is (=   (reduce (enc/catching-rf {:id :foo} (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
+   (is (->> (reduce (enc/catching-rf {:id :foo} (fn [acc in] (conj acc (throw! in)))) [] [:a :b])
+         (enc/throws? :common {:id :foo :call '(rf acc in) :args {:in {:value :a}}})))
+
+   (is (=   (reduce-kv (enc/catching-rf (fn [acc k v] (assoc acc k         v)))  {} {:a :A}) {:a :A}))
+   (is (->> (reduce-kv (enc/catching-rf (fn [acc k v] (assoc acc k (throw! v)))) {} {:a :A})
+         (enc/throws? :common {:call '(rf acc k v) :args {:k {:value :a} :v {:value :A}}})))])
+
+(deftest _catching-xform
+  [(is (=   (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc in))) [] [:a :b]) [:a :b]))
+   (is (->> (transduce (enc/catching-xform (map throw!))   (completing (fn [acc in] (conj acc in))) [] [:a :b])
+         (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
+     "Error in xform")
+
+   (is (->> (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc (throw! in)))) [] [:a :b])
+         (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
+     "Error in rf")])
 
 (deftest  _get-substr-by-idx
   [(is (= (enc/get-substr-by-idx nil            nil)         nil))

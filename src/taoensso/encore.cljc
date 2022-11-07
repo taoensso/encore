@@ -703,6 +703,64 @@
 
 (comment :see-tests)
 
+(let [get-default-error-fn
+      (fn [base-data]
+        (let [msg       (get    base-data :error/msg "Error thrown during reduction")
+              base-data (dissoc base-data :error/msg)]
+
+          (fn default-error-fn [data cause] ; == (partial ex-info <msg>)
+            (throw (ex-info msg (conj base-data data) cause)))))]
+
+  (defn catching-rf
+    "Returns wrapper around given reducing function `rf` so that if `rf`
+    throws, (error-fn <thrown-error> <contextual-data>) will be called.
+
+    The default `error-fn` will rethrow the original error, wrapped in
+    extra contextual information to aid debugging.
+
+    See also `catching-xform`."
+    ([         rf] (catching-rf (get-default-error-fn {:rf rf}) rf))
+    ([error-fn rf]
+     (let [error-fn
+           (if (map? error-fn) ; Undocumented convenience
+             (get-default-error-fn error-fn)
+             (do                   error-fn))]
+
+       (fn catching-rf
+         ([       ] (catching (rf)        t (error-fn {:rf rf :call '(rf)} t)))
+         ([acc    ] (catching (rf acc)    t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc :type (type acc)}}} t)))
+         ([acc in ] (catching (rf acc in) t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc :type (type acc)}
+                                                                                        :in  {:value in  :type (type in)}}} t)))
+         ([acc k v]
+          (catching (rf acc k v) t
+            (error-fn
+              {:rf     rf
+               :call '(rf acc k v)
+               :args
+               {:acc {:value acc :type (type acc)}
+                :k   {:value k   :type (type k)}
+                :v   {:value v   :type (type v)}}}
+              t))))))))
+
+(comment :see-tests)
+
+(defn catching-xform
+  "Like `catching-rf`, but applies to a transducer (`xform`).
+
+  Makes debugging transductions much easier by greatly improving
+  the information provided in any errors thrown by `xform` or the
+  reducing fn:
+
+    (transduce
+      (catching-xform (comp (filter even?) (map inc))) ; Modified xform
+      <reducing-fn>
+      <...>)"
+
+  ([error-fn xform] (comp (fn [rf] (catching-rf error-fn rf)) xform))
+  ([         xform] (comp           catching-rf               xform)))
+
+(comment :see-tests)
+
 ;;;; Tests
 
 (defn test-fixtures
