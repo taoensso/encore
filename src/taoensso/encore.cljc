@@ -4409,6 +4409,7 @@
     ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
 
 ;;;; DEPRECATED
+;; {:deprecated "v<x.y.z> (<yyyy-mm-dd>)" :doc "Prefer `<replacement>`"}
 
 #?(:clj
    (defmacro deprecated
@@ -4458,8 +4459,8 @@
   (def as-ufloat       as-nat-float)
   (def as-pfloat       as-pos-float)
   (def run!*           run!)
-  (def ?subvec<idx     (comp not-empty      get-subvec))
-  (def ?subvec<len     (comp not-empty      get-subvector))
+  (def ?subvec<idx     (comp not-empty get-subvec))
+  (def ?subvec<len     (comp not-empty get-subvector))
   (def nano-time       now-nano)
   (def -swap-cache!    -swap-val!)
   (def -unswapped      swapped-vec)
@@ -4476,8 +4477,8 @@
   (def  as-pval  as-pnum)
 
   (defn get-substr
-    "Deprecated as of Encore v3.26.0, 2022-10-14.
-    Prefer `get-substr-by-idx`."
+    {:deprecated "v3.26.0 (2022-10-14)"
+     :doc "Prefer `get-substr-by-idx`"}
     ([s ^long start]
      #?(:cljs (.substring s start)
         :clj
@@ -4498,8 +4499,8 @@
             (.substring ^String s start end))))))
 
   (defn get-substring
-    "Deprecated as of Encore v3.26.0, 2022-10-14.
-    Prefer `get-substr-by-len`."
+    {:deprecated "v3.26.0 (2022-10-14)"
+     :doc "Prefer `get-substr-by-len`"}
     ([s ^long start]
      #?(:cljs (as-?nempty-str (.substr s start))
         :clj
@@ -4570,7 +4571,10 @@
  (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
  (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
 
- (defmacro thrown "DEPRECATED, prefer `throws`" [& args] `(throws ~@args)) ; 2022-10-26
+ (defmacro thrown
+   {:deprecated "v3.31.0 (2022-10-27)"
+    :doc "Prefer `throws`"}
+   [& args] `(throws ~@args))
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn undefined->nil [x] (if (undefined? x) nil x)))

@@ -1,12 +1,13 @@
 (ns taoensso.encore.test
-  "DEPRECATED"
+  {:deprecated "v3.31.0 (2022-10-27)"}
   (:require
    [clojure.test    :as test]
    [taoensso.encore :as enc  :refer [have? if-cljs]]))
 
-(enc/deprecated ; 2022-10-26
+(enc/deprecated
   (defmacro expect
-    "DEPRECATED"
+    {:deprecated "v3.31.0 (2022-10-27)"
+     :doc "Prefer `clojure.test/is`, etc."}
     ([             expr] `(test/is                        ~expr))
     ([         val expr] `(test/is                (= ~val ~expr)))
     ([bindings val expr] `(test/is (let ~bindings (= ~val ~expr)))))
@@ -19,7 +20,8 @@
     `(fn [f#] (~before) (f#) (~after)))
 
   (defmacro use-fixtures
-    "DEPRECATED, prefer `encore/test-fixtures`."
+    {:deprecated "v3.31.0 (2022-10-27)"
+     :doc "Prefer `encore/test-fixtures`"}
     [fixture-type & fixtures]
     (have? [:el #{:each :once}] fixture-type)
     (have? map? :in fixtures)
