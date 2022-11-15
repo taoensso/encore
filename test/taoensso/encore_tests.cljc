@@ -99,6 +99,16 @@
    (is (= (enc/get-substr-by-len "123456789"  0  -5)         nil))
    (is (= (enc/get-substr-by-len "123456789" -5   2)      "56"  ))])
 
+(deftest _reduce-zip
+  [(is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2 3])   {:a 1, :b 2, :c 3}) "Vec,  normal")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2 3))   {:a 1, :b 2, :c 3}) "List, normal")
+   (is (= (enc/reduce-zip assoc {}  [:a :b :c :a]  [1 2 3 4]) {:a 4, :b 2, :c 3}) "Vec,  replacing")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c :a) '(1 2 3 4)) {:a 4, :b 2, :c 3}) "List, replacing")
+   (is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2])     {:a 1, :b 2})       "Vec,  uneven")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2))     {:a 1, :b 2})       "List, uneven")
+   (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
+   (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

@@ -1292,6 +1292,34 @@
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
     (rfirst        string?       [:a :b :c :d "boo"])))
 
+(defn reduce-zip
+  "Reduces given sequential xs and ys as pairs (e.g. key-val pairs).
+  Calls (rf acc x y) for each sequential pair.
+
+  Useful, among other things, as a more flexible version of `zipmap`."
+  {:added "v3.33.0 (2022-11-15)"}
+  [rf init xs ys]
+  (if (and
+        (vector? xs)
+        (vector? ys))
+
+    (let [n (min (count xs) (count ys))]
+      (reduce-n
+        (fn [acc idx] (rf acc (get xs idx) (get ys idx)))
+        init n))
+
+    (loop [acc init
+           xs (seq xs)
+           ys (seq ys)]
+
+      (if (and xs ys)
+        (recur (rf acc (first xs) (first ys))
+          (next xs)
+          (next ys))
+        acc))))
+
+(comment :see-tests)
+
 ;;;; Math
 
 (def ^:const max-long #?(:clj Long/MAX_VALUE :cljs  9007199254740991))
