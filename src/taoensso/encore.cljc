@@ -431,7 +431,7 @@
                          (declare ~(with-meta (symbol v) m))))) syms)
          (in-ns '~(symbol original-ns)))))
 
-(defn -alias-meta [src-var] (select-keys (meta src-var) [:doc :arglists :private :macro]))
+(defn -alias-meta [src-var] (select-keys (meta src-var) [:doc :arglists :private :macro :added :deprecated]))
 #?(:clj
    (defn -link-var [dst src]
      (add-watch src dst
