@@ -468,14 +468,13 @@
 
 ;;;; Truss aliases (for back compatibility, convenience)
 
-#?(:clj
-   (do
-     (defalias taoensso.truss/have)
-     (defalias taoensso.truss/have!)
-     (defalias taoensso.truss/have?)
-     (defalias taoensso.truss/have!?)
-     (defalias taoensso.truss/get-data)
-     (defalias taoensso.truss/with-data)))
+(do
+  (defalias taoensso.truss/have)
+  (defalias taoensso.truss/have!)
+  (defalias taoensso.truss/have?)
+  (defalias taoensso.truss/have!?)
+  (defalias taoensso.truss/get-data)
+  (defalias taoensso.truss/with-data))
 
 ;;;; Edn
 
