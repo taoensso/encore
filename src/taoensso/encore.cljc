@@ -674,7 +674,7 @@
 
 (defmacro throws
   "Like `throws?`, but returns ?matching-error instead of true/false."
-  {:added "v3.31.0 2022-10-27"}
+  {:added "v3.31.0 (2022-10-27)"}
   ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
   ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
   ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t))))
@@ -698,7 +698,7 @@
 
   See also `throws`."
 
-  {:added "v3.31.0 2022-10-27"}
+  {:added "v3.31.0 (2022-10-27)"}
   ([          form] `(boolean (throws             ~form)))
   ([c         form] `(boolean (throws ~c          ~form)))
   ([c pattern form] `(boolean (throws ~c ~pattern ~form))))
@@ -775,7 +775,7 @@
       (clojure.test/use-fixtures f)
          (cljs.test/use-fixtures f))"
 
-  {:added "v3.31.0 2022-10-27"}
+  {:added "v3.31.0 (2022-10-27)"}
   [fixtures-map]
   (have? map?                         fixtures-map)
   ;; (have? [:ks<= #{:before :after}] fixtures-map)
@@ -3011,7 +3011,7 @@
   ;; Compares normalized chars 1 by 1, so often faster than naive comparison
   ;; of normalized strings.
 
-  {:added "v3.25.0 2022-10-13"}
+  {:added "v3.25.0 (2022-10-13)"}
   [s1 s2]
   #?(:clj (.equalsIgnoreCase ^String s1 ^String s2)
      :cljs
