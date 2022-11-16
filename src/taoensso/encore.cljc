@@ -1819,8 +1819,8 @@
      false)))
 
 (defn dissoc-in
-  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (apply dissoc m dissoc-k more))))
-  ([m ks dissoc-k       ] (update-in m ks nil (fn [m]       (dissoc m dissoc-k))))
+  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (reduce dissoc (dissoc m dissoc-k) more))))
+  ([m ks dissoc-k       ] (update-in m ks nil (fn [m]                (dissoc m dissoc-k))))
   ([m ks                ]
    (if (seq ks)
      (fsplit-last (fn [ks lk] (dissoc-in m ks lk)) ks)
