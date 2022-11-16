@@ -474,8 +474,8 @@
      (defalias taoensso.truss/have!)
      (defalias taoensso.truss/have?)
      (defalias taoensso.truss/have!?)
-     (defalias taoensso.truss/get-dynamic-assertion-data)
-     (defalias taoensso.truss/with-dynamic-assertion-data)))
+     (defalias taoensso.truss/get-data)
+     (defalias taoensso.truss/with-data)))
 
 ;;;; Edn
 
@@ -4887,4 +4887,7 @@
       ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
 
   (def dswap! swap-in!*)
-  (def swap!* swap-in!*))
+  (def swap!* swap-in!*)
+
+  (defalias taoensso.truss/get-dynamic-assertion-data)
+  (defalias taoensso.truss/with-dynamic-assertion-data))
