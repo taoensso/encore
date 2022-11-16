@@ -109,6 +109,18 @@
    (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
    (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")])
 
+(deftest _select-nested-keys
+  [(is (= (enc/select-nested-keys nil    nil)) {})
+   (is (= (enc/select-nested-keys {:a 1} nil)  {}))
+   (is (= (enc/select-nested-keys {    } [:a]) {}))
+
+   (is (= (enc/select-nested-keys {:a 1 :b 1 :c 1} [:a :c]) {:a 1 :c 1}))
+   (is (= (enc/select-nested-keys {:a 1 :b 1 :c {:ca 2 :cb 2 :cc {:cca 3 :ccb 3} :cd 2} :d 1}
+            [:a :b {:c [:ca :cb {:cc [:cca]} :ce]
+                    :d [:da :db]} {:e []}])
+
+         {:a 1, :b 1, :c {:ca 2, :cb 2, :cc {:cca 3}}, :d 1}))])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

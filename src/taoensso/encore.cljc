@@ -1969,6 +1969,52 @@
 
 (comment :see-tests)
 
+(defn select-nested-keys
+  "Like `select-keys` but supports nested key spec:
+
+    (select-nested-keys
+      {:a :A :b :B :c {:c1 :C1 :c2 :C2} :d :D} ; `src-map`
+      [:a {:c [:c1], :d [:d1 :d2]}]) ; `key-spec`
+
+      => {:a :A, :c {:c1 :C1}, :d :D}
+
+  Note that as with the `{:d [:d1 :d2]}` spec in the example above,
+  if spec expects a nested map but the actual value is not a map,
+  the actual value will be included in output as-is.
+
+  Has the same behaviour as `select-keys` when `key-spec` is a
+  simple vector of keys."
+
+  {:added "v3.34.0 (2022-11-16)"}
+  [src-map key-spec]
+  (persistent!
+    (reduce
+      (fn rf [acc spec-in]
+        (if (map? spec-in)
+
+          (reduce-kv
+            (fn [acc k nested-spec-in]
+              (if (contains? src-map k)
+                (let [src-val (get src-map k)]
+                  (if (map? src-val)
+                    (assoc! acc k (select-nested-keys src-val nested-spec-in))
+                    (assoc! acc k                     src-val)))
+                acc))
+            acc spec-in)
+
+         (let [k spec-in]
+           (if (contains? src-map k)
+             (assoc!  acc k (get src-map k))
+             (do      acc)))))
+
+      (transient {}) key-spec)))
+
+(comment :see-tests)
+(comment
+  (enc/qb 1e5 ; [18.86 22.74]
+    (select-nested-keys  {:a 1 :b 1 :c 1} [:a :c])
+    (select-keys         {:a 1 :b 1 :c 1} [:a :c])))
+
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)
 ;; - reset-val!  ; Keys:    1    (optimized)
