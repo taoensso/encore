@@ -95,15 +95,15 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 34 0])
+(def encore-version [3 35 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
 (do ; Bootstrap Truss aliases
-  (defmacro have  [& args] `(taoensso.truss/have  ~@args))
-  (defmacro have? [& args] `(taoensso.truss/have? ~@args)))
+  (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args))
+  (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args)))
 
 (comment (test/run-tests))
 
