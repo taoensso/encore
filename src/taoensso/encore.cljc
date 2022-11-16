@@ -2011,7 +2011,7 @@
 
 (comment :see-tests)
 (comment
-  (enc/qb 1e5 ; [18.86 22.74]
+  (qb 1e5 ; [18.86 22.74]
     (select-nested-keys  {:a 1 :b 1 :c 1} [:a :c])
     (select-keys         {:a 1 :b 1 :c 1} [:a :c])))
 
