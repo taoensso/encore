@@ -121,6 +121,71 @@
 
          {:a 1, :b 1, :c {:ca 2, :cb 2, :cc {:cca 3}}, :d 1}))])
 
+(do
+  (def ^:private cache-idx_ (atom 0))
+  (enc/defn-cached ^:private cached-fn
+    {:ttl-ms 1000 :size 2 :gc-every 100}
+    "Example cached function"
+    ([   ] (swap! cache-idx_ inc))
+    ([_  ] (swap! cache-idx_ inc))
+    ([_ _] (swap! cache-idx_ inc))))
+
+(deftest _defn-cached
+  [(testing "Basics"
+     [(is (= (reset! cache-idx_ 0) 0))
+      (is (= (cached-fn :mem/del :mem/all) nil))
+      (is (= (cached-fn)     1))
+      (is (= (cached-fn)     1))
+      (is (= (cached-fn "a") 2))
+      (is (= (cached-fn "a") 2))
+      (is (= (cached-fn "b") 3))
+      (is (= (cached-fn "b") 3))
+      (is (= (cached-fn "a" "b")) 4)
+      (is (= (cached-fn "a" "b")) 4)
+      (is (= (cached-fn "a") 2))
+
+      (is (= (cached-fn :mem/fresh)     5))
+      (is (= (cached-fn :mem/fresh)     6))
+      (is (= (cached-fn)                6))
+      (is (= (cached-fn "a")            2))
+      (is (= (cached-fn :mem/fresh "a") 7))
+
+      (is (= (cached-fn "b")            3))
+      (is (= @cache-idx_                7))
+      (is (= (cached-fn :mem/del "b") nil))
+      (is (= @cache-idx_                7))
+      (is (= (cached-fn "b")            8))
+
+      (is (= (cached-fn "a"                  7)))
+      (is (= (cached-fn :mem/del :mem/all) nil))
+      (is (= (cached-fn "a"                  8)))])
+
+   #?(:clj
+      (testing "TTL"
+        [(is (= (reset! cache-idx_ 0)           0))
+         (is (= (cached-fn :mem/del :mem/all) nil))
+
+         (is (= (cached-fn "foo") 1))
+         (is (= (cached-fn "foo") 1))
+
+         (do (Thread/sleep 1200) :sleep>ttl-ms)
+         (is (= (cached-fn "foo") 2))
+         (is (= (cached-fn "foo") 2))]))
+
+   (testing "Max size"
+     [(is (= (reset! cache-idx_ 0)           0))
+      (is (= (cached-fn :mem/del :mem/all) nil))
+
+      (is (= (cached-fn "infrequent-old")    1))
+      (is (= (cached-fn "infrequent-recent") 2))
+      (is (= (cached-fn "frequent")          3))
+
+      (do (dotimes [_ 100] (cached-fn "frequent")) :call>gc-every)
+
+      (is (= (cached-fn "frequent")          3) "Cache retained (freq & recent)")
+      (is (= (cached-fn "infrequent-recent") 2) "Cache retained (recent)")
+      (is (= (cached-fn "infrequent-old")    4) "Cache dropped")])])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

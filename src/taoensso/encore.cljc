@@ -2380,22 +2380,35 @@
         v1
         (recur)))))
 
-(defn memoize
-  "Like `core/memoize` but:
-    - Often faster, depending on opts.
-    - Prevents race conditions on writes.
-    - Supports auto invalidation & gc with `ttl-ms` opt.
-    - Supports cache size limit & gc with `cache-size` opt.
-    - Supports invalidation by prepending args with `:mem/del` or `:mem/fresh`."
+(defn cache
+  "Returns a cached version of given referentially transparent function `f`.
 
+  Like `core/memoize` but:
+    - Often faster, depending on options.
+    - Prevents race conditions on writes.
+    - Supports cache invalidation by prepending args with:
+      - `:mem/del`   ; Delete cached item for subsequent args, returns nil.
+      - `:mem/fresh` ; Renew  cached item for subsequent args, returns new val.
+
+    - Supports options:
+      - `ttl-ms` ; Expire cached items after <this> many msecs.
+      - `size`   ; Restrict cache size to <this> many items at the next garbage
+                 ; collection (GC).
+
+      - `gc-every` ; Run garbage collection (GC) approximately once every
+                   ; <this> many calls to cached fn. If unspecified, GC rate
+                   ; will be determined automatically based on `size`.
+
+  See also `defn-cached`, `fmemoize`, `memoize-last`."
+
+  {:added "v3.36.0 (2022-11-18)"}
   ([f] ; De-raced, commands
    #?(:cljs
       (let [cache_ (volatile! {})
             get-sentinel (js-obj)]
 
-        (fn [& xs]
+        (fn cached [& xs]
           (let [x1 (first xs)]
-
             (cond
               (kw-identical? x1 :mem/del)
               (let [xn (next  xs)
@@ -2426,7 +2439,6 @@
 
           ([& xs]
            (let [x1 (first xs)]
-
              (cond
                (kw-identical? x1 :mem/del)
                (let [xn (next  xs)
@@ -2444,149 +2456,162 @@
                :else
                @(or (.get cache_ xs)
                   (let [dv (delay (apply f xs))]
-                    (or (.putIfAbsent cache_ xs dv) dv)))))))))) 
+                    (or (.putIfAbsent cache_ xs dv) dv))))))))))
 
-  ([ttl-ms f] ; De-raced, commands, ttl, gc
-   (have? pos-int? ttl-ms)
-   (let [gc-now? gc-now?
-         cache_  (atom nil) ; {<args> <SimpleCacheEntry>}
-         latch_  (atom nil) ; Used to pause writes during gc
-         ttl-ms  (long ttl-ms)]
+  ([{:keys [size ttl-ms gc-every]} f]
 
-     (fn [& args]
-       (let [a1 (first args)]
-         (cond
-           (kw-identical? a1 :mem/del)
-           (let [argn (next  args)
-                 a2   (first argn)]
-             (if (kw-identical? a2 :mem/all)
-               (reset! cache_ nil)
-               (swap!  cache_ dissoc argn))
-             nil)
+   (have? [:or nil? pos-int?] size ttl-ms gc-every)
 
-           :else
-           (let [instant (now-udt*)]
+   (cond
+     size ; De-raced, commands, ttl, gc, max-size
+     (let [gc-now?  gc-now?
+           ticker   (counter)
+           cache_   (atom nil) ; {<args> <TickedCacheEntry>}
+           latch_   (atom nil) ; Used to pause writes during gc
+           ttl-ms   (long (or ttl-ms 0))
+           ttl?     (not (zero? ttl-ms))
+           size     (long size)
+           gc-every (long (or gc-every (clamp-int 1000 16000 size)))]
 
-             (when (gc-now? 1e-4)
-               (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
-                 (-if-cas! latch_ nil latch
-                   (do
-                     (swap! cache_
-                       (fn [m]
-                         (persistent!
-                           (reduce-kv
-                             (fn [acc k ^SimpleCacheEntry e]
-                               (if (> (- instant (.-udt e)) ttl-ms)
-                                 (dissoc! acc k)
-                                 acc))
-                             (transient (or m {}))
-                             m))))
+       (fn cached [& args]
+         (let [a1 (first args)]
+           (cond
+             (kw-identical? a1 :mem/del)
+             (let [argn (next args)
+                   a2   (first argn)]
+               (if (kw-identical? a2 :mem/all)
+                 (reset! cache_ nil)
+                 (swap!  cache_ dissoc argn))
+               nil)
 
-                     #?(:clj (.countDown latch))
-                     #?(:clj (reset! latch_ nil))))))
+             :else
+             (let [^long tick (ticker) ; Always inc, even on reads
+                   instant (if ttl? (now-udt*) 0)]
 
-             (let [fresh? (kw-identical? a1 :mem/fresh)
-                   args   (if fresh? (next args) args)
-                   ^SimpleCacheEntry e
-                   (-swap-val! cache_ args
-                     (fn [?e]
-                       (if (or (nil? ?e) fresh?
-                               (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
-                         (do
-                           #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
-                           (SimpleCacheEntry. (delay (apply f args)) instant))
-                         ?e)))]
-               @(.-delay e))))))))
+               (when (and
+                       ;; We anyway have a tick, so may as well be exact
+                       ;; (gc-now? gc-rate)
+                       (== (rem tick gc-every) 0)
+                       (>= (count @cache_) (* 1.1 size)))
 
-  ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
-   (have? pos-int? cache-size)
-   (let [gc-rate (max (/ 1.0 (long cache-size)) 1e-4)]
-     (memoize cache-size gc-rate ttl-ms f)))
+                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
+                   (-if-cas! latch_ nil latch
+                     (do
+                       ;; First prune ttl-expired stuff
+                       (when ttl?
+                         (swap! cache_
+                           (fn [m]
+                             (persistent!
+                               (reduce-kv
+                                 (fn [acc k ^TickedCacheEntry e]
+                                   (if (> (- instant (.-udt e)) ttl-ms)
+                                     (dissoc! acc k)
+                                     acc))
+                                 (transient (or m {}))
+                                 m)))))
 
-  ;; Arity :added "v3.36.0 (2022-11-17)"
-  ([cache-size gc-rate ttl-ms f]
-   (have? [:or nil? pos-int?] ttl-ms)
-   (have? pos-int? cache-size)
-   (let [gc-now?    gc-now?
-         tick_      (atom 0)
-         cache_     (atom nil) ; {<args> <TickedCacheEntry>}
-         latch_     (atom nil) ; Used to pause writes during gc
-         ttl-ms     (long (or ttl-ms 0))
-         ttl-ms?    (not (zero? ttl-ms))
-         cache-size (long  cache-size)
-         gc-rate    (as-pnum! gc-rate)]
+                       ;; Then prune by ascending (worst) tick-sum:
+                       (let [snapshot @cache_
+                             n-to-gc  (- (count snapshot) size)]
 
-     (fn [& args]
-       (let [a1 (first args)]
-         (cond
-           (kw-identical? a1 :mem/del)
-           (let [argn (next args)
-                 a2   (first argn)]
-             (if (kw-identical? a2 :mem/all)
-               (reset! cache_ nil)
-               (swap!  cache_ dissoc argn))
-             nil)
+                         (when (>= n-to-gc (* 0.1 size))
+                           (let [ks-to-gc
+                                 (top n-to-gc
+                                   (fn [k]
+                                     (let [e ^TickedCacheEntry (get snapshot k)]
+                                       (+ (.-tick-lru e) (.-tick-lfu e))))
+                                   (keys snapshot))]
 
-           :else
-           (let [instant (if ttl-ms? (now-udt*) 0)]
-             (when (and
-                     (gc-now? gc-rate)
-                     (>= (count @cache_) (* 1.1 cache-size)))
+                             (swap! cache_
+                               (fn [m]
+                                 (persistent!
+                                   (reduce (fn [acc in] (dissoc! acc in))
+                                     (transient (or m {})) ks-to-gc)))))))
 
-               (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
-                 (-if-cas! latch_ nil latch
-                   (do
-                     ;; First prune ttl-expired stuff
-                     (when ttl-ms?
+                       #?(:clj (.countDown latch))
+                       #?(:clj (reset! latch_ nil))))))
+
+               (let [fresh?(kw-identical? a1 :mem/fresh)
+                     args  (if fresh? (next args) args)
+
+                     ^TickedCacheEntry e
+                     (-swap-val! cache_ args
+                       (fn [?e]
+                         #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
+                         (if (or (nil? ?e) fresh?
+                               (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
+                           (TickedCacheEntry. (delay (apply f args)) instant tick 1)
+                           (let [e ^TickedCacheEntry ?e]
+                             (TickedCacheEntry. (.-delay e) (.-udt e)
+                               tick (inc (.-tick-lfu e)))))))]
+
+                 @(.-delay e)))))))
+
+     ttl-ms ; De-raced, commands, ttl, gc
+     (let [gc-now? gc-now?
+           cache_  (atom nil) ; {<args> <SimpleCacheEntry>}
+           latch_  (atom nil) ; Used to pause writes during gc
+           ttl-ms  (long ttl-ms)
+           gc-rate
+           (let [gce (or gc-every 8e3)]
+             (/ 1.0 (long gce)))]
+
+       (fn cached [& args]
+         (let [a1 (first args)]
+           (cond
+             (kw-identical? a1 :mem/del)
+             (let [argn (next  args)
+                   a2   (first argn)]
+               (if (kw-identical? a2 :mem/all)
+                 (reset! cache_ nil)
+                 (swap!  cache_ dissoc argn))
+               nil)
+
+             :else
+             (let [instant (now-udt*)]
+
+               (when (gc-now? gc-rate)
+                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
+                   (-if-cas! latch_ nil latch
+                     (do
                        (swap! cache_
                          (fn [m]
                            (persistent!
                              (reduce-kv
-                               (fn [acc k ^TickedCacheEntry e]
+                               (fn [acc k ^SimpleCacheEntry e]
                                  (if (> (- instant (.-udt e)) ttl-ms)
                                    (dissoc! acc k)
                                    acc))
                                (transient (or m {}))
-                               m)))))
+                               m))))
 
-                     ;; Then prune by ascending (worst) tick-sum:
-                     (let [snapshot @cache_
-                           n-to-gc  (- (count snapshot) cache-size)]
+                       #?(:clj (.countDown latch))
+                       #?(:clj (reset! latch_ nil))))))
 
-                       (when (>= n-to-gc (* 0.1 cache-size))
-                         (let [ks-to-gc
-                               (top n-to-gc
-                                 (fn [k]
-                                   (let [e ^TickedCacheEntry (get snapshot k)]
-                                     (+ (.-tick-lru e) (.-tick-lfu e))))
-                                 (keys snapshot))]
+               (let [fresh? (kw-identical? a1 :mem/fresh)
+                     args   (if fresh? (next args) args)
+                     ^SimpleCacheEntry e
+                     (-swap-val! cache_ args
+                       (fn [?e]
+                         (if (or (nil? ?e) fresh?
+                               (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
+                           (do
+                             #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
+                             (SimpleCacheEntry. (delay (apply f args)) instant))
+                           ?e)))]
+                 @(.-delay e)))))))
 
-                           (swap! cache_
-                             (fn [m]
-                               (persistent!
-                                 (reduce (fn [acc in] (dissoc! acc in))
-                                   (transient (or m {})) ks-to-gc)))))))
+     :else (cache f))))
 
-                     #?(:clj (.countDown latch))
-                     #?(:clj (reset! latch_ nil))))))
+(comment :see-tests)
 
-             (let [fresh?(kw-identical? a1 :mem/fresh)
-                   args  (if fresh? (next args) args)
-
-                   ;;; We always adjust counters, even on reads:
-                   ^long tick (swap! tick_ (fn [^long n] (inc n)))
-                   ^TickedCacheEntry e
-                   (-swap-val! cache_ args
-                     (fn [?e]
-                       #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
-                       (if (or (nil? ?e) fresh?
-                               (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
-                         (TickedCacheEntry. (delay (apply f args)) instant tick 1)
-                         (let [e ^TickedCacheEntry ?e]
-                           (TickedCacheEntry. (.-delay e) (.-udt e)
-                             tick (inc (.-tick-lfu e)))))))]
-
-               @(.-delay e)))))))))
+(defn memoize
+  "Alternative way to call `cache`, provided mostly for back compatibility.
+  See `cache` docstring for details."
+  ;; {:deprecated "v3.36.0 (2022-11-18)"}
+  ([            f] (cache                             f))
+  ([     ttl-ms f] (cache {           :ttl-ms ttl-ms} f))
+  ([size ttl-ms f] (cache {:size size :ttl-ms ttl-ms} f)))
 
 (comment
   (do
@@ -2598,8 +2623,8 @@
     (def f5 (memoize 2 5000       f0))
     (def f6 (fmemoize             f0)))
 
-  (qb 1e5 (f1)    (f2)    (f3)    (f4)    (f5)    (f6))    ; [ 7.6  6.42 14.77 13.77 19.31 6.7]
-  (qb 1e5 (f1 :x) (f2 :x) (f3 :x) (f4 :x) (f5 :x) (f6 :x)) ; [13.73 8.57 33.92 29.32 37.81 4.6]
+  (qb 1e5 (f1)    (f2)    (f3)    (f4)    (f5)    (f6))    ; [ 5.4  3.95 16.56 13.98 18.01 3.97]
+  (qb 1e5 (f1 :x) (f2 :x) (f3 :x) (f4 :x) (f5 :x) (f6 :x)) ; [14.71 8.96 31.27 37.37 45.42 6.76]
 
   (let [f1 (clojure.core/memoize (fn [] (Thread/sleep 5) (print "f1\n")))
         f2 (memoize              (fn [] (Thread/sleep 5) (print "f2\n")))]
@@ -2608,10 +2633,39 @@
       (future (f2)) ; Never prints >once
       (future (f1))))
 
-  (do ; Test GC
+  (do ; Test GC (monitor JVM memory)
     (defn f1 [_] (vec (repeatedly 1000 #(str (rand)))))
     (def  m1 (memoize 500 (ms :days 3) f1))
     (dotimes [n 1e5] (m1 (rand)))))
+
+(defmacro defn-cached
+  "Defines a cached function.
+  Like (def <sym> (cache <cache-opts> <body...>)), but preserves
+  :arglists (arity) metadata as with `defn`:
+
+    (defn-cached ^:private my-fn {:ttl-ms 500}
+      \"Does something interesting, caches resultes for 500 msecs\"
+      [n]
+      (rand-int n))"
+
+  {:added "v3.36.0 (2022-11-18)"}
+  [sym cache-opts & body]
+  (let [arglists ; e.g. '([x] [x y])
+        (let [[_ sigs] (name-with-attrs sym body)]
+          (if (vector? (first sigs))
+            (list      (first sigs))
+            (map first sigs)))
+
+        [sym body]
+        (name-with-attrs sym body
+          {:arglists `'~arglists})]
+
+    (have? map?                               cache-opts)
+    (have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
+
+    `(def ~sym (cache ~cache-opts (fn ~@body)))))
+
+(comment :see-tests)
 
 ;;;; Rate limits
 
