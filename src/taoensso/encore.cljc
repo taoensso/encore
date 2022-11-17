@@ -34,7 +34,11 @@
     [fix]  - Fix broken behaviour (=> usu. non-breaking)
     [new]  - Add new    behaviour (=>      non-breaking)
     [nop]  - Unmodified behaviour (=>      non-breaking implementation or non-code changes, etc.)
-    [x][y] - Single commit with multiple tags (in priority order), try avoid"
+    [x][y] - Single commit with multiple tags (in priority order), try avoid
+
+  Example commit messages:
+    v1.0.0 (2022-01-27) ; Tagged release
+    [new] [#122] Add new feature x (@contributor)"
 
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
