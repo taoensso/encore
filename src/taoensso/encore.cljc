@@ -96,7 +96,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let -cond cond defonce
-        cond! catching -if-cas! now-dt* now-udt* now-nano* min* max* -gc-now?
+        cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
 (def encore-version [3 35 1])
@@ -2357,14 +2357,11 @@
                (let [dv (delay (f x1 x2 x3))]
                  (or (.putIfAbsent cachen_ xs dv) dv)))))))))
 
-(defmacro -gc-now? [rate]
-  `(if-clj
-     (<= (java.lang.Math/random) ~rate)
-     (<=       (.random js/Math) ~rate)))
+(defn- gc-now? [rate]
+  #?(:clj  (<= (java.lang.Math/random) ^double rate)
+     :cljs (<=       (.random js/Math)         rate)))
 
-(comment
-  (do           (-gc-now? 0.5))
-  (macroexpand '(-gc-now? 0.5)))
+(comment (qb 1e6 (gc-now? 0.5)))
 
 (deftype SimpleCacheEntry [delay ^long udt])
 (deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
@@ -2450,9 +2447,10 @@
 
   ([ttl-ms f] ; De-raced, commands, ttl, gc
    (have? pos-int? ttl-ms)
-   (let [cache_ (atom nil) ; {<args> <SimpleCacheEntry>}
-         latch_ (atom nil) ; Used to pause writes during gc
-         ttl-ms (long ttl-ms)]
+   (let [gc-now? gc-now?
+         cache_  (atom nil) ; {<args> <SimpleCacheEntry>}
+         latch_  (atom nil) ; Used to pause writes during gc
+         ttl-ms  (long ttl-ms)]
 
      (fn [& args]
        (let [a1 (first args)]
@@ -2468,7 +2466,7 @@
            :else
            (let [instant (now-udt*)]
 
-             (when (-gc-now? 1e-4)
+             (when (gc-now? 1e-4)
                (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                  (-if-cas! latch_ nil latch
                    (do
@@ -2500,15 +2498,22 @@
                @(.-delay e))))))))
 
   ([cache-size ttl-ms f] ; De-raced, commands, ttl, gc, max-size
+   (have? pos-int? cache-size)
+   (let [gc-rate (max (/ 1.0 (long cache-size)) 1e-4)]
+     (memoize cache-size gc-rate ttl-ms f)))
+
+  ;; Arity :added "v3.36.0 (2022-11-17)"
+  ([cache-size gc-rate ttl-ms f]
    (have? [:or nil? pos-int?] ttl-ms)
    (have? pos-int? cache-size)
-   (let [tick_      (atom 0)
+   (let [gc-now?    gc-now?
+         tick_      (atom 0)
          cache_     (atom nil) ; {<args> <TickedCacheEntry>}
          latch_     (atom nil) ; Used to pause writes during gc
          ttl-ms     (long (or ttl-ms 0))
          ttl-ms?    (not (zero? ttl-ms))
          cache-size (long  cache-size)
-         gc-rate    (max (/ 1.0 cache-size) 1e-4)]
+         gc-rate    (as-pnum! gc-rate)]
 
      (fn [& args]
        (let [a1 (first args)]
@@ -2524,7 +2529,7 @@
            :else
            (let [instant (if ttl-ms? (now-udt*) 0)]
              (when (and
-                     (-gc-now? gc-rate)
+                     (gc-now? gc-rate)
                      (>= (count @cache_) (* 1.1 cache-size)))
 
                (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
@@ -2639,12 +2644,14 @@
            {:keys [req-id-fn]
             :or   {req-id-fn identity}} opts ; Undocumented
 
+           gc-now? gc-now?
+
            f1
            (fn [rid peek?]
              (let [instant (now-udt*)
                    rid (req-id-fn rid)]
 
-               (when (and (not peek?) (-gc-now? 1.6e-4))
+               (when (and (not peek?) (gc-now? 1.6e-4))
                  (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                    (-if-cas! latch_ nil latch
                      (do
