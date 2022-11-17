@@ -2641,17 +2641,20 @@
            reqs_  (atom nil) ; {<rid> {<sid> <LimitEntry>}}
            specs  (coerce-limit-specs specs) ; {<sid> <LimitSpec>}
 
-           {:keys [req-id-fn]
-            :or   {req-id-fn identity}} opts ; Undocumented
+           {:keys [req-id-fn gc-every]
+            :or   {req-id-fn identity
+                   gc-every  1.6e4}}
+           opts ; Undocumented
 
            gc-now? gc-now?
+           gc-rate (let [gce (long gc-every)] (/ 1.0 gce))
 
            f1
            (fn [rid peek?]
              (let [instant (now-udt*)
                    rid (req-id-fn rid)]
 
-               (when (and (not peek?) (gc-now? 1.6e-4))
+               (when (and (not peek?) (gc-now? gc-rate))
                  (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
                    (-if-cas! latch_ nil latch
                      (do
