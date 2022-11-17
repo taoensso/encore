@@ -350,16 +350,17 @@
    (cond! :if-let [a nil] a (= 1 0) "1=0" #_"default")])
 
 (defn name-with-attrs
-  "Given a symbol and args, returns [<name-with-attrs-meta> <args>] with
-  support for `defn` style `?docstring` and `?attrs-map`."
+  "Given a symbol and args, returns [<name-with-attrs-meta> <args> <attrs>]
+  with support for `defn` style `?docstring` and `?attrs-map`."
   ([sym args            ] (name-with-attrs sym args nil))
   ([sym args attrs-merge]
    (let [[?docstring args] (if (and (string? (first args)) (next args)) [(first args) (next args)] [nil args])
          [attrs      args] (if (and (map?    (first args)) (next args)) [(first args) (next args)] [{}  args])
          attrs (if ?docstring (assoc attrs :doc ?docstring) attrs)
-         attrs (if (meta sym) (conj (meta sym) attrs) attrs)
+         attrs (if-let [m (meta sym)] (conj m attrs) attrs)
          attrs (conj attrs attrs-merge)]
-     [(with-meta sym attrs) args])))
+
+     [(with-meta sym attrs) args attrs])))
 
 (defmacro defonce
   "Like `core/defonce` but supports optional docstring and attrs map."
