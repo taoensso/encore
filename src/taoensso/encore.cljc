@@ -1063,8 +1063,8 @@
 (defn- try-pred [pred x] (catching (pred x) _ false))
 (defn #?(:clj when? :cljs ^boolean when?) [pred x] (when (try-pred pred x) x))
 (defn is! "Cheaper `have!` that provides less diagnostic info."
-  ([     x           ] (is! identity x nil)) ; Nb different to single-arg `have`
-  ([pred x           ] (is! identity x nil))
+  ([     x           ] (is! some? x nil)) ; Nb different to single-arg `have`
+  ([pred x           ] (is! pred  x nil))
   ([pred x fail-?data]
    (if (try-pred pred x)
      x
@@ -1072,7 +1072,7 @@
        (ex-info (str "`is!` " (str pred) " failure against arg: " (pr-str x))
          {:given x :type (type x) :fail-?data fail-?data})))))
 
-(comment [(is! false) (when-let [n (when? nneg? (as-?int 37))] n)])
+(comment [(is! false) (is! nil) (is! string? 5)])
 
 (defn -as-throw [as-name x]
   (throw (ex-info (str "`as-" (name as-name) "` failed against: `" (pr-str x) "`")
