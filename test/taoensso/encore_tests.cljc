@@ -20,6 +20,18 @@
 
 ;;;;
 
+(deftest _truss-invariants
+  ;; Tested properly in Truss, just confirm successful imports here
+  [(is (= (enc/have  string? "foo") "foo"))
+   (is (= (enc/have! string? "foo") "foo"))
+   (is (= (enc/have? string? "foo")  true))
+   (is (enc/throws? (enc/have string? 5)))
+   (is (enc/throws? :any
+         {:data {:dynamic :dynamic-data
+                 :arg     :arg-data}}
+         (enc/with-truss-data :dynamic-data
+           (enc/have? string? 5 :data :arg-data))))])
+
 (deftest _submap?
   [(is (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
    (is (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
