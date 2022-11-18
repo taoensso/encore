@@ -473,8 +473,8 @@
   (defalias taoensso.truss/have!)
   (defalias taoensso.truss/have?)
   (defalias taoensso.truss/have!?)
-  (defalias taoensso.truss/get-data)
-  (defalias taoensso.truss/with-data))
+  (defalias get-truss-data  taoensso.truss/get-data)
+  (defalias with-truss-data taoensso.truss/with-data))
 
 ;;;; Edn
 
