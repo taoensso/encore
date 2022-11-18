@@ -1065,8 +1065,12 @@
 (declare assoc-some)
 
 (defn- try-pred [pred x] (catching (pred x) _ false))
-(defn #?(:clj when? :cljs ^boolean when?) [pred x] (when (try-pred pred x) x))
-(defn is! "Cheaper `have!` that provides less diagnostic info."
+
+#?(:clj  (defn          when? [pred x] (when (try-pred pred x) x))
+   :cljs (defn ^boolean when? [pred x] (when (try-pred pred x) x)))
+
+(defn is!
+  "Lightweight `have!` that provides less diagnostic info."
   ([     x     ] (is! some? x nil)) ; Nb different to single-arg `have`
   ([pred x     ] (is! pred  x nil))
   ([pred x data]
@@ -1079,7 +1083,7 @@
             :arg  {:value x :type (type x)}}
            :data data))))))
 
-(comment [(is! false) (is! nil) (is! string? 5)])
+(comment [(is! false) (is! nil) (is! string? 5) (when? string? "foo")])
 
 (defn -as-throw [kind x]
   (throw
@@ -1374,7 +1378,7 @@
   ([kind nplaces n]
    (let [n        (double n)
          modifier (when nplaces (Math/pow 10.0 nplaces))
-         n*       (if-not modifier n (* n ^double modifier))
+         n*       (if modifier (* n ^double modifier) n)
          rounded
          (case kind
            ;;; Note same API for both #?(:clj _ :cljs: _)
