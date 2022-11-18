@@ -264,7 +264,7 @@
         (:if-let :if-some :if-not)
         (if (empty? more) ; Missing 3rd clause
           (throw
-            (ex-info (str "`encore/cond`: missing `then` clause for special test keyword: " test)
+            (ex-info (str "[encore/cond] Missing `then` clause for special test keyword: " test)
               {:test-form test :expr-form expr}))
 
           (case test
@@ -275,7 +275,7 @@
 
         (if (keyword? test)
           (throw ; Undocumented, but throws at compile-time so easy to catch
-            (ex-info (str "`encore/cond`: unrecognized special test keyword: " test)
+            (ex-info (str "[encore/cond] Unrecognized special test keyword: " test)
               {:test-form test :expr-form expr}))
 
           (if (vector? test) ; Undocumented
@@ -287,7 +287,8 @@
               `(if ~test ~expr    (-cond ~throw? ~@more)))))))
 
     (when throw?
-      `(throw (ex-info "`encore/cond!`: no matching clause" {})))))
+      `(throw
+         (ex-info "[encore/cond!] No matching clause" {})))))
 
 (defmacro cond
   "Like `core/cond` but supports implicit final `else` clause, and special
@@ -497,8 +498,9 @@
    (if (or (nil? s) (identical? s ""))
      nil
      (if-not (string? s)
-       (throw (ex-info "`read-edn` attempt against non-nil, non-string arg"
-                {:given s :type (type s)}))
+       (throw
+         (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
+           {:arg {:value s :type (type s)}}))
 
        (let [readers (get opts :readers ::dynamic)
              default (get opts :default ::dynamic)
@@ -1060,25 +1062,32 @@
       ["foo" "foo@" "foo@bar" "Foo@BAR.com"
        "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"])))
 
+(declare assoc-some)
+
 (defn- try-pred [pred x] (catching (pred x) _ false))
 (defn #?(:clj when? :cljs ^boolean when?) [pred x] (when (try-pred pred x) x))
 (defn is! "Cheaper `have!` that provides less diagnostic info."
-  ([     x           ] (is! some? x nil)) ; Nb different to single-arg `have`
-  ([pred x           ] (is! pred  x nil))
-  ([pred x fail-?data]
+  ([     x     ] (is! some? x nil)) ; Nb different to single-arg `have`
+  ([pred x     ] (is! pred  x nil))
+  ([pred x data]
    (if (try-pred pred x)
      x
      (throw
-       (ex-info (str "`is!` " (str pred) " failure against arg: " (pr-str x))
-         {:given x :type (type x) :fail-?data fail-?data})))))
+       (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
+         (assoc-some
+           {:pred pred
+            :arg  {:value x :type (type x)}}
+           :data data))))))
 
 (comment [(is! false) (is! nil) (is! string? 5)])
 
-(defn -as-throw [as-name x]
-  (throw (ex-info (str "`as-" (name as-name) "` failed against: `" (pr-str x) "`")
-           {:given x :type (type x)})))
+(defn -as-throw [kind x]
+  (throw
+    (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
+      {:pred-kind kind
+       :arg {:value x :type (type x)}})))
 
-(do
+(let [-as-throw -as-throw]
   (defn as-nzero             [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
   (defn as-nblank            [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
   (defn as-nblank-trim       [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
@@ -1361,19 +1370,22 @@
 (defn abs [n]     (if (neg? n) (- n) n)) ; #?(:clj (Math/abs n)) reflects
 (defn round* ; round
   ([             n] (round* :round nil n))
-  ([type         n] (round* type   nil n))
-  ([type nplaces n]
+  ([kind         n] (round* kind   nil n))
+  ([kind nplaces n]
    (let [n        (double n)
          modifier (when nplaces (Math/pow 10.0 nplaces))
          n*       (if-not modifier n (* n ^double modifier))
          rounded
-         (case type
+         (case kind
            ;;; Note same API for both #?(:clj _ :cljs: _)
            :round (Math/round n*) ; Round to nearest int or nplaces
            :floor (Math/floor n*) ; Round down to -inf
            :ceil  (Math/ceil  n*) ; Round up to +inf
            :trunc (long n*)       ; Round up/down toward zero
-           (throw (ex-info "Unrecognized round type" {:given type})))]
+           (throw
+             (ex-info "[encore/round*] Unexpected round kind (expected ∈ #{:round :floor :ceil :trunc})"
+               {:kind {:value kind :type (type kind)}})))]
+
      (if-not modifier
        (long rounded)                        ; Returns long
        (/ (double rounded) ^double modifier) ; Returns double
@@ -2810,8 +2822,9 @@
 
              :else
              (throw
-               (ex-info "Unrecognized rate limiter command"
-                 {:given cmd :req-id req-id})))))]))))
+               (ex-info "[encore/limiter*] Unexpected limiter command"
+                 {:command {:value cmd :type (type cmd)}
+                  :req-id req-id})))))]))))
 
 (defn limiter ; rate-limiter
   "Takes {<spec-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
@@ -3160,7 +3173,7 @@
      It's often a good idea to normalize strings before exchange or storage,
      especially if you're going to be querying against those string.
 
-     `form` is e/o #{:nfc :nfkc :nfd :nfkd <java.text.NormalizerForm>}.
+     `form` is ∈ #{:nfc :nfkc :nfd :nfkd <java.text.NormalizerForm>}.
      Defaults to :nfc as per W3C recommendation."
 
      ([     s] (norm-str :nfc s))
@@ -3175,8 +3188,8 @@
           (if (instance? java.text.Normalizer$Form form)
             form
             (throw
-              (ex-info "Unrecognized normalization form"
-                {:form form :type (type form)}))))))))
+              (ex-info "[encore/norm-str] Unrecognized normalization form (expected ∈ #{:nfc :nfkc :nfd :nfkd <java.text.Normalizer$Form>})"
+                {:form {:value form :type (type form)}}))))))))
 
 (comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
 
@@ -3639,8 +3652,8 @@
 #?(:clj
    (defn get-sys-bool
      "If `prop-id` JVM property or `env-id` environment variable are set:
-       - Returns `true`  if set value is e/o #{\"1\" \"t\" \"true\" \"T\" \"TRUE\"}
-       - Returns `false` if set value is e/o #{\"0\" \"f\" \"false\"\"F\" \"FALSE\"}
+       - Returns `true`  if set value is ∈ #{\"true\"  \"1\" \"t\" \"T\" \"TRUE\"}
+       - Returns `false` if set value is ∈ #{\"false\" \"0\" \"f\" \"F\" \"FALSE\"}
        - Otherwise throws
 
      Returns `default` if neither property nor environment variable is set."
@@ -3650,7 +3663,7 @@
          ("1" "t" "true"  "T" "TRUE")  true
          ("0" "f" "false" "F" "FALSE") false
          (throw
-           (ex-info "Unexpected `get-sys-bool` value"
+           (ex-info "[encore/get-sys-bool] Unexpected value (expected ∈ #{ \"true\" \"false\" ...})"
              {:value   sv
               :prop-id prop-id
               :env-id  env-id
@@ -3666,7 +3679,7 @@
        (try
          (slurp (io/reader r))
          (catch Exception e
-           (throw (ex-info "Failed to slurp resource" {:rname rname} e)))))))
+           (throw (ex-info "[encore/slurp-resource] Slurp failed" {:rname rname} e)))))))
 
 #?(:clj
    (defn get-file-resource-?last-modified
@@ -3748,7 +3761,9 @@
                (future (try (f) (finally (.release s))))
                (do
                  (.release s)
-                 (throw (ex-info "Not a fn" {:given f :type (type f)})))))]
+                 (throw
+                   (ex-info "[encore/future-pool] Unexpected arg type (expected function)"
+                     {:arg {:value f :type (type f)}})))))]
 
        (fn fp
          ([ ] (.acquire s n) (.release s n) true)
@@ -3911,9 +3926,9 @@
        }
        (fn async-callback-fn [resp-map]
          (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
-           ;; ?status - e/o #{nil 200 404 ...}, non-nil iff server responded
-           ;; ?error  - e/o #{nil <http-error-status-code> <exception> :timeout
-                              :abort :http-error :exception :xhr-pool-depleted}
+           ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
+           ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
+                            :abort :http-error :exception :xhr-pool-depleted}
            (js/alert (str \"Ajax response: \" resp-map)))))
 
      [1] Ref. https://developers.google.com/closure/library/docs/xhrio"
@@ -4210,9 +4225,9 @@
 ;;;; Stubs
 
 (do
-  #?(:cljs (defn -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "Attempting to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
-  #?(:cljs (defn -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "Unstub value must be a fn"     {:given f :type (type f)}))))
-     :clj  (defn -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "Unstub value must be a symbol" {:given s :type (type s)})))))
+  #?(:cljs (defn -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
+  #?(:cljs (defn -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected fn)"     {:unstub {:value f :type (type f)}}))))
+     :clj  (defn -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)" {:unstub {:value s :type (type s)}})))))
   #?(:clj
      (defmacro -intern-stub [ns stub-sym stub-var src]
        (-assert-unstub-val src)
@@ -4333,8 +4348,8 @@
 
           :else
           (throw
-            (ex-info "Unexpected compile spec type"
-              {:given spec :type (type spec)}))))]
+            (ex-info "[enc/compile-str-filter] Unexpected spec type"
+              {:spec {:value spec :type (type spec)}}))))]
 
   (defn compile-str-filter
     "Compiles given spec and returns a fast (fn conform? [?in-str]).
@@ -4385,7 +4400,7 @@
           deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) false true)))
           :else
           (throw
-            (ex-info "compile-str-filter: `allow-spec` and `deny-spec` cannot both be nil"
+            (ex-info "[encore/compile-str-filter] `allow-spec` and `deny-spec` cannot both be nil"
               {:allow-spec allow-spec :deny-spec deny-spec})))))))
 
 (comment
@@ -4568,7 +4583,7 @@
 #?(:clj
    (defmacro deprecated
      "Elides body when `taoensso.elide-deprecated` JVM property or
-     `TAOENSSO_ELIDE_DEPRECATED` environment variable is e/o #{\"true\" \"TRUE\"}."
+     `TAOENSSO_ELIDE_DEPRECATED` environment variable is ∈ #{\"true\" \"TRUE\"}."
      [& body]
      (if (get-sys-bool false
            "taoensso.elide-deprecated"
