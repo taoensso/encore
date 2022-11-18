@@ -982,7 +982,7 @@
   ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
   ;; `keyword-identical?`. This util helps alleviate the pain of writing
   ;; cross-platform code, Ref. http://goo.gl/be8CGP
-  #?(:clj  (defalias     kw-identical?         identical?)
+  #?(:clj  (def          kw-identical?         identical?)
      :cljs (def ^boolean kw-identical? keyword-identical?)))
 
 ;;;; Type coercions
