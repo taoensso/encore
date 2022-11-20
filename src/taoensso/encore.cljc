@@ -461,7 +461,7 @@
          attrs (dissoc attrs :link?)]
 
      `(if-cljs
-        (def ~sym @(var ~src))
+        (def ~sym ~src)
         (let [attrs# (conj (-alias-meta (var ~src)) ~attrs)]
           (alter-meta! (def ~sym @(var ~src)) conj attrs#)
           (when ~link? (-link-var (var ~sym) (var ~src)))
