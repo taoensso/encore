@@ -105,9 +105,10 @@
   (set! *unchecked-math* :warn-on-boxed)
   (set! *unchecked-math* false))
 
-(do ; Bootstrap Truss aliases
-  (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args))
-  (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args)))
+#?(:clj
+   (do ; Bootstrap Truss aliases
+     (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args))
+     (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args))))
 
 (comment (test/run-tests))
 
@@ -149,91 +150,98 @@
 ;;; (:ns &env) is nnil iff compiling for ClojureScript, giving us a way to
 ;;; write macros that produce different Clj/Cljs code (not something that
 ;;; .cljx or .cljc currently provide support for):
-(defmacro if-clj  [then & [else]] (if (:ns &env) else then))
-(defmacro if-cljs [then & [else]] (if (:ns &env) then else))
+#?(:clj (defmacro if-clj  {:style/indent 1} [then & [else]] (if (:ns &env) else then)))
+#?(:clj (defmacro if-cljs {:style/indent 1} [then & [else]] (if (:ns &env) then else)))
 
-(defmacro if-let
-  "Like `core/if-let` but can bind multiple values for `then` iff all tests
-  are truthy, supports internal unconditional `:let`s."
-  {:style/indent 1}
-  ([bindings then     ] `(if-let ~bindings ~then nil))
-  ([bindings then else]
-   (let [s (seq bindings)]
-     (if s ; (if-let [] true false) => true
-       (let [[b1 b2 & bnext] s]
-         (if (= b1 :let)
-           `(let      ~b2  (if-let ~(vec bnext) ~then ~else))
-           `(let [b2# ~b2]
-              (if b2#
-                (let [~b1 b2#]
-                  (if-let ~(vec bnext) ~then ~else))
-                ~else))))
-       then))))
+#?(:clj
+   (defmacro if-let
+     "Like `core/if-let` but can bind multiple values for `then` iff all tests
+     are truthy, supports internal unconditional `:let`s."
+     {:style/indent 1}
+     ([bindings then     ] `(if-let ~bindings ~then nil))
+     ([bindings then else]
+      (let [s (seq bindings)]
+        (if s ; (if-let [] true false) => true
+          (let [[b1 b2 & bnext] s]
+            (if (= b1 :let)
+              `(let      ~b2  (if-let ~(vec bnext) ~then ~else))
+              `(let [b2# ~b2]
+                 (if b2#
+                   (let [~b1 b2#]
+                     (if-let ~(vec bnext) ~then ~else))
+                   ~else))))
+          then)))))
 
-(defmacro if-some
-  "Like `core/if-some` but can bind multiple values for `then` iff all tests
-  are non-nil, supports internal unconditional `:let`s."
-  {:style/indent 1}
-  ([bindings then] `(if-some ~bindings ~then nil))
-  ([bindings then else]
-   (let [s (seq bindings)]
-     (if s ; (if-some [] true false) => true
-       (let [[b1 b2 & bnext] s]
-         (if (= b1 :let)
-           `(let      ~b2  (if-some ~(vec bnext) ~then ~else))
-           `(let [b2# ~b2]
-              (if (nil? b2#)
-                ~else
-                (let [~b1 b2#]
-                  (if-some ~(vec bnext) ~then ~else))))))
-       then))))
+#?(:clj
+   (defmacro if-some
+     "Like `core/if-some` but can bind multiple values for `then` iff all tests
+     are non-nil, supports internal unconditional `:let`s."
+     {:style/indent 1}
+     ([bindings then] `(if-some ~bindings ~then nil))
+     ([bindings then else]
+      (let [s (seq bindings)]
+        (if s ; (if-some [] true false) => true
+          (let [[b1 b2 & bnext] s]
+            (if (= b1 :let)
+              `(let      ~b2  (if-some ~(vec bnext) ~then ~else))
+              `(let [b2# ~b2]
+                 (if (nil? b2#)
+                   ~else
+                   (let [~b1 b2#]
+                     (if-some ~(vec bnext) ~then ~else))))))
+          then)))))
 
-(defmacro if-not
-  "Like `core/if-not` but acts like `if-let` when given a binding vector
-  as test expr."
-  ;; Also avoids unnecessary `(not test)`
-  {:style/indent 1}
-  ([test-or-bindings then]
-   (if (vector? test-or-bindings)
-     `(if-let ~test-or-bindings nil ~then)
-     `(if     ~test-or-bindings nil ~then)))
+#?(:clj
+   (defmacro if-not
+     "Like `core/if-not` but acts like `if-let` when given a binding vector
+     as test expr."
+     ;; Also avoids unnecessary `(not test)`
+     {:style/indent 1}
+     ([test-or-bindings then]
+      (if (vector? test-or-bindings)
+        `(if-let ~test-or-bindings nil ~then)
+        `(if     ~test-or-bindings nil ~then)))
 
-  ([test-or-bindings then else]
-   (if (vector? test-or-bindings)
-     `(if-let ~test-or-bindings ~else ~then)
-     `(if     ~test-or-bindings ~else ~then))))
+     ([test-or-bindings then else]
+      (if (vector? test-or-bindings)
+        `(if-let ~test-or-bindings ~else ~then)
+        `(if     ~test-or-bindings ~else ~then)))))
 
-(defmacro when
-  "Like `core/when` but acts like `when-let` when given a binding vector
-  as test expr."
-  {:style/indent 1}
-  [test-or-bindings & body]
-  (if (vector? test-or-bindings)
-    `(if-let ~test-or-bindings (do ~@body) nil)
-    `(if     ~test-or-bindings (do ~@body) nil)))
+#?(:clj
+   (defmacro when
+     "Like `core/when` but acts like `when-let` when given a binding vector
+     as test expr."
+     {:style/indent 1}
+     [test-or-bindings & body]
+     (if (vector? test-or-bindings)
+       `(if-let ~test-or-bindings (do ~@body) nil)
+       `(if     ~test-or-bindings (do ~@body) nil))))
 
-(defmacro when-not
-  "Like `core/when-not` but acts like `when-let` when given a binding vector
-  as test expr."
-  {:style/indent 1}
-  [test-or-bindings & body]
-  (if (vector? test-or-bindings)
-    `(if-let ~test-or-bindings nil (do ~@body))
-    `(if     ~test-or-bindings nil (do ~@body))))
+#?(:clj
+   (defmacro when-not
+     "Like `core/when-not` but acts like `when-let` when given a binding vector
+     as test expr."
+     {:style/indent 1}
+     [test-or-bindings & body]
+     (if (vector? test-or-bindings)
+       `(if-let ~test-or-bindings nil (do ~@body))
+       `(if     ~test-or-bindings nil (do ~@body)))))
 
-(defmacro when-some
-  {:style/indent 1}
-  [test-or-bindings & body]
-  (if (vector? test-or-bindings)
-    `(if-some       ~test-or-bindings  (do ~@body) nil)
-    `(if      (nil? ~test-or-bindings) nil (do ~@body))))
+#?(:clj
+   (defmacro when-some
+     {:style/indent 1}
+     [test-or-bindings & body]
+     (if (vector? test-or-bindings)
+       `(if-some       ~test-or-bindings  (do ~@body) nil)
+       `(if      (nil? ~test-or-bindings) nil (do ~@body)))))
 
-(defmacro when-let
-  "Like `core/when-let` but can bind multiple values for `body` iff all tests
-  are truthy, supports internal unconditional `:let`s."
-  {:style/indent 1}
-  ;; Now a feature subset of all-case `when`
-  [bindings & body] `(if-let ~bindings (do ~@body)))
+#?(:clj
+   (defmacro when-let
+     "Like `core/when-let` but can bind multiple values for `body` iff all tests
+     are truthy, supports internal unconditional `:let`s."
+     {:style/indent 1}
+     ;; Now a feature subset of all-case `when`
+     [bindings & body] `(if-let ~bindings (do ~@body))))
 
 (comment
   (if-let   [a :a b (= a :a)] [a b] "else")
@@ -242,80 +250,83 @@
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
 
-(defmacro -cond [throw? & clauses]
-  (if-let [[test expr & more] (seq clauses)]
-    (if-not (next clauses)
-      test ; Implicit else
-      (case test
-        (true :else :default)       expr                             ; Faster than (if <truthy> ...)
-        (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
-        :do          `(do          ~expr     (-cond ~throw? ~@more))
-        :let         `(let         ~expr     (-cond ~throw? ~@more))
-        :binding     `(binding     ~expr     (-cond ~throw? ~@more))
+#?(:clj
+   (defmacro -cond [throw? & clauses]
+     (if-let [[test expr & more] (seq clauses)]
+       (if-not (next clauses)
+         test ; Implicit else
+         (case test
+           (true :else :default)       expr                             ; Faster than (if <truthy> ...)
+           (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
+           :do          `(do          ~expr     (-cond ~throw? ~@more))
+           :let         `(let         ~expr     (-cond ~throw? ~@more))
+           :binding     `(binding     ~expr     (-cond ~throw? ~@more))
 
-        :with-redefs `(with-redefs ~expr     (-cond ~throw? ~@more)) ; Undocumented
-        :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
-        :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
-        :when        `(when        ~expr     (-cond ~throw? ~@more)) ; ''
-        :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; ''
-        :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; ''
+           :with-redefs `(with-redefs ~expr     (-cond ~throw? ~@more)) ; Undocumented
+           :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
+           :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
+           :when        `(when        ~expr     (-cond ~throw? ~@more)) ; ''
+           :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; ''
+           :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; ''
 
-        ;;; 3-clause cases
-        (:if-let :if-some :if-not)
-        (if (empty? more) ; Missing 3rd clause
-          (throw
-            (ex-info (str "[encore/cond] Missing `then` clause for special test keyword: " test)
-              {:test-form test :expr-form expr}))
+           ;;; 3-clause cases
+           (:if-let :if-some :if-not)
+           (if (empty? more) ; Missing 3rd clause
+             (throw
+               (ex-info (str "[encore/cond] Missing `then` clause for special test keyword: " test)
+                 {:test-form test :expr-form expr}))
 
-          (case test
-            :if-let  `(if-let  ~expr ~(first more) (-cond ~throw? ~@(next more)))
-            :if-some `(if-some ~expr ~(first more) (-cond ~throw? ~@(next more)))
-            :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))) ; Undocumented
-            ))
+             (case test
+               :if-let  `(if-let  ~expr ~(first more) (-cond ~throw? ~@(next more)))
+               :if-some `(if-some ~expr ~(first more) (-cond ~throw? ~@(next more)))
+               :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))) ; Undocumented
+               ))
 
-        (if (keyword? test)
-          (throw ; Undocumented, but throws at compile-time so easy to catch
-            (ex-info (str "[encore/cond] Unrecognized special test keyword: " test)
-              {:test-form test :expr-form expr}))
+           (if (keyword? test)
+             (throw ; Undocumented, but throws at compile-time so easy to catch
+               (ex-info (str "[encore/cond] Unrecognized special test keyword: " test)
+                 {:test-form test :expr-form expr}))
 
-          (if (vector? test) ; Undocumented
-            `(if-let ~test ~expr (-cond ~throw? ~@more))
+             (if (vector? test) ; Undocumented
+               `(if-let ~test ~expr (-cond ~throw? ~@more))
 
-            ;; Experimental, assumes `not` = `core/not`:
-            (if (and (list? test) (= (first test) 'not))
-              `(if ~(second test) (-cond ~throw? ~@more) ~expr)
-              `(if ~test ~expr    (-cond ~throw? ~@more)))))))
+               ;; Experimental, assumes `not` = `core/not`:
+               (if (and (list? test) (= (first test) 'not))
+                 `(if ~(second test) (-cond ~throw? ~@more) ~expr)
+                 `(if ~test ~expr    (-cond ~throw? ~@more)))))))
 
-    (when throw?
-      `(throw
-         (ex-info "[encore/cond!] No matching clause" {})))))
+       (when throw?
+         `(throw
+            (ex-info "[encore/cond!] No matching clause" {}))))))
 
-(defmacro cond
-  "Like `core/cond` but supports implicit final `else` clause, and special
-  clause keywords for advanced behaviour:
+#?(:clj
+   (defmacro cond
+     "Like `core/cond` but supports implicit final `else` clause, and special
+     clause keywords for advanced behaviour:
 
-  (cond
-    :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
-    :binding [*x* \"x\"] ; Establish dynamic binding/s for remaining forms
-    :do      (println (str \"x value: \" x)) ; Eval expr for side effects
+     (cond
+       :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
+       :binding [*x* \"x\"] ; Establish dynamic binding/s for remaining forms
+       :do      (println (str \"x value: \" x)) ; Eval expr for side effects
 
-    :if-let [y \"y\"
-             z nil]
-    \"y and z were both truthy\"
+       :if-let [y \"y\"
+                z nil]
+       \"y and z were both truthy\"
 
-    :if-some [y \"y\"
-              z nil]
-    \"y and z were both non-nil\")
+       :if-some [y \"y\"
+                 z nil]
+       \"y and z were both non-nil\")
 
-  :let support inspired by https://github.com/Engelberg/better-cond.
-  Simple, flexible way to eliminate deeply-nested control flow code."
+     :let support inspired by https://github.com/Engelberg/better-cond.
+     Simple, flexible way to eliminate deeply-nested control flow code."
 
-  ;; Also avoids unnecessary `(if :else ...)`, etc.
-  [& clauses] `(-cond false ~@clauses))
+     ;; Also avoids unnecessary `(if :else ...)`, etc.
+     [& clauses] `(-cond false ~@clauses)))
 
-(defmacro cond!
-  "Like `cond` but throws on non-match like `case` and `condp`."
-  [& clauses] `(-cond true ~@clauses))
+#?(:clj
+   (defmacro cond!
+     "Like `cond` but throws on non-match like `case` and `condp`."
+     [& clauses] `(-cond true ~@clauses)))
 
 (comment
   [(macroexpand-all '(clojure.core/cond nil "a" nil "b" :else "c"))
@@ -363,14 +374,15 @@
 
      [(with-meta sym attrs) args attrs])))
 
-(defmacro defonce
-  "Like `core/defonce` but supports optional docstring and attrs map."
-  {:style/indent 1}
-  [sym & args]
-  (let [[sym body] (name-with-attrs sym args)]
-    `(if-cljs
-          (cljs.core/defonce ~sym ~@body)
-       (clojure.core/defonce ~sym ~@body))))
+#?(:clj
+   (defmacro defonce
+     "Like `core/defonce` but supports optional docstring and attrs map."
+     {:style/indent 1}
+     [sym & args]
+     (let [[sym body] (name-with-attrs sym args)]
+       `(if-cljs
+             (cljs.core/defonce ~sym ~@body)
+          (clojure.core/defonce ~sym ~@body)))))
 
 #?(:clj
    (defn compiling-cljs?
@@ -407,35 +419,38 @@
           ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
           ~(when default default)))))
 
-(do
-  (defmacro do-nil   [& body] `(do ~@body nil))
-  (defmacro do-false [& body] `(do ~@body false))
-  (defmacro do-true  [& body] `(do ~@body true)))
+#?(:clj
+   (do
+     (defmacro do-nil   [& body] `(do ~@body nil))
+     (defmacro do-false [& body] `(do ~@body false))
+     (defmacro do-true  [& body] `(do ~@body true))))
 
-(defmacro doto-cond
-  "Cross between `doto`, `cond->` and `as->`."
-  {:style/indent 1}
-  [[sym x] & clauses]
-  (assert (even? (count clauses)))
-  (let [g (gensym)
-        pstep (fn [[test-expr step]]
-                `(when-let [~sym ~test-expr] (-> ~g ~step)))]
-    `(let [~g ~x]
-       ~@(map pstep (partition 2 clauses))
-       ~g)))
+#?(:clj
+   (defmacro doto-cond
+     "Cross between `doto`, `cond->` and `as->`."
+     {:style/indent 1}
+     [[sym x] & clauses]
+     (assert (even? (count clauses)))
+     (let [g (gensym)
+           pstep (fn [[test-expr step]]
+                   `(when-let [~sym ~test-expr] (-> ~g ~step)))]
+       `(let [~g ~x]
+          ~@(map pstep (partition 2 clauses))
+          ~g))))
 
-(defmacro declare-remote
-  "Declares given ns-qualified symbols, preserving metadata. Useful for
-  circular dependencies."
-  [& syms]
-  (let [original-ns (str *ns*)]
-    `(do ~@(map (fn [s]
-                  (let [ns (namespace s)
-                        v  (name      s)
-                        m  (meta      s)]
-                    `(do (in-ns  '~(symbol ns))
-                         (declare ~(with-meta (symbol v) m))))) syms)
-         (in-ns '~(symbol original-ns)))))
+#?(:clj
+   (defmacro declare-remote
+     "Declares given ns-qualified symbols, preserving metadata. Useful for
+     circular dependencies."
+     [& syms]
+     (let [original-ns (str *ns*)]
+       `(do ~@(map (fn [s]
+                     (let [ns (namespace s)
+                           v  (name      s)
+                           m  (meta      s)]
+                       `(do (in-ns  '~(symbol ns))
+                            (declare ~(with-meta (symbol v) m))))) syms)
+            (in-ns '~(symbol original-ns))))))
 
 (defn -alias-meta [src-var] (select-keys (meta src-var) [:doc :arglists :private :macro :added :deprecated]))
 #?(:clj
@@ -445,27 +460,28 @@
          (alter-var-root dst      (constantly @src))
          (alter-meta!    dst conj (-alias-meta src))))))
 
-(defmacro defalias
-  "Defines an alias for qualified source symbol, preserving its metadata (clj only):
-    (defalias my-map-alias clojure.core/map)
+#?(:clj
+   (defmacro defalias
+     "Defines an alias for qualified source symbol, preserving its metadata (clj only):
+     (defalias my-map-alias clojure.core/map)
 
-  Cannot alias Cljs macros.
-  Changes to source are not automatically applied to alias."
-  ;; TODO Any way to reliably preserve cljs metadata? See #53, commit 2a63a29, etc.
+     Cannot alias Cljs macros.
+     Changes to source are not automatically applied to alias."
+     ;; TODO Any way to reliably preserve cljs metadata? See #53, commit 2a63a29, etc.
 
-  ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
-  ([sym src      ] `(defalias ~sym                 ~src nil))
-  ([sym src attrs]
-   (let [attrs (if (string? attrs) {:doc attrs} attrs) ; Back compatibility
-         link? (:link? attrs) ; Currently undocumented
-         attrs (dissoc attrs :link?)]
+     ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
+     ([sym src      ] `(defalias ~sym                 ~src nil))
+     ([sym src attrs]
+      (let [attrs (if (string? attrs) {:doc attrs} attrs) ; Back compatibility
+            link? (:link? attrs) ; Currently undocumented
+            attrs (dissoc attrs :link?)]
 
-     `(if-cljs
-        (def ~sym ~src)
-        (let [attrs# (conj (-alias-meta (var ~src)) ~attrs)]
-          (alter-meta! (def ~sym @(var ~src)) conj attrs#)
-          (when ~link? (-link-var (var ~sym) (var ~src)))
-          (var ~sym))))))
+        `(if-cljs
+           (def ~sym ~src)
+           (let [attrs# (conj (-alias-meta (var ~src)) ~attrs)]
+             (alter-meta! (def ~sym @(var ~src)) conj attrs#)
+             (when ~link? (-link-var (var ~sym) (var ~src)))
+             (var ~sym)))))))
 
 (comment
   (defn foo [x] (* x x x))
@@ -474,13 +490,15 @@
 
 ;;;; Truss aliases (for back compatibility, convenience)
 
-(do
-  (defalias taoensso.truss/have)
-  (defalias taoensso.truss/have!)
-  (defalias taoensso.truss/have?)
-  (defalias taoensso.truss/have!?)
-  (defalias get-truss-data  taoensso.truss/get-data)
-  (defalias with-truss-data taoensso.truss/with-data))
+#?(:clj
+   (do
+     (defalias taoensso.truss/have)
+     (defalias taoensso.truss/have!)
+     (defalias taoensso.truss/have?)
+     (defalias taoensso.truss/have!?)
+     (defalias with-truss-data taoensso.truss/with-data)))
+
+(defalias get-truss-data taoensso.truss/get-data)
 
 ;;;; Edn
 
@@ -548,41 +566,42 @@
 
 ;;;; Errors
 
-(defmacro catching
-  "Cross-platform try/catch/finally."
-  ;; Very unfortunate that CLJ-1293 has not yet been addressed
-  ([try-expr                                             ] `(catching ~try-expr :all ~'__       nil         nil))
-  ([try-expr            error-sym catch-expr             ] `(catching ~try-expr :all ~error-sym ~catch-expr nil))
-  ([try-expr            error-sym catch-expr finally-expr] `(catching ~try-expr :all ~error-sym ~catch-expr ~finally-expr))
-  ([try-expr error-type error-sym catch-expr finally-expr]
-   (case error-type
-     (:common :default) ; `:default` is a poor name, here only for back compatibility
-     (if (nil? finally-expr)
-       `(if-cljs
-          (try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
-          (try ~try-expr (catch Exception ~error-sym ~catch-expr)))
-       `(if-cljs
-          (try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
-          (try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
+#?(:clj
+   (defmacro catching
+     "Cross-platform try/catch/finally."
+     ;; Very unfortunate that CLJ-1293 has not yet been addressed
+     ([try-expr                                             ] `(catching ~try-expr :all ~'__       nil         nil))
+     ([try-expr            error-sym catch-expr             ] `(catching ~try-expr :all ~error-sym ~catch-expr nil))
+     ([try-expr            error-sym catch-expr finally-expr] `(catching ~try-expr :all ~error-sym ~catch-expr ~finally-expr))
+     ([try-expr error-type error-sym catch-expr finally-expr]
+      (case error-type
+        (:common :default) ; `:default` is a poor name, here only for back compatibility
+        (if (nil? finally-expr)
+          `(if-cljs
+             (try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
+             (try ~try-expr (catch Exception ~error-sym ~catch-expr)))
+          `(if-cljs
+             (try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
+             (try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
 
-     (:all :any)
-     ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
-     (if (nil? finally-expr)
-       `(if-cljs
-          (try ~try-expr (catch :default  ~error-sym ~catch-expr))
-          (try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
-       `(if-cljs
-          (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
-          (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
+        (:all :any)
+        ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
+        (if (nil? finally-expr)
+          `(if-cljs
+             (try ~try-expr (catch :default  ~error-sym ~catch-expr))
+             (try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
+          `(if-cljs
+             (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
+             (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
 
-     ;; Specific error-type provided
-     (if (nil? finally-expr)
-       `(if-cljs
-          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
-          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
-       `(if-cljs
-          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
-          (try ~try-expr (catch ~error-type ~error-sym ~catch-expr)))))))
+        ;; Specific error-type provided
+        (if (nil? finally-expr)
+          `(if-cljs
+             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
+             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
+          `(if-cljs
+             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
+             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))))))))
 
 (comment
   (macroexpand '(catching (do "foo") e e (println "finally")))
@@ -620,9 +639,10 @@
   (error-data (Exception. "foo"))
   (error-data (ex-info    "foo" {:bar :baz})))
 
-(defmacro caught-error-data
-  "Handy for error-throwing unit tests."
-  [& body] `(catching (do ~@body nil) e# (error-data e#)))
+#?(:clj
+   (defmacro caught-error-data
+     "Handy for error-throwing unit tests."
+     [& body] `(catching (do ~@body nil) e# (error-data e#))))
 
 (comment (caught-error-data (/ 5 0)))
 
@@ -678,36 +698,38 @@
   (-matching-error :default #"Test"           (ex-info "Test" {:a :b}))
   (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
 
-(defmacro throws
-  "Like `throws?`, but returns ?matching-error instead of true/false."
-  {:added "v3.31.0 (2022-10-27)"}
-  ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
-  ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
-  ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t))))
+#?(:clj
+   (defmacro throws
+     "Like `throws?`, but returns ?matching-error instead of true/false."
+     {:added "v3.31.0 (2022-10-27)"}
+     ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
+     ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
+     ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t)))))
 
-(defmacro throws?
-  "Evals `form` and returns true iff it throws an error that matches given
-  criteria:
+#?(:clj
+   (defmacro throws?
+     "Evals `form` and returns true iff it throws an error that matches given
+     criteria:
 
-    - `c` may be:
-      - A predicate function, (fn match? [x]) -> bool
-      - A class (e.g. ArithmeticException, AssertionError, etc.)
-      - `:all`    => any    platform error (Throwable or js/Error, etc.)
-      - `:common` => common platform error (Exception or js/Error)
+       - `c` may be:
+         - A predicate function, (fn match? [x]) -> bool
+         - A class (e.g. ArithmeticException, AssertionError, etc.)
+         - `:all`    => any    platform error (Throwable or js/Error, etc.)
+         - `:common` => common platform error (Exception or js/Error)
 
-    - `pattern` may be:
-      - A string or Regex against which `ex-message` will be matched.
-      - A map             against which `ex-data`    will be matched.
+       - `pattern` may be:
+         - A string or Regex against which `ex-message` will be matched.
+         - A map             against which `ex-data`    will be matched.
 
-  Useful for unit tests, e.g.:
-    (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
+     Useful for unit tests, e.g.:
+       (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
 
-  See also `throws`."
+     See also `throws`."
 
-  {:added "v3.31.0 (2022-10-27)"}
-  ([          form] `(boolean (throws             ~form)))
-  ([c         form] `(boolean (throws ~c          ~form)))
-  ([c pattern form] `(boolean (throws ~c ~pattern ~form))))
+     {:added "v3.31.0 (2022-10-27)"}
+     ([          form] `(boolean (throws             ~form)))
+     ([c         form] `(boolean (throws ~c          ~form)))
+     ([c pattern form] `(boolean (throws ~c ~pattern ~form)))))
 
 (comment :see-tests)
 
@@ -1126,21 +1148,23 @@
 
 ;;;; Validation
 
-(defmacro check-some
-  "Returns first logical false/throwing expression (id/form), or nil."
-  ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
-  ([test       ]
-   (let [[error-id test] (if (vector? test) test [nil test])]
-     `(let [[test# err#] (catching [~test nil] err# [nil err#])]
-        (when-not test# (or ~error-id '~test :check/falsey))))))
+#?(:clj
+   (defmacro check-some
+     "Returns first logical false/throwing expression (id/form), or nil."
+     ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
+     ([test       ]
+      (let [[error-id test] (if (vector? test) test [nil test])]
+        `(let [[test# err#] (catching [~test nil] err# [nil err#])]
+           (when-not test# (or ~error-id '~test :check/falsey)))))))
 
-(defmacro check-all
-  "Returns all logical false/throwing expressions (ids/forms), or nil."
-  ([test       ] `(check-some ~test))
-  ([test & more]
-   `(let [errors# (filterv identity
-                    [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
-      (not-empty errors#))))
+#?(:clj
+   (defmacro check-all
+     "Returns all logical false/throwing expressions (ids/forms), or nil."
+     ([test       ] `(check-some ~test))
+     ([test & more]
+      `(let [errors# (filterv identity
+                       [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
+         (not-empty errors#)))))
 
 (comment
   (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
@@ -1360,15 +1384,16 @@
 (defn    pnum-complement ^double [pnum] (- 1.0 (double pnum)))
 (defn as-pnum-complement ^double [x   ] (- 1.0 (as-pnum   x)))
 
-(do ; These will pass primitives through w/o reflection
-  (defmacro <=*    [x y z]       `(let [y# ~y] (and (<= ~x y#) (<= y# ~z))))
-  (defmacro >=*    [x y z]       `(let [y# ~y] (and (>= ~x y#) (>= y# ~z))))
-  (defmacro <*     [x y z]       `(let [y# ~y] (and (<  ~x y#) (<  y# ~z))))
-  (defmacro >*     [x y z]       `(let [y# ~y] (and (>  ~x y#) (>  y# ~z))))
-  (defmacro min*   [n1 n2]       `(let [n1# ~n1 n2# ~n2] (if (> n1# n2#) n2# n1#)))
-  (defmacro max*   [n1 n2]       `(let [n1# ~n1 n2# ~n2] (if (< n1# n2#) n2# n1#)))
-  (defmacro clamp* [nmin nmax n] `(let [nmin# ~nmin nmax# ~nmax n# ~n]
-                                    (if (< n# nmin#) nmin# (if (> n# nmax#) nmax# n#)))))
+#?(:clj
+   (do ; These will pass primitives through w/o reflection
+     (defmacro <=*    [x y z]       `(let [y# ~y] (and (<= ~x y#) (<= y# ~z))))
+     (defmacro >=*    [x y z]       `(let [y# ~y] (and (>= ~x y#) (>= y# ~z))))
+     (defmacro <*     [x y z]       `(let [y# ~y] (and (<  ~x y#) (<  y# ~z))))
+     (defmacro >*     [x y z]       `(let [y# ~y] (and (>  ~x y#) (>  y# ~z))))
+     (defmacro min*   [n1 n2]       `(let [n1# ~n1 n2# ~n2] (if (> n1# n2#) n2# n1#)))
+     (defmacro max*   [n1 n2]       `(let [n1# ~n1 n2# ~n2] (if (< n1# n2#) n2# n1#)))
+     (defmacro clamp* [nmin nmax n] `(let [nmin# ~nmin nmax# ~nmax n# ~n]
+                                       (if (< n# nmin#) nmin# (if (> n# nmax#) nmax# n#))))))
 
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n)) ; #?(:clj (Math/abs n)) reflects
@@ -1906,7 +1931,7 @@
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))
         (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
 
-(defmacro new-object [] `(if-cljs (cljs.core/js-obj) (Object.)))
+#?(:clj (defmacro new-object [] `(if-cljs (cljs.core/js-obj) (Object.))))
 
 (let [not-found (new-object)]
   (defn -merge-with [nest? f maps]
@@ -2052,13 +2077,14 @@
   (def ^:private ^:const atom-tag 'clojure.lang.IAtom)
   (def ^:private ^:const atom-tag 'clojure.lang.Atom))
 
-(defmacro -if-cas! "Micro optimization, mostly for cljs."
-  [atom_ old-val new-val then & [?else]]
-  `(if-cljs
-     (do (reset! ~atom_ ~new-val) ~then)
-     (if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
-       ~then
-       ~?else)))
+#?(:clj
+   (defmacro -if-cas! "Micro optimization, mostly for cljs."
+     [atom_ old-val new-val then & [?else]]
+     `(if-cljs
+        (do (reset! ~atom_ ~new-val) ~then)
+        (if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
+          ~then
+          ~?else))))
 
 (defn- -reset-k0!
   "Impln. for 0-key resets"
@@ -2297,8 +2323,8 @@
 ;;;; Instants
 
 (do
-  (defmacro now-dt*   [] `(if-cljs           (js/Date.)  (java.util.Date.)))
-  (defmacro now-udt*  [] `(if-cljs (.getTime (js/Date.)) (System/currentTimeMillis)))
+  #?(:clj (defmacro now-dt*   [] `(if-cljs           (js/Date.)  (java.util.Date.))))
+  #?(:clj (defmacro now-udt*  [] `(if-cljs (.getTime (js/Date.)) (System/currentTimeMillis))))
   (defn  now-dt       [] (now-dt*))
   (defn now-udt ^long [] (now-udt*))
 
@@ -2314,7 +2340,7 @@
            (fn [] (* 1000000 (now-udt*))))
          (fn []   (* 1000000 (now-udt*))))))
 
-  (defmacro now-nano* [] `(if-cljs (now-nano) (System/nanoTime))))
+  #?(:clj (defmacro now-nano* [] `(if-cljs (now-nano) (System/nanoTime)))))
 
 ;;;; Memoization
 
@@ -2654,32 +2680,33 @@
     (def  m1 (memoize 500 (ms :days 3) f1))
     (dotimes [n 1e5] (m1 (rand)))))
 
-(defmacro defn-cached
-  "Defines a cached function.
-  Like (def <sym> (cache <cache-opts> <body...>)), but preserves
-  :arglists (arity) metadata as with `defn`:
+#?(:clj
+   (defmacro defn-cached
+     "Defines a cached function.
+     Like (def <sym> (cache <cache-opts> <body...>)), but preserves
+     :arglists (arity) metadata as with `defn`:
 
-    (defn-cached ^:private my-fn {:ttl-ms 500}
-      \"Does something interesting, caches resultes for 500 msecs\"
-      [n]
-      (rand-int n))"
+       (defn-cached ^:private my-fn {:ttl-ms 500}
+         \"Does something interesting, caches resultes for 500 msecs\"
+         [n]
+         (rand-int n))"
 
-  {:added "v3.36.0 (2022-11-18)"}
-  [sym cache-opts & body]
-  (let [arglists ; e.g. '([x] [x y])
-        (let [[_ sigs] (name-with-attrs sym body)]
-          (if (vector? (first sigs))
-            (list      (first sigs))
-            (map first sigs)))
+     {:added "v3.36.0 (2022-11-18)"}
+     [sym cache-opts & body]
+     (let [arglists ; e.g. '([x] [x y])
+           (let [[_ sigs] (name-with-attrs sym body)]
+             (if (vector? (first sigs))
+               (list      (first sigs))
+               (map first sigs)))
 
-        [sym body]
-        (name-with-attrs sym body
-          {:arglists `'~arglists})]
+           [sym body]
+           (name-with-attrs sym body
+             {:arglists `'~arglists})]
 
-    (have? map?                               cache-opts)
-    (have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
+       (have? map?                               cache-opts)
+       (have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
 
-    `(def ~sym (cache ~cache-opts (fn ~@body)))))
+       `(def ~sym (cache ~cache-opts (fn ~@body))))))
 
 (comment :see-tests)
 
@@ -3372,8 +3399,9 @@
 
 (comment (const-str= "foo" ""))
 
-(defmacro thread-local-proxy
-  [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body))))
+#?(:clj
+   (defmacro thread-local-proxy
+     [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body)))))
 
 #?(:clj
    (compile-if (fn [] (java.security.SecureRandom/getInstanceStrong)) ; Java 8+, blocking
@@ -3588,8 +3616,9 @@
 (comment #=(ms   :years 88 :months 3 :days 33)
          #=(secs :years 88 :months 3 :days 33))
 
-(defmacro msecs "Compile-time version of `ms`" [& opts]
-  (eval `(taoensso.encore/ms ~@opts)))
+#?(:clj
+   (defmacro msecs "Compile-time version of `ms`" [& opts]
+     (eval `(taoensso.encore/ms ~@opts))))
 
 (comment (macroexpand '(msecs :weeks 3)))
 
@@ -3637,14 +3666,15 @@
 
 ;;;; Macro env
 
-(defmacro get-env []
-  (let [ks (reduce
-             (fn [acc in]
-               (if (str-starts-with? (name in) "__") ; Hide privates
-                 acc ; Strip primitive tags which can cause issues:
-                 (conj acc (without-meta in))))
-             [] (keys &env))]
-    `(zipmap '~ks ~ks)))
+#?(:clj
+   (defmacro get-env []
+     (let [ks (reduce
+                (fn [acc in]
+                  (if (str-starts-with? (name in) "__") ; Hide privates
+                    acc ; Strip primitive tags which can cause issues:
+                    (conj acc (without-meta in))))
+                [] (keys &env))]
+       `(zipmap '~ks ~ks))))
 
 (comment [(let [x :x] (get-env)) ((fn [^long x] (get-env)) 0)])
 
@@ -3794,27 +3824,32 @@
 
 ;;;; Benchmarking
 
-(defmacro time-ms "Returns number of milliseconds it took to execute body."
-  [& body] `(let [t0# (now-udt*)] ~@body (- (now-udt*) t0#)))
+#?(:clj
+   (defmacro time-ms "Returns number of milliseconds it took to execute body."
+     [& body] `(let [t0# (now-udt*)] ~@body (- (now-udt*) t0#))))
 
-(defmacro time-ns "Returns number of nanoseconds it took to execute body."
-  [& body] `(let [t0# (now-nano*)] ~@body (- (now-nano*) t0#)))
+#?(:clj
+   (defmacro time-ns "Returns number of nanoseconds it took to execute body."
+     [& body] `(let [t0# (now-nano*)] ~@body (- (now-nano*) t0#))))
 
-(defmacro quick-bench "Returns fastest of 3 sets of times for each form, in msecs."
-  ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
-  ([nlaps form]
-   `(let [nlaps# ~nlaps
-          ;; 3 warmup sets, 3 working sets:
-          [nsets# nlaps#] (if (vector? nlaps#) nlaps# [6 nlaps#])
-          [nsets# nlaps#] (have pos-num? nsets# nlaps#)]
-      (round2
-        (/ (double
-             (reduce min
-               (for [_# (range nsets#)]
-                 (time-ns (dotimes [_# nlaps#] (do ~form))))))
-          1e6)))))
+#?(:clj
+   (defmacro quick-bench
+     "Returns fastest of 3 sets of times for each form, in msecs."
+     ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
+     ([nlaps form]
+      `(let [nlaps# ~nlaps
+             ;; 3 warmup sets, 3 working sets:
+             [nsets# nlaps#] (if (vector? nlaps#) nlaps# [6 nlaps#])
+             [nsets# nlaps#] (have pos-num? nsets# nlaps#)]
+         (round2
+           (/ (double
+                (reduce min
+                  (for [_# (range nsets#)]
+                    (time-ns (dotimes [_# nlaps#] (do ~form))))))
+             1e6))))))
 
-(defmacro qb [& args] `(quick-bench ~@args)) ; Alias
+#?(:clj (defalias qb quick-bench))
+
 (comment (qb [4 1e6] (first [:a]) (nth [:a] 0)))
 
 #?(:clj
@@ -3838,7 +3873,7 @@
          (println (str "Bench failure: " (.getMessage t)))
          -1))))
 
-(defmacro bench [nlaps opts & body] `(bench* ~nlaps ~opts (fn [] ~@body)))
+#?(:clj (defmacro bench [nlaps opts & body] `(bench* ~nlaps ~opts (fn [] ~@body))))
 
 ;;;; Browser stuff
 
@@ -4263,15 +4298,16 @@
             (defmacro ~(with-meta unstub-sym {:doc "Initializes stub"})
               [~'x] ; ~'sym for clj, ~'f for cljs
               `(if-cljs
-                   ;; In Cljs, a macro+fn can have the same name. Preference will be
-                   ;; given to the macro in contexts where both are applicable.
-                   ;; So there's 3 cases to consider:
-                   ;;   1. clj   stub: def var, clj macro
-                   ;;   2. cljs  stub: def volatile, 2 fns
-                   ;;   3. clj/s stub: def volatile, 2 fns, var, and clj/s macro
-                    (~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
+                 ;; In Cljs, a macro+fn can have the same name. Preference will be
+                 ;; given to the macro in contexts where both are applicable.
+                 ;; So there's 3 cases to consider:
+                 ;;   1. clj   stub: def var, clj macro
+                 ;;   2. cljs  stub: def volatile, 2 fns
+                 ;;   3. clj/s stub: def volatile, 2 fns, var, and clj/s macro
+                 (~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
                  (-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
                    ~stub-var# ~~'x))))))))
+
 
 (comment
   (defn- -foo ^long [y] (* y y))
@@ -4285,7 +4321,7 @@
     #?(:cljs (def cljs-thing "cljs-thing")
        :clj  (def clj-thing  "clj-thing"))
 
-    (defmacro cljs-macro [] `(if-cljs cljs-thing clj-thing))
+    #?(:clj (defmacro cljs-macro [] `(if-cljs cljs-thing clj-thing)))
 
     #?(:clj  (cljs-macro)
        :cljs (enc-macros/cljs-macro))
@@ -4569,11 +4605,12 @@
 
      (TimeoutFuture. f result__ udt #?(:clj latch)))))
 
-(defmacro after-timeout
-  "Alpha, subject to change.
-  Returns a TimeoutFuture that will execute body after timeout.
-  Body must be non-blocking or cheap."
-  [msecs & body] `(call-after-timeout ~msecs (fn [] ~@body)))
+#?(:clj
+   (defmacro after-timeout
+     "Alpha, subject to change.
+     Returns a TimeoutFuture that will execute body after timeout.
+     Body must be non-blocking or cheap."
+     [msecs & body] `(call-after-timeout ~msecs (fn [] ~@body))))
 
 (comment
   @(after-timeout 500 (println "foo") "bar")
@@ -4725,29 +4762,31 @@
   #?(:clj (defn merge-headers [rresp headers] (ring-merge-headers headers rresp)))
   #?(:clj (def  redirect-resp ring-redirect-resp))
 
-  (defmacro if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
-  (defmacro when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
-  (defmacro if-not*       [& args]  `(taoensso.encore/if-not        ~@args))
-  (defmacro cond*         [& args]  `(taoensso.encore/cond          ~@args))
-  (defmacro defonce*      [& args]  `(taoensso.encore/defonce       ~@args))
-  (defmacro have-in       [a1 & an] `(taoensso.encore/have  ~a1 :in ~@an))
-  (defmacro have-in!      [a1 & an] `(taoensso.encore/have! ~a1 :in ~@an))
-  (defmacro cond-throw    [& args]  `(taoensso.encore/cond!         ~@args))
-  (defmacro catch-errors* [& args]  `(taoensso.encore/catching      ~@args))
-  (defmacro use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
-  (defmacro nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
-  (defmacro qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
-  (defmacro catch-errors  [& body]
-    `(catching [(do ~@body) nil] e# [nil e#]))
+  #?(:clj
+     (do
+       (defmacro if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
+       (defmacro when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
+       (defmacro if-not*       [& args]  `(taoensso.encore/if-not        ~@args))
+       (defmacro cond*         [& args]  `(taoensso.encore/cond          ~@args))
+       (defmacro defonce*      [& args]  `(taoensso.encore/defonce       ~@args))
+       (defmacro have-in       [a1 & an] `(taoensso.encore/have  ~a1 :in ~@an))
+       (defmacro have-in!      [a1 & an] `(taoensso.encore/have! ~a1 :in ~@an))
+       (defmacro cond-throw    [& args]  `(taoensso.encore/cond!         ~@args))
+       (defmacro catch-errors* [& args]  `(taoensso.encore/catching      ~@args))
+       (defmacro use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
+       (defmacro nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
+       (defmacro qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
+       (defmacro catch-errors  [& body]
+         `(catching [(do ~@body) nil] e# [nil e#]))
 
- (defmacro -vol!       [val]           `(volatile!     ~val))
- (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
- (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
+       (defmacro -vol!       [val]           `(volatile!     ~val))
+       (defmacro -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
+       (defmacro -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
 
- (defmacro thrown
-   {:deprecated "v3.31.0 (2022-10-27)"
-    :doc "Prefer `throws`"}
-   [& args] `(throws ~@args))
+       (defmacro thrown
+         {:deprecated "v3.31.0 (2022-10-27)"
+          :doc "Prefer `throws`"}
+         [& args] `(throws ~@args))))
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn undefined->nil [x] (if (undefined? x) nil x)))
@@ -4763,11 +4802,12 @@
   ;; & coll changed to coll:
   (defn join-once [sep & coll] (str-join-once sep coll))
 
-  ;; Used by Carmine <= v2.7.0
-  (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
-  (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
-    [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))
-
+  #?(:clj
+     (do ;; Used by Carmine <= v2.7.0
+       (defmacro repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+       (defmacro repeatedly-into* "Deprecated" ; Used by Nippy < v2.10
+         [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))))
+  
   (defn nnil-set [x] (disj (ensure-set x) nil))
 
   ;;; Arg order changed for easier partials
@@ -4976,5 +5016,5 @@
   (def dswap! swap-in!*)
   (def swap!* swap-in!*)
 
-  (defalias taoensso.truss/get-dynamic-assertion-data)
-  (defalias taoensso.truss/with-dynamic-assertion-data))
+  #?(:clj (defalias taoensso.truss/get-dynamic-assertion-data))
+  #?(:clj (defalias taoensso.truss/with-dynamic-assertion-data)))
