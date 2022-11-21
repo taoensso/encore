@@ -67,6 +67,7 @@
       [clojure.string      :as str]
       [clojure.set         :as set]
       ;; [cljs.core.async  :as async]
+      [cljs.analyzer]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
       ;;[goog.crypt.base64 :as base64]
@@ -110,7 +111,9 @@
      (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args))
      (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args))))
 
-(comment (test/run-tests))
+(comment
+  (remove-ns 'taoensso.encore)
+  (test/run-tests))
 
 ;;;; TODO v4
 ;; - Drop previously deprecated vars
@@ -396,8 +399,8 @@
 
 ;;;; Core fns
 
-(def -core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
-(def -core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
+(def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
+(def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
 (declare merge update-in)
 
 #?(:cljs (defn ^boolean some? [x] (if (nil? x) false true))
@@ -452,41 +455,74 @@
                             (declare ~(with-meta (symbol v) m))))) syms)
             (in-ns '~(symbol original-ns))))))
 
-(defn -alias-meta [src-var] (select-keys (meta src-var) [:doc :arglists :private :macro :added :deprecated]))
+(defn- quote-arglists [m]
+  (if-let [x (get m :arglists)]
+    (assoc m :arglists `'~x)
+    (do    m)))
+
+(comment (quote-arglists {:a :A :arglists '([x])}))
+
+(defn- alias-src-attrs [m] (select-keys m [:doc :arglists :private :macro :added :deprecated]))
 #?(:clj
-   (defn -link-var [dst src]
-     (add-watch src dst
-       (fn [_ src old new]
-         (alter-var-root dst      (constantly @src))
-         (alter-meta!    dst conj (-alias-meta src))))))
+   (defn -alias-link-var [dst-var src-var #_dst-attrs]
+     (add-watch src-var dst-var
+       (fn [_ _ _ new-val]
+         ;; Note that src-var meta will not have been updated yet,
+         ;; so updating dst-var meta here is unfortunately not possible
+         (alter-var-root dst-var (fn [_] new-val))))))
 
 #?(:clj
    (defmacro defalias
-     "Defines an alias for qualified source symbol, preserving its metadata (clj only):
-     (defalias my-map-alias clojure.core/map)
+     "Defines a local alias for the var identified by the given qualified
+     source symbol, e.g.:
 
-     Cannot alias Cljs macros.
-     Changes to source are not automatically applied to alias."
-     ;; TODO Any way to reliably preserve cljs metadata? See #53, commit 2a63a29, etc.
+       (defalias my-map clojure.core/map)
 
-     ([    src      ] `(defalias ~(symbol (name src)) ~src nil))
-     ([sym src      ] `(defalias ~sym                 ~src nil))
-     ([sym src attrs]
-      (let [attrs (if (string? attrs) {:doc attrs} attrs) ; Back compatibility
-            link? (:link? attrs) ; Currently undocumented
-            attrs (dissoc attrs :link?)]
+     Source var's metadata will be preserved (docstring, arglists, etc.).
+     Changes to source var's value will also be applied to alias (Clj only)."
 
-        `(if-cljs
-           (def ~sym ~src)
-           (let [attrs# (conj (-alias-meta (var ~src)) ~attrs)]
-             (alter-meta! (def ~sym @(var ~src)) conj attrs#)
-             (when ~link? (-link-var (var ~sym) (var ~src)))
-             (var ~sym)))))))
+     ([          src-sym            ] `(defalias ~(symbol (name src-sym)) ~src-sym nil))
+     ([alias-sym src-sym            ] `(defalias ~alias-sym               ~src-sym nil))
+     ([alias-sym src-sym alias-attrs]
+      (-have? symbol? alias-sym src-sym)
+      (let [alias-attrs
+            (if (string? alias-attrs) ; Back compatibility
+              {:doc      alias-attrs}
+              (do        alias-attrs))
 
+            link?       (get    alias-attrs :link? true)
+            alias-attrs (dissoc alias-attrs :link?)
+            alias-attrs (core-merge (meta alias-sym) alias-attrs)
+            src-var
+            #?(:clj  (resolve                        src-sym)
+               :cljs (cljs.analyzer/resolve-var &env src-sym))
+
+            _
+            (when-not src-var
+              (throw
+                (ex-info "[encore/defalias] Failed to resolve source var"
+                  {:cljs?       (:ns &env)
+                   :alias-sym   alias-sym
+                   :src-sym     src-sym
+                   :alias-attrs alias-attrs})))
+
+            src-attrs (quote-arglists (alias-src-attrs (meta src-var)))
+            alias-sym
+            (with-meta alias-sym
+              (core-merge src-attrs alias-attrs))]
+
+        (if (:ns &env) ; Cljs
+          `(def ~alias-sym ~src-sym)
+          `(do
+             (def ~alias-sym                               @~src-var)
+             (when ~link? (-alias-link-var (var ~alias-sym) ~src-var))
+             (do                           (var ~alias-sym))))))))
+
+(comment :see-tests)
 (comment
-  (defn foo [x] (* x x x))
-  (defalias bar foo {:link? true})
-  (meta #'foo))
+  (defn src "src doc 1" [] "val1")
+  (defalias ^{:doc "alias doc 1"} src* src {:doc "alias doc 2"})
+  [(src*) (meta #'src*)])
 
 ;;;; Truss aliases (for back compatibility, convenience)
 
@@ -496,7 +532,7 @@
      (defalias taoensso.truss/have!)
      (defalias taoensso.truss/have?)
      (defalias taoensso.truss/have!?)
-     (defalias with-truss-data taoensso.truss/with-data)))
+     (defalias with-truss-data taoensso.truss/with-data {:link? false})))
 
 (defalias get-truss-data taoensso.truss/get-data)
 

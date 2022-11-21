@@ -5,7 +5,12 @@
    ;; [clojure.test.check.generators :as tc-gens]
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
-   [taoensso.encore :as enc]))
+   [taoensso.encore :as enc])
+
+  #?(:cljs
+     (:require-macros
+      [taoensso.encore-tests
+       :refer [test-macro-alias]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -19,6 +24,23 @@
 (defn- throw! [x] (throw (ex-info "Error" {:arg {:value x :type (type x)}})))
 
 ;;;;
+
+(do
+  (defn- test-fn "doc a" [x] x)
+  (enc/defalias                 test-fn-alias-1 test-fn)
+  (enc/defalias ^{:doc "doc b"} test-fn-alias-2 test-fn)
+  (enc/defalias ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
+
+  #?(:clj (defmacro ^:private test-macro [x] `~x))
+  #?(:clj (enc/defalias test-macro-alias test-macro)))
+
+(deftest _defalias
+  [(is (=    (test-fn-alias-1 :x) :x))
+   (is (= (-> test-fn-alias-1 var meta :doc) "doc a"))
+   (is (= (-> test-fn-alias-2 var meta :doc) "doc b"))
+   (is (= (-> test-fn-alias-3 var meta :doc) "doc c"))
+
+   (is (= (test-macro-alias :x) :x))])
 
 (deftest _truss-invariants
   ;; Tested properly in Truss, just confirm successful imports here
