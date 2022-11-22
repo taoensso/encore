@@ -2538,7 +2538,7 @@
 
   ([{:keys [size ttl-ms gc-every]} f]
 
-   (have? [:or nil? pos-int?] size ttl-ms gc-every)
+   (have? [:or nil? pos-num?] size ttl-ms gc-every)
 
    (cond
      size ; De-raced, commands, ttl, gc, max-size
