@@ -3751,6 +3751,108 @@
          (catch Exception e
            (throw (ex-info "[encore/slurp-resource] Slurp failed" {:rname rname} e)))))))
 
+(defn- auto-env [prop] (when prop (str-replace (str/upper-case prop) #"[.-]" "_")))
+(comment (auto-env "foo.bar.baz.edn"))
+
+#?(:clj
+   (let [load-edn
+         (fn [default-config error-data edn source]
+           (let [clj
+                 (try
+                   (read-edn edn)
+                   (catch Throwable t
+                     (throw
+                       (ex-info "[enc/load-edn-config] Error reading config EDN"
+                         (conj {:edn edn :source source} error-data)
+                         t))))
+
+                 config
+                 (if (symbol? clj)
+                   (if-let [var
+                            (or
+                              (resolve clj)
+                              (when-let [ns (namespace clj)]
+                                (require ns)
+                                (resolve clj)))]
+                     @var
+                     (throw
+                       (ex-info "[enc/load-edn-config] Failed to resolve config symbol"
+                         (conj {:edn edn :symbol symbol :source source} error-data))))
+                   clj)]
+
+             (if (map? config)
+               {:source source
+                :config
+                (cond
+                  (get    config :load/overwrite?) ; Undocumented
+                  (dissoc config :load/overwrite?) ; Without merge
+
+                  (empty?             default-config) config
+                  :else (nested-merge default-config  config))}
+
+               (throw
+                 (ex-info "[enc/load-edn-config] Unexpected config value type"
+                   (conj {:config {:value config :type (type config)}} error-data))))))]
+
+     (defn load-edn-config
+       "Attempts to read config as EDN from the following (in descending order):
+         1. JVM property,   if opt is provided and value    is present.
+         2. Env var,        if opt is provided and value    is present.
+         3. Named resource, if opt is provided and resource is present.
+
+       Returns nil, or {:config           <loaded-config>,
+                        :source <source-of-loaded-config>}.
+
+       Throws if value/resource cannot be successfully read as EDN.
+       The read EDN value must be a map, or a symbol that resolves to a map.
+
+       Useful for libraries, etc. that want to provide easily modified config.
+       Used by Timbre, Nippy, Carmine, etc.
+
+       Options:
+         - default   ; Default config map into which a nested merge will be done
+         - prop      ; Name of JVM property to check (e.g. \"taoensso.timbre.config.edn\")
+         - env       ; Name of Env var      to check (e.g. \"TAOENSSO_TIMBRE_CONFIG_EDN\")
+         - res       ; Name of resource     to check (e.g. \"taoensso.timbre.config.edn\")
+         - auto-env? ; If true, `env` will be provided automatically based on `prop`"
+
+       {:added "v3.39.0 (2022-11-23)"}
+       [{:as   opts
+         :keys [default prop env res auto-env?]
+         :or   {auto-env? true}}]
+
+       (let [{:keys [res-prop res-env]} opts ; Undocumented
+             env     (or     env (auto-env     prop))
+             res-env (or res-env (auto-env res-prop))]
+
+         (have? [:or nil? map?] default)
+
+         (if-let [[edn source]
+                  (or
+                    (when prop (when-let [edn (System/getProperty prop)] [edn {:jvm-prop prop}]))
+                    (when env  (when-let [edn (System/getenv       env)] [edn {:env-var   env}]))
+                    (when-let
+                        [res ; Configurable resource name, undocumented
+                         (or
+                           (when res-prop (System/getProperty res-prop))
+                           (when res-env  (System/getenv      res-env))
+                           res)]
+
+                      (when-let [edn (slurp-resource res)]
+                        [edn {:resource res}])))]
+
+           (load-edn default edn source)
+           (when     default
+             {:config  default
+              :source :default}))))))
+
+(comment
+  (load-edn-config {})
+  (load-edn-config
+    {:default  {:default? true}
+     :prop     "taoensso.timbre.config.edn"
+     :res      "taoensso.timbre.config.edn"}))
+
 #?(:clj
    (defn get-file-resource-?last-modified
      "Returns last-modified time for file backing given named resource, or nil
