@@ -836,8 +836,8 @@
   test fixtures for use by both `clojure.test` and `cljs.test`:
 
     (let [f (test-fixtures {:before (fn [] (test-setup))})]
-      (clojure.test/use-fixtures f)
-         (cljs.test/use-fixtures f))"
+      (clojure.test/use-fixtures :once f)
+         (cljs.test/use-fixtures :once f))"
 
   {:added "v3.31.0 (2022-10-27)"}
   [fixtures-map]
@@ -3798,7 +3798,7 @@
        "Attempts to read config as EDN from the following (in descending order):
          1. JVM property,   if opt is provided and value    is present.
          2. Env var,        if opt is provided and value    is present.
-         3. Named resource, if opt is provided and resource is present.
+         3. Resource file,  if opt is provided and resource is present.
 
        Returns nil, or {:config           <loaded-config>,
                         :source <source-of-loaded-config>}.
@@ -3807,13 +3807,13 @@
        The read EDN value must be a map, or a symbol that resolves to a map.
 
        Useful for libraries, etc. that want to provide easily modified config.
-       Used by Timbre, Nippy, Carmine, etc.
+       Used by Timbre, Carmine, etc.
 
        Options:
          - default   ; Default config map into which a nested merge will be done
-         - prop      ; Name of JVM property to check (e.g. \"taoensso.timbre.config.edn\")
-         - env       ; Name of Env var      to check (e.g. \"TAOENSSO_TIMBRE_CONFIG_EDN\")
-         - res       ; Name of resource     to check (e.g. \"taoensso.timbre.config.edn\")
+         - prop      ; Name of JVM property  to check (e.g. \"taoensso.timbre.config.edn\")
+         - env       ; Name of Env var       to check (e.g. \"TAOENSSO_TIMBRE_CONFIG_EDN\")
+         - res       ; Name of resource file to check (e.g. \"taoensso.timbre.config.edn\")
          - auto-env? ; If true, `env` will be provided automatically based on `prop`"
 
        {:added "v3.39.0 (2022-11-23)"}

@@ -47,6 +47,7 @@
   [(is (= (enc/have  string? "foo") "foo"))
    (is (= (enc/have! string? "foo") "foo"))
    (is (= (enc/have? string? "foo")  true))
+   (is (= (enc/have?         "foo")  true))
    (is (enc/throws? (enc/have string? 5)))
    (is (enc/throws? :any
          {:data {:dynamic :dynamic-data
