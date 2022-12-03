@@ -50,7 +50,7 @@
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
-    memoize abs])
+    memoize abs ex-message ex-cause])
 
   #?(:clj
      (:require
@@ -601,6 +601,20 @@
       )))
 
 ;;;; Errors
+
+(defn ex-message
+  "Copy of `core/ex-message` (added in Clojure v1.10)"
+  {:added "v3.41.0 (2022-12-03)"}
+  [ex]
+  #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
+     :cljs (when (instance? js/Error  ex) (.-message              ex))))
+
+(defn ex-cause
+  "Copy of `core/ex-cause` (added in Clojure v1.10)"
+  {:added "v3.41.0 (2022-12-03)"}
+  [ex]
+  #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
+     :cljs (when (instance? ExceptionInfo ex) (.-cause              ex))))
 
 #?(:clj
    (defmacro catching
