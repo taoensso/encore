@@ -2620,8 +2620,8 @@
                                    (reduce (fn [acc in] (dissoc! acc in))
                                      (transient (or m {})) ks-to-gc)))))))
 
-                       #?(:clj (.countDown latch))
-                       #?(:clj (reset! latch_ nil))))))
+                       #?(:clj (reset!     latch_ nil))
+                       #?(:clj (.countDown latch))))))
 
                (let [fresh?(kw-identical? a1 :mem/fresh)
                      args  (if fresh? (next args) args)
@@ -2677,8 +2677,8 @@
                                (transient (or m {}))
                                m))))
 
-                       #?(:clj (.countDown latch))
-                       #?(:clj (reset! latch_ nil))))))
+                       #?(:clj (reset!     latch_ nil))
+                       #?(:clj (.countDown latch))))))
 
                (let [fresh? (kw-identical? a1 :mem/fresh)
                      args   (if fresh? (next args) args)
@@ -2827,8 +2827,8 @@
                                (transient (or reqs {}))
                                reqs))))
 
-                       #?(:clj (.countDown latch))
-                       #?(:clj (reset! latch_ nil))))))
+                       #?(:clj (reset!     latch_ nil))
+                       #?(:clj (.countDown latch))))))
 
                ;; Need to atomically check if all limits pass before
                ;; committing to any n increments:
