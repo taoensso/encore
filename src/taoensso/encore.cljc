@@ -3163,18 +3163,22 @@
    (when s
      (let [s #?(:clj ^String s :cljs s)
            full-len #?(:clj (.length s) :cljs (.-length s))
+           ^long start-idx (if (nil? start-idx) 0        start-idx)
+           ^long end-idx   (if (nil? end-idx)   full-len   end-idx)]
 
-           ^long start-idx (if (nil? start-idx) 0                      start-idx) ; Default
-           start-idx       (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
-           start-idx          (max 0 start-idx) ; Snap left
+       (cond
+         (and (== start-idx 0) (>= end-idx full-len)) s
+         :let
+         [start-idx (if (neg?  start-idx) (+ full-len start-idx) start-idx) ; Idx from right
+          start-idx     (max 0 start-idx) ; Snap left
 
-           ^long end-idx (if (nil? end-idx)    full-len          end-idx) ; Default
-           end-idx       (if (neg? end-idx) (+ full-len end-idx) end-idx) ; Idx from right
-           end-idx   (min full-len end-idx) ; Snap right
-           ]
+          end-idx     (if (neg? end-idx) (+ full-len end-idx) end-idx) ; Idx from right
+          end-idx (min full-len end-idx) ; Snap right
+          ]
 
-       (if (>= start-idx end-idx)
-         nil
+         (>= start-idx end-idx) nil
+
+         :else
          (.substring s start-idx end-idx))))))
 
 (comment :see-tests)
@@ -3192,21 +3196,26 @@
    (when s
      (let [s #?(:clj ^String s :cljs s)
            full-len #?(:clj (.length s) :cljs (.-length s))
+
            ^long sub-len (if (nil? sub-len) full-len sub-len)]
 
-       (if-not (pos? sub-len)
-         nil
-         (let [^long start-idx (if (nil? start-idx) 0                      start-idx) ; Default
-               start-idx       (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
-               start-idx          (max 0 start-idx) ; Snap left
+       (cond
+         (not (pos? sub-len)) nil
+         :let [^long start-idx (if (nil? start-idx) 0 start-idx)]
+
+         (and (== start-idx 0) (>= sub-len full-len)) s
+
+         :let [start-idx (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
+               start-idx (max 0    start-idx) ; Snap left
 
                end-idx (+ start-idx sub-len)
                end-idx (min full-len end-idx) ; Snap right
                ]
 
-           (if (>= start-idx end-idx)
-             nil
-             (.substring s start-idx end-idx))))))))
+         (>= start-idx end-idx) nil
+
+         :else
+         (.substring s start-idx end-idx))))))
 
 (comment :see-tests)
 
