@@ -2550,8 +2550,9 @@
                   (let [dv (delay (apply f xs))]
                     (or (.putIfAbsent cache_ xs dv) dv))))))))))
 
-  ([{:keys [size ttl-ms gc-every]} f]
+  ([{:keys [size ttl-ms gc-every] :as opts} f]
 
+   (have? [:ks<= #{:size :ttl-ms :gc-every}] opts)
    (have? [:or nil? pos-num?] size ttl-ms gc-every)
 
    (cond
