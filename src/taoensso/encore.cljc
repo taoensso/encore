@@ -506,15 +506,15 @@
                    :src-sym     src-sym
                    :alias-attrs alias-attrs})))
 
-            src-attrs (quote-arglists (alias-src-attrs (meta src-var)))
-            alias-sym
-            (with-meta alias-sym
-              (core-merge src-attrs alias-attrs))]
+            src-attrs   (quote-arglists (alias-src-attrs (meta src-var)))
+            final-attrs (core-merge src-attrs alias-attrs)
+            alias-sym   (with-meta alias-sym final-attrs)]
 
-        (if (:ns &env) ; Cljs
-          `(def ~alias-sym ~src-sym)
-          `(do
-             (def ~alias-sym                               @~src-var)
+        `(if-cljs
+           (def ~alias-sym ~src-sym)
+           (do
+             ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
+             (alter-meta! (def ~alias-sym @~src-var) conj ~final-attrs)
              (when ~link? (-alias-link-var (var ~alias-sym) ~src-var))
              (do                           (var ~alias-sym))))))))
 
