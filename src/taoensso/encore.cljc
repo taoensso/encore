@@ -464,12 +464,18 @@
 
 (defn- alias-src-attrs [m] (select-keys m [:doc :arglists :private :macro :added :deprecated]))
 #?(:clj
-   (defn -alias-link-var [dst-var src-var #_dst-attrs]
+   (defn -alias-link-var [dst-var src-var dst-attrs]
      (add-watch src-var dst-var
        (fn [_ _ _ new-val]
-         ;; Note that src-var meta will not have been updated yet,
-         ;; so updating dst-var meta here is unfortunately not possible
-         (alter-var-root dst-var (fn [_] new-val))))))
+         (alter-var-root dst-var (fn [_] new-val))
+
+         ;; Wait for src-var meta to change. This is hacky, but
+         ;; generally only relevant for REPL dev so seems tolerable.
+         (let [t (Thread/currentThread)]
+           (future
+             (.join t 100)
+             (reset-meta! dst-var
+               (core-merge (meta src-var) dst-attrs))))))))
 
 #?(:clj
    (defmacro defalias
@@ -515,7 +521,7 @@
            (do
              ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
              (alter-meta! (def ~alias-sym @~src-var) conj ~final-attrs)
-             (when ~link? (-alias-link-var (var ~alias-sym) ~src-var))
+             (when ~link? (-alias-link-var (var ~alias-sym) ~src-var ~alias-attrs))
              (do                           (var ~alias-sym))))))))
 
 (comment :see-tests)
