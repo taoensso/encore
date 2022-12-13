@@ -2634,12 +2634,12 @@
                (let [fresh?(kw-identical? a1 :mem/fresh)
                      args  (if fresh? (next args) args)
 
+                     _ #?(:clj (when-let [l @latch_] (.await ^CountDownLatch l)) :cljs nil)
                      ^TickedCacheEntry e
                      (-swap-val! cache_ args
                        (fn [?e]
-                         #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
                          (if (or (nil? ?e) fresh?
-                               (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
+                                 (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
                            (TickedCacheEntry. (delay (apply f args)) instant tick 1)
                            (let [e ^TickedCacheEntry ?e]
                              (TickedCacheEntry. (.-delay e) (.-udt e)
@@ -2690,14 +2690,13 @@
 
                (let [fresh? (kw-identical? a1 :mem/fresh)
                      args   (if fresh? (next args) args)
+                     _      #?(:clj (when-let [l @latch_] (.await ^CountDownLatch l)) :cljs nil)
                      ^SimpleCacheEntry e
                      (-swap-val! cache_ args
                        (fn [?e]
                          (if (or (nil? ?e) fresh?
-                               (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
-                           (do
-                             #?(:clj (let [l @latch_] (when l (.await ^CountDownLatch l))))
-                             (SimpleCacheEntry. (delay (apply f args)) instant))
+                                 (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
+                           (SimpleCacheEntry. (delay (apply f args)) instant)
                            ?e)))]
                  @(.-delay e)))))))
 
