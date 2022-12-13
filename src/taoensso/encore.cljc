@@ -534,11 +534,12 @@
 
 #?(:clj
    (do
-     (defalias taoensso.truss/have)
-     (defalias taoensso.truss/have!)
-     (defalias taoensso.truss/have?)
-     (defalias taoensso.truss/have!?)
-     (defalias with-truss-data taoensso.truss/with-data {:link? false})))
+     (defalias                 taoensso.truss/have)
+     (defalias                 taoensso.truss/have!)
+     (defalias                 taoensso.truss/have?)
+     (defalias                 taoensso.truss/have!?)
+     (defalias with-truss-data taoensso.truss/with-data)
+     (defalias                 taoensso.truss/keep-callsite)))
 
 (defalias get-truss-data taoensso.truss/get-data)
 
