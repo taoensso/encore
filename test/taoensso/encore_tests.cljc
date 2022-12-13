@@ -221,6 +221,10 @@
       (is (= (cached-fn "infrequent-recent") 2) "Cache retained (recent)")
       (is (= (cached-fn "infrequent-old")    4) "Cache dropped")])])
 
+(deftest _rolling-sequentials
+  [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
+   #?(:clj (is (= (let [rl (enc/rolling-list   3)] (dotimes [idx 1e4] (rl idx)) (vec (rl))) [9997 9998 9999])))])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

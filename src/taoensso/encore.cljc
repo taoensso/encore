@@ -3062,6 +3062,81 @@
   (dotimes [_ 100000] (myrc))
   @myrc)
 
+;;;; Rolling sequentials
+
+(defn rolling-vector
+  "Returns a stateful fn of 2 arities:
+    (fn [ ]) => Returns current sub/vector in O(1).
+    (fn [x]) => Adds `x` to right of sub/vector, maintaining length <= `nmax`.
+                Returns current sub/vector.
+
+  Useful for maintaining limited-length histories, etc.
+  See also `rolling-list` (Clj only)."
+
+  {:added "v3.45.0 (2022-12-13)"}
+  ([nmax                          ] (rolling-vector nmax nil))
+  ([nmax {:keys [gc-every init-val]
+          :or   {gc-every 16e3}}]
+
+   (let [nmax     (long nmax)
+         acc_     (atom (vec init-val))
+         gc-every (when gc-every (long gc-every))
+         ticker   (when gc-every (counter))
+         latch_   (when gc-every (atom nil))]
+
+     (fn rolling-vec-fn
+       ([ ] @acc_)
+       ([x]
+        (when gc-every
+          #?(:clj (when-let [l @latch_] (.await ^CountDownLatch l)))
+
+          (let [^long tick (ticker)]
+            (when-let [gc-now? (== (rem tick ^long gc-every) 0)]
+              #?(:cljs (swap! acc_ (fn [sv] (into [] sv)))
+                 :clj
+                 (let [latch (CountDownLatch. 1)]
+                   (when (compare-and-set! latch_ nil latch)
+                     (swap! acc_ (fn [sv] (into [] sv)))
+                     (reset!     latch_ nil)
+                     (.countDown latch)))))))
+
+        (swap! acc_
+          (fn [acc]
+            (let [new (conj acc x)]
+              (if (> (count new) nmax)
+                (subvec new 1)
+                (do     new))))))))))
+
+(comment (let [rv (rolling-vector 3), c (counter)] [(qb 1e6 (rv (c))) (rv)])) ; 189.66
+
+#?(:clj
+   (defn rolling-list
+     "Returns a stateful fn of 2 arities:
+       (fn [ ]) => Returns current array in O(n).
+       (fn [x]) => Adds `x` to right of list, maintaining length <~ `nmax`.
+                   Returns nil. Very fast (faster than `rolling-vector`).
+
+     Useful for maintaining limited-length histories, etc.
+     See also `rolling-vector`."
+
+     {:added "v3.45.0 (2022-12-13)"}
+     ([nmax                   ] (rolling-list nmax nil))
+     ([nmax {:keys [init-val]}]
+      (let [nmax (long nmax)
+            ^java.util.LinkedList ll
+            (if init-val
+              (java.util.LinkedList. init-val)
+              (java.util.LinkedList.))]
+
+        (fn rolling-list-fn
+          ([ ] (.toArray ll))
+          ([x]
+           (do                       (.addLast     ll x))
+           (when (> (.size ll) nmax) (.removeFirst ll))
+           nil))))))
+
+(comment (let [rl (rolling-list 3), c (counter)] [(qb 1e6 (rl (c))) (vec (rl))])) ; 98.36
+
 ;;;; Strings
 
 #?(:clj  (def ^String system-newline (System/getProperty "line.separator"))
