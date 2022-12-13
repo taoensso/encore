@@ -2949,27 +2949,26 @@
        (let [n (long n)]
          (case action
            (:add)           (do (.addAndGet n_ n) nil)
-           (:set)           (do (.set       n_ n))
+           (:set)           (do (.set       n_ n) nil)
            (:set= :set-get) (do (.set       n_ n) n)
            (:=set :get-set) (do (.getAndSet n_ n))
            (:=+   :get-add) (do (.getAndAdd n_ n))
            (:+=   :add-get) (do (.addAndGet n_ n))))))
 
-   ;; TODO Could implement with ^:mutable set!, etc.
    :cljs
-   (deftype Counter [n_]
-     IDeref (-deref [_] @n_)
+   (deftype Counter [^:mutable c]
+     IDeref (-deref [_] c)
      IFn
-     (-invoke [_    ] (let [n @n_] (vswap! n_ (fn [c] (+ c   1))) n))
-     (-invoke [_ add] (let [n @n_] (vswap! n_ (fn [c] (+ c add))) n))
+     (-invoke [_    ] (let [o c] (set! c (inc c))   o))
+     (-invoke [_ add] (let [o c] (set! c (+ c add)) o))
      (-invoke [_ action n]
        (case action
-         (:add)           (do          (vswap!  n_ (fn [c] (+ c n))) nil)
-         (:set)           (do          (vreset! n_ n) nil)
-         (:set= :set-get) (do          (vreset! n_ n))
-         (:=set :get-set) (let [o @n_] (vreset! n_ n) o)
-         (:=+   :get-add) (let [o @n_] (vswap!  n_ (fn [c] (+ c n))) o)
-         (:+=   :add-get) (do          (vswap!  n_ (fn [c] (+ c n))))))))
+         (:add)           (do        (set! c (+ c n)) nil)
+         (:set)           (do        (set! c n)       nil)
+         (:set= :set-get) (do        (set! c n) n)
+         (:=set :get-set) (let [o c] (set! c n) o)
+         (:=+   :get-add) (let [o c] (set! c (+ c n)) o)
+         (:+=   :add-get) (do        (set! c (+ c n)) c)))))
 
 (defn counter
   "Returns a fast atomic Counter with `init` initial int value:
@@ -2980,8 +2979,8 @@
       :add, :set, :set-get, :get-set, :get-add, :add-get"
   ([    ] (counter 0))
   ([init]
-   #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. init))
-      :cljs (Counter. (volatile!                               init)))))
+   #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. (long init)))
+      :cljs (Counter.                                          (long init)))))
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 

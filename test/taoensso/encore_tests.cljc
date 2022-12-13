@@ -225,6 +225,17 @@
   [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
    #?(:clj (is (= (let [rl (enc/rolling-list   3)] (dotimes [idx 1e4] (rl idx)) (vec (rl))) [9997 9998 9999])))])
 
+(deftest _counters
+  (let [c (enc/counter)]
+    [(is (= @c        0))
+     (is (= (c)       0))
+     (is (= @c        1))
+     (is (= (c 5)     1))
+     (is (= @c        6))
+     (is (= (c :+= 2) 8))
+     (is (= (c :=+ 2) 8))
+     (is (= @c        10))]))
+
 ;;;;
 
 #?(:cljs (test/run-tests))
