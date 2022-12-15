@@ -506,7 +506,8 @@
             _
             (when-not src-var
               (throw
-                (ex-info "[encore/defalias] Failed to resolve source var"
+                (ex-info
+                  (str "[encore/defalias] Failed to resolve source var for sym: " src-sym)
                   {:cljs?       (:ns &env)
                    :alias-sym   alias-sym
                    :src-sym     src-sym
@@ -4026,7 +4027,7 @@
          [ ] - Blocks to acquire all futures, then immediately releases them.
                Useful for blocking till all outstanding work completes.
      Timeout variants are also provided."
-     ;; TODO Actually use an independent pool, not urgent
+     ;; TODO Optionally use an independent pool (=> need for shutdown control)
      [n]
      (let [n    (long n)
            s    (java.util.concurrent.Semaphore. n)
