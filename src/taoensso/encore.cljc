@@ -67,7 +67,6 @@
       [clojure.string      :as str]
       [clojure.set         :as set]
       ;; [cljs.core.async  :as async]
-      [cljs.analyzer]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
       ;;[goog.crypt.base64 :as base64]
