@@ -4,7 +4,7 @@
 **[CHANGELOG][]** | [API][] | current [Break Version][]:
 
 ```clojure
-[com.taoensso/encore "3.45.0"]
+[com.taoensso/encore "3.46.0"]
 ```
 
 > See [here][backers] if to help support my open-source work, thanks! - [Peter Taoussanis][Taoensso.com]
@@ -36,7 +36,7 @@ Otherwise, you can reach me at [Taoensso.com][]. Happy hacking!
 ## License
 
 Distributed under the [EPL v1.0][] (same as Clojure).  
-Copyright &copy; 2014-2022 [Peter Taoussanis][Taoensso.com].
+Copyright &copy; 2014-2023 [Peter Taoussanis][Taoensso.com].
 
 <!--- Standard links -->
 [Taoensso.com]: https://www.taoensso.com
