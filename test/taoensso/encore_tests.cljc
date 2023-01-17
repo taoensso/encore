@@ -38,16 +38,18 @@
   #?(:cljs (enc/defalias  cljs-var-alias           cljs-var)))
 
 (deftest _defalias
-  [(is (=    (test-fn-alias-1 :x) :x))
-   (is (= (-> test-fn-alias-1 var meta :doc) "doc a"))
-   (is (= (-> test-fn-alias-2 var meta :doc) "doc b"))
-   (is (= (-> test-fn-alias-3 var meta :doc) "doc c"))
+  ;; [1] v3.47.0+: Cljs aliases no longer copy metadata
+  [        (is (=    (test-fn-alias-1 :x) :x))
+   #?(:clj (is (= (-> test-fn-alias-1 var meta :doc) "doc a"))) ; [1]
+           (is (= (-> test-fn-alias-2 var meta :doc) "doc b"))
+           (is (= (-> test-fn-alias-3 var meta :doc) "doc c"))
 
    (is (= (test-macro-alias :x) :x))
 
-   #?(:cljs (is (=     cljs-var-alias                "cljs-var-val")))
-   #?(:cljs (is (= (-> cljs-var       var meta :doc) "cljs-var-doc")))
-   #?(:cljs (is (= (-> cljs-var-alias var meta :doc) "cljs-var-doc")))])
+      #?(:cljs (is (=     cljs-var-alias                "cljs-var-val")))
+      #?(:cljs (is (= (-> cljs-var       var meta :doc) "cljs-var-doc")))
+   ;; #?(:cljs (is (= (-> cljs-var-alias var meta :doc) "cljs-var-doc"))) ; [1]
+   ])
 
 (deftest _truss-invariants
   ;; Tested properly in Truss, just confirm successful imports here

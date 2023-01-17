@@ -477,69 +477,56 @@
                (core-merge (meta src-var) dst-attrs))))))))
 
 #?(:clj
-   (let [f_ (delay (when-let [v (resolve 'cljs.analyzer/resolve-var)] @v))]
-     (defn- resolve-cljs-var [env sym] (when-let [f @f_] (f env sym)))))
-
-#?(:clj
    (defmacro defalias
      "Defines a local alias for the var identified by the given qualified
-     source symbol, e.g.:
+     source symbol: (defalias my-map clojure.core/map), etc.
 
-       (defalias my-map clojure.core/map)
-
-     Source var's metadata will be preserved (docstring, arglists, etc.).
-     Changes to source var's value will also be applied to alias (Clj only)."
+     For Clj:
+       - Source var's metadata will be preserved (docstring, arglists, etc.).
+       - Changes to source var's value will also be applied to alias."
 
      ([          src-sym            ] `(defalias ~(symbol (name src-sym)) ~src-sym nil))
      ([alias-sym src-sym            ] `(defalias ~alias-sym               ~src-sym nil))
      ([alias-sym src-sym alias-attrs]
       (-have? symbol? alias-sym src-sym)
-      (let [alias-attrs
+      (let [compiling-cljs? (boolean (:ns &env))
+            alias-attrs
             (if (string? alias-attrs) ; Back compatibility
               {:doc      alias-attrs}
               (do        alias-attrs))
 
-            compiling-cljs? (boolean (:ns &env))
-
             link?       (get    alias-attrs :link? true)
             alias-attrs (dissoc alias-attrs :link?)
-            alias-attrs (core-merge (meta alias-sym) alias-attrs)
-            src-var
-            (if compiling-cljs?
-              (resolve-cljs-var &env src-sym)
-              (resolve               src-sym))
-
-            _
-            (when-not src-var
-              (throw
-                (ex-info
-                  (str "[encore/defalias] Failed to resolve source var for sym: " src-sym)
-                  {:alias-sym       alias-sym
-                   :src-sym         src-sym
-                   :alias-attrs     alias-attrs
-                   :compiling-cljs? compiling-cljs?
-                   :reader-mode     #?(:clj :clj :cljs :cljs :default :other)})))
-
-            src-attrs
-            (let [src-meta
-                  (if compiling-cljs?
-                    (core-merge     (:meta src-var) src-var) ; As cljs.analyzer/var-meta
-                    (quote-arglists (meta  src-var)))]
-
-              (select-keys src-meta alias-src-attrs))
-
-            final-attrs (core-merge src-attrs alias-attrs)
-            alias-sym   (with-meta  alias-sym final-attrs)]
-
-        #_(spit "defalias-debug" (str (if compiling-cljs? "cljs" "clj") "\t" alias-sym "\t" src-attrs "\n") :append true)
+            alias-attrs (core-merge (meta alias-sym) alias-attrs)]
 
         (if compiling-cljs?
-          `(def ~alias-sym ~src-sym)
-          `(do
-             ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
-             (alter-meta!                  (def ~alias-sym @~src-var) conj ~final-attrs)
-             (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
-             (do                           (var ~alias-sym))))))))
+          (let [alias-sym (with-meta alias-sym alias-attrs)]
+            `(def ~alias-sym ~src-sym))
+
+          (let [src-var (resolve src-sym)
+                _
+                (when-not src-var
+                  (throw
+                    (ex-info
+                      (str "[encore/defalias] Failed to resolve source var for sym: " src-sym)
+                      {:alias-sym       alias-sym
+                       :src-sym         src-sym
+                       :alias-attrs     alias-attrs
+                       :compiling-cljs? compiling-cljs?
+                       :reader-mode     #?(:clj :clj, :cljs :cljs, :default :other)})))
+
+                src-attrs
+                (let [src-meta (quote-arglists (meta src-var))]
+                  (select-keys src-meta alias-src-attrs))
+
+                final-attrs (core-merge src-attrs alias-attrs)
+                alias-sym   (with-meta  alias-sym final-attrs)]
+
+            `(do
+               ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
+               (alter-meta!                  (def ~alias-sym @~src-var) conj ~final-attrs)
+               (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
+               (do                           (var ~alias-sym)))))))))
 
 (comment :see-tests)
 (comment
