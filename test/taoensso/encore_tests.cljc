@@ -32,7 +32,10 @@
   (enc/defalias ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
 
   #?(:clj (defmacro ^:private test-macro [x] `~x))
-  #?(:clj (enc/defalias test-macro-alias test-macro)))
+  #?(:clj (enc/defalias test-macro-alias test-macro))
+
+  #?(:cljs (def ^:private cljs-var "cljs-var-doc" "cljs-var-val"))
+  #?(:cljs (enc/defalias  cljs-var-alias           cljs-var)))
 
 (deftest _defalias
   [(is (=    (test-fn-alias-1 :x) :x))
@@ -40,7 +43,11 @@
    (is (= (-> test-fn-alias-2 var meta :doc) "doc b"))
    (is (= (-> test-fn-alias-3 var meta :doc) "doc c"))
 
-   (is (= (test-macro-alias :x) :x))])
+   (is (= (test-macro-alias :x) :x))
+
+   #?(:cljs (is (=     cljs-var-alias                "cljs-var-val")))
+   #?(:cljs (is (= (-> cljs-var       var meta :doc) "cljs-var-doc")))
+   #?(:cljs (is (= (-> cljs-var-alias var meta :doc) "cljs-var-doc")))])
 
 (deftest _truss-invariants
   ;; Tested properly in Truss, just confirm successful imports here
