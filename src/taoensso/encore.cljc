@@ -16,8 +16,8 @@
     foo!?   - Fn that has side effects (or requires caution) and that return
               a truthy val. Note: !?, not ?!
     foo$    - Fn that's notably expensive to compute (e.g. hits db)
-    foo_    - Dereffable val (e.g. atom, volatile, delay, etc.)
-    foo__   - Dereffable in a dereffable (e.g. delay in an atom), etc.
+    foo_    - Derefable val (e.g. atom, volatile, delay, etc.)
+    foo__   - Derefable in a derefable (e.g. delay in an atom), etc.
     _       - Unnamed val
     _foo    - Named but unused val
     ?foo    - Optional val (emphasize that val may be nil)
@@ -3544,8 +3544,46 @@
 (comment (const-str= "foo" ""))
 
 #?(:clj
-   (defmacro thread-local-proxy
+   (defmacro thread-local-proxy "Low-level, see `thread-local` instead."
      [& body] `(proxy [ThreadLocal] [] (initialValue [] (do ~@body)))))
+
+#?(:clj
+   (defn thread-local*
+     "Low-level, see `thread-local` instead."
+     {:added "v3.48.0 (2023-01-25)"}
+     [init-val-fn]
+     (let [p (proxy [ThreadLocal] [] (initialValue [] (init-val-fn)))]
+       (reify clojure.lang.IDeref (deref [this] (.get p))))))
+
+#?(:clj
+   (defmacro thread-local
+     "Given a body that returns an initial value for the current thread,
+     returns a `ThreadLocal` proxy that can be derefed to get the current
+     thread's current value.
+
+     Commonly used to achieve thread safety during Java interop.
+     In the common case, `body` will be a call to some Java constructor
+     that returns a non-thread-safe instance.
+
+     Example:
+       (def thread-local-simple-date-format_
+         \"Deref to return a thread-local `SimpleDateFormat`\"
+         (thread-local (SimpleDateFormat. \"yyyy-MM-dd\")))
+
+       (.format @thread-local-simple-date-format_ (Date.)) => \"2023-01-24\"
+
+     NB: don't pass the derefed value to other threads!"
+     {:added "v3.48.0 (2023-01-25)"}
+     [& body] `(thread-local* (fn [] ~@body))))
+
+(comment
+  (def      thread-local-simple-date-format_ (thread-local (SimpleDateFormat. "yyyy-MM-dd")))
+  (.format @thread-local-simple-date-format_ (Date.))
+
+  ;; thread-local-proxy is a little faster ; [46.54 77.19]
+  (let [tlp (thread-local-proxy "init-val")
+        tl_ (thread-local       "init-val")]
+    (qb 1e6 (.get ^ThreadLocal tlp) @tl_)))
 
 #?(:clj
    (compile-if (fn [] (java.security.SecureRandom/getInstanceStrong)) ; Java 8+, blocking
