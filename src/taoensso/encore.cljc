@@ -28,6 +28,17 @@
     <foo    - Val \"from foo\" (e.g. <sender, <host), or fn to take/coerce/transform
     ->foo   - Fn to put/coerce/transform
 
+  Type affixes may be used for clarity:
+    <prefix>-<name>  - m-users,   v-users,   n-users,    etc. (also nusers when unambiguous)
+    <name>-<postfix> - users-map, users-vec, user-count, etc.
+
+  Regarding name heirarchy:
+    When there's a significant num of syms with a meaningful hierarchy,
+    prefer names with descending hierarchy to emphasize structure and
+    related groups/functionality, e.g.:
+      `user-add`, `user-remove`, `user-mod` vs
+      `add-user`, `remove-user`, `mod-user`, etc.
+
   Commit message tags (in priority order):
     ~      - Work-in-progress (still under development)
     [mod]  - Modify     behaviour (=>          breaking), [mod!], [mod!!], etc. for attention
