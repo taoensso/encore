@@ -1277,20 +1277,20 @@
      (defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
 
      (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
-       (let [s1  (alength ba1)
-             s2  (alength ba2)
-             out (byte-array (+ s1 s2))]
-         (System/arraycopy ba1 0 out 0  s1)
-         (System/arraycopy ba2 0 out s1 s2)
-         out))
+       (let [l1  (alength ba1)
+             l2  (alength ba2)
+             out (byte-array (+ l1 l2))]
+         (System/arraycopy ba1 0 out 0  l1)
+         (System/arraycopy ba2 0 out l1 l2)
+         (do                     out)))
 
      (defn ba-split [^bytes ba ^long idx]
        (if (zero? idx)
          [nil ba]
-         (let [s (alength ba)]
-           (when (> s idx)
+         (let [len (alength ba)]
+           (when (> len idx)
              [(java.util.Arrays/copyOf      ba idx)
-              (java.util.Arrays/copyOfRange ba idx s)]))))
+              (java.util.Arrays/copyOfRange ba idx len)]))))
 
      (comment
        (String. (ba-concat (.getBytes "foo") (.getBytes "bar")))
