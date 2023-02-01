@@ -245,6 +245,20 @@
      (is (= (c :=+ 2) 8))
      (is (= @c        10))]))
 
+#?(:clj
+   (deftest _precache
+     (let [c   (enc/counter)
+           pcf (enc/pre-cache 3 1 (fn inc-counter [] (c)))]
+
+       [(do (Thread/sleep 1000) "Sleep for cache to initialize (async)")
+        (is (= @c 3)  "f was run to initialize cache")
+        (is (= (pcf) 0))
+        (do (Thread/sleep 1000) "Sleep for cache to replenish (async)")
+        (is (= @c 4) "f was run to replenish cache")
+        (is (= (pcf) 1))
+        (is (= (pcf) 2))
+        (is (= (pcf) 3))])))
+
 ;;;;
 
 #?(:cljs (test/run-tests))

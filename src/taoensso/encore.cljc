@@ -4117,6 +4117,45 @@
        (fp (fn [] (Thread/sleep 3000) (println "3000")))
        (fp)])))
 
+#?(:clj
+   (defn pre-cache
+     "Given a nullary fn `f` that is non-idempotent and free of side effects,
+     returns a wrapped version of `f` that asynchronously maintains a cache
+     of up to `n-capacity` pre-computed return values of (f).
+
+     Useful when `f` is expensive & may be called in a spikey fashion,
+     e.g. ideal for cryptographic key generators."
+
+     {:added "v3.49.0 (2023-02-01)"}
+     ([n-capacity           f] (pre-cache n-capacity 1 f))
+     ([n-capacity n-threads f]
+      (let [queue (java.util.concurrent.ArrayBlockingQueue. n-capacity)
+            f* (fn [] (try {:okay (f)} (catch Throwable t {:error t})))
+
+            async-replenish!
+            (let [fp (future-pool n-threads)
+                  a_ (agent nil)]
+              (fn []
+                (send-off a_
+                  (fn [_] (fp (fn [] (.offer queue (f*)))) nil))))]
+
+        (dotimes [_ n-capacity] (async-replenish!)) ; Initialize cache
+
+        (fn take1 []
+          (let [f*-result
+                (if-let [cached (.poll queue)]
+                  (do (async-replenish!) cached)
+                  ;; Block to call f synchronously on calling thread.
+                  ;; Not limited by fp => pre-cached f will never be slower
+                  ;; than uncached f, even if `n-threads` is small.
+                  (f*))]
+
+            (if-let [t (get f*-result :error)]
+              (throw t)
+              (get f*-result :okay))))))))
+
+(comment :see-tests)
+
 ;;;; Benchmarking
 
 #?(:clj
