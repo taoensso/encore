@@ -4168,23 +4168,40 @@
 
 #?(:clj
    (defmacro quick-bench
-     "Returns fastest of 3 sets of times for each form, in msecs."
-     ([nlaps form & more] (mapv (fn [form] `(quick-bench ~nlaps ~form)) (cons form more)))
-     ([nlaps form]
-      `(let [nlaps# ~nlaps
-             ;; 3 warmup sets, 3 working sets:
-             [nsets# nlaps#] (if (vector? nlaps#) nlaps# [6 nlaps#])
-             [nsets# nlaps#] (have pos-num? nsets# nlaps#)]
+     "Simple util to benchmark/compare runtime of given form/s.
+
+     Runs sets of laps for each given form, recording the total runtime of each set.
+     Returns the the total runtime in msecs of the fastest set of laps for each form.
+
+       (quick-bench [<num-sets> <num-laps>] <form1> <form2> <...>) =>
+         [<total runtime msecs of fastest set of laps for form1>
+          <total runtime msecs of fastest set of laps for form2>
+          <...>]
+
+        Total number of runs for each form is: `num-sets` * `num-laps`
+
+     If omitted, the default `num-sets` is 6 (to include warmup):
+       (quick-bench <num-laps> <form1> <form2> <...>)
+
+     Example (comparing runtime of `first` and `nth` against vector):
+       (let [v [:a]] (quick-bench 1e6 (first v) (nth v 0))) => [67.43 39.05]"
+
+     ([spec form & more] (mapv (fn [form] `(quick-bench ~spec ~form)) (cons form more)))
+     ([spec form]
+      `(let [spec# ~spec
+             ;; Default 3 warmup + 3 working sets:
+             [num-sets# num-laps#] (if (vector? spec#) spec# [6 spec#])]
+         (have? pos-num? num-sets# num-laps#)
          (round2
            (/ (double
                 (reduce min
-                  (for [_# (range nsets#)]
-                    (time-ns (dotimes [_# nlaps#] (do ~form))))))
+                  (for [_# (range num-sets#)]
+                    (time-ns (dotimes [_# num-laps#] (do ~form))))))
              1e6))))))
 
 #?(:clj (defalias qb quick-bench))
 
-(comment (qb [4 1e6] (first [:a]) (nth [:a] 0)))
+(comment (let [v [:a]] (qb [4 1e6] (first v) (nth v 0))))
 
 #?(:clj
    (defn bench*
