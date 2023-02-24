@@ -4259,12 +4259,7 @@
 
 #?(:cljs
    (do
-     (def ^:private xhr-pool_ (delay (goog.net.XhrIoPool.)))
-     (defn- get-pooled-xhr!
-       "Returns an immediately available XhrIo instance, or nil. The instance must
-       be released back to pool manually."
-       [] (let [result (.getObject @xhr-pool_)] (if (undefined? result) nil result)))
-
+     (def ^:private default-xhr-pool_ (delay (goog.net.XhrIoPool.)))
      (def ^:private js-form-data? (if (exists? js/FormData) (fn [x] (instance? js/FormData x)) (fn [x] nil)))
      (def ^:private js-file?      (if (exists? js/File)     (fn [x] (instance? js/File     x)) (fn [x] nil)))
      (def ^:private coerce-xhr-params "Returns [<uri> <?data>]"
@@ -4303,8 +4298,11 @@
 
 #?(:cljs
    (defn ajax-lite
-     "Alpha, subject to change. Simple, lightweight Ajax via Google Closure.
-     Returns the resulting XhrIo[1] instance, or nil.
+     "Alpha, subject to change.
+     Simple, lightweight Ajax via Google Closure.
+
+     Returns nil, or resulting `goog.net.XhrIo` instance if one was
+     immediately available.
 
      (ajax-lite \"/my-post-route\"
        {:method     :post
@@ -4313,136 +4311,173 @@
         :resp-type  :text
         :timeout-ms 7000
         :with-credentials? false ; Enable if using CORS (requires xhr v2+)
+
+        :xhr-pool       my-xhr-pool ; `goog.net.XhrIoPool` instance or delay
+        :xhr-cb-fn      (fn [xhr])  ; Called with `XhrIo` from pool when available
+        :xhr-timeout-ms 2500        ; Max msecs to wait on pool for `XhrIo`
        }
        (fn async-callback-fn [resp-map]
          (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
            ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
            ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
                             :abort :http-error :exception :xhr-pool-depleted}
-           (js/alert (str \"Ajax response: \" resp-map)))))
+           (js/alert (str \"Ajax response: \" resp-map)))))"
 
-     [1] Ref. https://developers.google.com/closure/library/docs/xhrio"
+     [uri
+      {:as   opts
+       :keys [method params headers timeout-ms resp-type with-credentials?
+              xhr-pool xhr-cb-fn xhr-timeout-ms]
+       :or
+       {method         :get
+        timeout-ms     10000
+        resp-type      :auto
+        xhr-pool       default-xhr-pool_
+        xhr-timeout-ms 2500}}
 
-     [uri {:keys [method params headers timeout-ms resp-type with-credentials?] :as opts
-           :or   {method :get timeout-ms 10000 resp-type :auto}}
       callback-fn]
 
      (have? [:or nil? nat-int?] timeout-ms)
 
-     (if-let [xhr (get-pooled-xhr!)]
-       (catching
-         (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
-               xhr-method (case method :get "GET" :post "POST" :put "PUT")
+     (let [xhr-pool (force xhr-pool)
+           with-xhr
+           (fn [xhr]
+             (catching
+               (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
+                     xhr-method (case method :get "GET" :post "POST" :put "PUT")
 
-               [xhr-uri xhr-?data]
-               (coerce-xhr-params uri method params)
+                     [xhr-uri xhr-?data]
+                     (coerce-xhr-params uri method params)
 
-               xhr-headers
-               (let [headers (map-keys #(str/lower-case (name %)) headers)
-                     headers (assoc-some headers "x-requested-with"
-                               (get headers "x-requested-with" "XMLHTTPRequest"))]
-                 ;; `x-www-form-urlencoded`/`multipart/form-data` content-type
-                 ;; will be added by Closure if a custom content-type isn't provided
-                 (clj->js headers))
+                     xhr-headers
+                     (let [headers (map-keys #(str/lower-case (name %)) headers)
+                           headers (assoc-some headers "x-requested-with"
+                                     (get headers "x-requested-with" "XMLHTTPRequest"))]
+                       ;; `x-www-form-urlencoded`/`multipart/form-data` content-type
+                       ;; will be added by Closure if a custom content-type isn't provided
+                       (clj->js headers))
 
-               ?progress-listener
-               (when-let [pf (:progress-fn opts)]
-                 (.setProgressEventsEnabled xhr true)
-                 (gevents/listen xhr goog.net.EventType/PROGRESS
-                   (fn [ev]
-                     (let [length-computable? (.-lengthComputable ev)
-                           loaded (.-loaded ev)
-                           total  (.-total  ev)
-                           ?ratio (when (and length-computable? (not= total 0))
-                                    (/ loaded total))]
-                       (pf
-                         {:?ratio ?ratio
-                          :length-computable? length-computable?
-                          :loaded loaded
-                          :total  total
-                          :ev     ev})))))]
+                     ?progress-listener
+                     (when-let [pf (:progress-fn opts)]
+                       (.setProgressEventsEnabled xhr true)
+                       (gevents/listen xhr goog.net.EventType/PROGRESS
+                         (fn [ev]
+                           (let [length-computable? (.-lengthComputable ev)
+                                 loaded (.-loaded ev)
+                                 total  (.-total  ev)
+                                 ?ratio (when (and length-computable? (not= total 0))
+                                          (/ loaded total))]
+                             (pf
+                               {:?ratio ?ratio
+                                :length-computable? length-computable?
+                                :loaded loaded
+                                :total  total
+                                :ev     ev})))))]
 
-           (doto xhr
-             (gevents/listenOnce goog.net.EventType/READY
-               (fn [_] (.releaseObject @xhr-pool_ xhr)))
+                 (doto xhr
+                   (gevents/listenOnce goog.net.EventType/READY
+                     (fn [_] (.releaseObject xhr-pool xhr)))
 
-             (gevents/listenOnce goog.net.EventType/COMPLETE
-               (fn wrapped-callback-fn [resp]
-                 (let [success? (.isSuccess xhr) ; true iff no error or timeout
-                       -status  (.getStatus xhr) ; -1, 200, etc.
+                   (gevents/listenOnce goog.net.EventType/COMPLETE
+                     (fn wrapped-callback-fn [resp]
+                       (let [success? (.isSuccess xhr) ; true iff no error or timeout
+                             -status  (.getStatus xhr) ; -1, 200, etc.
 
-                       [?status ?content-type ?content]
-                       (when (not= -status -1) ; Got a response from server
-                         (let [;; Case insensitive get:
-                               ?content-type (.getResponseHeader xhr "content-type")
-                               ?content
-                               (let [resp-type
-                                     (cond
-                                       (not= resp-type :auto) resp-type
-                                       (nil? ?content-type)   :text
-                                       :else
-                                       (let [cts (str/lower-case (str ?content-type))
-                                             match? (fn [s] (str-contains? cts s))]
-                                         (cond
-                                           (match? "/edn")     :edn
-                                           (match? "/json")    :json
-                                           (match? "/xml")     :xml
-                                           ;; (match? "/html") :text
-                                           :else               :text)))]
+                             [?status ?content-type ?content]
+                             (when (not= -status -1) ; Got a response from server
+                               (let [;; Case insensitive get:
+                                     ?content-type (.getResponseHeader xhr "content-type")
+                                     ?content
+                                     (let [resp-type
+                                           (cond
+                                             (not= resp-type :auto) resp-type
+                                             (nil? ?content-type)   :text
+                                             :else
+                                             (let [cts (str/lower-case (str ?content-type))
+                                                   match? (fn [s] (str-contains? cts s))]
+                                               (cond
+                                                 (match? "/edn")     :edn
+                                                 (match? "/json")    :json
+                                                 (match? "/xml")     :xml
+                                                 ;; (match? "/html") :text
+                                                 :else               :text)))]
 
-                                 (catching
-                                   (case resp-type
-                                     :edn  (read-edn (.getResponseText xhr))
-                                     :json           (.getResponseJson xhr)
-                                     :xml            (.getResponseXml  xhr)
-                                     :text           (.getResponseText xhr))
+                                       (catching
+                                         (case resp-type
+                                           :edn  (read-edn (.getResponseText xhr))
+                                           :json           (.getResponseJson xhr)
+                                           :xml            (.getResponseXml  xhr)
+                                           :text           (.getResponseText xhr))
 
-                                   _e ; Undocumented, subject to change:
-                                   {:ajax/bad-response-type resp-type
-                                    :ajax/resp-as-text (.getResponseText xhr)}))]
+                                         _e ; Undocumented, subject to change:
+                                         {:ajax/bad-response-type resp-type
+                                          :ajax/resp-as-text (.getResponseText xhr)}))]
 
-                           [-status ?content-type ?content]))]
+                                 [-status ?content-type ?content]))]
 
-                   (when ?progress-listener
-                     (gevents/unlistenByKey ?progress-listener))
+                         (when ?progress-listener
+                           (gevents/unlistenByKey ?progress-listener))
 
-                   (callback-fn
-                     {:raw-resp      resp
-                      :xhr           xhr ; = (.-target resp)
-                      :success?      success?
-                      :?status       ?status
-                      :?content-type ?content-type
-                      :?content      ?content
-                      :?error
-                      (if success?
-                        nil
-                        (cond
-                          ?status ?status ; Http error status code (e.g. 404)
-                          :else
-                          (get {goog.net.ErrorCode/NO_ERROR   nil
-                                goog.net.ErrorCode/EXCEPTION  :exception
-                                goog.net.ErrorCode/HTTP_ERROR :http-error
-                                goog.net.ErrorCode/ABORT      :abort
-                                goog.net.ErrorCode/TIMEOUT    :timeout}
-                            (.getLastErrorCode xhr)
-                            :unknown)))})))))
+                         (callback-fn
+                           {:raw-resp      resp
+                            :xhr           xhr ; = (.-target resp)
+                            :success?      success?
+                            :?status       ?status
+                            :?content-type ?content-type
+                            :?content      ?content
+                            :?error
+                            (if success?
+                              nil
+                              (cond
+                                ?status ?status ; Http error status code (e.g. 404)
+                                :else
+                                (get {goog.net.ErrorCode/NO_ERROR   nil
+                                      goog.net.ErrorCode/EXCEPTION  :exception
+                                      goog.net.ErrorCode/HTTP_ERROR :http-error
+                                      goog.net.ErrorCode/ABORT      :abort
+                                      goog.net.ErrorCode/TIMEOUT    :timeout}
+                                  (.getLastErrorCode xhr)
+                                  :unknown)))})))))
 
-           (.setTimeoutInterval xhr (or timeout-ms 0)) ; nil = 0 = no timeout
-           (when with-credentials?
-             (.setWithCredentials xhr true)) ; Requires xhr v2+
+                 (.setTimeoutInterval xhr (or timeout-ms 0)) ; nil = 0 = no timeout
+                 (when with-credentials?
+                   (.setWithCredentials xhr true)) ; Requires xhr v2+
 
-           (.send xhr xhr-uri xhr-method xhr-?data xhr-headers)
-           xhr)
+                 (.send xhr xhr-uri xhr-method xhr-?data xhr-headers)
 
-         e
-         (do
-           (.releaseObject @xhr-pool_ xhr)
-           (callback-fn {:?error e})
-           nil))
+                 (when-let [cb xhr-cb-fn] (catching (cb xhr)))
+                 xhr)
 
-       (do ; Pool failed to return an available xhr instance
-         (callback-fn {:?error :xhr-pool-depleted})
-         nil))))
+               e
+               (do
+                 (.releaseObject xhr-pool xhr)
+                 (callback-fn {:?error e})
+                 nil)))]
+
+       (cond
+         :if-let [xhr (.getObject xhr-pool)] ; Available immediately
+         (with-xhr xhr)
+
+         (or
+           (nil?  xhr-timeout-ms)
+           (zero? xhr-timeout-ms))
+         (do (callback-fn {:?error :xhr-pool-depleted}) nil)
+
+         :else
+         (let [done?_ (atom false)]
+
+           (.setTimeout js/window
+             (fn xhr-timeout []
+               (when (compare-and-set! done?_ false true)
+                 (callback-fn {:?error :xhr-pool-timeout})))
+             xhr-timeout-ms)
+
+           (.getObject xhr-pool
+             (fn xhr-cb [xhr]
+               ;; We've acquired xhr after some time
+               (if (compare-and-set! done?_ false true)
+                 (with-xhr                xhr)
+                 (.releaseObject xhr-pool xhr))))
+           nil)))))
 
 ;;;; Ring
 
