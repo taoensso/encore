@@ -146,6 +146,17 @@
         `(do ~then)
         `(do ~else)))))
 
+#?(:clj
+   (defmacro try-eval
+     "Evaluates `form`. If eval doesn't throw, expands to `form`, otherwise to nil."
+     {:added "v3.50.0 (TODO)"}
+     [form] `(compile-if ~form ~form nil)))
+
+(comment
+  (macroexpand '(try-eval (java.util.concurrent.atomic.AtomicLong.)))
+  (macroexpand '(try-eval (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)))
+  (macroexpand '(try-eval (do (println "effect") :x))))
+
 #?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
 #?(:clj
    (compile-if
