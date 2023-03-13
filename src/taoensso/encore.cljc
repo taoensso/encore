@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 50 0])
+(def encore-version [3 51 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1270,7 +1270,7 @@
     {:arg {:value :unexpected, :type clojure.lang.Keyword},
      :expected #{:read :write}}"
 
-  {:added "v3.51.0 (TODO)"}
+  {:added "v3.51.0 (2023-03-13)"}
   [arg & {:keys [msg] :as details}]
   (throw
     (ex-info (or msg (str "Unexpected argument: " arg))
@@ -1285,7 +1285,7 @@
   "If (instance? class arg) is true, returns arg.
   Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
   See `unexpected-arg!` for more info."
-  {:added "v3.51.0 (TODO)"}
+  {:added "v3.51.0 (2023-03-13)"}
   [class arg & {:as details}]
   (if (instance? class arg)
     arg
@@ -1298,7 +1298,7 @@
   "If (satisfies? protocol arg) is true, returns arg.
   Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
   See `unexpected-arg!` for more info."
-  {:added "v3.51.0 (TODO)"}
+  {:added "v3.51.0 (2023-03-13)"}
   [protocol arg & {:as details}]
   (if (satisfies? protocol arg)
     arg
