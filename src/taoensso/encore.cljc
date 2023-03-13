@@ -1253,6 +1253,58 @@
   (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
   (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
+;;;;
+
+(defn unexpected-arg!
+  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
+  Takes optional kvs for merging into exception's data map.
+
+    (let [mode :unexpected]
+      (case mode
+        :read  (do <...>)
+        :write (do <...>)
+        (unexpected-arg! mode
+          :expected #{:read :write}))) =>
+
+    Unexpected argument: :unexpected
+    {:arg {:value :unexpected, :type clojure.lang.Keyword},
+     :expected #{:read :write}}"
+
+  {:added "v3.51.0 (TODO)"}
+  [arg & {:keys [msg] :as details}]
+  (throw
+    (ex-info (or msg (str "Unexpected argument: " arg))
+      (let [m {:arg {:value arg, :type (type arg)}}]
+        (if details
+          (conj m details)
+          (do   m))))))
+
+(comment (unexpected-arg! :foo :expected '#{string?}))
+
+(defn instance!
+  "If (instance? class arg) is true, returns arg.
+  Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
+  See `unexpected-arg!` for more info."
+  {:added "v3.51.0 (TODO)"}
+  [class arg & {:as details}]
+  (if (instance? class arg)
+    arg
+    (unexpected-arg! arg
+      (assoc details :expected `(~'instance? ~class ~'arg)))))
+
+(comment (instance! String 5))
+
+(defn satisfies!
+  "If (satisfies? protocol arg) is true, returns arg.
+  Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
+  See `unexpected-arg!` for more info."
+  {:added "v3.51.0 (TODO)"}
+  [protocol arg & {:as details}]
+  (if (satisfies? protocol arg)
+    arg
+    (unexpected-arg! arg
+      (assoc details :expected `(~'satisfies? ~protocol ~'arg)))))
+
 ;;;; Keywords
 
 (defn explode-keyword [k] (str/split (as-qname k) #"[\./]"))
