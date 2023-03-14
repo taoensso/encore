@@ -3976,14 +3976,14 @@
 
 #?(:clj
    (let [load-edn
-         (fn [default-config error-data edn source]
+         (fn [default-config edn source ?error-data]
            (let [clj
                  (try
                    (read-edn edn)
                    (catch Throwable t
                      (throw
                        (ex-info "[enc/load-edn-config] Error reading config EDN"
-                         (conj {:edn edn :source source} error-data)
+                         (conj {:edn edn :source source} ?error-data)
                          t))))
 
                  config
@@ -3997,7 +3997,7 @@
                      @var
                      (throw
                        (ex-info "[enc/load-edn-config] Failed to resolve config symbol"
-                         (conj {:edn edn :symbol symbol :source source} error-data))))
+                         (conj {:edn edn :symbol symbol :source source} ?error-data))))
                    clj)]
 
              (if (map? config)
@@ -4012,7 +4012,7 @@
 
                (throw
                  (ex-info "[enc/load-edn-config] Unexpected config value type"
-                   (conj {:config {:value config :type (type config)}} error-data))))))]
+                   (conj {:config {:value config :type (type config)}} ?error-data))))))]
 
      (defn load-edn-config
        "Attempts to read config as EDN from the following (in descending order):
@@ -4030,15 +4030,16 @@
        Used by Timbre, Carmine, etc.
 
        Options:
-         - default   ; Default config map into which a nested merge will be done
-         - prop      ; Name of JVM property  to check (e.g. \"taoensso.timbre.config.edn\")
-         - env       ; Name of Env var       to check (e.g. \"TAOENSSO_TIMBRE_CONFIG_EDN\")
-         - res       ; Name of resource file to check (e.g. \"taoensso.timbre.config.edn\")
-         - auto-env? ; If true, `env` will be provided automatically based on `prop`"
+         - default    ; Default config map into which a nested merge will be done
+         - prop       ; Name of JVM property  to check (e.g. \"taoensso.timbre.config.edn\")
+         - env        ; Name of Env var       to check (e.g. \"TAOENSSO_TIMBRE_CONFIG_EDN\")
+         - res        ; Name of resource file to check (e.g. \"taoensso.timbre.config.edn\")
+         - auto-env?  ; If true, `env` will be provided automatically based on `prop`
+         - error-data ; Optional map to be added to ex-data if load fails"
 
        {:added "v3.39.0 (2022-11-23)"}
        [{:as   opts
-         :keys [default prop env res auto-env?]
+         :keys [default prop env res auto-env? error-data]
          :or   {auto-env? true}}]
 
        (let [{:keys [res-prop res-env]} opts ; Undocumented
@@ -4049,6 +4050,7 @@
 
          (if-let [[edn source]
                   (or
+                    (when-let [test-edn (get opts :test-edn)] [test-edn :test-edn])
                     (when prop (when-let [edn (System/getProperty prop)] [edn {:jvm-prop prop}]))
                     (when env  (when-let [edn (System/getenv       env)] [edn {:env-var   env}]))
                     (when-let
@@ -4061,7 +4063,7 @@
                       (when-let [edn (slurp-resource res)]
                         [edn {:resource res}])))]
 
-           (load-edn default edn source)
+           (load-edn default edn source error-data)
            (when     default
              {:config  default
               :source :default}))))))
@@ -4071,7 +4073,8 @@
   (load-edn-config
     {:default  {:default? true}
      :prop     "taoensso.timbre.config.edn"
-     :res      "taoensso.timbre.config.edn"}))
+     :res      "taoensso.timbre.config.edn"
+     :test-edn (pr-edn {:test-edn? true})}))
 
 #?(:clj
    (defn get-file-resource-?last-modified
