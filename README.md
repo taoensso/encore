@@ -4,7 +4,7 @@
 **[CHANGELOG][]** | [API][] | current [Break Version][]:
 
 ```clojure
-[com.taoensso/encore "3.51.1"]
+[com.taoensso/encore "3.52.0"]
 ```
 
 > See [here][backers] if to help support my open-source work, thanks! - [Peter Taoussanis][Taoensso.com]
