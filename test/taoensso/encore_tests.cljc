@@ -127,6 +127,14 @@
             (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
             (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
 
+#?(:clj
+   (deftest _hex-strings
+     [(is (= (enc/ba->hex-str (byte-array  0))    ""))
+      (is (= (enc/ba->hex-str (byte-array [0]))   "00"))
+      (is (= (enc/ba->hex-str (byte-array [0 1])) "0001"))
+      (let [v (vec (range -128 128))]
+        (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
+
 (deftest  _get-substr-by-idx
   [(is (= (enc/get-substr-by-idx nil            nil)         nil))
    (is (= (enc/get-substr-by-idx "123456789"    nil) "123456789"))

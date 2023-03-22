@@ -3778,6 +3778,71 @@
 
 (comment (qb 1e5 (secure-rand-id nanoid-alphabet 21) (nanoid) (uuid-str))) ; [343.31 205.98 82.86]
 
+;;;; Hex strings
+
+#?(:clj
+   (do
+     ;; Select fastest possible implementation,
+     ;; Ref. https://stackoverflow.com/a/58118078/1982742
+
+     (compile-if java.util.HexFormat ; Java >= 17
+       (let [hf (java.util.HexFormat/of)]
+         (defn- -ba->hex-str [^bytes ba] (.formatHex hf ba))
+         (defn- -hex-str->ba [^String s] (.parseHex  hf s)))
+
+       (compile-if org.apache.commons.codec.binary.Hex ; Apache Commons
+         (do
+           (defn- -ba->hex-str [^bytes ba] (org.apache.commons.codec.binary.Hex/encodeHexString ba))
+           (defn- -hex-str->ba [^String s] (org.apache.commons.codec.binary.Hex/decodeHex       s)))
+
+         (compile-if com.google.common.io.BaseEncoding ; Guava
+           (let [encoding (.lowerCase (com.google.common.io.BaseEncoding/base16))]
+             (defn- -ba->hex-str [^bytes ba] (.encode encoding ba))
+             (defn- -hex-str->ba [^String s] (.decode encoding s)))
+
+           ;; Pure Clojure (slowest implementation)
+           (do
+             (let [hex-chars (mapv identity "0123456789abcdef")
+                   byte->char-pair
+                   (fn [^StringBuilder sb b]
+                     (let [v (bit-and ^byte b 0xFF)]
+                       (.append sb (hex-chars (bit-shift-right v 4)))
+                       (.append sb (hex-chars (bit-and         v 0x0F)))))]
+
+               (defn- -ba->hex-str [ba] (str (reduce (fn [sb b] (byte->char-pair sb b)) (StringBuilder.) ba))))
+
+             (let [char-pair->byte
+                   (fn [[c1 c2]]
+                     (let [d1 (Character/digit ^char c1 16)
+                           d2 (Character/digit ^char c2 16)]
+                       (unchecked-byte (+ (bit-shift-left d1 4) d2))))]
+
+               (defn- -hex-str->ba [s]
+                 (if (even? (count s))
+                   (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
+                   (throw
+                     (ex-info "Invalid hex string (length must be even)"
+                       {:given {:value s, :type (type s)}})))))))))
+
+     (let [f-impl -hex-str->ba]
+       (defn hex-str->ba
+         "Returns hex string for given byte[]."
+         {:added "vX.Y.Z (TODO)"}
+         ^bytes [^String s] (f-impl s)))
+
+     (let [f-impl -ba->hex-str]
+       (defn ba->hex-str
+         "Returns byte[] for given hex string."
+         {:added "vX.Y.Z (TODO)"}
+         ^String [^bytes ba] (f-impl ba)))))
+
+(comment :see-tests)
+(comment
+  (vec (-hex-str->ba (-ba->hex-str (byte-array [1 2 3 4 5 6 120 -120 127]))))
+  (let [ba (byte-array (range -128 128))]
+    (enc/qb 1e4 (hex-str->ba (ba->hex-str ba))))
+  )
+
 ;;;; Sorting
 
 #?(:cljs (defn rcompare "Reverse comparator." [x y] (compare y x))
