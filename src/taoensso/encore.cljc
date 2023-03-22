@@ -1339,6 +1339,10 @@
      (defn bytes? [x] (instance? bytes-class x)) ; Also introduced in Clojure v1.9-alpha5+
      (defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
 
+     ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
+     (defn utf8-ba->str {:added "vX.Y.Z (TODO)"} ^String [^bytes ba] (String. ba  java.nio.charset.StandardCharsets/UTF_8))
+     (defn str->utf8-ba {:added "vX.Y.Z (TODO)"} ^bytes  [^String s] (.getBytes s java.nio.charset.StandardCharsets/UTF_8))
+
      (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
        (let [l1  (alength ba1)
              l2  (alength ba2)

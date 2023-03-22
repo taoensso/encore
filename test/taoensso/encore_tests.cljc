@@ -135,6 +135,11 @@
       (let [v (vec (range -128 128))]
         (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
 
+#?(:clj
+   (deftest _utf8-byte-strings
+     (let [s "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ"]
+       (is (= (-> s enc/str->utf8-ba enc/utf8-ba->str) s)))))
+
 (deftest  _get-substr-by-idx
   [(is (= (enc/get-substr-by-idx nil            nil)         nil))
    (is (= (enc/get-substr-by-idx "123456789"    nil) "123456789"))
