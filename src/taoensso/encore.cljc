@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 52 0])
+(def encore-version [3 53 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1340,8 +1340,8 @@
      (defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
 
      ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
-     (defn utf8-ba->str {:added "vX.Y.Z (TODO)"} ^String [^bytes ba] (String. ba  java.nio.charset.StandardCharsets/UTF_8))
-     (defn str->utf8-ba {:added "vX.Y.Z (TODO)"} ^bytes  [^String s] (.getBytes s java.nio.charset.StandardCharsets/UTF_8))
+     (defn utf8-ba->str {:added "v3.53.0 (2023-03-22)"} ^String [^bytes ba] (String. ba  java.nio.charset.StandardCharsets/UTF_8))
+     (defn str->utf8-ba {:added "v3.53.0 (2023-03-22)"} ^bytes  [^String s] (.getBytes s java.nio.charset.StandardCharsets/UTF_8))
 
      (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
        (let [l1  (alength ba1)
@@ -3685,7 +3685,7 @@
      (defn secure-rng-mock!!!
        "Returns **INSECURE** `java.security.SecureRandom` mock instance backed by
        a seeded deterministic `java.util.Random`. Useful for testing, etc."
-       {:added "vX.Y.Z (TODO)"}
+       {:added "v3.53.0 (2023-03-22)"}
        ^java.security.SecureRandom [long-seed]
        (let [long-seed    (long              long-seed)
              insecure-rng (java.util.Random. long-seed)]
@@ -3831,13 +3831,13 @@
      (let [f-impl -hex-str->ba]
        (defn hex-str->ba
          "Returns hex string for given byte[]."
-         {:added "vX.Y.Z (TODO)"}
+         {:added "v3.53.0 (2023-03-22)"}
          ^bytes [^String s] (f-impl s)))
 
      (let [f-impl -ba->hex-str]
        (defn ba->hex-str
          "Returns byte[] for given hex string."
-         {:added "vX.Y.Z (TODO)"}
+         {:added "v3.53.0 (2023-03-22)"}
          ^String [^bytes ba] (f-impl ba)))))
 
 (comment :see-tests)
