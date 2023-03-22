@@ -3589,8 +3589,6 @@
     (into-str :a :b br :c (for [n (range 5)] [n br])
       (when true [:d :e [:f :g]]))))
 
-;;;; Security, etc.
-
 (defn const-str=
   "Constant-time string equality checker.
   Useful to prevent timing attacks, etc."
@@ -3620,6 +3618,8 @@
            nmax)))))
 
 (comment (const-str= "foo" ""))
+
+;;;; Thread locals
 
 #?(:clj
    (defmacro thread-local-proxy "Low-level, see `thread-local` instead."
@@ -3662,6 +3662,8 @@
   (let [tlp (thread-local-proxy "init-val")
         tl_ (thread-local       "init-val")]
     (qb 1e6 (.get ^ThreadLocal tlp) @tl_)))
+
+;;;; (S)RNG, etc.
 
 #?(:clj
    (compile-if (fn [] (java.security.SecureRandom/getInstanceStrong)) ; Java 8+, blocking
@@ -3844,8 +3846,7 @@
 (comment
   (vec (-hex-str->ba (-ba->hex-str (byte-array [1 2 3 4 5 6 120 -120 127]))))
   (let [ba (byte-array (range -128 128))]
-    (enc/qb 1e4 (hex-str->ba (ba->hex-str ba))))
-  )
+    (enc/qb 1e4 (hex-str->ba (ba->hex-str ba)))))
 
 ;;;; Sorting
 
