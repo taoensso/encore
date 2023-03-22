@@ -117,6 +117,16 @@
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in rf")])
 
+#?(:clj
+   (deftest _secure-rng-mock
+     [(is (=
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])))
+
+      (is (not=
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
+            (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
+
 (deftest  _get-substr-by-idx
   [(is (= (enc/get-substr-by-idx nil            nil)         nil))
    (is (= (enc/get-substr-by-idx "123456789"    nil) "123456789"))

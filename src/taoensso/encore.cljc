@@ -3665,17 +3665,32 @@
      (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstance "SHA1SRNG")))))
 
 #?(:clj
-   (defn secure-rng
-     "Returns a thread-local `java.security.SecureRandom`.
-     Favours security over performance. Automatically re-seeds occasionally.
-     May block while waiting on system entropy!"
-     ^java.security.SecureRandom []
-     (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
-       ;; Occasionally supplement current seed for extra security.
-       ;; Otherwise an attacker could *theoretically* observe large amounts of
-       ;; srng output to determine initial seed, Ref. https://goo.gl/MPM91w
-       (when (< (.nextDouble rng) 2.44140625E-4) (.setSeed rng (.generateSeed rng 8)))
-       rng)))
+   (do
+     (defn secure-rng
+       "Returns a thread-local `java.security.SecureRandom`.
+       Favours security over performance. Automatically re-seeds occasionally.
+       May block while waiting on system entropy!"
+       ^java.security.SecureRandom []
+       (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
+         ;; Occasionally supplement current seed for extra security.
+         ;; Otherwise an attacker could *theoretically* observe large amounts of
+         ;; srng output to determine initial seed, Ref. https://goo.gl/MPM91w
+         (when (< (.nextDouble rng) 2.44140625E-4) (.setSeed rng (.generateSeed rng 8)))
+         rng))
+
+     (defn secure-rng-mock!!!
+       "Returns **INSECURE** `java.security.SecureRandom` mock instance backed by
+       a seeded deterministic `java.util.Random`. Useful for testing, etc."
+       {:added "vX.Y.Z (TODO)"}
+       ^java.security.SecureRandom [long-seed]
+       (let [long-seed    (long              long-seed)
+             insecure-rng (java.util.Random. long-seed)]
+
+         (proxy [java.security.SecureRandom] []
+           (getAlgorithm [] (str "INSECURE deterministic, seed=" long-seed))
+           (nextBytes [^bytes ba] (.nextBytes insecure-rng ba)))))))
+
+(comment :see-tests)
 
 (defn secure-rand-bytes
   "Returns `size` random bytes using `secure-rng` or `js/window.crypto`."
