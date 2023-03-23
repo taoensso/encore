@@ -4223,6 +4223,23 @@
 ;;;; Async
 
 #?(:clj
+   (let [ap   (fn [] (.availableProcessors (Runtime/getRuntime)))
+         perc (fn [n] (max 1 (long (Math/floor (* (/ (double (ap)) 100.0) (double n))))))]
+
+     (defn- get-num-threads [n-threads]
+       (if (vector? n-threads)
+         (let [[kind n] n-threads]
+           (case kind
+             :num  (have pos-int? n)
+             :perc (perc          n)
+             (unexpected-arg! kind
+               :context  get-num-threads
+               :expected #{:num :perc})))
+         (have pos-int? n-threads)))))
+
+(comment (get-num-threads [:perc 90]))
+
+#?(:clj
    (defn future-pool
      "Returns a simple semaphore-limited wrapper of Clojure's standard `future`:
        (fn
@@ -4230,9 +4247,10 @@
          [ ] - Blocks to acquire all futures, then immediately releases them.
                Useful for blocking till all outstanding work completes.
      Timeout variants are also provided."
+
      ;; TODO Optionally use an independent pool (=> need for shutdown control)
-     [n]
-     (let [n    (long n)
+     [n-threads]
+     (let [n    (long (get-num-threads n-threads)) ; Undocumented special vec support
            s    (java.util.concurrent.Semaphore. n)
            msecs java.util.concurrent.TimeUnit/MILLISECONDS
            fp-call
