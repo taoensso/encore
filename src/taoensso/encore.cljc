@@ -4296,15 +4296,19 @@
      e.g. ideal for cryptographic key generators."
 
      {:added "v3.49.0 (2023-02-01)"}
-     ([n-capacity           f] (pre-cache n-capacity 1 f))
-     ([n-capacity n-threads f]
+     ([n-capacity                 f] (pre-cache n-capacity 1 f))
+     ([n-capacity fp-or-n-threads f]
       (let [queue (java.util.concurrent.ArrayBlockingQueue. n-capacity)
             f* (fn [] (try {:okay (f)} (catch Throwable t {:error t})))
 
             async-replenish!
-            (let [fp (future-pool n-threads)
-                  a_ (agent nil)]
-              (fn []
+            (let [a_ (agent nil)
+                  fp
+                  (if       (fn? fp-or-n-threads)
+                    (do          fp-or-n-threads)
+                    (future-pool fp-or-n-threads))]
+
+              (fn async-replenish! []
                 (send-off a_
                   (fn [_] (fp (fn [] (.offer queue (f*)))) nil))))]
 
@@ -4324,6 +4328,10 @@
               (get f*-result :okay))))))))
 
 (comment :see-tests)
+(comment
+  (let [fp (future-pool 6)] ; Shared future pool
+    (def f1 (pre-cache 3 fp (fn [] (Thread/sleep 1000) :f1)))
+    (def f2 (pre-cache 4 fp (fn [] (Thread/sleep 500)  :f2)))))
 
 ;;;; Benchmarking
 
