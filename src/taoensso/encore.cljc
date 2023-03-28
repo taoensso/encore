@@ -745,15 +745,17 @@
                 (c err)
                 #?(:clj
                    (case c
-                     (:all        :any) (instance? Throwable err)
-                     (:common :default) (instance? Exception err)
-                     (do                (instance? c         err)))
+                     (:all        :any) (instance? Throwable                  err)
+                     (:common :default) (instance? Exception                  err)
+                     :ex-info           (instance? clojure.lang.ExceptionInfo err)
+                     (do                (instance? c                          err)))
 
                    :cljs
                    (case c
-                     (:all        :any) (some?              err)
-                     (:common :default) (instance? js/Error err)
-                     (do                (instance? c        err)))))]
+                     (:all        :any) (some?                   err)
+                     (:common :default) (instance? js/Error      err)
+                     :ex-info           (instance? ExceptionInfo err)
+                     (do                (instance? c             err)))))]
      err))
 
   ([c pattern err]
