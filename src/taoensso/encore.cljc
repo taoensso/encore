@@ -556,6 +556,22 @@
   (defalias ^{:doc "alias doc 1"} src* src {:doc "alias doc 2"})
   [(src*) (meta #'src*)])
 
+#?(:clj
+   (defmacro deftype-print-methods
+     "Private, used by other Taoensso libs."
+     {:added "vX.Y.Z (TODO)"}
+     [& types]
+     `(do ~@(map (fn [type]
+                   `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
+                      (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
+
+(comment
+  (do
+    (deftype   Foo [] Object (toString [x] "Foo[]"))
+    (defrecord Bar [] Object (toString [x] "Bar{}"))
+    (deftype-print-methods Foo Bar)
+    [(str (Foo.) " " (Bar.)) (Foo.) (Bar.)]))
+
 ;;;; Truss aliases (for back compatibility, convenience)
 
 #?(:clj
