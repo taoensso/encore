@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 55 0])
+(def encore-version [3 56 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -3790,7 +3790,7 @@
 #?(:clj
    (defn ident-hex-str
      "Returns hex string of given Object's `identityHashCode` (e.g. \"0x5eeb49f2\")."
-     {:added "vX.Y.Z (TODO)"}
+     {:added "v3.56.0 (2023-03-29)"}
      ^String [obj] (str "0x" (Integer/toHexString (System/identityHashCode obj)))))
 
 #?(:clj
