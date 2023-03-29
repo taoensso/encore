@@ -3788,6 +3788,12 @@
 ;;;; Hex strings
 
 #?(:clj
+   (defn ident-hex-str
+     "Returns hex string of given Object's `identityHashCode` (e.g. \"0x5eeb49f2\")."
+     {:added "vX.Y.Z (TODO)"}
+     ^String [obj] (str "0x" (Integer/toHexString (System/identityHashCode obj)))))
+
+#?(:clj
    (do
      ;; Select fastest possible implementation,
      ;; Ref. https://stackoverflow.com/a/58118078/1982742
