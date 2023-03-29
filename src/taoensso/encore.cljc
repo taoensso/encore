@@ -630,8 +630,7 @@
                   ]
           ;; (pr x)
           (print-method x sw) ; Bypass *out*, *print-dup*
-          (.toString sw)))
-      )))
+          (.toString sw))))))
 
 ;;;; Errors
 
