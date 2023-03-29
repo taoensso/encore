@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 56 0])
+(def encore-version [3 57 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -559,7 +559,7 @@
 #?(:clj
    (defmacro deftype-print-methods
      "Private, used by other Taoensso libs."
-     {:added "vX.Y.Z (TODO)"}
+     {:added "v3.57.0 (2023-03-29)"}
      [& types]
      `(do ~@(map (fn [type]
                    `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
