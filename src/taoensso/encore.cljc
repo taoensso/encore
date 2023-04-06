@@ -3815,7 +3815,10 @@
      ;; Select fastest possible implementation,
      ;; Ref. https://stackoverflow.com/a/58118078/1982742
 
-     (compile-if java.util.HexFormat ; Java >= 17
+     (compile-if false #_java.util.HexFormat ; Java >= 17
+       ;; Currently disabled since if a project using Encore is AOT compiled
+       ;; with Java >= 17, it won't run on Java < 17. Could also be done by
+       ;; reflection, but not worth the effort.
        (let [hf (java.util.HexFormat/of)]
          (defn- -ba->hex-str [^bytes ba] (.formatHex hf ba))
          (defn- -hex-str->ba [^String s] (.parseHex  hf s)))
