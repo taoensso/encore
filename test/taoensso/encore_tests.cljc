@@ -30,6 +30,8 @@
   (enc/defalias                 test-fn-alias-1 test-fn)
   (enc/defalias ^{:doc "doc b"} test-fn-alias-2 test-fn)
   (enc/defalias ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs {:doc "doc d"}})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-5         :doc "doc e"})
 
   #?(:clj (defmacro ^:private test-macro [x] `~x))
   #?(:clj (enc/defalias test-macro-alias test-macro))
@@ -39,10 +41,12 @@
 
 (deftest _defalias
   ;; [1] v3.47.0+: Cljs aliases no longer copy metadata
-  [        (is (=    (test-fn-alias-1 :x) :x))
+  [(do     (is (=    (test-fn-alias-1 :x) :x)))
    #?(:clj (is (= (-> test-fn-alias-1 var meta :doc) "doc a"))) ; [1]
-           (is (= (-> test-fn-alias-2 var meta :doc) "doc b"))
-           (is (= (-> test-fn-alias-3 var meta :doc) "doc c"))
+   (do     (is (= (-> test-fn-alias-2 var meta :doc) "doc b")))
+   (do     (is (= (-> test-fn-alias-3 var meta :doc) "doc c")))
+   (do     (is (= (-> test-fn-alias-4 var meta :doc) "doc d")))
+   (do     (is (= (-> test-fn-alias-5 var meta :doc) "doc e")))
 
    (is (= (test-macro-alias :x) :x))
 

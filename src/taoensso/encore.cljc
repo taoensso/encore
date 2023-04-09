@@ -507,11 +507,12 @@
        - Source var's metadata will be preserved (docstring, arglists, etc.).
        - Changes to source var's value will also be applied to alias."
 
-     ([          src-sym            ] `(defalias ~(symbol (name src-sym)) ~src-sym nil))
-     ([alias-sym src-sym            ] `(defalias ~alias-sym               ~src-sym nil))
+     ([          src-sym            ] `(defalias nil        ~src-sym nil))
+     ([alias-sym src-sym            ] `(defalias ~alias-sym ~src-sym nil))
      ([alias-sym src-sym alias-attrs]
-      (-have? symbol? alias-sym src-sym)
-      (let [compiling-cljs? (boolean (:ns &env))
+      (-have? symbol? src-sym)
+      (let [alias-sym (-have symbol? (or alias-sym (symbol (name src-sym))))
+            compiling-cljs? (boolean (:ns &env))
             alias-attrs
             (if (string? alias-attrs) ; Back compatibility
               {:doc      alias-attrs}
@@ -550,11 +551,41 @@
                (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
                (do                           (var ~alias-sym)))))))))
 
+(declare unexpected-arg!)
+
+#?(:clj
+   (defmacro defaliases
+     "Bulk version of `defalias`.
+     Takes source symbols or {:keys [alias src attrs]} maps:
+       (defaliases
+         {:alias my-map, :src map, :attrs {:doc \"My `map` alias\"}}
+         {:alias my-vec, :src vec, :attrs {:doc \"My `vec` alias\"}})"
+
+     {:added "vX.Y.Z (TODO)"}
+     [& aliases]
+     `(do
+        ~@(map
+            (fn [x]
+              (cond
+                (symbol? x) `(defalias ~x)
+                (map?    x)
+                (let [{:keys [alias src attrs]
+                       :or   {attrs (dissoc x :alias :src)}} x]
+                  `(defalias ~alias ~src ~attrs))
+
+                :else
+                (unexpected-arg! x
+                  {:expected '#{symbol map}})))
+
+            aliases))))
+
 (comment :see-tests)
 (comment
   (defn src "src doc 1" [] "val1")
   (defalias ^{:doc "alias doc 1"} src* src {:doc "alias doc 2"})
-  [(src*) (meta #'src*)])
+  [(src*) (meta #'src*)]
+  (macroexpand '(defaliases {:alias map2 :src map :doc "map2"}))
+  (do           (defaliases {:alias map2 :src map :doc "map2"})))
 
 #?(:clj
    (defmacro deftype-print-methods
