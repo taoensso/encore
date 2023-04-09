@@ -575,7 +575,8 @@
 
                 :else
                 (unexpected-arg! x
-                  {:expected '#{symbol map}})))
+                  {:expected '#{symbol map}
+                   :context  `defaliases})))
 
             aliases))))
 
@@ -4291,7 +4292,7 @@
              :num  (have pos-int? n)
              :perc (perc          n)
              (unexpected-arg! kind
-               :context  get-num-threads
+               :context  `get-num-threads
                :expected #{:num :perc})))
          (have pos-int? n-threads)))))
 
