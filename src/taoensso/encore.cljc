@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 57 2])
+(def encore-version [3 58 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -561,7 +561,7 @@
          {:alias my-map, :src map, :attrs {:doc \"My `map` alias\"}}
          {:alias my-vec, :src vec, :attrs {:doc \"My `vec` alias\"}})"
 
-     {:added "vX.Y.Z (TODO)"}
+     {:added "v3.58.0 (2023-04-09)"}
      [& aliases]
      `(do
         ~@(map
