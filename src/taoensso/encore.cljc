@@ -834,7 +834,7 @@
    (defmacro throws
      "Like `throws?`, but returns ?matching-error instead of true/false."
      {:added "v3.31.0 (2022-10-27)"}
-     ([          form] `(-matching-error             (catching (do ~form nil) ~'t ~'t)))
+     ([          form] `                             (catching (do ~form nil) ~'t ~'t))
      ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
      ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t)))))
 
