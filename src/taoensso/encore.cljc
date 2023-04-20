@@ -806,29 +806,33 @@
      err))
 
   ([c pattern err]
-   (when-let [match?
-              (and
-                (-matching-error c err)
-                (cond
-                  (nil? pattern) true
-                  (map? pattern)
-                  (if-let [data (ex-data err)]
-                    (submap? data pattern)
-                    false #_(empty? pattern))
+   (if-let [match?
+            (and
+              (-matching-error c err)
+              (cond
+                (nil? pattern) true
+                (map? pattern)
+                (if-let [data (ex-data err)]
+                  (submap? data pattern)
+                  false)
 
-                  :else
-                  (boolean
-                    (re-find
-                      (re-pattern pattern)
-                      (error-message err)))))]
-     err)))
+                :else
+                (boolean
+                  (re-find
+                    (re-pattern pattern)
+                    (error-message err)))))]
+     err
+     (if-let [cause (ex-cause err)]
+       (-matching-error c pattern cause) ; Try match cause
+       false))))
 
 (comment
   (-matching-error                            (catching (/ 4 0) t t))
   (-matching-error :default #"Divide by zero" (catching (/ 4 0) t t))
   (-matching-error :default #"Nope"           (catching (/ 4 0) t t))
   (-matching-error :default #"Test"           (ex-info "Test" {:a :b}))
-  (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d})))
+  (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d}))
+  (-matching-error :ex-info {:a :b}           (ex-info "Dummy" {} (ex-info "Test" {:a :b}))))
 
 #?(:clj
    (defmacro throws
@@ -852,6 +856,9 @@
        - `pattern` may be:
          - A string or Regex against which `ex-message` will be matched.
          - A map             against which `ex-data`    will be matched.
+
+     When an error with (nested) causes doesn't match, a match will be attempted
+     against its (nested) causes.
 
      Useful for unit tests, e.g.:
        (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))

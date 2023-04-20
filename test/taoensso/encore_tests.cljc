@@ -91,6 +91,15 @@
      (is      (enc/throws? :default {:a :a1} (throw (ex-info "Test" {:a :a1 :b :b1}))))
      (is (not (enc/throws? :default {:a :a1} (throw (ex-info "Test" {:a :a2 :b :b1})))))
 
+     (is (= (ex-data (enc/throws :ex-info     {:a :a3}
+                       (throw
+                         (ex-info       "ex1" {:a :a1}
+                           (ex-info     "ex2" {:a :a2}
+                             (ex-info   "ex3" {:a :a3} ; <- Match this
+                               (ex-info "ex4" {:a :a4})))))))
+           {:a :a3})
+       "Check nested causes for match")
+
      ;; Form must throw error, not return it
     #?(:clj
        [(is      (enc/throws? Exception (throw (Exception.))))
