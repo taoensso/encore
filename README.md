@@ -1,56 +1,44 @@
-<a href="https://www.taoensso.com" title="More stuff by @ptaoussanis at www.taoensso.com">
-<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="350"/></a>
+<a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com">
+<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="380""/></a>
 
-**[CHANGELOG][]** | [API][] | current [Break Version][]:
+# Encore
 
-```clojure
-[com.taoensso/encore "3.59.0"]
-```
-
-> See [here][backers] if to help support my open-source work, thanks! - [Peter Taoussanis][Taoensso.com]
-
-# Encore: core utils library for Clojure/Script
+## Core utils library for Clojure/Script
 
 **Or**: What happens when you spend way too much time with Clojure.
 
 **Please note**: this library is intended mostly for my own use or for **advanced users** who are comfortable reading the source code to see what's available + how to use it.
 
-## Recommended steps after any significant dependency update
+## Latest release/s
 
-> These are a good idea when updated **any** dependency, not just Encore!
+Please check [Clojars](https://clojars.org/com.taoensso/encore) for details.
 
-1. Run `lein deps :tree` (or equivalent) to check for possible **dependency conflicts**.
-2. Run `lein clean` (or equivalent) to ensure no **stale build artifacts** remain.
-3. Please test carefully before running in production!
+[![tests][tests badge]][tests status]
 
-Some info on how to resolve dependency conflicts [here](https://github.com/ptaoussanis/encore/blob/master/DEP-CONFLICT.md).
+## Resources
+1. [Wiki][wiki] - **community docs** (👈 start here)
+1. [Release info][] - releases and changes
+1. [API docs][] - auto-generated API docs
+1. [GitHub issues][] - for support requests, contributions, etc.
 
-## Contacting me / contributions
+## Funding this work
 
-Please use the project's [GitHub issues][] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors][] for a list of contributors.
-
-Otherwise, you can reach me at [Taoensso.com][]. Happy hacking!
-
-\- Peter Taoussanis
+Please see [here][funding] if you'd like to help support my continued [open-source work][] (thank you!! 🙏) - Peter
 
 ## License
 
-Distributed under the [EPL v1.0][] (same as Clojure).  
-Copyright &copy; 2014-2023 [Peter Taoussanis][Taoensso.com].
+Copyright &copy; 2014-2023 [Peter Taoussanis][], licensed under [EPL 1.0][] (same as Clojure).
 
-<!--- Standard links -->
-[Taoensso.com]: https://www.taoensso.com
-[Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
-[backers]: https://taoensso.com/clojure/backers
+<!--- Common links -->
+[wiki]: ../../wiki
+[Release info]: ../../releases
+[GitHub issues]: ../../issues
+[funding]: https://taoensso.com/clojure/backers
+[EPL 1.0]: LICENSE
+[Peter Taoussanis]: https://www.taoensso.com
+[open-source work]: https://www.taoensso.com/clojure
 
-<!--- Standard links (repo specific) -->
-[_CHANGELOG]: https://github.com/ptaoussanis/encore/releases
-[CHANGELOG]: https://github.com/ptaoussanis/encore/commits/master
-[API]: http://ptaoussanis.github.io/encore/
-[GitHub issues]: https://github.com/ptaoussanis/encore/issues
-[GitHub contributors]: https://github.com/ptaoussanis/encore/graphs/contributors
-[EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/encore/master/LICENSE
-[Hero]: https://raw.githubusercontent.com/ptaoussanis/encore/master/hero.png
-[Build status]: https://img.shields.io/github/workflow/status/ptaoussanis/encore/build?label=build&style=flat-square
-
-<!--- Unique links -->
+<!--- Repo links -->
+[API docs]: http://ptaoussanis.github.io/encore/
+[tests badge]: https://github.com/ptaoussanis/encore/actions/workflows/tests.yml/badge.svg
+[tests status]: https://github.com/ptaoussanis/encore/actions/workflows/tests.yml
