@@ -3851,68 +3851,61 @@
 
 #?(:clj
    (do
-     ;; Select fastest possible implementation,
-     ;; Ref. https://stackoverflow.com/a/58118078/1982742
+     (let [hex-chars (mapv identity "0123456789abcdef")
+           byte->char-pair
+           (fn [^StringBuilder sb b]
+             (let [v (bit-and ^byte b 0xFF)]
+               (.append sb (hex-chars (bit-shift-right v 4)))
+               (.append sb (hex-chars (bit-and         v 0x0F)))))]
 
-     (compile-if false #_java.util.HexFormat ; Java >= 17
-       ;; Currently disabled since if a project using Encore is AOT compiled
-       ;; with Java >= 17, it won't run on Java < 17. Could also be done by
-       ;; reflection, but not worth the effort.
-       (let [hf (java.util.HexFormat/of)]
-         (defn- -ba->hex-str [^bytes ba] (.formatHex hf ba))
-         (defn- -hex-str->ba [^String s] (.parseHex  hf s)))
-
-       (compile-if org.apache.commons.codec.binary.Hex ; Apache Commons
-         (do
-           (defn- -ba->hex-str [^bytes ba] (org.apache.commons.codec.binary.Hex/encodeHexString ba))
-           (defn- -hex-str->ba [^String s] (org.apache.commons.codec.binary.Hex/decodeHex       s)))
-
-         (compile-if com.google.common.io.BaseEncoding ; Guava
-           (let [encoding (.lowerCase (com.google.common.io.BaseEncoding/base16))]
-             (defn- -ba->hex-str [^bytes ba] (.encode encoding ba))
-             (defn- -hex-str->ba [^String s] (.decode encoding s)))
-
-           ;; Pure Clojure (slowest implementation)
-           (do
-             (let [hex-chars (mapv identity "0123456789abcdef")
-                   byte->char-pair
-                   (fn [^StringBuilder sb b]
-                     (let [v (bit-and ^byte b 0xFF)]
-                       (.append sb (hex-chars (bit-shift-right v 4)))
-                       (.append sb (hex-chars (bit-and         v 0x0F)))))]
-
-               (defn- -ba->hex-str [ba] (str (reduce (fn [sb b] (byte->char-pair sb b)) (StringBuilder.) ba))))
-
-             (let [char-pair->byte
-                   (fn [[c1 c2]]
-                     (let [d1 (Character/digit ^char c1 16)
-                           d2 (Character/digit ^char c2 16)]
-                       (unchecked-byte (+ (bit-shift-left d1 4) d2))))]
-
-               (defn- -hex-str->ba [s]
-                 (if (even? (count s))
-                   (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
-                   (throw
-                     (ex-info "Invalid hex string (length must be even)"
-                       {:given {:value s, :type (type s)}})))))))))
-
-     (let [f-impl -hex-str->ba]
-       (defn hex-str->ba
-         "Returns hex string for given byte[]."
-         {:added "v3.53.0 (2023-03-22)"}
-         ^bytes [^String s] (f-impl s)))
-
-     (let [f-impl -ba->hex-str]
        (defn ba->hex-str
          "Returns byte[] for given hex string."
          {:added "v3.53.0 (2023-03-22)"}
-         ^String [^bytes ba] (f-impl ba)))))
+         ^String [^bytes ba]
+         (str (reduce (fn [sb b] (byte->char-pair sb b)) (StringBuilder.) ba))))
+
+     (let [char-pair->byte
+           (fn [[c1 c2]]
+             (let [d1 (Character/digit ^char c1 16)
+                   d2 (Character/digit ^char c2 16)]
+               (unchecked-byte (+ (bit-shift-left d1 4) d2))))]
+
+       (defn hex-str->ba
+         "Returns hex string for given byte[]."
+         {:added "v3.53.0 (2023-03-22)"}
+         ^bytes [^String s]
+         (if (even? (count s))
+           (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
+           (throw
+             (ex-info "Invalid hex string (length must be even)"
+               {:given {:value s, :type (type s)}})))))
+
+     ;; TODO Any way to auto select fastest implementation?
+     ;; Ref. https://stackoverflow.com/a/58118078/1982742
+     ;; Auto selection seems to cause problems with AOT and/or Graal
+
+     #_
+     (compile-if com.google.common.io.BaseEncoding
+       (let [encoding (.lowerCase (com.google.common.io.BaseEncoding/base16))]
+         (defn- ba->hex-str-guava ^String [^bytes ba] (.encode encoding ba))
+         (defn- hex-str->ba-guava ^bytes  [^String s] (.decode encoding s))))
+
+     #_
+     (compile-if org.apache.commons.codec.binary.Hex
+       (defn- ba->hex-str-commons ^String [^bytes ba] (org.apache.commons.codec.binary.Hex/encodeHexString ba))
+       (defn- hex-str->ba-commons ^bytes  [^String s] (org.apache.commons.codec.binary.Hex/decodeHex       s)))
+
+     #_
+     (compile-if java.util.HexFormat ; Fastest, needs Java 17+
+       (let [hf (java.util.HexFormat/of)]
+         (defn- ba->hex-str-hf ^String [^bytes ba] (.formatHex hf ba))
+         (defn- hex-str->ba-hf ^bytes  [^String s] (.parseHex  hf s))))))
 
 (comment :see-tests)
 (comment
   (vec (-hex-str->ba (-ba->hex-str (byte-array [1 2 3 4 5 6 120 -120 127]))))
   (let [ba (byte-array (range -128 128))]
-    (enc/qb 1e4 (hex-str->ba (ba->hex-str ba)))))
+    (qb 1e4 (hex-str->ba (ba->hex-str ba)))))
 
 ;;;; Sorting
 
