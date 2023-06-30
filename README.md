@@ -13,11 +13,10 @@
 
 Please check [Clojars](https://clojars.org/com.taoensso/encore) for details.
 
-[![Main tests](https://github.com/ptaoussanis/encore/actions/workflows/main_tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/main_tests.yml)
-[![Graal tests](https://github.com/ptaoussanis/encore/actions/workflows/graal_tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/graals_test.yml)
+[![Main tests](https://github.com/ptaoussanis/encore/actions/workflows/main-tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/main-tests.yml)
+[![Graal tests](https://github.com/ptaoussanis/encore/actions/workflows/graal-tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/graal-tests.yml)
 
 ## Resources
-1. [Wiki][wiki] - **community docs** (👈 start here)
 1. [Release info][] - releases and changes
 1. [API docs][] - auto-generated API docs
 1. [GitHub issues][] - for support requests, contributions, etc.
