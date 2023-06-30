@@ -35,7 +35,13 @@
    :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
    :dev      [:c1.11 :test :server-jvm :depr]
    :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
-                             [org.clojure/core.async    "1.6.673"]]}}
+                             [org.clojure/core.async    "1.6.673"]]}
+   :graal-tests
+   {:dependencies [[org.clojure/clojure "1.11.1"]
+                   [com.github.clj-easy/graal-build-time "0.1.4"]]
+    :main taoensso.graal-tests
+    :aot [taoensso.graal-tests]
+    :uberjar-name "graal-tests.jar"}}
 
   :test-paths ["test" #_"src"]
 

@@ -13,7 +13,8 @@
 
 Please check [Clojars](https://clojars.org/com.taoensso/encore) for details.
 
-[![tests][tests badge]][tests status]
+[![Main tests](https://github.com/ptaoussanis/encore/actions/workflows/main_tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/main_tests.yml)
+[![Graal tests](https://github.com/ptaoussanis/encore/actions/workflows/graal_tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/graals_test.yml)
 
 ## Resources
 1. [Wiki][wiki] - **community docs** (👈 start here)
@@ -40,5 +41,3 @@ Copyright &copy; 2014-2023 [Peter Taoussanis][], licensed under [EPL 1.0][] (sam
 
 <!--- Repo links -->
 [API docs]: http://ptaoussanis.github.io/encore/
-[tests badge]: https://github.com/ptaoussanis/encore/actions/workflows/tests.yml/badge.svg
-[tests status]: https://github.com/ptaoussanis/encore/actions/workflows/tests.yml
