@@ -979,6 +979,7 @@
      (defn transient?  [x] (instance? clojure.lang.ITransientCollection x))
      (defn lazy-seq?   [x] (instance? clojure.lang.LazySeq              x))
      (defn re-pattern? [x] (instance? java.util.regex.Pattern           x))
+     (defn can-meta?   [x] (instance? clojure.lang.IObj                 x)) ; Not IMeta
 
      (defn simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
      (defn qualified-ident?   [x] (and (ident?   x)       (namespace x) true))
@@ -1010,6 +1011,7 @@
      (defn ^boolean  transient? [x] (instance?   ITransientCollection x))
      (defn ^boolean   lazy-seq? [x] (instance?   LazySeq              x))
      (defn ^boolean re-pattern? [x] (instance?   js/RegExp            x))
+     (defn ^boolean   can-meta? [x] (implements? IWithMeta            x)) ; Not IMeta
 
      (defn ^boolean simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
      (defn ^boolean qualified-ident?   [x] (and (ident?   x)       (namespace x) true))

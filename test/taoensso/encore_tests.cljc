@@ -295,6 +295,10 @@
         (is (= (pcf) 2))
         (is (= (pcf) 3))])))
 
+(deftest _predicates
+  [(is      (enc/can-meta? []))
+   (is (not (enc/can-meta? "foo")))])
+
 ;;;;
 
 #?(:cljs (test/run-tests))
