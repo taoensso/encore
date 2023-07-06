@@ -23,19 +23,24 @@
    [lein-codox     "0.10.8"]
    [lein-cljsbuild "1.1.8"]]
 
+  :codox
+  {:language #{:clojure :clojurescript}
+   :base-language :clojure}
+
   :profiles
   {;; :default [:base :system :user :provided :dev]
+   :dev        [:c1.11 :test :server-jvm :depr]
+   :depr       {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
    :server-jvm {:jvm-opts ^:replace ["-server"]}
+
    :provided {:dependencies [[org.clojure/clojurescript "1.11.60"]
                              [org.clojure/clojure       "1.11.1"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.1"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
-
-   :depr     {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]}
-   :dev      [:c1.11 :test :server-jvm :depr]
    :test     {:dependencies [[org.clojure/test.check    "1.1.1"]
                              [org.clojure/core.async    "1.6.673"]]}
+
    :graal-tests
    {:dependencies [[org.clojure/clojure "1.11.1"]
                    [com.github.clj-easy/graal-build-time "0.1.4"]]
@@ -63,14 +68,12 @@
 
   :aliases
   {"start-dev"  ["with-profile" "+dev" "repl" ":headless"]
-   "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
    "build-once" ["do" ["clean"] "cljsbuild" "once"]
+   "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
 
-   "test-cljs"  ["with-profile" "+test" "cljsbuild" "test"]
-   "test-all"
-   ["do" ["clean"]
-    "with-profile" "+c1.11:+c1.10:+c1.9" "test,"
-    "test-cljs"]}
+   "test-clj"   ["with-profile" "+c1.11:+c1.10:+c1.9" "test"]
+   "test-cljs"  ["with-profile" "+test" "cljsbuild"   "test"]
+   "test-all"   ["do" ["clean"] "test-clj," "test-cljs"]}
 
   :repositories
   {"sonatype-oss-public"
