@@ -418,6 +418,30 @@
 
 (comment (compiling-cljs?))
 
+#?(:clj
+   (defmacro keep-callsite
+     "The long-standing CLJ-865 unfortunately means that it's currently
+     not possible for an inner macro to access the &form metadata of an
+     outer macro.
+
+     This means that inner macros lose call site information like the
+     line number of the outer macro.
+
+     This util offers a workaround for macro authors:
+
+       (defmacro inner  [] (meta &form))
+       (defmacro outer1 []                `(inner))
+       (defmacro outer2 [] (keep-callsite `(inner)))
+
+       (inner)  => {:line _, :column _}
+       (outer1) => nil
+       (outer2) => {:line _, :column _}"
+
+     {:added "v3.61.0 (yyyy-mm-dd)"}
+     [& body] `(with-meta (do ~@body) (meta ~'&form))))
+
+(comment :see-tests)
+
 ;;;; Core fns
 
 (def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))

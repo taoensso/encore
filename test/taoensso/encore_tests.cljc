@@ -10,7 +10,9 @@
   #?(:cljs
      (:require-macros
       [taoensso.encore-tests
-       :refer [test-macro-alias]])))
+       :refer
+       [test-macro-alias
+        callsite-inner callsite-outer1 callsite-outer2]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -303,6 +305,15 @@
 (deftest _predicates
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
+
+(defmacro ^:private callsite-inner  [] (meta &form))
+(defmacro ^:private callsite-outer1 []                    `(callsite-inner))
+(defmacro ^:private callsite-outer2 [] (enc/keep-callsite `(callsite-inner)))
+
+(deftest _keep-callsite
+  [(is (map? (callsite-inner)))
+   (is (nil? (callsite-outer1)))
+   (is (map? (callsite-outer2)))])
 
 ;;;;
 
