@@ -2202,9 +2202,12 @@
               mval (get m k ::nx)]
 
           (if-let [match?
-                   (if (kw-identical? sval :submap/nx) ; Undocumented
-                     (kw-identical? mval ::nx)
-                     (= sval mval))]
+                   (cond
+                     ;;; Special svals currently undocumented
+                     (kw-identical? sval :submap/nx)        (kw-identical? mval ::nx)
+                     (kw-identical? sval :submap/ex)   (not (kw-identical? mval ::nx))
+                     (kw-identical? sval :submap/some)              (some? mval)
+                     :else (= sval mval))]
             true
             (reduced false)))))
     true

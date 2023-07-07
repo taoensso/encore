@@ -69,8 +69,13 @@
            (enc/have? string? 5 :data :arg-data))))])
 
 (deftest _submap?
-  [(is (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
-   (is (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))])
+  [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+   (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
+   (is (not (enc/submap? {:a {:b :B1 :c nil}} {:a {:c :submap/nx}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
+   (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
+   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))])
 
 (deftest _throws?
   (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
