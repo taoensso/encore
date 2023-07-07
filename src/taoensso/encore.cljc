@@ -442,6 +442,25 @@
 
 (comment :see-tests)
 
+#?(:clj
+   (defn get-source
+     "Returns {:keys [ns line column file]} given a macro's `&form`, `&env` vals."
+     {:added "v3.61.0 (yyyy-mm-dd)"}
+     [form env]
+     (let [{:keys [line column file]} (meta form)]
+       {:ns     (str *ns*)
+        :line   line
+        :column column
+        :file
+        (if (:ns env) ; Compiling cljs
+          ;; Note that meta (and thus file) can be nil due to CLJ-865
+          (if-let [classpath-file (and file (io/resource file))]
+            (.getPath (io/file classpath-file))
+            file)
+          *file*)})))
+
+(comment :see-tests)
+
 ;;;; Core fns
 
 (def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))

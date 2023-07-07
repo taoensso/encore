@@ -11,7 +11,7 @@
      (:require-macros
       [taoensso.encore-tests
        :refer
-       [test-macro-alias
+       [test-macro-alias test-if-cljs test-get-source
         callsite-inner callsite-outer1 callsite-outer2]])))
 
 (comment
@@ -314,6 +314,39 @@
   [(is (map? (callsite-inner)))
    (is (nil? (callsite-outer1)))
    (is (map? (callsite-outer2)))])
+
+(defmacro test-if-cljs [caller]
+  `(enc/if-cljs
+     {:target :cljs, :caller ~caller}
+     {:target :clj,  :caller ~caller}))
+
+(deftest _if-cljs
+  [#?(:clj  (is (= (test-if-cljs :clj)  {:target :clj,  :caller :clj})))
+   #?(:cljs (is (= (test-if-cljs :cljs) {:target :cljs, :caller :cljs})))])
+
+#?(:clj
+   (defmacro test-get-source [caller]
+     #_(spit "debug.txt" (str [(boolean (:ns &env)) (:file (meta &form))] "\n") :append true)
+     `{:caller    ~caller
+       :target    ~(if (:ns &env) :cljs :clj)
+       :form      '~&form
+       :*file*    ~(str *file*)
+       :env       ~(-> &env       (select-keys [:line :column]))
+       :form-meta ~(-> &form meta (select-keys [:line :column :file]))
+       :source    ~(enc/get-source &form &env)}))
+
+(comment (test-get-source :repl))
+
+(deftest _get-source
+  [#?(:clj
+      (let [m (test-get-source :clj)]
+        [(is (enc/submap? m {:target :clj, :caller :clj, :source {:file :submap/some}}))
+         (is (= (get-in   m [:source :file]) (get-in m [:*file*])))]))
+
+   #?(:cljs
+      (let [m (test-get-source :cljs)]
+        [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
+         (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
 
 ;;;;
 
