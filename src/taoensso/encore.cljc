@@ -110,7 +110,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 60 0])
+(def encore-version [3 61 1])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -437,7 +437,7 @@
        (outer1) => nil
        (outer2) => {:line _, :column _}"
 
-     {:added "v3.61.0 (yyyy-mm-dd)"}
+     {:added "v3.61.0 (2023-07-07)"}
      [& body] `(with-meta (do ~@body) (meta ~'&form))))
 
 (comment :see-tests)
@@ -445,7 +445,7 @@
 #?(:clj
    (defn get-source
      "Returns {:keys [ns line column file]} given a macro's `&form`, `&env` vals."
-     {:added "v3.61.0 (yyyy-mm-dd)"}
+     {:added "v3.61.0 (2023-07-07)"}
      [form env]
      (let [{:keys [line column file]} (meta form)]
        {:ns     (str *ns*)
