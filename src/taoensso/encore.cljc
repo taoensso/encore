@@ -444,7 +444,8 @@
 
 #?(:clj
    (defn get-source
-     "Returns {:keys [ns line column file]} given a macro's `&form`, `&env` vals."
+     "Returns {:keys [ns line column file]} callsite and file info given a
+     macro's compile-time `&form` and `&env` vals. See also `keep-callsite`."
      {:added "v3.61.0 (2023-07-07)"}
      [form env]
      (let [{:keys [line column file]} (meta form)]
@@ -655,8 +656,7 @@
      (defalias                 taoensso.truss/have!)
      (defalias                 taoensso.truss/have?)
      (defalias                 taoensso.truss/have!?)
-     (defalias with-truss-data taoensso.truss/with-data)
-     (defalias                 taoensso.truss/keep-callsite)))
+     (defalias with-truss-data taoensso.truss/with-data)))
 
 (defalias get-truss-data taoensso.truss/get-data)
 
