@@ -20,8 +20,8 @@
   :plugins
   [[lein-pprint    "1.3.2"]
    [lein-ancient   "0.7.0"]
-   [lein-codox     "0.10.8"]
-   [lein-cljsbuild "1.1.8"]]
+   [lein-cljsbuild "1.1.8"]
+   [com.taoensso.forks/lein-codox "0.10.9"]]
 
   :codox
   {:language #{:clojure :clojurescript}
