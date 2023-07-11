@@ -348,6 +348,128 @@
         [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
          (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
 
+(deftest _update-in
+  [(is (= (enc/update-in {:a :A :b :B} [   ]        (fn [_] :x))                :x))
+   (is (= (enc/update-in {:a :A :b :B} [:a ]        (fn [_] :x))            {:a :x, :b :B}))
+   (is (= (enc/update-in {:a :A :b :B} [:a ] :nf    (fn [_] :x))            {:a :x, :b :B}))
+   (is (= (enc/update-in {:a :A :b :B} [:nx] :nf    (fn [x]  x))            {:a :A, :b :B, :nx :nf}))
+
+   (is (= (enc/update-in {           } [:a :b ]     (fn [_] :x))            {:a {:b :x}}))
+   (is (= (enc/update-in {           } [:a :b ]     (fn [x] :swap/abort))   {}))
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] x))             {:a {:b :nf}}))
+
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
+
+   (is (= (enc/update-in {           } [:a :b ]     (fn [m] (dissoc m :k))) {:a {:b nil}}))
+   (is (= (enc/update-in {:a {:b :B} } [:a :b ]     (fn [_] :swap/dissoc))  {:a {}}))
+   (is (= (enc/update-in {:a {:b :B} } [:a :nx]     (fn [_] :swap/dissoc))  {:a {:b :B}}))
+
+   (is (enc/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
+     "Non-associative val")])
+
+(deftest _contains-in?
+  [(is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :c])  true))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :nx]) false))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :c)  true))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :nx) false))])
+
+(deftest _dissoc-in
+  [(is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :c])    {:a {:b {:d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :nx])   {:a {:b {:c :C :d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c)    {:a {:b {:d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c :d) {:a {:b {}}}))
+   (is (= (enc/dissoc-in {                     } [:a :b :c])    {}))
+   (is (= (enc/dissoc-in {:a :A                } [:a :b :c])    {:a :A}))
+   (is (= (enc/dissoc-in {                     } [:a :b] :c :d) {}))
+   (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
+   (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
+
+(deftest _swap-in
+  [(testing "k0"
+     [(let [a (atom :a)]
+        [(is (= :x1 (enc/swap-in! a (fn [_] :x1))))
+         (is (= :x1 @a))
+
+         (is (= :y1 (enc/swap-in! a (fn [_] (enc/swapped :x1 :y1)))))
+         (is (= :x1 @a))
+
+         (is (= :x1 (enc/swap-in! a (fn [v] (enc/swapped :x2 v)))))
+         (is (= :x2 @a))
+
+         (is (= :x2 (enc/swap-in! a (fn [v] :swap/abort))))
+         (is (= :x2 @a))
+
+         (is (= :x3 (enc/swap-in! a nil (fn [_] :x3))) "nil ks")
+         (is (= :x3 @a))
+
+         (is (= :x4 (enc/swap-in! a []  (fn [_] :x4))) "empty ks")
+         (is (= :x4 @a))])])
+
+   (testing "k1"
+     [(let [a (atom {:a :A :b :B})]
+        [(is (= (enc/swap-in! a [:a] (fn [_] :x1)) :x1))
+         (is (= @a {:a :x1 :b :B}))
+
+         (is (= (enc/swap-in! a [:a] (fn [v] (enc/swapped :x2 v))) :x1))
+         (is (= @a {:a :x2 :b :B}))
+
+         (is (= (enc/swap-in! a [:a] (fn [_] :swap/abort)) :x2))
+         (is (= @a {:a :x2 :b :B}) "No change")
+
+         (is (= (enc/swap-in! a [:nx] (fn [_] :swap/abort)) nil))
+         (is (= @a {:a :x2 :b :B}) "No change")
+
+         (is (= (enc/swap-in! a [:a] (fn [v] (enc/swapped :swap/abort v))) :x2))
+         (is (= @a {:a :x2 :b :B}) "No change")
+
+         (is (= (enc/swap-in! a [:nx] (fn [v] (enc/swapped :swap/abort v))) nil))
+         (is (= @a {:a :x2 :b :B}) "No change")
+
+         (is (= (enc/swap-in! a [:nx] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= @a {:a :x2 :b :B}) "No change")
+
+         (is (= (enc/swap-in! a [:a] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= @a {:b :B}))
+
+         (is (enc/throws? #?(:clj ClassCastException) (enc/swap-in! a [:b :c] (fn [_] :x)))
+           "Non-associative val")
+
+         (is (= (enc/swap-in! a [:b] (fn [v] (enc/swapped :swap/dissoc v))) :B))
+         (is (= @a {}))])])
+
+   (testing "kn"
+     [(let [a (atom {:a {:b1 :B1 :b2 :B2}})]
+        [(is (= (enc/swap-in! a [:a :b1] (fn [_] :x1)) :x1))
+         (is (= @a {:a {:b1 :x1 :b2 :B2}}))
+
+         (is (= (enc/swap-in! a [:a :b2] (fn [v] (enc/swapped :x2 v))) :B2))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}))
+
+         (is (= (enc/swap-in! a [:a :b2] (fn [_] :swap/abort)) :x2))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
+
+         (is (= (enc/swap-in! a [:nx] (fn [_] :swap/abort)) nil))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
+
+         (is (= (enc/swap-in! a [:a :b1] (fn [v] (enc/swapped :swap/abort v))) :x1))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
+
+         (is (= (enc/swap-in! a [:a :nx] (fn [v] (enc/swapped :swap/abort v))) nil))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
+
+         (is (= (enc/swap-in! a [:a :nx] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
+
+         (is (= (enc/swap-in! a [:a :b1] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= @a {:a {:b2 :x2}}))
+
+         (is (enc/throws? #?(:clj ClassCastException) (enc/swap-in! a [:a :b2 :c] (fn [_] :x)))
+           "Non-associative val")
+
+         (is (= (enc/swap-in! a [:a :b2] (fn [v] (enc/swapped :swap/dissoc v))) :x2))
+         (is (= @a {:a {}}))])])])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

@@ -1961,7 +1961,7 @@
 
 (defn- fsplit-last
   "Faster (f (vec (butlast xs)) (last x))."
-  [f xs]
+  [xs f]
   (if (vector? xs)
     (let [[vn vl] (vsplit-last xs)] (f vn vl))
     (loop [butlast [] xs xs]
@@ -1970,7 +1970,7 @@
           (recur (conj butlast x1) xn)
           (f butlast x1))))))
 
-(comment (let [v [:a :b :c :d]] (qb 1e6 (fsplit-last vector v) [(butlast v) (last v)])))
+(comment (let [v [:a :b :c :d]] (qb 1e6 (fsplit-last v vector) [(butlast v) (last v)])))
 
 (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
 
@@ -1979,7 +1979,7 @@
 
 (def seq-kvs "(seq-kvs {:a :A}) => (:a :A)." (partial reduce concat))
 (defn mapply "Like `apply` but calls `seq-kvs` on final arg."
-  [f & args] (apply f (fsplit-last (fn [xs lx] (concat xs (seq-kvs lx))) args)))
+  [f & args] (apply f (fsplit-last args (fn [xs lx] (concat xs (seq-kvs lx))))))
 
 (comment [(seq-kvs {:a :A :b :B}) (mapply str 1 2 3 {:a :A})])
 
@@ -2090,43 +2090,51 @@
     - Empty ks will return (f m), not act like [nil] ks.
     - Adds support for `not-found`.
     - Adds support for special return vals: `:swap/dissoc`, `:swap/abort`."
-  ;; Consider alternative impl. that accepts (fn f [old nx?])?
   ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
    (if (empty? ks)
-     (f m) #_m ; Also a sensible choice, but (f m) more useful
-     (let [v (f (get-in m ks not-found))]
+     (f m) ; m would also be a sensible choice, but (f m) is more useful
+     (let [old (get-in m ks not-found)
+           new (f old)]
        (cond
-         (kw-identical? v :swap/abort)             m
-         (kw-identical? v :swap/dissoc) (dissoc-in m ks)
-         :else                          (assoc-in  m ks v))))))
+         (kw-identical? new :swap/abort) m
+         (kw-identical? new :swap/dissoc)
+         (fsplit-last ks
+           (fn [ks lk]
+             (update-in m ks nil
+               (fn [v]
+                 (if v ; Assume associative
+                   (dissoc v lk)
+                   :swap/abort)))))
 
-(comment
-  (update-in {:a :A :b :B} [  ] (fn [_] "foo"))
-  (update-in {:a :A :b :B} [:a] (fn [_] "foo"))
-  (update-in {} [:a :b :c] :_nx (fn [in] :swap/abort)))
+         :else (assoc-in m ks new))))))
+
+(comment :see-tests)
 
 (defn #?(:clj contains-in? :cljs ^boolean contains-in?)
   ([coll ks k] (contains? (get-in coll ks) k))
   ([coll ks  ]
-   (if (seq ks)
-     (fsplit-last (fn [ks lk] (contains-in? coll ks lk)) ks)
-     false)))
+   (if (empty? ks)
+     false
+     (fsplit-last ks (fn [ks lk] (contains-in? coll ks lk))))))
+
+(comment :see-tests)
 
 (defn dissoc-in
-  ([m ks dissoc-k & more] (update-in m ks nil (fn [m] (reduce dissoc (dissoc m dissoc-k) more))))
-  ([m ks dissoc-k       ] (update-in m ks nil (fn [m]                (dissoc m dissoc-k))))
-  ([m ks                ]
-   (if (seq ks)
-     (fsplit-last (fn [ks lk] (dissoc-in m ks lk)) ks)
-     m)))
+  ([m ks dissoc-k       ] (update-in m ks nil (fn [m] (if m (dissoc m dissoc-k) :swap/abort))))
+  ([m ks dissoc-k & more]
+   (update-in m ks nil
+     (fn [m]
+       (if m
+         (reduce dissoc (dissoc m dissoc-k) more)
+         :swap/abort))))
 
-(comment
-  [(dissoc-in    {:a :A} [] :a)
-   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b] :c :e)
-   (dissoc-in    {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
-   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a :b :c])
-   (contains-in? {:a {:b {:c :C :d :D :e :E}}} [:a])])
+  ([m ks]
+   (if (empty? m)
+     (do       m)
+     (fsplit-last ks (fn [ks lk] (dissoc-in m ks lk))))))
+
+(comment :see-tests)
 
 (defn node-paths
   ([          m      ] (node-paths associative? m nil))
@@ -2501,7 +2509,7 @@
       (if (kw-identical? f :swap/dissoc)
         (loop []
           (let [m0 @atom_
-                m1 (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)]
+                m1 (dissoc-in m0 ks)]
             (-if-cas! atom_ m0 m1
               (return m0 (get-in m0 ks not-found) m1 :swap/dissoc) ; [m0 v0/nx m1 v1]
               (recur))))
@@ -2520,8 +2528,8 @@
 
               (let [m1
                     (if (kw-identical? v1 :swap/dissoc)
-                      (fsplit-last (fn [ks lk] (dissoc-in m0 ks lk)) ks)
-                      (do                      (assoc-in  m0 ks v1)))]
+                      (dissoc-in m0 ks)
+                      (assoc-in  m0 ks v1))]
 
                 (-if-cas! atom_ m0 m1
                   (if sw?
