@@ -1707,6 +1707,7 @@
 #?(:cljs (def js-?win (when (exists? js/window) js/window)))
 
 (defn force-ref "Like `force` for refs." [x] (if (derefable? x) (deref x) x))
+(defn force-var "Like `force` for vars." [x] (if (var?       x) (deref x) x))
 (defn merge-meta   [x m] (with-meta x (merge (meta x) m)))
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
 
