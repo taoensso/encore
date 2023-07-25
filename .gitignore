@@ -10,8 +10,6 @@ pom.xml*
 /target/
 /checkouts/
 /logs/
-/docs/
 /.clj-kondo/.cache
-/doc/
 .idea/
 *.iml
