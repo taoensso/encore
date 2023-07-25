@@ -1,47 +1,64 @@
-<a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com">
-<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="380""/></a>
+<a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com"><img src="https://www.taoensso.com/open-source.png" alt="Taoensso open source" width="340"/></a>  
+[**Documentation**](#documentation) | [Latest releases](#latest-releases) | [Get support][GitHub issues]
 
-# TODO library name
+# TODO Library name
 
-## TODO library description
+#### TODO Library blurb
 
-TODO More info
+TODO Detailed description
 
 ## Latest release/s
 
-- yyyy-mm-dd: `x.y.z` (dev): [release notes](TODO) | [Clojars](TODO)
-- yyyy-mm-dd: `x.y.z`  (stable): [release notes](TODO) | [Clojars](TODO)
+[![Clojars project][Clojars SVG]][Clojars URL]
 
-[![Main tests](https://github.com/ptaoussanis/TODO/actions/workflows/main_tests.yml/badge.svg)](https://github.com/ptaoussanis/TODO/actions/workflows/main_tests.yml)
-[![Graal tests](https://github.com/ptaoussanis/TODO/actions/workflows/graal_tests.yml/badge.svg)](https://github.com/ptaoussanis/TODO/actions/workflows/graals_test.yml)
+TODO or
 
-## Resources
-1. [Wiki][wiki] - **community docs** (👈 start here)
-1. [Release info][] - releases and changes
-1. [API docs][] - auto-generated API docs
-1. [GitHub issues][] - for support requests, contributions, etc.
+- `yyyy-mm-dd` `x.y.z` (dev): [changes](../../releases/tag/TODO)
+- `yyyy-mm-dd` `x.y.z` (stable): [changes](../../releases/tag/TODO)
 
-## Features
+[![Main tests][Main tests SVG]][Main tests URL]
+[![Graal tests][Graal tests SVG]][Graal tests URL]
 
-* TODO
-* TODO
+See [here][GitHub releases] for earlier releases.
 
-## Funding this work
+## Why <TODO>?
 
-Please see [here][funding] if you'd like to help support my continued [open-source work][] (thank you!! 🙏) - Peter
+- Reason 1 (TODO)
+- Reason 2 (TODO)
+- ... (TODO)
+
+## Documentation
+
+- [Full documentation][GitHub wiki] (**getting started** and more)
+- Auto-generated API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
+
+## Funding
+
+You can [help support][sponsor] on this project, thank you!! 🙏
 
 ## License
 
-Copyright &copy; 2014-2023 [Peter Taoussanis][], licensed under [EPL 1.0][] (same as Clojure).
+Copyright &copy; 2014-2023 [Peter Taoussanis][].  
+Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
-<!--- Common links -->
-[wiki]: ../../wiki
-[Release info]: ../../releases
-[GitHub issues]: ../../issues
-[funding]: https://taoensso.com/clojure/backers
-[EPL 1.0]: LICENSE
+<!-- Common -->
+
+[GitHub releases]: ../../releases
+[GitHub issues]:   ../../issues
+[GitHub wiki]:     ../../wiki
+
 [Peter Taoussanis]: https://www.taoensso.com
-[open-source work]: https://www.taoensso.com/clojure
+[sponsor]:          https://www.taoensso.com/sponsor
 
-<!--- Repo links -->
-[API docs]: http://ptaoussanis.github.io/TODO/
+<!-- Project -->
+
+[Codox docs]:   https://taoensso.github.io/TODO/
+[clj-doc docs]: https://cljdoc.org/d/com.taoensso/TODO/
+
+[Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/TODO.svg
+[Clojars URL]: https://clojars.org/com.taoensso/TODO
+
+[Main tests SVG]:  https://github.com/taoensso/TODO/actions/workflows/main-tests.yml/badge.svg
+[Main tests URL]:  https://github.com/taoensso/TODO/actions/workflows/main-tests.yml
+[Graal tests SVG]: https://github.com/taoensso/TODO/actions/workflows/graal-tests.yml/badge.svg
+[Graal tests URL]: https://github.com/taoensso/TODO/actions/workflows/graal-tests.yml
