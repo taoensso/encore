@@ -1745,7 +1745,7 @@
 
     (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
       (throw
-        (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see http://goo.gl/qBbLvC for solutions."
+        (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see `https://www.taoensso.com/dependency-conflicts` for solutions."
           {:min-version  (str/join "." [xm ym zm])
            :your-version (str/join "." [xc yc zc])})))))
 
