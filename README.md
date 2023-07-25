@@ -1,42 +1,53 @@
-<a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com">
-<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="380""/></a>
+<a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com"><img src="https://ensso.taoensso.com/assets/imgs/taoensso-open-source.png" alt="Taoensso open source" width="340"/></a>  
+[**Documentation**](#documentation) | [Latest releases](#latest-releases) | [Get support][GitHub issues]
 
 # Encore
 
-## Core utils library for Clojure/Script
+#### Core utils library for Clojure/Script
 
 **Or**: What happens when you spend way too much time with Clojure.
 
-**Please note**: this library is intended mostly for my own use or for **advanced users** who are comfortable reading the source code to see what's available + how to use it.
+**Note**: This library is intended mostly for my own use or for **advanced users** who are comfortable reading the source code and commit history for more info.
 
 ## Latest release/s
 
-Please check [Clojars](https://clojars.org/com.taoensso/encore) for details.
+[![Clojars project][Clojars SVG]][Clojars URL]
 
-[![Main tests](https://github.com/ptaoussanis/encore/actions/workflows/main-tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/main-tests.yml)
-[![Graal tests](https://github.com/ptaoussanis/encore/actions/workflows/graal-tests.yml/badge.svg)](https://github.com/ptaoussanis/encore/actions/workflows/graal-tests.yml)
+[![Main tests][Main tests SVG]][Main tests URL]
+[![Graal tests][Graal tests SVG]][Graal tests URL]
 
-## Resources
-1. [Release info][] - releases and changes
-1. [API docs][] - auto-generated API docs
-1. [GitHub issues][] - for support requests, contributions, etc.
+## Documentation
 
-## Funding this work
+- [Full documentation][GitHub wiki] (**getting started** and more)
+- Auto-generated API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
 
-Please see [here][funding] if you'd like to help support my continued [open-source work][] (thank you!! 🙏) - Peter
+## Funding
+
+You can [help support continued work][funding] on this project, thank you!! 🙏
 
 ## License
 
-Copyright &copy; 2014-2023 [Peter Taoussanis][], licensed under [EPL 1.0][] (same as Clojure).
+Copyright &copy; 2014-2023 [Peter Taoussanis][].  
+Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
-<!--- Common links -->
-[wiki]: ../../wiki
-[Release info]: ../../releases
-[GitHub issues]: ../../issues
-[funding]: https://taoensso.com/clojure/backers
-[EPL 1.0]: LICENSE
+<!-- Common -->
+
+[GitHub releases]: ../../releases
+[GitHub issues]:   ../../issues
+[GitHub wiki]:     ../../wiki
+
 [Peter Taoussanis]: https://www.taoensso.com
-[open-source work]: https://www.taoensso.com/clojure
+[funding]:          https://www.taoensso.com/clojure/backers
 
-<!--- Repo links -->
-[API docs]: http://ptaoussanis.github.io/encore/
+<!-- Project -->
+
+[Codox docs]:   https://taoensso.github.io/encore/
+[clj-doc docs]: https://cljdoc.org/d/com.taoensso/encore/
+
+[Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/encore.svg
+[Clojars URL]: https://clojars.org/com.taoensso/encore
+
+[Main tests SVG]:  https://github.com/taoensso/encore/actions/workflows/main-tests.yml/badge.svg
+[Main tests URL]:  https://github.com/taoensso/encore/actions/workflows/main-tests.yml
+[Graal tests SVG]: https://github.com/taoensso/encore/actions/workflows/graal-tests.yml/badge.svg
+[Graal tests URL]: https://github.com/taoensso/encore/actions/workflows/graal-tests.yml
