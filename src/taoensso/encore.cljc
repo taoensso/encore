@@ -426,6 +426,38 @@
 (comment (compiling-cljs?))
 
 #?(:clj
+   (let [resolve-clj clojure.core/resolve
+         resolve-cljs
+         (when-let [ns (find-ns 'cljs.analyzer.api)]
+           (when-let [v (ns-resolve ns 'resolve)] @v))]
+
+     (defn resolve-var
+       "Resolves given symbol to clj/s var, or nil."
+       {:added "vX.Y.Z (yyyy-mm-dd)"}
+       #?(:clj ([sym] (resolve-clj sym)))
+       ([env sym]
+        (when (symbol? sym)
+          (if (:ns env)
+            (when resolve-cljs (resolve-cljs env sym))
+            (do                (resolve-clj  env sym))))))))
+
+(comment (resolve-var nil 'string?) :see-tests)
+
+#?(:clj
+   (defn- var->sym [cljs? v]
+     (let [m (if cljs? v (meta v))]
+       (symbol (str (:ns m)) (name (:name m))))))
+
+#?(:clj
+   (defn resolve-sym
+     "Resolves given symbol to qualified clj/s symbol, or nil."
+     {:added "vX.Y.Z (yyyy-mm-dd)"}
+     #?(:clj ([sym] (when-let [v (resolve-var     sym)] (var->sym false     v))))
+     ([env sym]     (when-let [v (resolve-var env sym)] (var->sym (:ns env) v)))))
+
+(comment (resolve-sym nil 'string?) :see-tests)
+
+#?(:clj
    (defmacro keep-callsite
      "The long-standing CLJ-865 unfortunately means that it's currently
      not possible for an inner macro to access the &form metadata of an

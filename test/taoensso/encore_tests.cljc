@@ -11,7 +11,7 @@
      (:require-macros
       [taoensso.encore-tests
        :refer
-       [test-macro-alias test-if-cljs test-get-source
+       [test-macro-alias test-if-cljs test-get-source resolve-sym
         callsite-inner callsite-outer1 callsite-outer2]])))
 
 (comment
@@ -347,6 +347,14 @@
       (let [m (test-get-source :cljs)]
         [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
          (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
+
+#?(:clj (defmacro resolve-sym [x] (let [s (enc/resolve-sym &env x)] `'~s)))
+
+(deftest _resolve-sym
+  [#?(:clj  (is (= (resolve-sym string?) 'clojure.core/string?))
+      :cljs (is (= (resolve-sym string?)    'cljs.core/string?)))])
+
+;;;;
 
 (deftest _update-in
   [(is (= (enc/update-in {:a :A :b :B} [   ]        (fn [_] :x))                :x))
