@@ -416,11 +416,12 @@
 
 #?(:clj
    (defn compiling-cljs?
-     "Return truthy iff currently generating Cljs code."
+     "Return truthy iff currently generating Cljs code.
+     See also `if-cljs`, `if-clj`."
      []
-     (when-let [n (find-ns 'cljs.analyzer)]
-       (when-let [v (ns-resolve n '*cljs-file*)]
-         @v))))
+     (when-let [ns (find-ns 'cljs.analyzer)]
+       (when-let [v (ns-resolve ns '*cljs-file*)]
+         (boolean @v)))))
 
 (comment (compiling-cljs?))
 
