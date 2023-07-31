@@ -9,7 +9,7 @@
 
   :dependencies
   [[org.clojure/tools.reader "1.3.6"]
-   [com.taoensso/truss       "1.10.1"]]
+   [com.taoensso/truss       "1.11.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
