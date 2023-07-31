@@ -116,7 +116,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 62 1])
+(def encore-version [3 63 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -433,7 +433,7 @@
 
      (defn resolve-var
        "Resolves given symbol to clj/s var, or nil."
-       {:added "vX.Y.Z (yyyy-mm-dd)"}
+       {:added "v3.63.0 (2023-07-31)"}
        #?(:clj ([sym] (resolve-clj sym)))
        ([env sym]
         (when (symbol? sym)
@@ -451,7 +451,7 @@
 #?(:clj
    (defn resolve-sym
      "Resolves given symbol to qualified clj/s symbol, or nil."
-     {:added "vX.Y.Z (yyyy-mm-dd)"}
+     {:added "v3.63.0 (2023-07-31)"}
      #?(:clj ([sym] (when-let [v (resolve-var     sym)] (var->sym false     v))))
      ([env sym]     (when-let [v (resolve-var env sym)] (var->sym (:ns env) v)))))
 
