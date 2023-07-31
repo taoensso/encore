@@ -49,7 +49,13 @@
 
   Example commit messages:
     v1.0.0 (2022-01-27) ; Tagged release
-    [new] [#122] Add new feature x (@contributor)"
+    [new] [#122] Add new feature x (@contributor)
+
+  Version numbers:
+     Changelog: `X.Y.Z`(with    backticks)
+    Ver tables:  X.Y.Z (without backticks)
+       Min ver: vX.Y.Z+
+     Elsewhere: vX.Y.Z"
 
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
