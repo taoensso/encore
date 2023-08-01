@@ -1,9 +1,14 @@
 <a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com"><img src="https://www.taoensso.com/open-source.png" alt="Taoensso open source" width="340"/></a>  
 [**Documentation**](#documentation) | [Latest releases](#latest-releases) | [Get support][GitHub issues]
 
+<!-- ../../ from README to get to base of GitHub project -->
+<!-- ../ from wiki to get to base of GitHub project -->
+<!-- ../../blobs/master/<path> to get to file in repo -->
+<!-- ../../tree/master/<path> to get to dir in repo -->
+
 # TODO Library name
 
-#### TODO Library blurb
+### TODO Library blurb
 
 TODO Detailed description
 
@@ -13,8 +18,8 @@ TODO Detailed description
 
 TODO or
 
-- `yyyy-mm-dd` `x.y.z` (dev): [changes](../../releases/tag/TODO)
-- `yyyy-mm-dd` `x.y.z` (stable): [changes](../../releases/tag/TODO)
+- `yyyy-mm-dd` `x.y.z` (dev): [changes](../../releases/tag/vTODO)
+- `yyyy-mm-dd` `x.y.z` (stable): [changes](../../releases/tag/vTODO)
 
 [![Main tests][Main tests SVG]][Main tests URL]
 [![Graal tests][Graal tests SVG]][Graal tests URL]

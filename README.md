@@ -3,7 +3,7 @@
 
 # Encore
 
-#### Core utils library for Clojure/Script
+### Core utils library for Clojure/Script
 
 **Or**: What happens when you spend way too much time with Clojure.
 

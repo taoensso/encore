@@ -13,3 +13,4 @@ pom.xml*
 /.clj-kondo/.cache
 .idea/
 *.iml
+/wiki/.git
