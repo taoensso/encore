@@ -52,7 +52,6 @@
     [new] [#122] Add new feature x (@contributor)
 
   Version numbers:
-     Changelog: `X.Y.Z`(with    backticks)
     Ver tables:  X.Y.Z (without backticks)
        Min ver: vX.Y.Z+
      Elsewhere: vX.Y.Z"
@@ -1683,28 +1682,27 @@
                                        (if (< n# nmin#) nmin# (if (> n# nmax#) nmax# n#))))))
 
 (defn pow [n exp] (Math/pow n exp))
-(defn abs [n]     (if (neg? n) (- n) n)) ; #?(:clj (Math/abs n)) reflects
-(defn round* ; round
-  ([             n] (round* :round nil n))
-  ([kind         n] (round* kind   nil n))
-  ([kind nplaces n]
+(defn abs [n]     (if (neg? n) (- n) n))
+(defn round*
+  ([               n] (round* :round nil n))
+  ([kind           n] (round* kind   nil n))
+  ([kind precision n]
    (let [n        (double n)
-         modifier (when nplaces (Math/pow 10.0 nplaces))
+         modifier (when precision (Math/pow 10.0 precision))
          n*       (if modifier (* n ^double modifier) n)
          rounded
          (case kind
-           ;;; Note same API for both #?(:clj _ :cljs: _)
-           :round (Math/round n*) ; Round to nearest int or nplaces
-           :floor (Math/floor n*) ; Round down to -inf
-           :ceil  (Math/ceil  n*) ; Round up to +inf
-           :trunc (long n*)       ; Round up/down toward zero
+           :round (Math/round n*)
+           :floor (Math/floor n*)
+           :ceil  (Math/ceil  n*)
+           :trunc (long       n*)
            (throw
              (ex-info "[encore/round*] Unexpected round kind (expected ∈ #{:round :floor :ceil :trunc})"
                {:kind {:value kind :type (type kind)}})))]
 
      (if-not modifier
-       (long rounded)                        ; Returns long
-       (/ (double rounded) ^double modifier) ; Returns double
+       (/  (double rounded) ^double modifier) ; Return double
+       (do (long   rounded))                  ; Returns long
        ))))
 
 (comment
