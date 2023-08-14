@@ -5,6 +5,8 @@
 
 ### Core utils library for Clojure/Script
 
+A set of general-purpose extensions for Clojure/Script with a heavy emphasis on cross-platform consistency.
+
 **Or**: What happens when you spend way too much time with Clojure.
 
 **Note**: This library is intended mostly for my own use or for **advanced users** who are comfortable reading the source code and commit history for more info.

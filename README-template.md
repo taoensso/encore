@@ -3,8 +3,9 @@
 
 <!-- ../../ from README to get to base of GitHub project -->
 <!-- ../ from wiki to get to base of GitHub project -->
-<!-- ../../blobs/master/<path> to get to file in repo -->
-<!-- ../../tree/master/<path> to get to dir in repo -->
+<!-- ../../raw/master/<path> to get image in repo -->
+<!-- ../../blob/master/<path> to get file in repo -->
+<!-- ../../tree/master/<path> to get dir in repo -->
 
 # TODO Library name
 
