@@ -1,10 +1,10 @@
-This project uses Break Versioning (https://www.taoensso.com/break-versioning)
+This project uses [**Break Versioning**](https://www.taoensso.com/break-versioning).
 
-[releases]: https://github.com/taoensso/TODO/releases
+---
 
 # `vX.Y.Z` (yyyy-mm-dd)
 
-> 📦 [Available on Clojars](https://clojars.org/com.taoensso/TODO/versions/X.Y.Z), this project uses [Break Versioning](https://www.taoensso.com/break-versioning)
+> 📦 [Available on Clojars](https://clojars.org/com.taoensso/TODO/versions/X.Y.Z), this project uses [Break Versioning](https://www.taoensso.com/break-versioning).
 
 This is a non-breaking **feature and maintenance** (pre-)release.
 
@@ -30,7 +30,8 @@ Please test carefully and report any unexpected problems, thank you! 🙏
 
 * 79fbf8f [new] Commit message
 
+---
 
 # Earlier releases
 
-See [here][releases] for earlier releases.
+See [here](https://github.com/taoensso/TODO/releases) for earlier releases.
