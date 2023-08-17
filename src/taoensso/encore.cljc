@@ -176,12 +176,6 @@
 
 (comment (require '[clojure.core.async] :verbose))
 
-;;; (:ns &env) is nnil iff compiling for ClojureScript, giving us a way to
-;;; write macros that produce different Clj/Cljs code (not something that
-;;; .cljx or .cljc currently provide support for):
-#?(:clj (defmacro if-clj  {:style/indent 1} [then & [else]] (if (:ns &env) else then)))
-#?(:clj (defmacro if-cljs {:style/indent 1} [then & [else]] (if (:ns &env) then else)))
-
 #?(:clj
    (defmacro if-let
      "Like `core/if-let` but can bind multiple values for `then` iff all tests
@@ -279,8 +273,23 @@
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
 
+;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
+;; different code depending on target (Clj/s), something reader conditionals cannot do.
+#?(:clj (defmacro if-clj  {:style/indent 1} [then & [else]] (if (:ns &env) else then)))
+#?(:clj (defmacro if-cljs {:style/indent 1} [then & [else]] (if (:ns &env) then else)))
 #?(:clj
-   (defmacro -cond [throw? & clauses]
+   (defn compiling-cljs?
+     "Return truthy iff currently generating Cljs code.
+     See also `if-cljs`, `if-clj`."
+     []
+     (when-let [ns (find-ns 'cljs.analyzer)]
+       (when-let [v (ns-resolve ns '*cljs-file*)]
+         (boolean @v)))))
+
+(comment (compiling-cljs?))
+
+#?(:clj
+   (defmacro ^:no-doc -cond [throw? & clauses]
      (if-let [[test expr & more] (seq clauses)]
        (if-not (next clauses)
          test ; Implicit else
@@ -346,7 +355,7 @@
                  z nil]
        \"y and z were both non-nil\")
 
-     :let support inspired by https://github.com/Engelberg/better-cond.
+     :let support inspired by <https://github.com/Engelberg/better-cond>.
      Simple, flexible way to eliminate deeply-nested control flow code."
 
      ;; Also avoids unnecessary `(if :else ...)`, etc.
@@ -409,103 +418,9 @@
      {:style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
-       `(if-cljs
-             (cljs.core/defonce ~sym ~@body)
-          (clojure.core/defonce ~sym ~@body)))))
-
-#?(:clj
-   (defn compiling-cljs?
-     "Return truthy iff currently generating Cljs code.
-     See also `if-cljs`, `if-clj`."
-     []
-     (when-let [ns (find-ns 'cljs.analyzer)]
-       (when-let [v (ns-resolve ns '*cljs-file*)]
-         (boolean @v)))))
-
-(comment (compiling-cljs?))
-
-#?(:clj
-   (let [resolve-clj clojure.core/resolve
-         resolve-cljs
-         (when-let [ns (find-ns 'cljs.analyzer.api)]
-           (when-let [v (ns-resolve ns 'resolve)] @v))]
-
-     (defn resolve-var
-       "Resolves given symbol to clj/s var, or nil."
-       {:added "v3.63.0 (2023-07-31)"}
-       #?(:clj ([sym] (resolve-clj sym)))
-       ([env sym]
-        (when (symbol? sym)
-          (if (:ns env)
-            (when resolve-cljs (resolve-cljs env sym))
-            (do                (resolve-clj  env sym))))))))
-
-(comment (resolve-var nil 'string?) :see-tests)
-
-#?(:clj
-   (defn- var->sym [cljs? v]
-     (let [m (if cljs? v (meta v))]
-       (symbol (str (:ns m)) (name (:name m))))))
-
-#?(:clj
-   (defn resolve-sym
-     "Resolves given symbol to qualified clj/s symbol, or nil."
-     {:added "v3.63.0 (2023-07-31)"}
-     #?(:clj ([sym] (when-let [v (resolve-var     sym)] (var->sym false     v))))
-     ([env sym]     (when-let [v (resolve-var env sym)] (var->sym (:ns env) v)))))
-
-(comment (resolve-sym nil 'string?) :see-tests)
-
-#?(:clj
-   (defmacro keep-callsite
-     "The long-standing CLJ-865 unfortunately means that it's currently
-     not possible for an inner macro to access the &form metadata of an
-     outer macro.
-
-     This means that inner macros lose call site information like the
-     line number of the outer macro.
-
-     This util offers a workaround for macro authors:
-
-       (defmacro inner  [] (meta &form))
-       (defmacro outer1 []                `(inner))
-       (defmacro outer2 [] (keep-callsite `(inner)))
-
-       (inner)  => {:line _, :column _}
-       (outer1) => nil
-       (outer2) => {:line _, :column _}"
-
-     {:added "v3.61.0 (2023-07-07)"}
-     [& body] `(with-meta (do ~@body) (meta ~'&form))))
-
-(comment :see-tests)
-
-#?(:clj
-   (defn get-source
-     "Returns {:keys [ns line column file]} callsite and file info given a
-     macro's compile-time `&form` and `&env` vals. See also `keep-callsite`."
-     {:added "v3.61.0 (2023-07-07)"}
-     [form env]
-     (let [{:keys [line column file]} (meta form)
-           file
-           (if-not (:ns env)
-             *file* ; Compiling clj
-             (or    ; Compiling cljs
-               (when-let [url (and file (try (io/resource file) (catch Throwable _ nil)))]
-                 (try (.getPath (io/file url)) (catch Throwable _ nil))
-                 (do            (str     url)))
-               file))]
-
-       {:ns     (str *ns*)
-        :line   line
-        :column column
-        :file
-        (when (string? file)
-          (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
-            file))})))
-
-(comment (io/resource "taoensso/encore.cljc"))
-(comment :see-tests)
+       (if (:ns &env)
+         `(cljs.core/defonce    ~sym ~@body)
+         `(clojure.core/defonce ~sym ~@body)))))
 
 ;;;; Core fns
 
@@ -572,9 +487,9 @@
 
 (comment (quote-arglists {:a :A :arglists '([x])}))
 
-(def ^:private alias-src-attrs [:doc :arglists :private :macro :added :deprecated])
+#?(:clj (def ^:private alias-src-attrs [:doc :arglists :private :macro :added :deprecated]))
 #?(:clj
-   (defn -alias-link-var [dst-var src-var dst-attrs]
+   (defn ^:no-doc -alias-link-var [dst-var src-var dst-attrs]
      (add-watch src-var dst-var
        (fn [_ _ _ new-val]
          (alter-var-root dst-var (fn [_] new-val))
@@ -678,7 +593,7 @@
   (do           (defaliases {:alias map2 :src map :doc "map2"})))
 
 #?(:clj
-   (defmacro deftype-print-methods
+   (defmacro ^:no-doc deftype-print-methods
      "Private, used by other Taoensso libs."
      {:added "v3.57.0 (2023-03-29)"}
      [& types]
@@ -795,31 +710,31 @@
       (case error-type
         (:common :default) ; `:default` is a poor name, here only for back compatibility
         (if (nil? finally-expr)
-          `(if-cljs
-             (try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
-             (try ~try-expr (catch Exception ~error-sym ~catch-expr)))
-          `(if-cljs
-             (try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
-             (try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
+          (if (:ns &env)
+            `(try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
+            `(try ~try-expr (catch Exception ~error-sym ~catch-expr)))
+          (if (:ns &env)
+            `(try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
+            `(try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
 
         (:all :any)
         ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
         (if (nil? finally-expr)
-          `(if-cljs
-             (try ~try-expr (catch :default  ~error-sym ~catch-expr))
-             (try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
-          `(if-cljs
-             (try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
-             (try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
+          (if (:ns &env)
+            `(try ~try-expr (catch :default  ~error-sym ~catch-expr))
+            `(try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
+          (if (:ns &env)
+            `(try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
+            `(try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
 
         ;; Specific error-type provided
         (if (nil? finally-expr)
-          `(if-cljs
-             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
-             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
-          `(if-cljs
-             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
-             (try ~try-expr (catch ~error-type ~error-sym ~catch-expr))))))))
+          (if (:ns &env)
+            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
+            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
+          (if (:ns &env)
+            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
+            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr))))))))
 
 (comment
   (macroexpand '(catching (do "foo") e e (println "finally")))
@@ -864,15 +779,9 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(defn- error-message
-  ;; Note Clojure >= 1.10 now has `ex-message`
-  [x]
-  #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
-     :cljs (when (instance? js/Error  x) (.-message              x))))
-
 (declare submap?)
-(defn -matching-error
-  ;; Ref. also CLJ-1293
+(defn ^:no-doc -matching-error
+  ;; Ref. CLJ-1293
   ([  err] err)
   ([c err]
    (when-let [match?
@@ -908,7 +817,7 @@
                 (boolean
                   (re-find
                     (re-pattern pattern)
-                    (error-message err)))))]
+                    (ex-message err)))))]
      err
      (if-let [cause (ex-cause err)]
        (-matching-error c pattern cause) ; Try match cause
@@ -1018,6 +927,93 @@
   ([error-fn xform] (comp (fn [rf] (catching-rf error-fn rf)) xform))
   ([         xform] (comp           catching-rf               xform)))
 
+(comment :see-tests)
+
+;;;; Vars, etc.
+
+#?(:clj
+   (let [resolve-clj clojure.core/resolve
+         resolve-cljs
+         (when-let [ns (find-ns 'cljs.analyzer.api)]
+           (when-let [v (ns-resolve ns 'resolve)] @v))]
+
+     (defn resolve-var
+       "Resolves given symbol to clj/s var, or nil."
+       {:added "v3.63.0 (2023-07-31)"}
+       ([          sym] (resolve-var nil sym))
+       ([macro-env sym]
+        (when (symbol? sym)
+          (if (:ns macro-env)
+            (when resolve-cljs (resolve-cljs macro-env sym))
+            (do                (resolve-clj  macro-env sym))))))))
+
+(comment (resolve-var nil 'string?) :see-tests)
+
+#?(:clj
+   (defn- var->sym [cljs? v]
+     (let [m (if cljs? v (meta v))]
+       (symbol (str (:ns m)) (name (:name m))))))
+
+#?(:clj
+   (defn resolve-sym
+     "Resolves given symbol to qualified clj/s symbol, or nil."
+     {:added "v3.63.0 (2023-07-31)"}
+     ([          sym] (resolve-sym nil sym))
+     ([macro-env sym]
+      (when-let [v (resolve-var macro-env sym)]
+        (var->sym (:ns macro-env) v)))))
+
+(comment (resolve-sym nil 'string?) :see-tests)
+
+#?(:clj
+   (defmacro keep-callsite
+     "The long-standing CLJ-865 unfortunately means that it's currently
+     not possible for an inner macro to access the &form metadata of an
+     outer macro.
+
+     This means that inner macros lose call site information like the
+     line number of the outer macro.
+
+     This util offers a workaround for macro authors:
+
+       (defmacro inner  [] (meta &form))
+       (defmacro outer1 []                `(inner))
+       (defmacro outer2 [] (keep-callsite `(inner)))
+
+       (inner)  => {:line _, :column _}
+       (outer1) => nil
+       (outer2) => {:line _, :column _}"
+
+     {:added "v3.61.0 (2023-07-07)"}
+     [& body] `(with-meta (do ~@body) (meta ~'&form))))
+
+(comment :see-tests)
+
+#?(:clj
+   (defn get-source
+     "Returns {:keys [ns line column file]} callsite and file info given a
+     macro's compile-time `&form` and `&env` vals. See also `keep-callsite`."
+     {:added "v3.61.0 (2023-07-07)"}
+     [form env]
+     (let [{:keys [line column file]} (meta form)
+           file
+           (if-not (:ns env)
+             *file* ; Compiling clj
+             (or    ; Compiling cljs
+               (when-let [url (and file (catching (io/resource file)))]
+                 (catching (.getPath (io/file url)))
+                 (do                 (str     url)))
+               file))]
+
+       {:ns     (str *ns*)
+        :line   line
+        :column column
+        :file
+        (when (string? file)
+          (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
+            file))})))
+
+(comment (io/resource "taoensso/encore.cljc"))
 (comment :see-tests)
 
 ;;;; Tests
@@ -1232,7 +1228,7 @@
 (do
   ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
   ;; `keyword-identical?`. This util helps alleviate the pain of writing
-  ;; cross-platform code, Ref. http://goo.gl/be8CGP
+  ;; cross-platform code, Ref. <http://goo.gl/be8CGP>
   #?(:clj  (def          kw-identical?         identical?)
      :cljs (def ^boolean kw-identical? keyword-identical?)))
 
@@ -1336,7 +1332,7 @@
 
 (comment [(is! false) (is! nil) (is! string? 5) (when? string? "foo")])
 
-(defn -as-throw [kind x]
+(defn ^:no-doc -as-throw [kind x]
   (throw
     (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
       {:pred-kind kind
@@ -1537,13 +1533,14 @@
 ;;;; Reduce
 
 (defn   convey-reduced [x] (if (reduced? x) (reduced x) x)) ; Double-wrap
-(defn preserve-reduced "As `core/preserving-reduced`."
+(defn preserve-reduced
+  "Public version of `core/preserving-reduced`."
   [rf]
   (fn [acc in]
     (let [result (rf acc in)]
       (if (reduced? result)
         (reduced result)
-        result))))
+        (do      result)))))
 
 (defn reduce-kvs
   "Like `reduce-kv` but takes a flat sequence of kv pairs."
@@ -1551,8 +1548,8 @@
   (transduce (partition-all 2)
     (completing (fn [acc [k v]] (rf acc k v))) init kvs))
 
-;; No longer so interesting with Clojure 1.7+
 (defn reduce-n
+  ;; No longer so interesting with Clojure 1.7+
   ([rf init       end     ] (reduce rf init (range       end)))
   ([rf init start end     ] (reduce rf init (range start end)))
   ([rf init start end step] (reduce rf init (range start end step))))
@@ -1573,8 +1570,7 @@
 
 #?(:cljs
    (defn reduce-obj "Like `reduce-kv` but for JavaScript objects."
-     [f init o]
-     (reduce (fn [acc k] (f acc k (gobj/get o k nil))) init (js-keys o))))
+     [f init o] (reduce (fn [acc k] (f acc k (gobj/get o k nil))) init (js-keys o))))
 
 (do
            (defn run!     [proc coll] (reduce     #(proc %2)    nil coll) nil)
@@ -2050,8 +2046,8 @@
    (fn [rf]
      (let [seen_ (volatile! (transient #{}))]
        (fn
-         ([]    (rf))
-         ([acc] (rf acc))
+         ([         ] (rf))
+         ([acc      ] (rf acc))
          ([acc input]
           (let [k (keyfn input)]
             (if (contains? @seen_ k)
@@ -2195,7 +2191,8 @@
   (node-paths associative? {:a1 :A1 :a2 {:b1 :B1 :b2 {:c1 :C1 :c2 :C2}}} [:h])
   (node-paths [:a1 :a2 [:b1 :b2 [:c1 :c2] :b3] :a3 :a4]))
 
-(defn interleave-all "Greedy version of `interleave`."
+(defn interleave-all
+  "Greedy version of `interleave`."
   ([     ] '())
   ([c1   ] (lazy-seq c1))
   ([c1 c2]
@@ -2229,10 +2226,10 @@
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))
         (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
 
-#?(:clj (defmacro new-object [] `(if-cljs (cljs.core/js-obj) (Object.))))
+#?(:clj (defmacro new-object [] (if (:ns &env) `(cljs.core/js-obj) `(Object.))))
 
 (let [not-found (new-object)]
-  (defn -merge-with [nest? f maps]
+  (defn ^:no-doc -merge-with [nest? f maps]
     (reduce
       (fn [acc in]
         (if (nil? in)
@@ -2379,13 +2376,14 @@
   (def ^:private ^:const atom-tag 'clojure.lang.Atom))
 
 #?(:clj
-   (defmacro -if-cas! "Micro optimization, mostly for cljs."
-     [atom_ old-val new-val then & [?else]]
-     `(if-cljs
-        (do (reset! ~atom_ ~new-val) ~then)
-        (if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
-          ~then
-          ~?else))))
+   (defmacro ^:no-doc -if-cas!
+     "Micro optimization, mostly for Cljs.
+     Implementation detail, but public for use by other Taoensso libs."
+     [atom_ old-val new-val then & [else]]
+     (if (:ns &env)
+       `(do (reset! ~atom_ ~new-val) ~then)
+       `(if (.compareAndSet ~(with-meta atom_ {:tag atom-tag}) ~old-val ~new-val)
+          ~then ~else))))
 
 (defn- -reset-k0!
   "Impln. for 0-key resets"
@@ -2624,16 +2622,17 @@
 ;;;; Instants
 
 (do
-  #?(:clj (defmacro now-dt*   [] `(if-cljs           (js/Date.)  (java.util.Date.))))
-  #?(:clj (defmacro now-udt*  [] `(if-cljs (.getTime (js/Date.)) (System/currentTimeMillis))))
+  #?(:clj (defmacro now-dt*  [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
+  #?(:clj (defmacro now-udt* [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
   (defn  now-dt       [] (now-dt*))
   (defn now-udt ^long [] (now-udt*))
 
   #?(:clj (defn now-nano ^long [] (System/nanoTime))
      :cljs
-     (def now-nano "Uses window context as epoch, Ref. http://goo.gl/mWZWnR"
+     (def now-nano
+       "Uses window context as epoch, Ref. <http://goo.gl/mWZWnR>"
        (if-let [perf (and (oget js-?win "performance"))]
-         ;; Ref. http://goo.gl/fn84us
+         ;; Ref. <http://goo.gl/fn84us>
          (if-let [f (or (oget perf "now")  (oget perf "mozNow") (oget perf "msNow")
                         (oget perf "oNow") (oget perf "webkitNow"))]
            ;; JS call returns millisecs double, accurate to 1/1000th of a ms:
@@ -2641,7 +2640,7 @@
            (fn [] (* 1000000 (now-udt*))))
          (fn []   (* 1000000 (now-udt*))))))
 
-  #?(:clj (defmacro now-nano* [] `(if-cljs (now-nano) (System/nanoTime)))))
+  #?(:clj (defmacro now-nano* [] (if (:ns &env) `(now-nano) `(System/nanoTime)))))
 
 ;;;; Memoization
 
@@ -2712,7 +2711,7 @@
 
 (declare top)
 
-(defn -swap-val!
+(defn ^:no-doc -swap-val!
   "Used internally by memoization utils."
   [atom_ k f]
   (loop []
@@ -3030,7 +3029,7 @@
 
 (comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
 
-(defn limiter*
+(defn ^:no-doc limiter*
   "Experimental. Like `limiter` but returns [<state_> <limiter>]."
   ([     specs] (limiter* nil specs))
   ([opts specs]
@@ -3405,11 +3404,11 @@
 
 (comment (str (sb-append (str-builder "a") "b" "c")))
 
-(def str-rf "String builder reducing fn"
-  (fn
-    ([]       (str-builder))
-    ([acc]               (if (str-builder? acc) acc (str-builder (str acc)))) ; cf
-    ([acc in] (sb-append (if (str-builder? acc) acc (str-builder (str acc))) (str in)))))
+(defn str-rf
+  "String builder reducing fn."
+  ([      ] (str-builder))
+  ([acc   ]            (if (str-builder? acc) acc (str-builder (str acc)))) ; cf
+  ([acc in] (sb-append (if (str-builder? acc) acc (str-builder (str acc))) (str in))))
 
 (comment
   (qb 1e3 ; [358.45 34.6]
@@ -3459,6 +3458,7 @@
          (not= -1 (.indexOf s substr (- s-len substr-len)))))))
 
 (defn str-?index
+  "Returns (first/last) ?index of substring if it exists within given string."
   ([s substr          ] (str-?index s substr 0         false))
   ([s substr start-idx] (str-?index s substr start-idx false))
   ([s substr start-idx last?]
@@ -3611,8 +3611,8 @@
 (defn str-replace
   "Like `str/replace` but provides consistent clj/s behaviour.
 
-  Workaround for http://dev.clojure.org/jira/browse/CLJS-794,
-                 http://dev.clojure.org/jira/browse/CLJS-911.
+  Workaround for <http://dev.clojure.org/jira/browse/CLJS-794>,
+                 <http://dev.clojure.org/jira/browse/CLJS-911>.
 
   Note that ClojureScript 1.7.145 introduced a partial fix for CLJS-911.
   A full fix could unfortunately not be introduced w/o breaking compatibility
@@ -3623,7 +3623,7 @@
      (cond
        (string? match) ; string -> string replacement
        (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
-       ;; (.hasOwnProperty match "source") ; No! Ref. http://goo.gl/8hdqxb
+       ;; (.hasOwnProperty match "source") ; No! Ref. <http://goo.gl/8hdqxb>
 
        (instance? js/RegExp match) ; pattern -> string/fn replacement
        (let [flags (str "g" (when (.-ignoreCase match) "i")
@@ -3638,10 +3638,7 @@
        :else (throw (str "Invalid match arg: " match)))))
 
 (do
-  (defn nil->str "nil/undefined -> \"nil\"" [x]
-    ;; Note (undefined? x) not needed for modern Cljs
-    #?(:clj  (if                    (nil? x)  "nil" x)
-       :cljs (if (or (undefined? x) (nil? x)) "nil" x)))
+  (defn ^:no-doc nil->str [x] (if (nil? x) "nil" x)) ; (undefined? x) check no longer needed for modern Cljs
 
   (defn format*
     (#?(:clj ^String [      fmt args]
@@ -3710,9 +3707,9 @@
 
 (defn uuid-str
   "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".
-  Ref. http://www.ietf.org/rfc/rfc4122.txt,
-       https://gist.github.com/franks42/4159427,
-       https://github.com/clojure/clojurescript/pull/194"
+  Ref. <http://www.ietf.org/rfc/rfc4122.txt>,
+       <https://gist.github.com/franks42/4159427>,
+       <https://github.com/clojure/clojurescript/pull/194>"
   ([max-length] (get-substr-by-len (uuid-str) 0 max-length))
   ([]
    #?(:clj (str (java.util.UUID/randomUUID))
@@ -3842,7 +3839,7 @@
        (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
          ;; Occasionally supplement current seed for extra security.
          ;; Otherwise an attacker could *theoretically* observe large amounts of
-         ;; srng output to determine initial seed, Ref. https://goo.gl/MPM91w
+         ;; srng output to determine initial seed, Ref. <https://goo.gl/MPM91w>
          (when (< (.nextDouble rng) 2.44140625E-4) (.setSeed rng (.generateSeed rng 8)))
          rng))
 
@@ -3875,9 +3872,9 @@
 (def           ^:const nanoid-alphabet "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
 (def ^:private          parse-alphabet
   "Ref.
-    Java impl.: https://bit.ly/3dtYv73,
-      JS impl.: https://bit.ly/3fYv1zT,
-    Motivation: https://bit.ly/2VhWuEO"
+    Java impl.: <https://bit.ly/3dtYv73>,
+      JS impl.: <https://bit.ly/3fYv1zT>,
+    Motivation: <https://bit.ly/2VhWuEO>"
   (fmemoize
     (fn [alphabet len]
       (let [an   (count alphabet)
@@ -3903,7 +3900,7 @@
   introduces bias into ids that can be exploited by an attacker.
 
   The method used here is designed to eliminate that bias.
-  Based on https://bit.ly/3dtYv73."
+  Based on <https://bit.ly/3dtYv73>."
 
   #?(:clj [alphabet ^long len] :cljs [alphabet len])
   (let [#?(:clj [^byte mask step v] :cljs [mask step v])
@@ -3932,8 +3929,8 @@
       mask     0x3f]
 
   (defn nanoid
-    "Experimental. Optimized variant of `secure-rand-id` that returns Nano IDs
-    as in https://github.com/ai/nanoid."
+    "Experimental. Optimized variant of `secure-rand-id` that returns Nano IDs,
+    Ref. <https://github.com/ai/nanoid>."
     ([   ] (nanoid 21))
     ([len]
      (let [ba (secure-rand-bytes len) #_(byte-array [81 -125 -54 -45 -108 99])]
@@ -3986,7 +3983,7 @@
                {:given {:value s, :type (type s)}})))))
 
      ;; TODO Any way to auto select fastest implementation?
-     ;; Ref. https://stackoverflow.com/a/58118078/1982742
+     ;; Ref. <https://stackoverflow.com/a/58118078/1982742>
      ;; Auto selection seems to cause problems with AOT and/or Graal
 
      #_
@@ -4588,7 +4585,7 @@
      []
      (when-let [js-win js-?win]
        (when-let [loc (.-location js-win)]
-         {;; Ref. http://bl.ocks.org/abernier/3070589
+         {;; Ref. <http://bl.ocks.org/abernier/3070589>
           :href     (.-href     loc) ; "http://www.example.org:80/foo/bar?q=baz#bang"
           :protocol (.-protocol loc) ; "http:" ; Note the :
           :hostname (.-hostname loc) ; "example.org"
@@ -4841,8 +4838,8 @@
 (comment (normalize-headers {:headers {"Foo1" "bar1" "FOO2" "bar2" "foo3" "bar3"}}))
 
 #?(:clj
-   (defn -ring-merge-headers
-     "Experimental."
+   (defn ^:no-doc -ring-merge-headers
+     "Experimental!"
      [h1 h2]
      (reduce-kv
        (fn [m k2 v2]
@@ -4902,19 +4899,21 @@
 
 (comment (ring-redirect-resp 303 "/foo" "boo!"))
 
-(defn url-encode "Based on https://goo.gl/fBqy6e"
+(defn url-encode
+  "Based on <https://goo.gl/fBqy6e>."
   #?(:clj  [s & [encoding]] :cljs [s])
   (when s
     #?(:clj  (-> (str s)
                (java.net.URLEncoder/encode (str (or encoding "UTF-8")))
-               (str/replace "*" "%2A") ; Cautious, https://stackoverflow.com/a/25149577/1982742
-               (str/replace "+" "%20") ; Cautious, https://stackoverflow.com/a/40292770/1982742
+               (str/replace "*" "%2A") ; Cautious, <https://stackoverflow.com/a/25149577/1982742>
+               (str/replace "+" "%20") ; Cautious, <https://stackoverflow.com/a/40292770/1982742>
                )
        :cljs (-> (str s)
                (js/encodeURIComponent s)
                (str/replace "*" "%2A")))))
 
-(defn url-decode "Stolen from http://goo.gl/99NSR1"
+(defn url-decode
+  "Stolen from <http://goo.gl/99NSR1>."
   [s & [encoding]]
   (when s
     #?(:clj  (java.net.URLDecoder/decode (str s) (str (or encoding "UTF-8")))
@@ -4989,13 +4988,14 @@
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
 ;;;; Stubs
+;; Experimental, could do with a refactor
 
 (do
-  #?(:cljs (defn -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
-  #?(:cljs (defn -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected fn)"     {:unstub {:value f :type (type f)}}))))
-     :clj  (defn -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)" {:unstub {:value s :type (type s)}})))))
+  #?(:cljs (defn ^:no-doc -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
+  #?(:cljs (defn ^:no-doc -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected fn)"     {:unstub {:value f :type (type f)}}))))
+     :clj  (defn ^:no-doc -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)" {:unstub {:value s :type (type s)}})))))
   #?(:clj
-     (defmacro -intern-stub [ns stub-sym stub-var src]
+     (defmacro ^:no-doc -intern-stub [ns stub-sym stub-var src]
        (-assert-unstub-val src)
        `(let [src-var# (var ~src)
               dst-var# ~stub-var
@@ -5016,12 +5016,15 @@
      (let [   stub-sym  sym
             unstub-sym (symbol (str  "unstub-" (name stub-sym)))
            -unstub-sym (symbol (str "-unstub-" (name stub-sym)))]
-       `(if-cljs ; No declare/intern support
-            (let [~'stubfn_ (-new-stubfn_ ~(name stub-sym))]
-              (defn ~-unstub-sym [~'f]        (vreset! ~'stubfn_ (-assert-unstub-val ~'f)))
-              (defn  ~unstub-sym [~'f]        (~-unstub-sym ~'f))
-              (defn    ~stub-sym [~'& ~'args] (apply      @~'stubfn_ ~'args)))
-          (let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
+
+       (if (:ns &env)
+         ;; No declare/intern support
+         `(let [~'stubfn_ (-new-stubfn_ ~(name stub-sym))]
+            (defn ~-unstub-sym [~'f] (vreset! ~'stubfn_ (-assert-unstub-val ~'f)))
+            (defn  ~unstub-sym [~'f] (~-unstub-sym ~'f))
+            (defn    ~stub-sym [~'& ~'args] (apply @~'stubfn_ ~'args)))
+
+         `(let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
             (defmacro ~(with-meta unstub-sym {:doc "Initializes stub"})
               [~'x] ; ~'sym for clj, ~'f for cljs
               `(if-cljs
@@ -5035,7 +5038,6 @@
                  (-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
                    ~stub-var# ~~'x))))))))
 
-
 (comment
   (defn- -foo ^long [y] (* y y))
   (macroexpand-all '(defstub foo))
@@ -5048,7 +5050,7 @@
     #?(:cljs (def cljs-thing "cljs-thing")
        :clj  (def clj-thing  "clj-thing"))
 
-    #?(:clj (defmacro cljs-macro [] `(if-cljs cljs-thing clj-thing)))
+    #?(:clj (defmacro cljs-macro [] (if (:ns &env) `cljs-thing `clj-thing)))
 
     #?(:clj  (cljs-macro)
        :cljs (enc-macros/cljs-macro))
@@ -5599,7 +5601,7 @@
     (let [comparator (or ?comparator rcompare)]
       (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
-  (defn clj1098 "Ref. http://goo.gl/0GzRuz" [x] (or x {}))
+  (defn clj1098 "Ref. <http://goo.gl/0GzRuz>" [x] (or x {}))
 
   (defn distinct-by "Deprecated, prefer `xdistinct`"
     [keyfn coll]
@@ -5744,4 +5746,7 @@
   (def swap!* swap-in!*)
 
   #?(:clj (defalias taoensso.truss/get-dynamic-assertion-data))
-  #?(:clj (defalias taoensso.truss/with-dynamic-assertion-data)))
+  #?(:clj (defalias taoensso.truss/with-dynamic-assertion-data))
+
+
+  )
