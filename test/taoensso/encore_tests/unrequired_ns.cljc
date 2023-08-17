@@ -3,3 +3,5 @@
   for testing auto-requiring resolves, etc.")
 
 (def myvar #?(:clj "foreign clj var" :cljs "foreign cljs var"))
+(def myvar-embeddable   {:embeddable? true, :foo :bar})
+(def myvar-unembeddable {:embeddable? false, :fn (fn [])})

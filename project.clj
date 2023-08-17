@@ -20,7 +20,14 @@
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
 
    :test
-   {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]
+   {:jvm-opts
+    ["-Dtaoensso.elide-deprecated=true"
+     "-Dtaoensso.encore-tests.config.str=foo"
+     "-Dtaoensso.encore-tests.config.clj.str=foo/clj"
+     "-Dtaoensso.encore-tests.config.cljs.str=foo/cljs"
+     "-Dtaoensso.encore-tests.config.bool=t"
+     "-Dtaoensso.encore-tests.config.edn={:kw :my-kw, :str \"foo\", :int 5, :vec [:x]}"]
+
     :global-vars
     {*warn-on-reflection* true
      *assert*             true

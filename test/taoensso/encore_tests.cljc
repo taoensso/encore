@@ -507,6 +507,51 @@
    (is (= (resolve-sym                                     myvar) :taoensso.encore-tests/myvar))
    (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/myvar) :taoensso.encore-tests.unrequired-ns/myvar))])
 
+;;;; Config API
+
+(deftest config-api
+  [(is (enc/submap? (enc/get-config {:_debug? true}) {:config :submap/nx, :search []}))
+   (is (enc/submap? (enc/get-config {:_debug? true :prop [:taoensso.prop-a1 :taoensso.prop-a2 :taoensso.prop-a3]})
+         {:config :submap/nx
+          :search
+          [[:prop :taoensso.prop-a1]
+           [:env  "TAOENSSO_PROP_A1"]
+           [:res  :taoensso.prop-a1]
+           [:prop :taoensso.prop-a2]
+           [:env  "TAOENSSO_PROP_A2"]
+           [:res  :taoensso.prop-a2]
+           [:prop :taoensso.prop-a3]
+           [:env  "TAOENSSO_PROP_A3"]
+           [:res  :taoensso.prop-a3]]}))
+
+   (is (enc/submap? (enc/get-config {:_debug? true :prop :taoensso.encore-tests.config.str})
+         {:config "foo",
+          :search [[:prop :taoensso.encore-tests.config.str]
+                   [:env  "TAOENSSO_ENCORE_TESTS_CONFIG_STR"]
+                   [:res  :taoensso.encore-tests.config.str]]}))
+
+   (is (enc/submap? (enc/get-config {:debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
+                                                           :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
+         {:config #?(:clj "foo/clj" :cljs "foo/cljs")}))
+
+   (is (enc/submap? (enc/get-config {:_debug? true :_debug/match ["taoensso.encore-tests.unrequired-ns/myvar-embeddable" [:debug]] :as :edn})
+         {:config {:embeddable? true, :foo :bar}}))
+
+   #?(:clj
+      (is (enc/submap? (enc/get-config {:_debug? true :_debug/match ["taoensso.encore-tests.unrequired-ns/myvar-unembeddable" [:debug]] :as :edn})
+            {:config {:embeddable? false, :fn :submap/ex}})))
+
+   (is (= (enc/get-sys-val*        [::nx :taoensso.encore-tests.config.str]) "foo"))
+   (is (= (enc/get-sys-bool* false [::nx :taoensso.encore-tests.config.bool]) true))
+   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config.edn])
+          {:kw :my-kw :str "foo" :int 5 :vec [:x]}))])
+
+(comment
+  (get-config {})
+  (def foo {:fn (fn [x] (* x x))})
+  (get-config {:_debug/match ["taoensso.encore/foo" [:debug]] :as :edn})
+  (get-config {:_debug? true :prop [:p1] :as :edn}))
+
 ;;;; Misc
 
 #?(:clj
