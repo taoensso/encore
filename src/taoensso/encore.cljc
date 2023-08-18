@@ -4987,13 +4987,24 @@
   (merge-url-with-query-string "/?foo=bar" {:foo  nil})
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
-;;;; Stubs
-;; Experimental, could do with a refactor
+;;;; Stubs (experimental)
+;; Could do with a refactor
 
 (do
-  #?(:cljs (defn ^:no-doc -new-stubfn_ [name] (volatile! (fn [& args]  (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")") {:stub name :args args}))))))
-  #?(:cljs (defn ^:no-doc -assert-unstub-val [f] (if (fn?     f) f (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected fn)"     {:unstub {:value f :type (type f)}}))))
-     :clj  (defn ^:no-doc -assert-unstub-val [s] (if (symbol? s) s (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)" {:unstub {:value s :type (type s)}})))))
+  #?(:cljs
+     (defn ^:no-doc -new-stubfn_ [name]
+       (volatile!
+         (fn [& args]
+           (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")")
+                    {:stub name :args args}))))))
+
+  (defn ^:no-doc -assert-unstub-val [x]
+    (let [pred #?(:clj symbol? :cljs fn?)]
+      (if (pred x)
+        x
+        (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)"
+                 {:unstub {:value x :type (type x)}})))))
+
   #?(:clj
      (defmacro ^:no-doc -intern-stub [ns stub-sym stub-var src]
        (-assert-unstub-val src)
@@ -5008,14 +5019,17 @@
 
 #?(:clj
    (defmacro defstub
-     "Experimental. Declares a stub var that can be initialized from any
-     namespace with `unstub-<stub-name>`. Decouples a var's declaration
-     (location) and its initialization (value). Handy for defining vars in a
-     shared ns from elsewhere (e.g. a private or cyclic ns)."
+     "Experimental!!
+     Declares a stub var that can be initialized from any namespace with
+     `unstub-<stub-name>`.
+
+     Decouples a var's declaration (location) and its initialization (value).
+     Handy for defining vars in a shared ns from elsewhere (e.g. a private
+     or cyclic ns)."
      [sym]
-     (let [   stub-sym  sym
-            unstub-sym (symbol (str  "unstub-" (name stub-sym)))
-           -unstub-sym (symbol (str "-unstub-" (name stub-sym)))]
+     (let [   stub-sym sym
+            unstub-sym (with-meta (symbol (str  "unstub-" (name stub-sym))) {:doc "Call to initialze stub"})
+           -unstub-sym (with-meta (symbol (str "-unstub-" (name stub-sym))) {:no-doc true})]
 
        (if (:ns &env)
          ;; No declare/intern support
@@ -5025,23 +5039,23 @@
             (defn    ~stub-sym [~'& ~'args] (apply @~'stubfn_ ~'args)))
 
          `(let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
-            (defmacro ~(with-meta unstub-sym {:doc "Initializes stub"})
+            (defmacro ~unstub-sym
               [~'x] ; ~'sym for clj, ~'f for cljs
-              `(if-cljs
+              (if (:ns ~'&env)
                  ;; In Cljs, a macro+fn can have the same name. Preference will be
                  ;; given to the macro in contexts where both are applicable.
                  ;; So there's 3 cases to consider:
                  ;;   1. clj   stub: def var, clj macro
                  ;;   2. cljs  stub: def volatile, 2 fns
                  ;;   3. clj/s stub: def volatile, 2 fns, var, and clj/s macro
-                 (~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
-                 (-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
+                `(~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
+                `(-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
                    ~stub-var# ~~'x))))))))
 
 (comment
   (defn- -foo ^long [y] (* y y))
   (macroexpand-all '(defstub foo))
-  (defstub foo)
+  (defstub     foo)
   (unstub-foo -foo)
   (qb 1e6 (-foo 5) (foo 5)) ; [68.49 71.88]
   (meta (first (:arglists (meta #'foo))))
