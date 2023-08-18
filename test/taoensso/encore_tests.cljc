@@ -496,11 +496,16 @@
 
 ;;;; Resolving
 
-#?(:clj (defmacro resolve-sym [x] (let [s (enc/resolve-sym &env x)] `'~s)))
+(def myvar #?(:clj "local clj var" :cljs "local cljs var"))
 
-(deftest _resolve-sym
-  [#?(:clj  (is (= (resolve-sym string?) 'clojure.core/string?))
-      :cljs (is (= (resolve-sym string?)    'cljs.core/string?)))])
+#?(:clj (defmacro resolve-sym [sym] (keyword (enc/resolve-sym &env sym true))))
+
+(deftest _resolve
+  [(is (= (resolve-sym __nx)     nil))
+   (is (= (resolve-sym __nx/foo) nil))
+
+   (is (= (resolve-sym                                     myvar) :taoensso.encore-tests/myvar))
+   (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/myvar) :taoensso.encore-tests.unrequired-ns/myvar))])
 
 ;;;; Misc
 

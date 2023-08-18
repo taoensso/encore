@@ -932,36 +932,38 @@
 ;;;; Vars, etc.
 
 #?(:clj
-   (let [resolve-clj clojure.core/resolve
-         resolve-cljs
-         (when-let [ns (find-ns 'cljs.analyzer.api)]
-           (when-let [v (ns-resolve ns 'resolve)] @v))]
+   (let [resolve-clj clojure.core/resolve ; Returns Var
+         resolve-cljs ; Returns analysis map
+         (when-let [ns (find-ns 'cljs.analyzer.api)
+                    v  (ns-resolve ns 'resolve)]
+           @v)
 
-     (defn resolve-var
-       "Resolves given symbol to clj/s var, or nil."
+         resolve-auto
+         (fn [macro-env sym]
+           (when-let [m
+                      (if (:ns macro-env)
+                        (when resolve-cljs (catching (resolve-cljs macro-env sym)))
+                        (do                    (meta (resolve-clj  macro-env sym))))]
+             (symbol (str (:ns m)) (name (:name m)))))]
+
+     ;; Note a couple fundamental limitations:
+     ;;   - Macros targeting Cljs cannot expand to a Cljs symbol in an unrequired namespace.
+     ;;   - Macros targeting Cljs cannot eval      a Cljs symbol for its value at macro time.
+
+     (defn resolve-sym
+       "Returns resolved qualified Clj/s symbol, or nil."
        {:added "v3.63.0 (2023-07-31)"}
-       ([          sym] (resolve-var nil sym))
-       ([macro-env sym]
+       ([          sym                ] (resolve-sym nil       sym false)) ; Clj only
+       ([macro-env sym                ] (resolve-sym macro-env sym false))
+       ([macro-env sym may-require-ns?]
         (when (symbol? sym)
-          (if (:ns macro-env)
-            (when resolve-cljs (resolve-cljs macro-env sym))
-            (do                (resolve-clj  macro-env sym))))))))
-
-(comment (resolve-var nil 'string?) :see-tests)
-
-#?(:clj
-   (defn- var->sym [cljs? v]
-     (let [m (if cljs? v (meta v))]
-       (symbol (str (:ns m)) (name (:name m))))))
-
-#?(:clj
-   (defn resolve-sym
-     "Resolves given symbol to qualified clj/s symbol, or nil."
-     {:added "v3.63.0 (2023-07-31)"}
-     ([          sym] (resolve-sym nil sym))
-     ([macro-env sym]
-      (when-let [v (resolve-var macro-env sym)]
-        (var->sym (:ns macro-env) v)))))
+          (if-not may-require-ns?
+            (resolve-auto macro-env sym)
+            (or
+              (resolve-auto macro-env sym)
+              (when-let [ns (namespace sym)]
+                (when (catching (do (require (symbol ns)) true))
+                  (resolve-auto macro-env sym))))))))))
 
 (comment (resolve-sym nil 'string?) :see-tests)
 
