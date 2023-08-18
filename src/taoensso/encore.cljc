@@ -555,7 +555,7 @@
                (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
                (do                           (var ~alias-sym)))))))))
 
-(declare unexpected-arg!)
+(declare -unexpected-arg!)
 
 #?(:clj
    (defmacro defaliases
@@ -578,7 +578,7 @@
                   `(defalias ~alias ~src ~attrs))
 
                 :else
-                (unexpected-arg! x
+                (-unexpected-arg! x
                   {:expected '#{symbol map}
                    :context  `defaliases})))
 
@@ -1397,6 +1397,15 @@
 
 ;;;;
 
+(defn ^:no-doc -unexpected-arg!
+  "Private low-level util."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([arg] (-unexpected-arg! arg nil))
+  ([arg {:keys [msg] :as details}]
+   (throw
+     (ex-info (or msg (str "Unexpected argument: " arg))
+       (conj {:arg {:value arg, :type (type arg)}} details)))))
+
 (defn unexpected-arg!
   "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
   Takes optional kvs for merging into exception's data map.
@@ -1414,14 +1423,9 @@
 
   {:added "v3.51.0 (2023-03-13)"}
   [arg & {:keys [msg] :as details}]
-  (throw
-    (ex-info (or msg (str "Unexpected argument: " arg))
-      (let [m {:arg {:value arg, :type (type arg)}}]
-        (if details
-          (conj m details)
-          (do   m))))))
+  (-unexpected-arg! arg details))
 
-(comment (unexpected-arg! :foo :expected '#{string?}))
+(comment (unexpected-arg! :arg :expected '#{string?}))
 
 (defn instance!
   "If (instance? class arg) is true, returns arg.
@@ -1431,10 +1435,10 @@
   [class arg & {:as details}]
   (if (instance? class arg)
     arg
-    (unexpected-arg! arg
-      (assoc details :expected `(~'instance? ~class ~'arg)))))
+    (-unexpected-arg! arg
+      (conj {:expected `(~'instance? ~class ~'arg)} details))))
 
-(comment (instance! String 5))
+(comment (instance! String 5 :foo :bar))
 
 (defn satisfies!
   "If (satisfies? protocol arg) is true, returns arg.
@@ -1444,8 +1448,8 @@
   [protocol arg & {:as details}]
   (if (satisfies? protocol arg)
     arg
-    (unexpected-arg! arg
-      (assoc details :expected `(~'satisfies? ~protocol ~'arg)))))
+    (-unexpected-arg! arg
+      (conj {:expected `(~'satisfies? ~protocol ~'arg)} details))))
 
 ;;;; Keywords
 
@@ -4393,9 +4397,9 @@
            (case kind
              :num  (have pos-int? n)
              :perc (perc          n)
-             (unexpected-arg! kind
-               :context  `get-num-threads
-               :expected #{:num :perc})))
+             (-unexpected-arg! kind
+               {:context  `get-num-threads
+                :expected #{:num :perc}})))
          (have pos-int? n-threads)))))
 
 (comment (get-num-threads [:perc 90]))
