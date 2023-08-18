@@ -1701,8 +1701,8 @@
                {:kind {:value kind :type (type kind)}})))]
 
      (if-not modifier
-       (/  (double rounded) ^double modifier) ; Return double
        (do (long   rounded))                  ; Returns long
+       (/  (double rounded) ^double modifier) ; Return double
        ))))
 
 (comment
