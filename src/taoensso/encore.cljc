@@ -2634,6 +2634,12 @@
   (defn  now-dt       [] (now-dt*))
   (defn now-udt ^long [] (now-udt*))
 
+  #?(:clj
+     (defmacro now-inst
+       "Returns current `java.time.Instant` (Clj), or epoch millis (Cljs)."
+       {:added "vX.Y.Z (YYYY-MM-DD)"} []
+       (if (:ns &env) `(js/Date.now) `(java.time.Instant/now))))
+
   #?(:clj (defn now-nano ^long [] (System/nanoTime))
      :cljs
      (def now-nano
