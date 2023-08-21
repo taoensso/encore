@@ -1534,7 +1534,7 @@
 
 (comment (const-ba= (byte-array [1 2 3 4]) (byte-array [])))
 
-;;;; Reduce
+;;;; Reductions
 
 (defn   convey-reduced [x] (if (reduced? x) (reduced x) x)) ; Double-wrap
 (defn preserve-reduced
@@ -1652,6 +1652,63 @@
               (next xs)
               (next ys))))
         acc))))
+
+(comment :see-tests)
+
+(do
+  (deftype ^:no-doc Tup2 [x y  ])
+  (deftype ^:no-doc Tup3 [x y z]))
+
+(defn reduce-multi
+  "Like `reduce` but supports separate simultaneous accumulators
+  as a micro-optimisation when reducing a large collection multiple
+  times."
+  ;; Faster than using volatiles
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([rf  init            coll] (reduce rf init coll))
+  ([rf1 init1 rf2 init2 coll]
+   (let [^Tup2 tuple
+         (reduce
+           (fn [^Tup2 tuple in]
+             (let [x   (.-x tuple)
+                   y   (.-y tuple)
+                   rx? (reduced? x)
+                   ry? (reduced? y)]
+
+               (if (and rx? ry?)
+                 (reduced tuple)
+                 (let [x (if rx? x (rf1 x in))
+                       y (if ry? y (rf2 y in))]
+                   (Tup2. x y)))))
+           (Tup2. init1 init2)
+           coll)]
+
+     [(unreduced (.-x tuple))
+      (unreduced (.-y tuple))]))
+
+  ([rf1 init1 rf2 init2 rf3 init3 coll]
+   (let [^Tup3 tuple
+         (reduce
+           (fn [^Tup3 tuple in]
+             (let [x   (.-x tuple)
+                   y   (.-y tuple)
+                   z   (.-z tuple)
+                   rx? (reduced? x)
+                   ry? (reduced? y)
+                   rz? (reduced? z)]
+
+               (if (and rx? ry? rz?)
+                 (reduced tuple)
+                 (let [x (if rx? x (rf1 x in))
+                       y (if ry? y (rf2 y in))
+                       z (if rz? z (rf3 z in))]
+                   (Tup3. x y z)))))
+           (Tup3. init1 init2 init3)
+           coll)]
+
+     [(unreduced (.-x tuple))
+      (unreduced (.-y tuple))
+      (unreduced (.-z tuple))])))
 
 (comment :see-tests)
 

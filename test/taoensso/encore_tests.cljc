@@ -144,6 +144,28 @@
    (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c]  [1 2 3]) ::reduced!))
    (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c] '(1 2 3)) ::reduced!))])
 
+(deftest _reduce-multi
+  [(is (= (enc/reduce-multi + 0 []) 0))
+
+   (is (= (enc/reduce-multi + 0 (range 1 11))      55))
+   (is (= (enc/reduce-multi * 1 (range 1 11)) 3628800))
+   (is (= (enc/reduce-multi * 2 (range 1 11)) 7257600))
+
+   (is (= (enc/reduce-multi + 0 * 1     []) [0 1]))
+   (is (= (enc/reduce-multi + 0 * 1     []) [0 1]))
+   (is (= (enc/reduce-multi + 0 * 1 * 2 []) [0 1 2]))
+
+   (is (= (enc/reduce-multi + 0 * 1     (range 1 11)) [55 3628800]))
+   (is (= (enc/reduce-multi + 0 * 1 * 2 (range 1 11)) [55 3628800 7257600]))
+
+   (is (=
+         (enc/reduce-multi
+           (fn [^long acc ^long in] (let [new (+ acc in)] (if (>= new 100) (reduced [:reduced new in]) new))) 0
+           (fn [^long acc ^long in] (let [new (* acc in)] (if (>= new 100) (reduced [:reduced new in]) new))) 1
+           (range 1 100))
+
+         [[:reduced 105 14] [:reduced 120 5]]))])
+
 ;;;; Collections
 
 (deftest _submap?
