@@ -140,7 +140,9 @@
    (is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2])     {:a 1, :b 2})       "Vec,  uneven")
    (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2))     {:a 1, :b 2})       "List, uneven")
    (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
-   (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")])
+   (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")
+   (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c]  [1 2 3]) ::reduced!))
+   (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c] '(1 2 3)) ::reduced!))])
 
 ;;;; Collections
 

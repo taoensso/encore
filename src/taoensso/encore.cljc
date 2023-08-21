@@ -1645,9 +1645,12 @@
            ys (seq ys)]
 
       (if (and xs ys)
-        (recur (rf acc (first xs) (first ys))
-          (next xs)
-          (next ys))
+        (let [result (rf acc (first xs) (first ys))]
+          (if (reduced? result)
+            @result
+            (recur result
+              (next xs)
+              (next ys))))
         acc))))
 
 (comment :see-tests)
