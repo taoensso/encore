@@ -2292,7 +2292,8 @@
   (node-paths [:a1 :a2 [:b1 :b2 [:c1 :c2] :b3] :a3 :a4]))
 
 (defn interleave-all
-  "Greedy version of `interleave`."
+  "Like `interleave` but includes all items (i.e. stops when the longest
+  rather than shortest coll has been consumed)."
   ([     ] '())
   ([c1   ] (lazy-seq c1))
   ([c1 c2]
@@ -2304,23 +2305,37 @@
                                 (interleave-all (rest s1) (rest s2))))
          s1 s1
          s2 s2))))
+
   ([c1 c2 & colls]
    (lazy-seq
       (let [ss (filter identity (map seq (conj colls c2 c1)))]
         (concat (map first ss)
                 (apply interleave-all (map rest ss)))))))
 
-(comment (interleave-all [:a :b :c] [:A :B :C :D :E] [:1 :2]))
+(comment (interleave-all [:a1 :a2 :a3] [:b1 :b2] [:c1 :c2 :c3 :c4]))
 
-(defn vinterleave-all [c1 c2]
-  (loop [v (transient []) s1 (seq c1) s2 (seq c2)]
-    (cond
-      (and s1 s2)
-      (recur (conj! (conj! v (first s1)) (first s2)) (next s1) (next s2))
-      s1    (persistent! (reduce conj! v s1))
-      s2    (persistent! (reduce conj! v s2))
-      :else (persistent! v))))
+(defn vinterleave-all
+  "Like `interleave`, but:
+    - Returns a vector rather than lazy seq (=> greedy).
+    - Includes all items (i.e. stops when the longest rather than
+      shortest coll has been consumed).
 
+  Single-arity version takes a coll of colls."
+  {:added "vX.Y.Z (YYYY-MM-DD) for !=2 arities"}
+  ([colls] (if (empty? colls) [] (persistent! (reduce-interleave-all conj! (transient []) colls))))
+  ([c1 c2] ; Optimized common case
+   (loop [v (transient []) s1 (seq c1) s2 (seq c2)]
+     (cond
+       (and s1 s2)
+       (recur (conj! (conj! v (first s1)) (first s2)) (next s1) (next s2))
+       s1    (persistent! (reduce conj! v s1))
+       s2    (persistent! (reduce conj! v s2))
+       :else (persistent! v))))
+
+  ([c1 c2 c3        ] (vinterleave-all       [c1 c2 c3]))
+  ([c1 c2 c3 & colls] (vinterleave-all (into [c1 c2 c3] colls))))
+
+(comment :see-tests)
 (comment
   (qb 1e5
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))

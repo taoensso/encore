@@ -202,6 +202,22 @@
 
          {:a 1, :b 1, :c {:ca 2, :cb 2, :cc {:cca 3}}, :d 1}))])
 
+(deftest _vinterleave-all
+  [(is (= (enc/vinterleave-all [  ]) []))
+   (is (= (enc/vinterleave-all [[]]) []))
+   (is (= (enc/vinterleave-all [[:a1 :a2]]) [:a1 :a2]))
+   (is (= (enc/vinterleave-all [[:a1 :a2 :a3]
+                                [:b1 :b2]
+                                [:c1 :c2 :c3 :c4]])
+         [:a1 :b1 :c1 :a2 :b2 :c2 :a3 :c3 :c4]))
+
+   (testing "Optimized 2-arity case"
+     [(is (= (enc/vinterleave-all [       ] [       ]) [           ]))
+      (is (= (enc/vinterleave-all [:a1    ] [       ]) [:a1        ]))
+      (is (= (enc/vinterleave-all [       ] [:b1    ]) [:b1        ]))
+      (is (= (enc/vinterleave-all [:a1    ] [:b1 :b2]) [:a1 :b1 :b2]))
+      (is (= (enc/vinterleave-all [:a1 :a2] [:b1    ]) [:a1 :b1 :a2]))])])
+
 (deftest _update-in
   [(is (= (enc/update-in {:a :A :b :B} [   ]        (fn [_] :x))                :x))
    (is (= (enc/update-in {:a :A :b :B} [:a ]        (fn [_] :x))            {:a :x, :b :B}))
