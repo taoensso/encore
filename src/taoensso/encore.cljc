@@ -1712,6 +1712,42 @@
 
 (comment :see-tests)
 
+(defn reduce-interleave-all
+  "Reduces sequence of elements interleaved from given `colls`.
+  (reduce-interleave-all conj [] [[:a :b] [1 2 3]]) => [:a 1 :b 2 3]"
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [rf init colls]
+  (if (empty? colls)
+    init
+    (loop [acc init, colls colls]
+      (let [^Tup2 tuple
+            (reduce
+              (fn [^Tup2 tuple in]
+                (if (empty? in)
+                  tuple
+                  (let [[in1 & next-in] in
+                        acc (.-x tuple)
+                        ncs (.-y tuple)
+                        res (rf acc in1)]
+
+                    (if (reduced? res)
+                      (reduced (Tup2. @res nil))
+                      (do      (Tup2. res
+                                 (if next-in
+                                   (conj (or ncs []) next-in)
+                                   (do       ncs))))))))
+              (Tup2. acc nil)
+              colls)
+
+            acc        (.-x tuple)
+            next-colls (.-y tuple)]
+
+        (if next-colls
+          (recur acc next-colls)
+          (do    acc))))))
+
+(comment :see-tests)
+
 ;;;; Math
 
 (def ^:const max-long #?(:clj Long/MAX_VALUE :cljs  9007199254740991))

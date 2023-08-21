@@ -166,6 +166,19 @@
 
          [[:reduced 105 14] [:reduced 120 5]]))])
 
+(deftest _reduce-interleave-all
+  [(is (= (enc/reduce-interleave-all conj "init" [])              "init"))
+   (is (= (enc/reduce-interleave-all conj []     [[:a1 :a2 :a3]]) [:a1 :a2 :a3]))
+   (is (= (enc/reduce-interleave-all conj []     [[:a1 :a2 :a3]
+                                                  [:b1 :b2]
+                                                  [:c1 :c2 :c3 :c4]])
+         [:a1 :b1 :c1 :a2 :b2 :c2 :a3 :c3 :c4]))
+
+   (is (= (enc/reduce-interleave-all
+            (fn [acc in] (when (= in :b2) (reduced ::reduced!)))
+            [] [[:a1 :a2] [:b1 :b2 :b3]])
+         ::reduced!))])
+
 ;;;; Collections
 
 (deftest _submap?
