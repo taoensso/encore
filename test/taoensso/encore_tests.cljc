@@ -25,7 +25,7 @@
 
 (defn- throw! [x] (throw (ex-info "Error" {:arg {:value x :type (type x)}})))
 
-;;;;
+;;;; Core
 
 (do
   (defn- test-fn "doc a" [x] x)
@@ -70,14 +70,7 @@
          (enc/with-truss-data :dynamic-data
            (enc/have? string? 5 :data :arg-data))))])
 
-(deftest _submap?
-  [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
-   (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
-   (is (not (enc/submap? {:a {:b :B1 :c nil}} {:a {:c :submap/nx}})))
-   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
-   (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
-   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
-   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))])
+;;;; Errors
 
 (deftest _throws?
   (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
@@ -137,23 +130,79 @@
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in rf")])
 
-#?(:clj
-   (deftest _secure-rng-mock
-     [(is (=
-            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
-            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])))
+;;;; Reductions
 
-      (is (not=
-            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
-            (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
+(deftest _reduce-zip
+  [(is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2 3])   {:a 1, :b 2, :c 3}) "Vec,  normal")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2 3))   {:a 1, :b 2, :c 3}) "List, normal")
+   (is (= (enc/reduce-zip assoc {}  [:a :b :c :a]  [1 2 3 4]) {:a 4, :b 2, :c 3}) "Vec,  replacing")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c :a) '(1 2 3 4)) {:a 4, :b 2, :c 3}) "List, replacing")
+   (is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2])     {:a 1, :b 2})       "Vec,  uneven")
+   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2))     {:a 1, :b 2})       "List, uneven")
+   (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
+   (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")])
 
-#?(:clj
-   (deftest _hex-strings
-     [(is (= (enc/ba->hex-str (byte-array  0))    ""))
-      (is (= (enc/ba->hex-str (byte-array [0]))   "00"))
-      (is (= (enc/ba->hex-str (byte-array [0 1])) "0001"))
-      (let [v (vec (range -128 128))]
-        (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
+;;;; Collections
+
+(deftest _submap?
+  [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+   (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
+   (is (not (enc/submap? {:a {:b :B1 :c nil}} {:a {:c :submap/nx}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
+   (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
+   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))])
+
+(deftest _select-nested-keys
+  [(is (= (enc/select-nested-keys nil    nil)) {})
+   (is (= (enc/select-nested-keys {:a 1} nil)  {}))
+   (is (= (enc/select-nested-keys {    } [:a]) {}))
+
+   (is (= (enc/select-nested-keys {:a 1 :b 1 :c 1} [:a :c]) {:a 1 :c 1}))
+   (is (= (enc/select-nested-keys {:a 1 :b 1 :c {:ca 2 :cb 2 :cc {:cca 3 :ccb 3} :cd 2} :d 1}
+            [:a :b {:c [:ca :cb {:cc [:cca]} :ce]
+                    :d [:da :db]} {:e []}])
+
+         {:a 1, :b 1, :c {:ca 2, :cb 2, :cc {:cca 3}}, :d 1}))])
+
+(deftest _update-in
+  [(is (= (enc/update-in {:a :A :b :B} [   ]        (fn [_] :x))                :x))
+   (is (= (enc/update-in {:a :A :b :B} [:a ]        (fn [_] :x))            {:a :x, :b :B}))
+   (is (= (enc/update-in {:a :A :b :B} [:a ] :nf    (fn [_] :x))            {:a :x, :b :B}))
+   (is (= (enc/update-in {:a :A :b :B} [:nx] :nf    (fn [x]  x))            {:a :A, :b :B, :nx :nf}))
+
+   (is (= (enc/update-in {           } [:a :b ]     (fn [_] :x))            {:a {:b :x}}))
+   (is (= (enc/update-in {           } [:a :b ]     (fn [x] :swap/abort))   {}))
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] x))             {:a {:b :nf}}))
+
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
+   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
+
+   (is (= (enc/update-in {           } [:a :b ]     (fn [m] (dissoc m :k))) {:a {:b nil}}))
+   (is (= (enc/update-in {:a {:b :B} } [:a :b ]     (fn [_] :swap/dissoc))  {:a {}}))
+   (is (= (enc/update-in {:a {:b :B} } [:a :nx]     (fn [_] :swap/dissoc))  {:a {:b :B}}))
+
+   (is (enc/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
+     "Non-associative val")])
+
+(deftest _contains-in?
+  [(is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :c])  true))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :nx]) false))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :c)  true))
+   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :nx) false))])
+
+(deftest _dissoc-in
+  [(is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :c])    {:a {:b {:d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :nx])   {:a {:b {:c :C :d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c)    {:a {:b {:d :D}}}))
+   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c :d) {:a {:b {}}}))
+   (is (= (enc/dissoc-in {                     } [:a :b :c])    {}))
+   (is (= (enc/dissoc-in {:a :A                } [:a :b :c])    {:a :A}))
+   (is (= (enc/dissoc-in {                     } [:a :b] :c :d) {}))
+   (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
+   (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
+
+;;;; Strings
 
 #?(:clj
    (deftest _utf8-byte-strings
@@ -186,27 +235,15 @@
    (is (= (enc/get-substr-by-len "123456789"  0  -5)         nil))
    (is (= (enc/get-substr-by-len "123456789" -5   2)      "56"  ))])
 
-(deftest _reduce-zip
-  [(is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2 3])   {:a 1, :b 2, :c 3}) "Vec,  normal")
-   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2 3))   {:a 1, :b 2, :c 3}) "List, normal")
-   (is (= (enc/reduce-zip assoc {}  [:a :b :c :a]  [1 2 3 4]) {:a 4, :b 2, :c 3}) "Vec,  replacing")
-   (is (= (enc/reduce-zip assoc {} '(:a :b :c :a) '(1 2 3 4)) {:a 4, :b 2, :c 3}) "List, replacing")
-   (is (= (enc/reduce-zip assoc {}  [:a :b :c]     [1 2])     {:a 1, :b 2})       "Vec,  uneven")
-   (is (= (enc/reduce-zip assoc {} '(:a :b :c)    '(1 2))     {:a 1, :b 2})       "List, uneven")
-   (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
-   (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")])
+#?(:clj
+   (deftest _hex-strings
+     [(is (= (enc/ba->hex-str (byte-array  0))    ""))
+      (is (= (enc/ba->hex-str (byte-array [0]))   "00"))
+      (is (= (enc/ba->hex-str (byte-array [0 1])) "0001"))
+      (let [v (vec (range -128 128))]
+        (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
 
-(deftest _select-nested-keys
-  [(is (= (enc/select-nested-keys nil    nil)) {})
-   (is (= (enc/select-nested-keys {:a 1} nil)  {}))
-   (is (= (enc/select-nested-keys {    } [:a]) {}))
-
-   (is (= (enc/select-nested-keys {:a 1 :b 1 :c 1} [:a :c]) {:a 1 :c 1}))
-   (is (= (enc/select-nested-keys {:a 1 :b 1 :c {:ca 2 :cb 2 :cc {:cca 3 :ccb 3} :cd 2} :d 1}
-            [:a :b {:c [:ca :cb {:cc [:cca]} :ce]
-                    :d [:da :db]} {:e []}])
-
-         {:a 1, :b 1, :c {:ca 2, :cb 2, :cc {:cca 3}}, :d 1}))])
+;;;; Cache API
 
 (do
   (def ^:private cache-idx_ (atom 0))
@@ -273,125 +310,7 @@
       (is (= (cached-fn "infrequent-recent") 2) "Cache retained (recent)")
       (is (= (cached-fn "infrequent-old")    4) "Cache dropped")])])
 
-(deftest _rolling-sequentials
-  [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
-   #?(:clj (is (= (let [rl (enc/rolling-list   3)] (dotimes [idx 1e4] (rl idx)) (vec (rl))) [9997 9998 9999])))])
-
-(deftest _counters
-  (let [c (enc/counter)]
-    [(is (= @c        0))
-     (is (= (c)       0))
-     (is (= @c        1))
-     (is (= (c 5)     1))
-     (is (= @c        6))
-     (is (= (c :+= 2) 8))
-     (is (= (c :=+ 2) 8))
-     (is (= @c        10))]))
-
-#?(:clj
-   (deftest _precache
-     (let [c   (enc/counter)
-           pcf (enc/pre-cache 3 1 (fn inc-counter [] (c)))]
-
-       [(do (Thread/sleep 1000) "Sleep for cache to initialize (async)")
-        (is (= @c 3)  "f was run to initialize cache")
-        (is (= (pcf) 0))
-        (do (Thread/sleep 1000) "Sleep for cache to replenish (async)")
-        (is (= @c 4) "f was run to replenish cache")
-        (is (= (pcf) 1))
-        (is (= (pcf) 2))
-        (is (= (pcf) 3))])))
-
-(deftest _predicates
-  [(is      (enc/can-meta? []))
-   (is (not (enc/can-meta? "foo")))])
-
-(defmacro ^:private callsite-inner  [] (meta &form))
-(defmacro ^:private callsite-outer1 []                    `(callsite-inner))
-(defmacro ^:private callsite-outer2 [] (enc/keep-callsite `(callsite-inner)))
-
-(deftest _keep-callsite
-  [(is (map? (callsite-inner)))
-   (is (nil? (callsite-outer1)))
-   (is (map? (callsite-outer2)))])
-
-(defmacro test-if-cljs [caller]
-  `(enc/if-cljs
-     {:target :cljs, :caller ~caller}
-     {:target :clj,  :caller ~caller}))
-
-(deftest _if-cljs
-  [#?(:clj  (is (= (test-if-cljs :clj)  {:target :clj,  :caller :clj})))
-   #?(:cljs (is (= (test-if-cljs :cljs) {:target :cljs, :caller :cljs})))])
-
-#?(:clj
-   (defmacro test-get-source [caller]
-     #_(spit "debug.txt" (str [(boolean (:ns &env)) (:file (meta &form))] "\n") :append true)
-     `{:caller    ~caller
-       :target    ~(if (:ns &env) :cljs :clj)
-       :form      '~&form
-       :*file*    ~(str *file*)
-       :env       ~(-> &env       (select-keys [:line :column]))
-       :form-meta ~(-> &form meta (select-keys [:line :column :file]))
-       :source    ~(enc/get-source &form &env)}))
-
-(comment (test-get-source :repl))
-
-(deftest _get-source
-  [#?(:clj
-      (let [m (test-get-source :clj)]
-        [(is (enc/submap? m {:target :clj, :caller :clj, :source {:file :submap/some}}))
-         (is (= (get-in   m [:source :file]) (get-in m [:*file*])))]))
-
-   #?(:cljs
-      (let [m (test-get-source :cljs)]
-        [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
-         (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
-
-#?(:clj (defmacro resolve-sym [x] (let [s (enc/resolve-sym &env x)] `'~s)))
-
-(deftest _resolve-sym
-  [#?(:clj  (is (= (resolve-sym string?) 'clojure.core/string?))
-      :cljs (is (= (resolve-sym string?)    'cljs.core/string?)))])
-
-;;;;
-
-(deftest _update-in
-  [(is (= (enc/update-in {:a :A :b :B} [   ]        (fn [_] :x))                :x))
-   (is (= (enc/update-in {:a :A :b :B} [:a ]        (fn [_] :x))            {:a :x, :b :B}))
-   (is (= (enc/update-in {:a :A :b :B} [:a ] :nf    (fn [_] :x))            {:a :x, :b :B}))
-   (is (= (enc/update-in {:a :A :b :B} [:nx] :nf    (fn [x]  x))            {:a :A, :b :B, :nx :nf}))
-
-   (is (= (enc/update-in {           } [:a :b ]     (fn [_] :x))            {:a {:b :x}}))
-   (is (= (enc/update-in {           } [:a :b ]     (fn [x] :swap/abort))   {}))
-   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] x))             {:a {:b :nf}}))
-
-   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
-   (is (= (enc/update-in {           } [:a :b ] :nf (fn [x] :swap/abort))   {}))
-
-   (is (= (enc/update-in {           } [:a :b ]     (fn [m] (dissoc m :k))) {:a {:b nil}}))
-   (is (= (enc/update-in {:a {:b :B} } [:a :b ]     (fn [_] :swap/dissoc))  {:a {}}))
-   (is (= (enc/update-in {:a {:b :B} } [:a :nx]     (fn [_] :swap/dissoc))  {:a {:b :B}}))
-
-   (is (enc/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
-     "Non-associative val")])
-
-(deftest _contains-in?
-  [(is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :c])  true))
-   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b :nx]) false))
-   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :c)  true))
-   (is (= (enc/contains-in? {:a {:b {:c :C}}} [:a :b] :nx) false))])
-
-(deftest _dissoc-in
-  [(is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :c])    {:a {:b {:d :D}}}))
-   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b :nx])   {:a {:b {:c :C :d :D}}}))
-   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c)    {:a {:b {:d :D}}}))
-   (is (= (enc/dissoc-in {:a {:b {:c :C :d :D}}} [:a :b] :c :d) {:a {:b {}}}))
-   (is (= (enc/dissoc-in {                     } [:a :b :c])    {}))
-   (is (= (enc/dissoc-in {:a :A                } [:a :b :c])    {:a :A}))
-   (is (= (enc/dissoc-in {                     } [:a :b] :c :d) {}))
-   (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
-   (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
+;;;; Swap API
 
 (deftest _swap-in
   [(testing "k0"
@@ -477,6 +396,103 @@
 
          (is (= (enc/swap-in! a [:a :b2] (fn [v] (enc/swapped :swap/dissoc v))) :x2))
          (is (= @a {:a {}}))])])])
+
+;;;; Callsites, etc.
+
+(defmacro ^:private callsite-inner  [] (meta &form))
+(defmacro ^:private callsite-outer1 []                    `(callsite-inner))
+(defmacro ^:private callsite-outer2 [] (enc/keep-callsite `(callsite-inner)))
+
+(deftest _keep-callsite
+  [(is (map? (callsite-inner)))
+   (is (nil? (callsite-outer1)))
+   (is (map? (callsite-outer2)))])
+
+(defmacro test-if-cljs [caller]
+  `(enc/if-cljs
+     {:target :cljs, :caller ~caller}
+     {:target :clj,  :caller ~caller}))
+
+(deftest _if-cljs
+  [#?(:clj  (is (= (test-if-cljs :clj)  {:target :clj,  :caller :clj})))
+   #?(:cljs (is (= (test-if-cljs :cljs) {:target :cljs, :caller :cljs})))])
+
+#?(:clj
+   (defmacro test-get-source [caller]
+     #_(spit "debug.txt" (str [(boolean (:ns &env)) (:file (meta &form))] "\n") :append true)
+     `{:caller    ~caller
+       :target    ~(if (:ns &env) :cljs :clj)
+       :form      '~&form
+       :*file*    ~(str *file*)
+       :env       ~(-> &env       (select-keys [:line :column]))
+       :form-meta ~(-> &form meta (select-keys [:line :column :file]))
+       :source    ~(enc/get-source &form &env)}))
+
+(comment (test-get-source :repl))
+
+(deftest _get-source
+  [#?(:clj
+      (let [m (test-get-source :clj)]
+        [(is (enc/submap? m {:target :clj, :caller :clj, :source {:file :submap/some}}))
+         (is (= (get-in   m [:source :file]) (get-in m [:*file*])))]))
+
+   #?(:cljs
+      (let [m (test-get-source :cljs)]
+        [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
+         (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
+
+;;;; Resolving
+
+#?(:clj (defmacro resolve-sym [x] (let [s (enc/resolve-sym &env x)] `'~s)))
+
+(deftest _resolve-sym
+  [#?(:clj  (is (= (resolve-sym string?) 'clojure.core/string?))
+      :cljs (is (= (resolve-sym string?)    'cljs.core/string?)))])
+
+;;;; Misc
+
+#?(:clj
+   (deftest _secure-rng-mock
+     [(is (=
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])))
+
+      (is (not=
+            (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
+            (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
+
+(deftest _counters
+  (let [c (enc/counter)]
+    [(is (= @c        0))
+     (is (= (c)       0))
+     (is (= @c        1))
+     (is (= (c 5)     1))
+     (is (= @c        6))
+     (is (= (c :+= 2) 8))
+     (is (= (c :=+ 2) 8))
+     (is (= @c        10))]))
+
+(deftest _rolling-sequentials
+  [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
+   #?(:clj (is (= (let [rl (enc/rolling-list   3)] (dotimes [idx 1e4] (rl idx)) (vec (rl))) [9997 9998 9999])))])
+
+#?(:clj
+   (deftest _precache
+     (let [c   (enc/counter)
+           pcf (enc/pre-cache 3 1 (fn inc-counter [] (c)))]
+
+       [(do (Thread/sleep 1000) "Sleep for cache to initialize (async)")
+        (is (= @c 3)  "f was run to initialize cache")
+        (is (= (pcf) 0))
+        (do (Thread/sleep 1000) "Sleep for cache to replenish (async)")
+        (is (= @c 4) "f was run to replenish cache")
+        (is (= (pcf) 1))
+        (is (= (pcf) 2))
+        (is (= (pcf) 3))])))
+
+(deftest _predicates
+  [(is      (enc/can-meta? []))
+   (is (not (enc/can-meta? "foo")))])
 
 ;;;;
 
