@@ -2376,9 +2376,16 @@
 (let [not-found (new-object)]
   (defn ^:no-doc -merge-with [nest? f maps]
     (reduce
-      (fn [acc in]
-        (if (nil? in)
-          acc
+      (fn rf [acc in]
+        (cond
+          (nil? in) acc
+          :if-let [e (find in :merge/replace?)] ; Currently undocumented
+          (let [in (dissoc in :merge/replace?)]
+            (if (val e)
+              (do     in)
+              (rf acc in)))
+
+          :else
           (reduce-kv
             (fn rf2 [acc k rv]
               (let [lv (get acc k not-found)]
@@ -2403,27 +2410,23 @@
       maps)))
 
 (do
-  (defn merge "Like `core/merge` but faster, supports `:swap/dissoc` rvals."
+  (defn merge
+    "Like `core/merge` but faster, supports `:swap/dissoc` rvals."
     [& maps] (-merge-with false (fn [x y] y) maps))
 
-  (defn merge-with "Like `core/merge-with` but faster, supports `:swap/dissoc` rvals."
+  (defn merge-with
+    "Like `core/merge-with` but faster, supports `:swap/dissoc` rvals."
     [f & maps] (-merge-with false f maps))
 
-  (defn nested-merge "Like `merge` but does nested merging."
+  (defn nested-merge
+    "Like `merge` but does nested merging."
     [& maps] (-merge-with :nest (fn [x y] y) maps))
 
-  (defn nested-merge-with "Like `merge-with` but does nested merging."
+  (defn nested-merge-with
+    "Like `merge-with` but does nested merging."
     [f & maps] (-merge-with :nest f maps)))
 
-(comment
-  [(nested-merge nil nil nil)
-   (nested-merge nil nil {})
-   (nested-merge
-     {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
-     {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :swap/dissoc}}}
-     nil
-     {})]
-  [nil {} {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}])
+(comment :see-tests)
 
 (defn submap?
   "Returns true iff `sub` is a (possibly nested) submap of `m`,
@@ -6027,13 +6030,9 @@
              (when (and validator have-default?) (have? validator default))
              (when-let [{:keys [config] :as m} (get-config opts)]
                (let [config
-                     (if (map? config)
-                       (cond
-                         (get    config :load/overwrite?) ; Undocumented option
-                         (dissoc config :load/overwrite?) ; Without merge
-                         (not (map? default))        config
-                         :else (nested-merge default config))
-                       config)]
+                     (if (and (map? config) (map? default))
+                       (nested-merge default config)
+                       (do                   config))]
                  (when validator (have? validator config))
                  (assoc m :config config)))
 

@@ -261,6 +261,20 @@
    (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
    (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
 
+(deftest _merge-with
+  [(is (= (enc/merge {:a :A1} {:b :B1})          {:a :A1, :b :B1}))
+   (is (= (enc/merge {:a :A1} {:b :B1} {:a :A2}) {:a :A2, :b :B1}))
+
+   (is (= (enc/merge {:a :A1 :b :B2} {:a :A1 :b :swap/dissoc})       {:a :A1}))
+   (is (= (enc/merge {:a :A1}        {:b :B1 :merge/replace? true})  {:b :B1}))
+   (is (= (enc/merge {:a :A1}        {:b :B1 :merge/replace? false}) {:a :A1, :b :B1}))
+
+   (is (= (enc/nested-merge
+            {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
+            {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :swap/dissoc}}}
+            nil)
+         {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}))])
+
 ;;;; Strings
 
 #?(:clj
