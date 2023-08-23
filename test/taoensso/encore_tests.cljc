@@ -5,7 +5,8 @@
    ;; [clojure.test.check.generators :as tc-gens]
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
-   [taoensso.encore :as enc])
+   [taoensso.encore :as enc]
+   [taoensso.encore.ctx-filter :as cf])
 
   #?(:cljs
      (:require-macros
@@ -644,6 +645,99 @@
 
    (is (false? ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobar)))
    (is (true?  ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobaz)))])
+
+;;;; Context filter
+
+(deftest _context-filter
+  [(testing "Levels"
+     [(is (=   (cf/get-level-int   -10) -10))
+      (is (=   (cf/get-level-int :info)  50))
+      (is (=   (cf/get-level-int   nil)  nil))
+      (is (=   (cf/get-level-int :__nx)  nil))
+
+      (is (=   (cf/valid-level-int   -10) -10))
+      (is (=   (cf/valid-level-int :info)  50))
+      ;; (is (->>          (cf/valid-level-int     nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
+      (is    (->> ((fn [x] (cf/valid-level-int x)) nil) (enc/throws? :common "Invalid level")))
+
+      (is      (cf/level>= :error :info))
+      (is      (cf/level>= :error :error))
+      (is (not (cf/level>= :info  :error)))
+      (is      (cf/level>= :min   -10))])
+
+   (testing "Utils"
+     [(testing "update-level-spec"
+        [(is (=   (cf/update-level-spec nil      nil) nil))
+         (is (=   (cf/update-level-spec nil    :info) :info))
+         (is (=   (cf/update-level-spec :info :error) :error))
+         (is (->> (cf/update-level-spec nil    :__nx) (enc/throws? :common "Invalid level")))
+
+         (is (=   (cf/update-level-spec nil  nil  [["ns1" :info]]) [["ns1" :info]]))
+         (is (=   (cf/update-level-spec nil "ns1" :info)           [["ns1" :info]]))
+         (is (->> (cf/update-level-spec nil "ns1" [["ns1" :info]]) (enc/throws? :common "Invalid level")))
+         (is (->> (cf/update-level-spec nil  nil  [["ns1" :__nx]]) (enc/throws? :common "Invalid level")))
+         (is (->> (cf/update-level-spec nil  -1   :info)           (enc/throws? :common "Invalid name filter spec")))
+
+         (is (=   (cf/update-level-spec :debug "ns1" :info) [["ns1" :info] ["*" :debug]]))
+         (is (=   (->
+                    :debug
+                    (cf/update-level-spec  "ns1" :info)
+                    (cf/update-level-spec  "ns2" :trace)
+                    (cf/update-level-spec  "ns3" -20)
+                    (cf/update-level-spec  "ns2" :warn))
+               [["ns2" :warn] ["ns3" -20] ["ns1" :info] ["*" :debug]]))])])
+
+   (testing "Filtering"
+     [(testing "basics"
+        [(is (false? (cf/filter? nil nil   nil    nil)))
+         (is (false? (cf/filter? nil nil   "ns1" :info)))
+         (is (false? (cf/filter? nil :info "ns1" :info)))
+         (is (true?  (cf/filter? nil :warn "ns1" :info)))
+
+         ;; (is (false? (cf/filter? (fn [_] true)  nil "ns1" :info)) "Arb ns-spec fn")
+         ;; (is (true?  (cf/filter? (fn [_] false) nil "ns1" :info)) "Arb ns-spec fn")
+
+         (is (false? (cf/filter? "ns1"          nil "ns1" :info)))
+         (is (true?  (cf/filter? "ns2"          nil "ns1" :info)))
+         (is (false? (cf/filter? "ns*"          nil "ns1" :info)))
+         (is (false? (cf/filter? #{"ns1" "ns2"} nil "ns1" :info)))
+         (is (true?  (cf/filter? #{"ns2" "ns3"} nil "ns1" :info)))
+         (is (false? (cf/filter? #"ns(\d*)?"    nil "ns5" :info)))
+         (is (false? (cf/filter? #"ns(\d*)?"    nil "ns"  :info)))
+
+         (is (false? (cf/filter? {:allow #{"ns1"}}  nil "ns1" :info)))
+         (is (false? (cf/filter? {:allow #{"ns*"}}  nil "ns1" :info)))
+         (is (false? (cf/filter? {:allow #{"*"}}    nil "ns1" :info)))
+         (is (false? (cf/filter? {:allow #{:any}}   nil "ns1" :info)))
+         (is (false? (cf/filter? {:allow "*"}       nil "ns1" :info)))
+         (is (false? (cf/filter? {:allow :any}      nil "ns1" :info)))
+         (is (true?  (cf/filter? {:allow #{}}       nil "ns1" :info)))
+
+         (is (false? (cf/filter? {:allow #{"a.*.c"}} nil "a.b3.c"    :info)))
+         (is (false? (cf/filter? {:allow #{"a.*.c"}} nil "a.b1.b2.c" :info)))
+
+         (is (false? (cf/filter? {:deny #{}}     nil "ns1" :info)))
+         (is (true? (cf/filter?  {:deny #{"*"}}  nil "ns1" :info)))
+         (is (true? (cf/filter?  {:deny #{:any}} nil "ns1" :info)))
+         (is (true? (cf/filter?  {:deny "*"}     nil "ns1" :info)))
+         (is (true? (cf/filter?  {:deny :any}    nil "ns1" :info)))
+
+         (is (true? (cf/filter? {:allow :any :deny :any} nil "ns1" :info)) "Deny > allow")
+
+         (is (true? (cf/filter? "ns1" nil   nil :info))                                     "ns-spec without ns")
+         (is (->>   (cf/filter? nil   :info nil nil) (enc/throws? :common "Invalid level")) "level-spec without level")])
+
+      (testing "ns-specific levels"
+        [(is (false? (cf/filter? nil [["*" :info]] "ns1" :info)))
+         (is (true?  (cf/filter? nil [["*" :info]] "ns1" :debug)))
+         (is (false? (cf/filter? nil [["ns1" :info] ["ns1" :warn] ["*" :warn]] "ns1" :info)) "Match sequentially")
+         (is (true?  (cf/filter? nil [["ns1" :warn] ["ns1" :info] ["*" :warn]] "ns1" :info)) "Match sequentially")
+
+         (is (false? (cf/filter? nil [["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] "ns.public.foo"   :info)))
+         (is (true?  (cf/filter? nil [["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] "ns.internal.foo" :info)))
+
+         (is (->> (cf/filter? nil [["*" :info]] "ns1" nil) (enc/throws? :common "Invalid level")))
+         (is (->> (cf/filter? nil [["*" :info]] nil   nil) (enc/throws? :common "Invalid level")))])])])
 
 ;;;;
 
