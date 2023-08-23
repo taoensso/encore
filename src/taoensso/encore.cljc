@@ -115,7 +115,7 @@
         cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
-(def encore-version [3 64 1])
+(def encore-version [3 66 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1401,7 +1401,7 @@
 
 (defn ^:no-doc -unexpected-arg!
   "Private low-level util."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.66.0 (2023-08-23)"}
   ([arg] (-unexpected-arg! arg nil))
   ([arg {:keys [msg] :as details}]
    (throw
@@ -1666,7 +1666,7 @@
   as a micro-optimisation when reducing a large collection multiple
   times."
   ;; Faster than using volatiles
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.66.0 (2023-08-23)"}
   ([rf  init            coll] (reduce rf init coll))
   ([rf1 init1 rf2 init2 coll]
    (let [^Tup2 tuple
@@ -1717,7 +1717,7 @@
 (defn reduce-interleave-all
   "Reduces sequence of elements interleaved from given `colls`.
   (reduce-interleave-all conj [] [[:a :b] [1 2 3]]) => [:a 1 :b 2 3]"
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.66.0 (2023-08-23)"}
   [rf init colls]
   (if (empty? colls)
     init
@@ -2323,7 +2323,7 @@
       shortest coll has been consumed).
 
   Single-arity version takes a coll of colls."
-  {:added "vX.Y.Z (YYYY-MM-DD) for !=2 arities"}
+  {:added "v3.66.0 (2023-08-23) for !=2 arities"}
   ([colls] (if (empty? colls) [] (persistent! (reduce-interleave-all conj! (transient []) colls))))
   ([c1 c2] ; Optimized common case
    (loop [v (transient []) s1 (seq c1) s2 (seq c2)]
@@ -2747,7 +2747,7 @@
   #?(:clj
      (defmacro now-inst
        "Returns current `java.time.Instant` (Clj), or epoch millis (Cljs)."
-       {:added "vX.Y.Z (YYYY-MM-DD)"} []
+       {:added "v3.66.0 (2023-08-23)"} []
        (if (:ns &env) `(js/Date.now) `(java.time.Instant/now))))
 
   #?(:clj (defn now-nano ^long [] (System/nanoTime))
@@ -4483,7 +4483,7 @@
      (defmacro ^:no-doc get-config
        "Returns nil, or {:keys [config source ...]}.
        Private low-level config API util."
-       {:added "vX.Y.Z (YYYY-MM-DD)"
+       {:added "v3.66.0 (2023-08-23)"
         :arglists (:arglists (meta #'-get-config))}
        [opts]
        (if (:ns &env)
@@ -4514,7 +4514,7 @@
                         :cljs [:my-app.config.cljs.txt :my-app.config.txt]))
 
      Match order: [<prop1> <env1> <res1> <prop2> <env2> <res2> ...]."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.66.0 (2023-08-23)"}
      ([prop        ] `(:config (get-config {:prop ~prop})))
      ([prop env    ] `(:config (get-config {:prop ~prop :env ~env})))
      ([prop env res] `(:config (get-config {:prop ~prop :env ~env :res ~res})))))
@@ -4537,7 +4537,7 @@
        - Return `true`  if value is ∈ #{\"true\"  \"1\" \"t\" \"T\" \"TRUE\"}
        - Return `false` if value is ∈ #{\"false\" \"0\" \"f\" \"F\" \"FALSE\"}
        - Throws for all other values"
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.66.0 (2023-08-23)"}
      ([default prop        ] `(:config (get-config {:as :bool :default ~default :prop ~prop})))
      ([default prop env    ] `(:config (get-config {:as :bool :default ~default :prop ~prop :env ~env})))
      ([default prop env res] `(:config (get-config {:as :bool :default ~default :prop ~prop :env ~env :res ~res})))))
@@ -4560,7 +4560,7 @@
 
      NB: when targeting Cljs, the final value must be something that can be
      safely embedded in code during macro expansion."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.66.0 (2023-08-23)"}
      ([prop        ] `(:config (get-config {:as :edn :prop ~prop})))
      ([prop env    ] `(:config (get-config {:as :edn :prop ~prop :env ~env})))
      ([prop env res] `(:config (get-config {:as :edn :prop ~prop :env ~env :res ~res})))))
@@ -5952,31 +5952,31 @@
   #?(:clj (defalias ^:no-doc ^:deprecated taoensso.truss/with-dynamic-assertion-data)))
 
 (deprecated
-  ;; vX.Y.Z (YYYY-MM-DD) - unified config API
+  ;; v3.66.0 (2023-08-23) - unified config API
   #?(:clj
      (do
        (defn ^:no-doc get-sys-val
          "Prefer new cross-platform `get-sys-val*` macro."
-         {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+         {:deprecated "v3.66.0 (2023-08-23)"}
          ([prop    ] (get-sys-val* prop))
          ([prop env] (get-sys-val* prop env :auto)))
 
        (defn ^:no-doc read-sys-val
          "Prefer new cross-platform `read-sys-val*` macro."
-         {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+         {:deprecated "v3.66.0 (2023-08-23)"}
          ([prop    ] (read-sys-val* prop))
          ([prop env] (read-sys-val* prop env)))
 
        (defn ^:no-doc get-sys-bool
          "Prefer new cross-platform `get-sys-bool*` macro."
-         {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+         {:deprecated "v3.66.0 (2023-08-23)"}
          ([default prop    ] (get-sys-bool* default prop))
          ([default prop env] (get-sys-bool* default prop env)))
 
        (defn ^:no-doc load-edn-config
          "Prefer new cross-platform `read-sys-val*` macro."
          {:added      "v3.39.0 (2022-11-23)"
-          :deprecated "vX.Y.Z (YYYY-MM-DD)"}
+          :deprecated "v3.66.0 (2023-08-23)"}
          [opts]
          (let [{:keys [error-data validator default]} opts
                have-default? (contains? opts :default)]
