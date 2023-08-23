@@ -130,14 +130,6 @@
   (remove-ns 'taoensso.encore)
   (test/run-tests))
 
-;;;; TODO v4
-;; - Drop previously deprecated vars
-;; - Transducers first
-;; - Better match naming of late Clojure additions (e.g. nnil->some / sor)
-;; - Consider docstrings catered for public consumption
-;; - Imports from tl-core, tl-math, tl-nodes, baget, etc.
-;; - Unit tests
-
 ;;;; Core macros
 
 #?(:clj
@@ -996,10 +988,10 @@
      "Returns {:keys [ns line column file]} callsite and file info given a
      macro's compile-time `&form` and `&env` vals. See also `keep-callsite`."
      {:added "v3.61.0 (2023-07-07)"}
-     [form env]
-     (let [{:keys [line column file]} (meta form)
+     [macro-form macro-env]
+     (let [{:keys [line column file]} (meta macro-form)
            file
-           (if-not (:ns env)
+           (if-not (:ns macro-env)
              *file* ; Compiling clj
              (or    ; Compiling cljs
                (when-let [url (and file (catching (io/resource file)))]
@@ -5328,7 +5320,7 @@
 
       - A vector or set of regex patterns or strings.
         Will conform on ANY match.
-        If you need literal \"*\"s, use an explicit regex pattern instead.
+        If you need literal \"*\"s, use #\"\\*\" regex instead.
 
       - {:allow <allow-spec> :deny <deny-spec> :cache? <bool>}.
         Will conform iff allow-spec matches AND deny-spec does NOT.
@@ -5338,7 +5330,8 @@
 
     Spec examples:
       #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
-      {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}}"
+      {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}},
+      #\"(foo1|foo2)\\.bar\"."
 
     [spec]
     (if-not (map? spec)
@@ -5527,9 +5520,7 @@
                @result_
                #?(:clj (.countDown latch)))))]
 
-     (let [impl (force impl_)]
-       (-schedule-timeout impl msecs cas-f))
-
+     (let [impl (force impl_)] (-schedule-timeout impl msecs cas-f))
      (TimeoutFuture. f result__ udt #?(:clj latch)))))
 
 #?(:clj
