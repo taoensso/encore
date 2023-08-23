@@ -2255,25 +2255,25 @@
   "Like `core/update-in` but:.
     - Empty ks will return (f m), not act like [nil] ks.
     - Adds support for `not-found`.
-    - Adds support for special return vals: `:swap/dissoc`, `:swap/abort`."
+    - Adds support for special return vals: `:update/dissoc`, `:update/abort`."
   ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
    (if (empty? ks)
      (f m) ; m would also be a sensible choice, but (f m) is more useful
      (let [old (get-in m ks not-found)
            new (f old)]
-       (cond
-         (kw-identical? new :swap/abort) m
-         (kw-identical? new :swap/dissoc)
+       (case new
+         (:update/abort  :swap/abort) m
+         (:update/dissoc :swap/dissoc)
          (fsplit-last ks
            (fn [ks lk]
              (update-in m ks nil
                (fn [v]
                  (if v ; Assume associative
                    (dissoc v lk)
-                   :swap/abort)))))
+                   :update/abort)))))
 
-         :else (assoc-in m ks new))))))
+         (assoc-in m ks new))))))
 
 (comment :see-tests)
 
@@ -2287,13 +2287,13 @@
 (comment :see-tests)
 
 (defn dissoc-in
-  ([m ks dissoc-k       ] (update-in m ks nil (fn [m] (if m (dissoc m dissoc-k) :swap/abort))))
+  ([m ks dissoc-k       ] (update-in m ks nil (fn [m] (if m (dissoc m dissoc-k) :update/abort))))
   ([m ks dissoc-k & more]
    (update-in m ks nil
      (fn [m]
        (if m
          (reduce dissoc (dissoc m dissoc-k) more)
-         :swap/abort))))
+         :update/abort))))
 
   ([m ks]
    (if (empty? m)
@@ -2393,7 +2393,7 @@
                   (identical? lv not-found)
                   (assoc acc k rv)
 
-                  (kw-identical? rv :swap/dissoc)
+                  (case rv (:merge/dissoc :swap/dissoc) true false)
                   (dissoc acc k)
 
                   (and nest? (map? rv) (map? lv))
@@ -2401,7 +2401,7 @@
 
                   :else
                   (let [new-rv (f lv rv)]
-                    (if (kw-identical? new-rv :swap/dissoc)
+                    (if (case new-rv (:merge/dissoc :swap/dissoc) true false)
                       (dissoc acc k)
                       (assoc  acc k new-rv))))))
             (or acc {})
@@ -2411,11 +2411,11 @@
 
 (do
   (defn merge
-    "Like `core/merge` but faster, supports `:swap/dissoc` rvals."
+    "Like `core/merge` but faster, supports `:merge/dissoc` rvals."
     [& maps] (-merge-with false (fn [x y] y) maps))
 
   (defn merge-with
-    "Like `core/merge-with` but faster, supports `:swap/dissoc` rvals."
+    "Like `core/merge-with` but faster, supports `:merge/dissoc` rvals."
     [f & maps] (-merge-with false f maps))
 
   (defn nested-merge
@@ -2447,12 +2447,12 @@
               mval (get m k ::nx)]
 
           (if-let [match?
-                   (cond
-                     ;;; Special svals currently undocumented
-                     (kw-identical? sval :submap/nx)        (kw-identical? mval ::nx)
-                     (kw-identical? sval :submap/ex)   (not (kw-identical? mval ::nx))
-                     (kw-identical? sval :submap/some)              (some? mval)
-                     :else (= sval mval))]
+                   (case sval
+                     ;; Special svals currently undocumented
+                     :submap/nx      (kw-identical? mval ::nx)
+                     :submap/ex (not (kw-identical? mval ::nx))
+                     :submap/some            (some? mval)
+                     (= sval mval))]
             true
             (reduced false)))))
     true
@@ -2884,8 +2884,8 @@
     - Often faster, depending on options.
     - Prevents race conditions on writes.
     - Supports cache invalidation by prepending args with:
-      - `:mem/del`   ; Delete cached item for subsequent args, returns nil.
-      - `:mem/fresh` ; Renew  cached item for subsequent args, returns new val.
+      - `:cache/del`   ; Delete cached item for subsequent args, returns nil.
+      - `:cache/fresh` ; Renew  cached item for subsequent args, returns new val.
 
     - Supports options:
       - `ttl-ms` ; Expire cached items after <this> many msecs.
@@ -2906,8 +2906,9 @@
 
         (fn cached [& xs]
           (let [x1 (first xs)]
-            (cond
-              (kw-identical? x1 :mem/del)
+            (case x1
+
+              (:cache/del :mem/del)
               (let [xn (next  xs)
                     x2 (first xn)]
                 (if (kw-identical? x2 :mem/all)
@@ -2915,11 +2916,11 @@
                   (vswap!  cache_ dissoc xn))
                 nil)
 
-              (kw-identical? x1 :mem/fresh)
+              (:cache/fresh :mem/fresh)
               (let [xn (next xs)
-                    v  (apply f xn)] (vswap! cache_ assoc xn v) v)
+                    v  (apply f xn)]
+                (vswap! cache_ assoc xn v) v)
 
-              :else
               (let [v (get @cache_ xs get-sentinel)]
                 (if (identical? v get-sentinel)
                   (let [v (apply f xs)] (vswap! cache_ assoc xs v) v)
@@ -2936,8 +2937,9 @@
 
           ([& xs]
            (let [x1 (first xs)]
-             (cond
-               (kw-identical? x1 :mem/del)
+             (case x1
+
+               (:cache/del :mem/del)
                (let [xn (next  xs)
                      x2 (first xn)]
                  (if (kw-identical? x2 :mem/all)
@@ -2945,12 +2947,11 @@
                    (.remove cache_ (or xn nil-sentinel)))
                  nil)
 
-               (kw-identical? x1 :mem/fresh)
+               (:cache/fresh :mem/fresh)
                @(let [xn (next xs)
                       dv (delay (apply f xn))]
                   (.put cache_ (or xn nil-sentinel) dv) dv)
 
-               :else
                @(or (.get cache_ xs)
                   (let [dv (delay (apply f xs))]
                     (or (.putIfAbsent cache_ xs dv) dv))))))))))
@@ -2973,16 +2974,15 @@
 
        (fn cached [& args]
          (let [a1 (first args)]
-           (cond
-             (kw-identical? a1 :mem/del)
+           (case a1
+             (:cache/del :mem/del)
              (let [argn (next args)
                    a2   (first argn)]
-               (if (kw-identical? a2 :mem/all)
+               (if (case a2 (:cache/all :mem/all) true false)
                  (reset! cache_ nil)
                  (swap!  cache_ dissoc argn))
                nil)
 
-             :else
              (let [^long tick (ticker) ; Always inc, even on reads
                    instant (if ttl? (now-udt*) 0)]
 
@@ -3029,8 +3029,8 @@
                        #?(:clj (reset!     latch_ nil))
                        #?(:clj (.countDown latch))))))
 
-               (let [fresh?(kw-identical? a1 :mem/fresh)
-                     args  (if fresh? (next args) args)
+               (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
+                     args   (if fresh? (next args) args)
 
                      _ #?(:clj (when-let [l @latch_] (.await ^CountDownLatch l)) :cljs nil)
                      ^TickedCacheEntry e
@@ -3056,16 +3056,15 @@
 
        (fn cached [& args]
          (let [a1 (first args)]
-           (cond
-             (kw-identical? a1 :mem/del)
+           (case a1
+             (:cache/del :mem/del)
              (let [argn (next  args)
                    a2   (first argn)]
-               (if (kw-identical? a2 :mem/all)
+               (if (case a2 (:cache/all :mem/all) true false)
                  (reset! cache_ nil)
                  (swap!  cache_ dissoc argn))
                nil)
 
-             :else
              (let [instant (now-udt*)]
 
                (when (gc-now? gc-rate)
@@ -3086,7 +3085,7 @@
                        #?(:clj (reset!     latch_ nil))
                        #?(:clj (.countDown latch))))))
 
-               (let [fresh? (kw-identical? a1 :mem/fresh)
+               (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
                      _      #?(:clj (when-let [l @latch_] (.await ^CountDownLatch l)) :cljs nil)
                      ^SimpleCacheEntry e
@@ -3295,18 +3294,16 @@
           ([          ] (f1 nil    false))
           ([    req-id] (f1 req-id false))
           ([cmd req-id]
-           (cond
-             (kw-identical? cmd :rl/reset)
+           (case cmd
+             :rl/reset
              (do
                (if (kw-identical? req-id :rl/all)
                  (reset! reqs_ nil)
                  (swap!  reqs_ dissoc (req-id-fn req-id)))
                nil)
 
-             (kw-identical? cmd :rl/peek)
-             (f1 req-id true)
+             :rl/peek (f1 req-id true)
 
-             :else
              (throw
                (ex-info "[encore/limiter*] Unexpected limiter command"
                  {:command {:value cmd :type (type cmd)}

@@ -265,7 +265,7 @@
   [(is (= (enc/merge {:a :A1} {:b :B1})          {:a :A1, :b :B1}))
    (is (= (enc/merge {:a :A1} {:b :B1} {:a :A2}) {:a :A2, :b :B1}))
 
-   (is (= (enc/merge {:a :A1 :b :B2} {:a :A1 :b :swap/dissoc})       {:a :A1}))
+   (is (= (enc/merge {:a :A1 :b :B2} {:a :A1 :b :merge/dissoc})      {:a :A1}))
    (is (= (enc/merge {:a :A1}        {:b :B1 :merge/replace? true})  {:b :B1}))
    (is (= (enc/merge {:a :A1}        {:b :B1 :merge/replace? false}) {:a :A1, :b :B1}))
 
@@ -330,7 +330,7 @@
 (deftest _defn-cached
   [(testing "Basics"
      [(is (= (reset! cache-idx_ 0) 0))
-      (is (= (cached-fn :mem/del :mem/all) nil))
+      (is (= (cached-fn :cache/del :cache/all) nil))
       (is (= (cached-fn)     1))
       (is (= (cached-fn)     1))
       (is (= (cached-fn "a") 2))
@@ -341,26 +341,26 @@
       (is (= (cached-fn "a" "b")) 4)
       (is (= (cached-fn "a") 2))
 
-      (is (= (cached-fn :mem/fresh)     5))
-      (is (= (cached-fn :mem/fresh)     6))
-      (is (= (cached-fn)                6))
-      (is (= (cached-fn "a")            2))
-      (is (= (cached-fn :mem/fresh "a") 7))
+      (is (= (cached-fn :cache/fresh)     5))
+      (is (= (cached-fn :cache/fresh)     6))
+      (is (= (cached-fn)                  6))
+      (is (= (cached-fn "a")              2))
+      (is (= (cached-fn :cache/fresh "a") 7))
 
       (is (= (cached-fn "b")            3))
       (is (= @cache-idx_                7))
-      (is (= (cached-fn :mem/del "b") nil))
+      (is (= (cached-fn :cache/del "b") nil))
       (is (= @cache-idx_                7))
       (is (= (cached-fn "b")            8))
 
-      (is (= (cached-fn "a"                  7)))
-      (is (= (cached-fn :mem/del :mem/all) nil))
-      (is (= (cached-fn "a"                  8)))])
+      (is (= (cached-fn "a"                    7)))
+      (is (= (cached-fn :cache/del :cache/all) nil))
+      (is (= (cached-fn "a"                    8)))])
 
    #?(:clj
       (testing "TTL"
-        [(is (= (reset! cache-idx_ 0)           0))
-         (is (= (cached-fn :mem/del :mem/all) nil))
+        [(is (= (reset! cache-idx_ 0)             0))
+         (is (= (cached-fn :cache/del :cache/all) nil))
 
          (is (= (cached-fn "foo") 1))
          (is (= (cached-fn "foo") 1))
@@ -370,8 +370,8 @@
          (is (= (cached-fn "foo") 2))]))
 
    (testing "Max size"
-     [(is (= (reset! cache-idx_ 0)           0))
-      (is (= (cached-fn :mem/del :mem/all) nil))
+     [(is (= (reset! cache-idx_ 0)             0))
+      (is (= (cached-fn :cache/del :cache/all) nil))
 
       (is (= (cached-fn "infrequent-old")    1))
       (is (= (cached-fn "infrequent-recent") 2))
