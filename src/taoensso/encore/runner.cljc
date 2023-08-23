@@ -9,7 +9,7 @@
     - Runners have no validators or watches.
     - Runners auto shutdown their threads on JVM shutdown."
 
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   (:require
    [taoensso.encore :as enc :refer [have have?]]))
 

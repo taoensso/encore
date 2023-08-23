@@ -2,7 +2,7 @@
   "Alpha, subject to change without notice!
   Low-level toolkit for building context filters.
   Used by Telemere, Timbre, Tufte, etc."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc :refer [have have?]])

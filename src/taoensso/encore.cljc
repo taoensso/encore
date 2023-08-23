@@ -118,7 +118,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 66 0])
+(def encore-version [3 67 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -402,7 +402,7 @@
 
 (defmacro or-some
   "Like `or`, but returns the first non-nil form (may be falsey)."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))
   ([x       ] x)
   ([        ] nil))
@@ -426,7 +426,7 @@
    (defmacro def*
      "Like `core/def` but supports attrs map."
      {:style/indent 1
-      :added "vX.Y.Z (YYYY-MM-DD)"}
+      :added "v3.67.0 (2023-09-08)"}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
@@ -455,7 +455,7 @@
      Portable and maximally fast.
        For Clj  this expands to: `(identical?         x y)`
        For Cljs this expands to: `(keyword-identical? x y)`"
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.67.0 (2023-09-08)"}
      [x y]
      (if (:ns &env)
        `(cljs.core/keyword-identical? ~x ~y)
@@ -726,7 +726,7 @@
 
 (defn- list-form?
   "Returns true if given a list or Cons."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   [x]
   (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
@@ -735,7 +735,7 @@
      "Like `try`, but `catch` clause classnames can be the special keywords
        `:any` or `:common` for cross-platform catching. Addresses CLJ-1293."
 
-     {:added "vX.Y.Z (YYYY-MM-DD)"
+     {:added "v3.67.0 (2023-09-08)"
       :arglists '([expr catch-clause-or-clauses ?finally-clause])}
 
      [expr & clauses]
@@ -1408,9 +1408,9 @@
 
 #?(:clj
    (do
-     (defn ^:no-doc runtime-form? "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (or (symbol? form) (list-form? form)))
-     (defn ^:no-doc const-form?   "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (not  (runtime-form? form)))
-     (defn ^:no-doc const-form    "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (when (const-form?   form) form))))
+     (defn ^:no-doc runtime-form? "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (or (symbol? form) (list-form? form)))
+     (defn ^:no-doc const-form?   "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (not  (runtime-form? form)))
+     (defn ^:no-doc const-form    "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (when (const-form?   form) form))))
 
 ;;;; Validation
 
@@ -1998,7 +1998,7 @@
   Useful for key aliases or fallbacks when vals may be falsey.
   Equivalent to (if (contains? m k1) (get m k1)
                   (if (contains? m k2) (get m k2) ...))."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   ([m k        not-found] (get m k not-found))
   ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
   ([m k1 k2 k3 not-found] (if-let [e (and m (or (find m k1) (find m k2) (find m k3)))] (val e) not-found)))
@@ -2571,7 +2571,7 @@
   "Private implementation detail.
   Micro-optimized lightweight `atom` for internal use.
   Up to 30% faster than standard atoms, with the same atomicity guarantees."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.67.0 (2023-09-08)"}
   [init-state]
   (LightAtom.
     #?(:clj (AtomicReference. init-state)
@@ -2582,7 +2582,7 @@
      (defmacro ^:no-doc -cas!?
        "Private implementation detail.
        Micro-optimized `compare-and-set!` for internal use."
-       {:added "vX.Y.Z (YYYY-MM-DD)"}
+       {:added "v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val]
        (if (:ns &env)
          `(compare-and-set!          ~atom_                  ~old-val ~new-val)
@@ -5489,7 +5489,7 @@
       {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}},
       #\"(foo1|foo2)\\.bar\"."
 
-    {:added "vX.Y.Z (YYYY-MM-DD)"}
+    {:added "v3.67.0 (2023-09-08)"}
     [spec]
     (if-not (map? spec)
       (recur {:allow spec :deny nil})
@@ -5685,7 +5685,7 @@
 (deprecated
   (defn ^:no-doc -swap-val!
     "Prefer `latom`."
-    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "v3.67.0 (2023-09-08)"}
     [atom_ k f]
     (loop []
       (let [m0 @atom_
@@ -6090,7 +6090,7 @@
   #?(:clj (defalias ^:no-doc ^:deprecated taoensso.truss/with-dynamic-assertion-data))
 
   (defalias ^:no-doc compile-str-filter name-filter
-    {:deprecated "vX.Y.Z (YYYY-MM-DD)"
+    {:deprecated "v3.67.0 (2023-09-08)"
      :doc "Renamed to `name-filter`."})
 
   (defn ^:no-doc ^:deprecated kw-identical?
@@ -6101,7 +6101,7 @@
   #?(:clj
      (defmacro ^:no-doc -if-cas!
        "Prefer `-cas!?`."
-       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val then & [else]]
        `(if (-cas!? ~atom_ ~old-val ~new-val) ~then ~else))))
 
