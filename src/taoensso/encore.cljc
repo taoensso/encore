@@ -4419,8 +4419,9 @@
 ;; Utils to allow indirect/ops methods for modifying (initial) config
 
 #?(:clj
-   (let [prop->env (fn [prop] (when prop (str-replace (str/upper-case (name prop)) #"[.-]" "_")))
-         prop->res (fn [prop] (when prop                                    prop))]
+   (let [pname   (fn [x] (str-replace                 (as-qname x)  #"/" "."))
+         ename   (fn [x] (str-replace (str/upper-case (as-qname x)) #"[./-]" "_"))
+         add-ext (fn [s ext] (when-not (str/ends-with? s ext) (str s ext)))]
 
      (defn ^:no-doc -get-config
        "Implementation detail for `get-config*`."
@@ -4438,27 +4439,28 @@
                                       :no-recur? true}))]
                res* res)
 
-             env   (if (= env :auto) (if (vector? prop) (mapv prop->env prop) (prop->env prop)) env)
-             res   (if (= res :auto) (if (vector? res)  (mapv prop->res prop) (prop->res prop)) res)
+             env   (if (= env :auto) prop env)
+             res   (if (= res :auto) prop env)
 
-             props (when prop (mapv #(vector :prop %) (if (vector? prop) prop [prop])))
-             envs  (when env  (mapv #(vector :env  %) (if (vector? env)  env  [env])))
-             ress  (when res  (mapv #(vector :res  %) (if (vector? res)  res  [res])))
+             props (when prop (mapv #(vector :prop (pname %)) (if (vector? prop) prop [prop])))
+             envs  (when env  (mapv #(vector :env  (ename %)) (if (vector? env)  env  [env])))
+             ress  (when res  (mapv #(vector :res  (pname %)) (if (vector? res)  res  [res])))
 
              ;; search (vinterleave-all props envs ress)
              ;; (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]])
              match
              (or
                (get opts :_debug/match)
-               (reduce-interleave-all
-                 (fn [_ [kind n]]
-                   (when-let [n (when n (name n))]
-                     (case kind
-                       :prop (when-let [v (System/getProperty n)] (reduced [v [:property n]]))
-                       :env  (when-let [v (System/getenv      n)] (reduced [v [:env-var  n]]))
-                       :res  (when-let [v (slurp-resource     n)] (reduced [v [:resource n]])))))
-                 nil
-                 [props envs ress]))
+               (let [as-edn? (= as :edn)]
+                 (reduce-interleave-all
+                   (fn rf [_ [kind n]]
+                     (when n
+                       (case kind
+                         :prop (if-let [v (System/getProperty n)] (reduced [v [:property n]]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*])))
+                         :env  (if-let [v (System/getenv      n)] (reduced [v [:env-var  n]]) (when-let [n* (and as-edn? (add-ext n "_EDN"))] (rf nil [kind n*])))
+                         :res  (if-let [v (slurp-resource     n)] (reduced [v [:resource n]]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*]))))))
+                   nil
+                   [props envs ress])))
 
              match-as
              (or
@@ -4504,7 +4506,8 @@
                     [parsed-bool source]))
 
                  (-unexpected-arg! as
-                   {:expected #{nil :edn :bool}}))
+                   {:context  'taoensso.encore/get-config
+                    :expected #{nil :edn :bool}}))
 
                (when (contains? opts :default)
                  [default [:default]]))

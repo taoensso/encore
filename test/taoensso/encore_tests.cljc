@@ -520,24 +520,24 @@
    (is (enc/submap? (enc/get-config {:_debug? true :prop [:taoensso.prop-a1 :taoensso.prop-a2 :taoensso.prop-a3]})
          {:config :submap/nx
           :search
-          [[:prop :taoensso.prop-a1]
+          [[:prop "taoensso.prop-a1"]
            [:env  "TAOENSSO_PROP_A1"]
-           [:res  :taoensso.prop-a1]
-           [:prop :taoensso.prop-a2]
+           [:res  "taoensso.prop-a1"]
+           [:prop "taoensso.prop-a2"]
            [:env  "TAOENSSO_PROP_A2"]
-           [:res  :taoensso.prop-a2]
-           [:prop :taoensso.prop-a3]
+           [:res  "taoensso.prop-a2"]
+           [:prop "taoensso.prop-a3"]
            [:env  "TAOENSSO_PROP_A3"]
-           [:res  :taoensso.prop-a3]]}))
+           [:res  "taoensso.prop-a3"]]}))
 
    (is (enc/submap? (enc/get-config {:_debug? true :prop :taoensso.encore-tests.config.str})
          {:config "foo",
-          :search [[:prop :taoensso.encore-tests.config.str]
+          :search [[:prop "taoensso.encore-tests.config.str"]
                    [:env  "TAOENSSO_ENCORE_TESTS_CONFIG_STR"]
-                   [:res  :taoensso.encore-tests.config.str]]}))
+                   [:res  "taoensso.encore-tests.config.str"]]}))
 
-   (is (enc/submap? (enc/get-config {:debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
-                                                           :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
+   (is (enc/submap? (enc/get-config {:_debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
+                                                            :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
          {:config #?(:clj "foo/clj" :cljs "foo/cljs")}))
 
    (is (enc/submap? (enc/get-config {:_debug? true :_debug/match ["taoensso.encore-tests.unrequired-ns/myvar-embeddable" [:debug]] :as :edn})
@@ -549,8 +549,8 @@
 
    (is (= (enc/get-sys-val*        [::nx :taoensso.encore-tests.config.str]) "foo"))
    (is (= (enc/get-sys-bool* false [::nx :taoensso.encore-tests.config.bool]) true))
-   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config.edn])
-          {:kw :my-kw :str "foo" :int 5 :vec [:x]}))])
+   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config.edn]) {:kw :my-kw :str "foo" :int 5 :vec [:x]}))
+   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config])     {:kw :my-kw :str "foo" :int 5 :vec [:x]}) "Auto .edn extension")])
 
 (comment
   (get-config {})
