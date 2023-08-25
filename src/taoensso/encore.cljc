@@ -391,6 +391,21 @@
    (cond  :if-let [a nil] a (= 1 0) "1=0" #_"default")
    (cond! :if-let [a nil] a (= 1 0) "1=0" #_"default")])
 
+#?(:cljs (defn ^boolean some? [x] (if (nil? x) false true))
+   :clj
+   (defn some?
+     {:inline (fn [x] `(if (identical? ~x nil) false true))}
+     [x] (if (identical? x nil) false true)))
+
+(defmacro or-some
+  "Like `or`, but returns the first non-nil form (may be falsey)."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))
+  ([x       ] x)
+  ([        ] nil))
+
+(comment (or-some nil nil false true))
+
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args> <attrs>]
   with support for `defn` style `?docstring` and `?attrs-map`."
@@ -428,12 +443,6 @@
 (def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
 (def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
 (declare merge update-in)
-
-#?(:cljs (defn ^boolean some? [x] (if (nil? x) false true))
-   :clj
-   (defn some?
-     {:inline (fn [x] `(if (identical? ~x nil) false true))}
-     [x] (if (identical? x nil) false true)))
 
 ;;;; Secondary macros
 
