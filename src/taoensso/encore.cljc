@@ -1946,6 +1946,18 @@
                 (recur o (next ks))))
             o))))))
 
+(defn get1
+  "Like `get` but returns val for first given key that exists in map.
+  Useful for key aliases or fallbacks when vals may be falsey.
+  Equivalent to (if (contains? m k1) (get m k1)
+                  (if (contains? m k2) (get m k2) ...))."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([m k        not-found] (get m k not-found))
+  ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
+  ([m k1 k2 k3 not-found] (if-let [e (and m (or (find m k1) (find m k2) (find m k3)))] (val e) not-found)))
+
+(comment :see-tests)
+
 (do
   (defn conj-some "Conjoins each non-nil value."
     ([             ] [])

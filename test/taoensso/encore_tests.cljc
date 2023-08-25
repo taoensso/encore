@@ -181,6 +181,12 @@
 
 ;;;; Collections
 
+(deftest _get1
+  [(is (= (enc/get1 {:a :A}  :b       ::nx) ::nx))
+   (is (= (enc/get1 {:a nil} :a       ::nx) nil))
+   (is (= (enc/get1 {:a nil} :b :a    ::nx) nil))
+   (is (= (enc/get1 {:a nil} :c :b :a ::nx) nil))])
+
 (deftest _submap?
   [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
    (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
