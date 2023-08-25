@@ -1383,6 +1383,12 @@
 
   (defn as-bool              [x] (let [?b (as-?bool   x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
+#?(:clj
+   (do
+     (defn ^:no-doc runtime-form? "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (or (symbol? form) (list? form) (instance? clojure.lang.Cons form)))
+     (defn ^:no-doc const-form?   "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (not  (runtime-form? form)))
+     (defn ^:no-doc const-form    "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (when (const-form?   form) form))))
+
 ;;;; Validation
 
 #?(:clj
