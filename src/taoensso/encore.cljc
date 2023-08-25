@@ -2774,7 +2774,7 @@
              args)))))
 
 (defn fmemoize
-  "For Clj: fastest possible memoize. Non-racey, 0-3 arity only.
+  "For Clj: fastest possible memoize. Non-racey, 0-7 arity only.
   For Cljs: just passes through to `core/memoize`."
   [f]
   #?(:cljs (cljs.core/memoize f)
@@ -2795,25 +2795,26 @@
                  (.get cache0_)))))
 
          ([x]
-          (let [x* (if (nil? x) nil-sentinel x)]
+          (let [x* (if (identical? x nil) nil-sentinel x)]
             @(or
                (.get cache1_ x*)
                (let [dv (delay (f x))]
                  (or (.putIfAbsent cache1_ x* dv) dv)))))
 
-         ([x1 x2]
-          (let [xs [x1 x2]]
-            @(or
-               (.get cachen_ xs)
-               (let [dv (delay (f x1 x2))]
-                 (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2               ] (let [xs [x1 x2]               ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2))               ] (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2 x3            ] (let [xs [x1 x2 x3]            ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3))            ] (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2 x3 x4         ] (let [xs [x1 x2 x3 x4]         ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4))         ] (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2 x3 x4 x5      ] (let [xs [x1 x2 x3 x4 x5]      ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5))      ] (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2 x3 x4 x5 x6   ] (let [xs [x1 x2 x3 x4 x5 x6]   ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6))   ] (or (.putIfAbsent cachen_ xs dv) dv)))))
+         ([x1 x2 x3 x4 x5 x6 x7] (let [xs [x1 x2 x3 x4 x5 x6 x7]] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6 x7))] (or (.putIfAbsent cachen_ xs dv) dv)))))))))
 
-         ([x1 x2 x3]
-          (let [xs [x1 x2 x3]]
-            @(or
-               (.get cachen_ xs)
-               (let [dv (delay (f x1 x2 x3))]
-                 (or (.putIfAbsent cachen_ xs dv) dv)))))))))
+(comment
+  (let [f0 (fmemoize (fn []))
+        f1 (fmemoize (fn [x1]))
+        f2 (fmemoize (fn [x1 x2]))]
+
+    (qb 1e6 ; [30.14 38.72 65.09]
+      (f0) (f1 :x1) (f2 :x1 :x2))))
 
 (defn- gc-now? [rate]
   #?(:clj  (<= (java.lang.Math/random) ^double rate)
