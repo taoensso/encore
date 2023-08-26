@@ -111,8 +111,8 @@
      (:require-macros
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if
-        if-let if-some if-not when when-not when-some when-let -cond cond defonce
-        cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
+        if-let if-some if-not when when-not when-some when-let -cond cond
+        def* defonce cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?]])))
 
 (def encore-version [3 66 0])
@@ -405,8 +405,17 @@
      [(with-meta sym attrs) args attrs])))
 
 #?(:clj
+   (defmacro def*
+     "Like `core/def` but supports attrs map."
+     {:style/indent 1
+      :added "vX.Y.Z (YYYY-MM-DD)"}
+     [sym & args]
+     (let [[sym body] (name-with-attrs sym args)]
+       `(def ~sym ~@body))))
+
+#?(:clj
    (defmacro defonce
-     "Like `core/defonce` but supports optional docstring and attrs map."
+     "Like `core/defonce` but supports docstring and attrs map."
      {:style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
