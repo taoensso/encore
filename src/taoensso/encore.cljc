@@ -3168,30 +3168,34 @@
 
 (deftype LimitSpec  [^long n ^long ms])
 (deftype LimitEntry [^long n ^long udt0])
-(deftype LimitHits  [m worst-sid ^long worst-ms])
+(deftype LimitHits  [m worst-lid ^long worst-ms])
 
 (let [limit-spec (fn [n ms] (have? pos-int? n ms) (LimitSpec. n ms))]
-  (defn- coerce-limit-specs [x]
-    (cond!
-      (map?    x) (reduce-kv (fn [acc sid [n ms]] (assoc acc sid (limit-spec n ms))) {} x)
+  (defn- coerce-limit-spec [x]
+    (cond
+      (map?    x) (reduce-kv (fn [acc lid [n ms]] (assoc acc lid (limit-spec n ms))) {} x)
       (vector? x)
-      (let [i (volatile! -1)]
+      (let [i (counter)]
         (reduce
           (fn [acc [n ms ?id]] ; ?id for back compatibility
-            (assoc acc (or ?id (vswap! i (fn [i] (inc ^long i))))
-              (limit-spec n ms))) {} x)))))
+            (assoc acc (or ?id (i)) (limit-spec n ms))) {} x))
 
-(comment (qb 1e5 (coerce-limit-specs [[10 1000] [20 2000]])))
+      (-unexpected-arg! x
+        {:context  'taoensso.encore.limiter/coerce-limit-spec
+         :expected '#{map vector}}))))
+
+(comment (qb 1e6 (coerce-limit-spec [[10 1000] [20 2000]])))
 
 (defn ^:no-doc limiter*
-  "Experimental. Like `limiter` but returns [<state_> <limiter>]."
-  ([     specs] (limiter* nil specs))
-  ([opts specs]
-   (if (empty? specs)
+  "Private low-level util.
+  Like `limiter` but returns [<state_> <limiter>]."
+  ([     spec] (limiter* nil spec))
+  ([opts spec]
+   (if (empty? spec)
      [nil (constantly nil)]
      (let [latch_ (atom nil) ; Used to pause writes during gc
-           reqs_  (atom nil) ; {<rid> {<sid> <LimitEntry>}}
-           specs  (coerce-limit-specs specs) ; {<sid> <LimitSpec>}
+           reqs_  (atom nil) ; {<rid> {<lid> <LimitEntry>}}
+           spec   (coerce-limit-spec spec) ; {<lid> <LimitSpec>}
 
            {:keys [req-id-fn gc-every]
             :or   {req-id-fn identity
@@ -3217,13 +3221,13 @@
                                (fn [acc rid entries]
                                  (let [new-entries
                                        (reduce-kv
-                                         (fn [acc sid ^LimitEntry e]
-                                           (if-let [^LimitSpec s (get specs sid)]
+                                         (fn [acc lid ^LimitEntry e]
+                                           (if-let [^LimitSpec s (get spec lid)]
                                              (if (>= instant (+ (.-udt0 e) (.-ms s)))
-                                               (dissoc acc sid)
+                                               (dissoc acc lid)
                                                acc)
-                                             (dissoc acc sid)))
-                                         entries ; {<sid <LimitEntry>}
+                                             (dissoc acc lid)))
+                                         entries ; {<lid <LimitEntry>}
                                          entries)]
                                    (if (empty? new-entries)
                                      (dissoc! acc rid)
@@ -3237,28 +3241,28 @@
                ;; Need to atomically check if all limits pass before
                ;; committing to any n increments:
                (loop []
-                 (let [reqs        @reqs_     ; {<sid> <entries>}
-                       entries (get reqs rid) ; {<sid> <LimitEntry>}
+                 (let [reqs        @reqs_     ; {<lid> <entries>}
+                       entries (get reqs rid) ; {<lid> <LimitEntry>}
                        ?hits                  ; ?LimitHits
                        (if (nil? entries)
                          nil
                          (reduce-kv
-                           (fn [^LimitHits acc sid ^LimitEntry e]
-                             (if-let [^LimitSpec s (get specs sid)]
+                           (fn [^LimitHits acc lid ^LimitEntry e]
+                             (if-let [^LimitSpec s (get spec lid)]
                                (if (< (.-n e) (.-n s))
                                  acc
                                  (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
                                    (if (<= tdelta 0)
                                      acc
                                      (cond
-                                       (nil? acc) (LimitHits. {sid tdelta} sid tdelta)
+                                       (nil? acc) (LimitHits. {lid tdelta} lid tdelta)
 
                                        (> tdelta (.-worst-ms acc))
-                                       (LimitHits. (assoc (.-m acc) sid tdelta) sid tdelta)
+                                       (LimitHits. (assoc (.-m acc) lid tdelta) lid tdelta)
 
                                        :else
-                                       (LimitHits. (assoc (.-m acc) sid tdelta)
-                                         (.-worst-sid acc)
+                                       (LimitHits. (assoc (.-m acc) lid tdelta)
+                                         (.-worst-lid acc)
                                          (.-worst-ms  acc))))))
                                acc))
                            nil
@@ -3267,23 +3271,23 @@
                    (if (or peek? ?hits)
                      ;; No action (peeking, or hit >= 1 spec)
                      (when-let [^LimitHits h ?hits]
-                       [(.-worst-sid h) (.-worst-ms h) (.-m h)])
+                       [(.-worst-lid h) (.-worst-ms h) (.-m h)])
 
-                     ;; Passed all limit specs, ready to commit increments:
+                     ;; Passed all limits, ready to commit increments:
                      (if-let [l @latch_]
                        #?(:clj (do (.await ^CountDownLatch l) (recur)) :cljs nil)
                        (let [new-entries
                              (reduce-kv
-                               (fn [acc sid ^LimitSpec s]
-                                 (assoc acc sid
-                                   (if-let [^LimitEntry e (get entries sid)]
+                               (fn [acc lid ^LimitSpec s]
+                                 (assoc acc lid
+                                   (if-let [^LimitEntry e (get entries lid)]
                                      (let [udt0 (.-udt0 e)]
                                        (if (>= instant (+ udt0 (.-ms s)))
                                          (LimitEntry. 1 instant)
                                          (LimitEntry. (inc (.-n e)) udt0)))
                                      (LimitEntry. 1 instant))))
                                entries
-                               specs)]
+                               spec)]
 
                          (-if-cas! reqs_ reqs (assoc reqs rid new-entries)
                            nil
@@ -3304,24 +3308,23 @@
 
              :rl/peek (f1 req-id true)
 
-             (throw
-               (ex-info "[encore/limiter*] Unexpected limiter command"
-                 {:command {:value cmd :type (type cmd)}
-                  :req-id req-id})))))]))))
+             (-unexpected-arg! cmd
+               {:context  'taoensso.encore.limiter/check-limits!
+                :expected #{:rl/reset :rl/peek}
+                :req-id   req-id}))))]))))
 
-(defn limiter ; rate-limiter
-  "Takes {<spec-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
+(defn limiter
+  "Rate limiter.
+  Takes {<limit-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
   limiter (fn check-limits! [req-id]) -> nil (all limits pass), or
-  [<worst-spec-id> <worst-backoff-msecs> {<spec-id> <backoff-msecs>}].
+  [<worst-limit-id> <worst-backoff-msecs> {<limit-id> <backoff-msecs>}].
 
   Limiter fn commands:
     :rl/peek  <req-id> - Check limits w/o side effects.
     :rl/reset <req-id> - Reset all limits for given req-id."
 
-  ([     specs] (limiter nil specs))
-  ([opts specs]
-   (let [[_ f] (limiter* opts specs)]
-     f)))
+  ([     spec] (limiter nil spec))
+  ([opts spec] (let [[_ f] (limiter* opts spec)] f)))
 
 (comment
   (let [[s_ rl1] (limiter* {:2s [1 2000] :5s [2 5000]})]
@@ -5784,17 +5787,17 @@
   (defn ^:no-doc ^:deprecated keys>=     [m ks] (ks>=     ks m))
   (defn ^:no-doc ^:deprecated keys=nnil? [m ks] (ks-nnil? ks m))
 
-  (defn ^:no-doc ^:deprecated rate-limiter* [specs]
-    (let [ids? (rsome (fn [[_ _ id]] id) specs)
-          lfn  (limiter specs)]
+  (defn ^:no-doc ^:deprecated rate-limiter* [spec]
+    (let [ids? (rsome (fn [[_ _ id]] id) spec)
+          lfn  (limiter spec)]
       (fn [& args]
-        (when-let [[worst-sid backoff-ms] (apply lfn args)]
+        (when-let [[worst-lid backoff-ms] (apply lfn args)]
           (if ids?
-            [backoff-ms worst-sid]
+            [backoff-ms worst-lid]
              backoff-ms)))))
 
-  (defn ^:no-doc ^:deprecated rate-limit [specs f]
-    (let [rl (rate-limiter* specs)]
+  (defn ^:no-doc ^:deprecated rate-limit [spec f]
+    (let [rl (rate-limiter* spec)]
       (fn [& args]
         (if-let [backoff (rl)]
           [nil backoff]
