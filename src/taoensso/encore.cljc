@@ -3775,7 +3775,7 @@
     [fmt & args] (format* fmt args)))
 
 (defn str-join-once
-  "Like `string/join` but skips duplicate separators."
+  "Like `string/join` but skips nils and duplicate separators."
   [separator coll]
   (let [sep separator]
     (if (str/blank? sep)
