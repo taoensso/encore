@@ -3496,8 +3496,10 @@
 
 ;;;; Strings
 
-#?(:clj  (def ^String system-newline (System/getProperty "line.separator"))
-   :cljs (def         system-newline "\n"))
+(def* system-newline
+  {:tag #?(:clj String :cljs string)}
+  #?(:clj  (System/getProperty "line.separator")
+     :cljs "\n"))
 
 #?(:clj  (defn          str-builder? [x] (instance?            StringBuilder x))
    :cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer x)))
@@ -3533,9 +3535,10 @@
 (defn str-join
   "Faster, transducer-based generalization of `clojure.string/join` with `xform`
   support."
-  (^String [                coll] (str-join nil       nil coll))
-  (^String [separator       coll] (str-join separator nil coll))
-  (^String [separator xform coll]
+  {:tag #?(:clj String :cljs string)}
+  ([                coll] (str-join nil       nil coll))
+  ([separator       coll] (str-join separator nil coll))
+  ([separator xform coll]
    (if (and separator (not= separator ""))
      (let [sep-xform (interpose separator)
            str-rf*   (completing str-rf str)]
@@ -3698,14 +3701,13 @@
       (str/lower-case "_abcdefghijklmnop"))))
 
 #?(:clj
-   (defn norm-str
+   (defn ^String norm-str
      "Given a Unicode string, returns the normalized de/composed form.
      It's often a good idea to normalize strings before exchange or storage,
      especially if you're going to be querying against those string.
 
      `form` is ∈ #{:nfc :nfkc :nfd :nfkd <java.text.NormalizerForm>}.
      Defaults to :nfc as per W3C recommendation."
-
      ([     s] (norm-str :nfc s))
      ([form s]
       [s]
@@ -3732,6 +3734,7 @@
   Note that ClojureScript 1.7.145 introduced a partial fix for CLJS-911.
   A full fix could unfortunately not be introduced w/o breaking compatibility
   with the previously incorrect behaviour. CLJS-794 also remains unresolved."
+  {:tag #?(:clj String :cljs string)}
   [s match replacement]
   #?(:clj (str/replace s match replacement)
      :cljs
@@ -3756,10 +3759,11 @@
   (defn ^:no-doc nil->str [x] (if (nil? x) "nil" x)) ; (undefined? x) check no longer needed for modern Cljs
 
   (defn format*
-    (#?(:clj ^String [      fmt args]
-        :cljs        [      fmt args]) (format* nil->str fmt args))
-    (#?(:clj ^String [xform fmt args]
-        :cljs        [xform fmt args])
+    {:tag #?(:clj String :cljs string)}
+    (#?(:clj  [      fmt args]
+        :cljs [      fmt args]) (format* nil->str fmt args))
+    (#?(:clj  [xform fmt args]
+        :cljs [xform fmt args])
       (if (nil? fmt)
         "" ; Prevent NPE
         (let [args (if xform (mapv xform args) args)]
@@ -3772,10 +3776,12 @@
       * Formats nil as \"nil\" rather than \"null\".
       * Provides ClojureScript support via goog.string.format (this has fewer
         formatting options than Clojure's `format`!)."
+    {:tag #?(:clj String :cljs string)}
     [fmt & args] (format* fmt args)))
 
 (defn str-join-once
   "Like `string/join` but skips nils and duplicate separators."
+  {:tag #?(:clj String :cljs string)}
   [separator coll]
   (let [sep separator]
     (if (str/blank? sep)
@@ -3809,12 +3815,16 @@
             (str-builder)
             coll))))))
 
-(defn path [& parts] (str-join-once "/" parts))
+(defn path
+  {:tag #?(:clj String :cljs string)}
+  [& parts] (str-join-once "/" parts))
+
 (comment (path "foo/" nil "/bar" "baz/" "/qux/"))
 
 (defn norm-word-breaks
   "Converts all word breaks of any form and length (including line breaks of any
   form, tabs, spaces, etc.) to a single regular space."
+  {:tag #?(:clj String :cljs string)}
   [s] (str/replace (str s) #"\s+" \space))
 
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
@@ -3825,6 +3835,7 @@
   Ref. <http://www.ietf.org/rfc/rfc4122.txt>,
        <https://gist.github.com/franks42/4159427>,
        <https://github.com/clojure/clojurescript/pull/194>"
+  {:tag #?(:clj String :cljs string)}
   ([max-length] (get-substr-by-len (uuid-str) 0 max-length))
   ([]
    #?(:clj (str (java.util.UUID/randomUUID))
@@ -3844,10 +3855,11 @@
         (str (quad-hex) (quad-hex) "-" (quad-hex) "-" ver-trip-hex "-" res-trip-hex "-"
           (quad-hex) (quad-hex) (quad-hex))))))
 
-(comment (qb 1e4 (uuid-str 5)))
+(comment (qb 1e6 (uuid-str 5)))
 
 (defn into-str
   "Simple Hiccup-like string templating to complement Tempura."
+  {:tag #?(:clj String :cljs string)}
   [& xs]
   (str
     (reduce
