@@ -617,6 +617,34 @@
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
 
+;;;; Name filter
+
+(deftest _name-filter
+  [(is (enc/throws? (enc/name-filter  nil)))
+
+   (is (true?  ((enc/name-filter :any)      "foo")))
+
+   (is (true?  ((enc/name-filter #{:foo*})  "foo")))
+   (is (true?  ((enc/name-filter #{"foo*"}) 'foo)))
+   (is (false? ((enc/name-filter #{"foo*"}) 'bar)))
+
+   (is (true?  ((enc/name-filter ["foo" "bar"]) "bar")))
+   (is (true?  ((enc/name-filter ["foo" "bar"]) :bar)))
+   (is (false? ((enc/name-filter ["foo" "bar"]) :baz)))
+
+   (is (true?  ((enc/name-filter ["foo" "b*"])  "bar")))
+   (is (true?  ((enc/name-filter ["foo" "b*"])  :bar)))
+   (is (false? ((enc/name-filter ["foo" "b*"])  :qux)))
+
+   (is (false? ((enc/name-filter {:allow :any :deny :any}) "foo")))
+   (is (true?  ((enc/name-filter {:allow :any :deny  #{}}) "foo")))
+
+   (is (true? ((enc/name-filter {:allow "foo*"}) "foo")))
+   (is (true? ((enc/name-filter {:allow "foo*"}) :foobar)))
+
+   (is (false? ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobar)))
+   (is (true?  ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobaz)))])
+
 ;;;;
 
 #?(:cljs (test/run-tests))

@@ -5306,10 +5306,23 @@
     #?(:cljs (enc-macros/unstub-stub-test identity)
        :clj             (unstub-stub-test identity))))
 
-;;;; Str filter
+;;;; Name filter
 
-(let [always (fn always [?in-str] true)
-      never  (fn never  [?in-str] false)
+(let [always (fn always [_in] true)
+      never  (fn never  [_in] false)
+
+      name? (fn [x] (or (string? x) (named? x)))
+      qname (fn [x] (if (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n)) x))
+      qname!
+      (fn [x]
+        (cond
+          (string? x) x
+          (nil?    x) ""
+          (or
+            (qname x)
+            (-unexpected-arg! x
+              {:context  `name-filter
+               :expected '#{string keyword symbol nil}}))))
 
       wild-str->?re-pattern
       (fn [s]
@@ -5319,20 +5332,18 @@
               (str/replace "." "\\.")
               (str/replace "*" "(.*)")))))
 
-      compile
-      (fn compile [spec cache?] ; Returns (fn match? [in-str])
+      compile->match-fn
+      (fn compile->match-fn
+        [spec cache?]
         (cond
-          (#{:any "*"    } spec) always
+          (#{:any "*"}     spec) always
           (#{:none #{} []} spec) never
-          (re-pattern?     spec) (fn [in-str] (re-find spec in-str))
-          (string?         spec)
+          (re-pattern?     spec) (fn match? [in] (re-find spec (qname! in)))
+          (name?           spec)
           (cond
-            ;; Ambiguous: "," meant as splitter or literal? Prefer coll.
-            ;; (str-contains? spec ",") (recur (mapv str/trim (str/split spec #",")) cache?)
-            :if-let [re-pattern (wild-str->?re-pattern spec)]
-
-            (recur re-pattern cache?)
-            :else (fn [in-str] (= in-str spec)))
+            :let    [spec       (qname spec)]
+            :if-let [re-pattern (wild-str->?re-pattern spec)] (recur re-pattern cache?)
+            :else   (fn match? [in] (= spec (qname! in))))
 
           (or (vector? spec) (set? spec))
           (cond
@@ -5343,51 +5354,60 @@
             (let [[fixed-strs re-patterns]
                   (reduce
                     (fn [[fixed-strs re-patterns] spec]
-                      (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
-                        [      fixed-strs       (conj re-patterns re-pattern)]
-                        [(conj fixed-strs spec)       re-patterns            ]))
+                      (let [spec (qname spec)]
+                        (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
+                          [      fixed-strs       (conj re-patterns re-pattern)]
+                          [(conj fixed-strs spec)       re-patterns            ])))
                     [#{} []]
                     spec)
 
                   fx-match (not-empty fixed-strs) ; #{"foo" "bar"}, etc.
                   re-match
                   (when-let [re-patterns (not-empty re-patterns)] ; ["foo.*", "bar.*"], etc.
-                    (let [f (fn [in-str] (rsome #(re-find % in-str) re-patterns))]
+                    (let [f (fn match? [in-str] (rsome #(re-find % in-str) re-patterns))]
                       (if cache? (fmemoize f) f)))]
 
               (cond!
-                (and fx-match re-match) (fn [in-str] (or (fx-match in-str) (re-match in-str)))
-                fx-match fx-match
-                re-match re-match)))
+                (and fx-match re-match)
+                (fn match? [in]
+                  (let [in-str (qname! in)]
+                    (or
+                      (fx-match in-str)
+                      (re-match in-str))))
+
+                fx-match (fn [in] (fx-match (qname! in)))
+                re-match (fn [in] (re-match (qname! in))))))
 
           :else
-          (throw
-            (ex-info "[enc/compile-str-filter] Unexpected spec type"
-              {:spec {:value spec :type (type spec)}}))))]
+          (-unexpected-arg! spec
+            {:context  `name-filter
+             :expected '#{string keyword set regex {:allow <spec>, :deny <spec>}}})))]
 
-  (defn compile-str-filter
-    "Compiles given spec and returns a fast (fn conform? [?in-str]).
+  (defn name-filter
+    "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
+    any name type (string, keyword, symbol).
 
     Spec may be:
       - A regex pattern. Will conform on match.
-      - A string, in which any \"*\"s will act as wildcards (#\".*\").
+      - A str/kw/sym, in which any \"*\"s will act as #\".*\" wildcards.
         Will conform on match.
 
-      - A vector or set of regex patterns or strings.
+      - A vector or set of regex patterns or strs/kws/syms.
         Will conform on ANY match.
         If you need literal \"*\"s, use #\"\\*\" regex instead.
 
-      - {:allow <allow-spec> :deny <deny-spec> :cache? <bool>}.
-        Will conform iff allow-spec matches AND deny-spec does NOT.
+      - {:allow <allow-spec> :deny <deny-spec>}.
+        Will conform iff `allow-spec` matches AND `deny-spec` does NOT.
 
-    Input may be: namespace strings, class names, etc.
-    Useful as string allowlist (whitelist) and/or denylist (blacklist).
+    Resulting conform fn is useful as allowlist and/or denylist.
+    Example inputs: namespace strings, class names, ids, etc.
 
     Spec examples:
       #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
       {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}},
       #\"(foo1|foo2)\\.bar\"."
 
+    {:added "vX.Y.Z (YYYY-MM-DD)"}
     [spec]
     (if-not (map? spec)
       (recur {:allow spec :deny nil})
@@ -5395,43 +5415,30 @@
             allow-spec (or (get spec :allow) (get spec :whitelist))
             deny-spec  (or (get spec :deny)  (get spec :blacklist))
 
-            allow (when-let [as allow-spec] (compile as cache?))
-            deny  (when-let [ds deny-spec]  (compile ds cache?))]
+            allow (when-let [as allow-spec] (compile->match-fn as cache?))
+            deny  (when-let [ds deny-spec]  (compile->match-fn ds cache?))]
 
         (cond
           (= deny  always) never
           (= allow never)  never
 
           (and allow deny)
-          (fn [?in-str]
-            (let [in-str (str ?in-str)]
-              (if (allow in-str)
-                (if (deny in-str)
-                  false
-                  true)
-                false)))
+          (fn conform? [in]
+            (if ^boolean (allow in)
+              (if ^boolean (deny in)
+                false
+                true)
+              false))
 
-          allow (if (= allow always) always (fn [?in-str] (if (allow (str ?in-str)) true  false)))
-          deny  (if (= deny  never)  always (fn [?in-str] (if (deny  (str ?in-str)) false true)))
+          allow (if (= allow always) always (fn conform? [in] (if ^boolean (allow in) true  false)))
+          deny  (if (= deny  never)  always (fn conform? [in] (if ^boolean (deny  in) false true)))
           :else
           (throw
-            (ex-info "[encore/compile-str-filter] `allow-spec` and `deny-spec` cannot both be nil"
+            (ex-info "[encore/name-filter] `allow-spec` and `deny-spec` cannot both be nil"
               {:allow-spec allow-spec :deny-spec deny-spec})))))))
 
-(comment
-  (def sf? (compile-str-filter #{"foo.*" "bar"}))
-  (qb 1e5 (sf? "foo")) ; 26
-
-  (-> "foo" ((compile-str-filter nil)))           :ex
-  (-> "foo" ((compile-str-filter :any)))          true
-  (-> "foo" ((compile-str-filter #{"foo*"})))     true
-  (-> "foo" ((compile-str-filter ["bar" "foo"]))) true
-  (-> "foo" ((compile-str-filter ["bar" "f*"])))  true
-  (-> "foo" ((compile-str-filter {:allow :any :deny :any}))) false
-  (-> "foo" ((compile-str-filter {:allow "foo*"}))) true
-  (-> "foo" ((compile-str-filter {:deny  "foo*"}))) false
-  (-> "foo" ((compile-str-filter {:allow "*" :deny "foo*"}))) false
-  )
+(comment :see-tests)
+(comment (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo")))) ; 118.25
 
 ;;;; Namespaces
 
@@ -5725,7 +5732,7 @@
 
        (if (and (nolist? whitelist) (nolist? blacklist))
          (fn [_] true) ; Unfortunate API choice
-         (compile-str-filter {:allow whitelist :deny blacklist})))))
+         (name-filter {:allow whitelist :deny blacklist})))))
 
   #?(:clj (defn ^:no-doc ^:deprecated set-body      [rresp body]    (ring-set-body      body    rresp)))
   #?(:clj (defn ^:no-doc ^:deprecated set-status    [rresp code]    (ring-set-status    code    rresp)))
@@ -5995,7 +6002,11 @@
   (def ^:no-doc ^:deprecated swap!* swap-in!*)
 
   #?(:clj (defalias ^:no-doc ^:deprecated taoensso.truss/get-dynamic-assertion-data))
-  #?(:clj (defalias ^:no-doc ^:deprecated taoensso.truss/with-dynamic-assertion-data)))
+  #?(:clj (defalias ^:no-doc ^:deprecated taoensso.truss/with-dynamic-assertion-data))
+
+  (defalias ^:no-doc compile-str-filter name-filter
+    {:deprecated "vX.Y.Z (YYYY-MM-DD)"
+     :doc "Renamed to `name-filter`."}))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
