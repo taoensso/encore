@@ -113,7 +113,8 @@
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let -cond cond
         def* defonce cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
-        name-with-attrs deprecated new-object defalias throws throws?]])))
+        name-with-attrs deprecated new-object defalias throws throws?
+        identical-kw?]])))
 
 (def encore-version [3 66 0])
 
@@ -447,6 +448,18 @@
 ;;;; Secondary macros
 
 #?(:clj
+   (defmacro identical-kw?
+     "Returns true iff two keywords are identical.
+     Portable and maximally fast.
+       For Clj  this expands to: `(identical?         x y)`
+       For Cljs this expands to: `(keyword-identical? x y)`"
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     [x y]
+     (if (:ns &env)
+       `(cljs.core/keyword-identical? ~x ~y)
+       `(identical?                   ~x ~y))))
+
+#?(:clj
    (defmacro case-eval
      "Like `case` but evals test constants for their compile-time value."
      {:style/indent 1}
@@ -632,7 +645,7 @@
 
 ;;;; Edn
 
-(declare map-keys kw-identical?)
+(declare map-keys)
 
 (defn read-edn
   "Attempts to pave over differences in:
@@ -661,7 +674,7 @@
              ;;     using tools.reader under the covers
 
              readers
-             (if-not (kw-identical? readers ::dynamic)
+             (if-not (identical-kw? readers ::dynamic)
                readers
                #?(:clj  clojure.core/*data-readers*
 
@@ -669,7 +682,7 @@
                   :cljs (map-keys symbol @cljs.reader/*tag-table*)))
 
              default
-             (if-not (kw-identical? default ::dynamic)
+             (if-not (identical-kw? default ::dynamic)
                default
                #?(:clj  clojure.core/*default-data-reader-fn*
                   :cljs @cljs.reader/*default-data-reader-fn*))
@@ -1236,13 +1249,6 @@
     #?(:clj  (defn          chan? [x] (instance? @c x))
        :cljs (defn ^boolean chan? [x] (instance? @c x))))
   (do        (defn          chan? [x] nil)))
-
-(do
-  ;; ClojureScript keywords aren't `identical?` and Clojure doesn't have
-  ;; `keyword-identical?`. This util helps alleviate the pain of writing
-  ;; cross-platform code, Ref. <http://goo.gl/be8CGP>
-  #?(:clj  (def          kw-identical?         identical?)
-     :cljs (def ^boolean kw-identical? keyword-identical?)))
 
 ;;;; Type coercions
 
@@ -2449,8 +2455,8 @@
           (if-let [match?
                    (case sval
                      ;; Special svals currently undocumented
-                     :submap/nx      (kw-identical? mval ::nx)
-                     :submap/ex (not (kw-identical? mval ::nx))
+                     :submap/nx      (identical-kw? mval ::nx)
+                     :submap/ex (not (identical-kw? mval ::nx))
                      :submap/some            (some? mval)
                      (= sval mval))]
             true
@@ -2641,7 +2647,7 @@
           sw? (instance? Swapped s1)
           m1  (if sw? (.-newv ^Swapped s1) s1)]
 
-      (if (kw-identical? m1 :swap/abort)
+      (if (identical-kw? m1 :swap/abort)
         (if sw?
           (return-swapped s1 m0 m1) ; rv
           (return m0 m0 m0 m0)) ; [m0 v0 m1 v1]
@@ -2655,7 +2661,7 @@
 (defn- -swap-k1!
   "Impln. for 1-key swaps"
   [return atom_ k not-found f]
-  (if (kw-identical? f :swap/dissoc)
+  (if (identical-kw? f :swap/dissoc)
     (loop []
       (let [m0 @atom_
             m1 (dissoc m0 k)]
@@ -2670,13 +2676,13 @@
             sw? (instance? Swapped s1)
             v1  (if sw? (.-newv ^Swapped s1) s1)]
 
-        (if (kw-identical? v1 :swap/abort)
+        (if (identical-kw? v1 :swap/abort)
           (if sw?
             (return-swapped s1 m0 m0) ; rv
             (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
           (let [m1
-                (if (kw-identical? v1 :swap/dissoc)
+                (if (identical-kw? v1 :swap/dissoc)
                   (dissoc m0 k)
                   (assoc  m0 k v1))]
 
@@ -2692,7 +2698,7 @@
   (if-let [ks-seq (seq ks)]
     (if (next ks-seq)
 
-      (if (kw-identical? f :swap/dissoc)
+      (if (identical-kw? f :swap/dissoc)
         (loop []
           (let [m0 @atom_
                 m1 (dissoc-in m0 ks)]
@@ -2707,13 +2713,13 @@
                 sw? (instance? Swapped s1)
                 v1  (if sw? (.-newv ^Swapped s1) s1)]
 
-            (if (kw-identical? v1 :swap/abort)
+            (if (identical-kw? v1 :swap/abort)
               (if sw?
                 (return-swapped s1 m0 m0) ; rv
                 (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
               (let [m1
-                    (if (kw-identical? v1 :swap/dissoc)
+                    (if (identical-kw? v1 :swap/dissoc)
                       (dissoc-in m0 ks)
                       (assoc-in  m0 ks v1))]
 
@@ -2911,7 +2917,7 @@
               (:cache/del :mem/del)
               (let [xn (next  xs)
                     x2 (first xn)]
-                (if (kw-identical? x2 :mem/all)
+                (if (identical-kw? x2 :mem/all)
                   (vreset! cache_ {})
                   (vswap!  cache_ dissoc xn))
                 nil)
@@ -2942,7 +2948,7 @@
                (:cache/del :mem/del)
                (let [xn (next  xs)
                      x2 (first xn)]
-                 (if (kw-identical? x2 :mem/all)
+                 (if (identical-kw? x2 :mem/all)
                    (.clear  cache_)
                    (.remove cache_ (or xn nil-sentinel)))
                  nil)
@@ -3301,7 +3307,7 @@
            (case cmd
              :rl/reset
              (do
-               (if (kw-identical? req-id :rl/all)
+               (if (identical-kw? req-id :rl/all)
                  (reset! reqs_ nil)
                  (swap!  reqs_ dissoc (req-id-fn req-id)))
                nil)
@@ -4302,14 +4308,14 @@
              pattern)
 
            locale
-           (if (kw-identical? locale :jvm-default)
+           (if (identical-kw? locale :jvm-default)
              nil ; (Locale/getDefault)
              locale)
 
            timezone
-           (if (kw-identical? timezone :jvm-default)
+           (if (identical-kw? timezone :jvm-default)
              nil ; (TimeZone/getDefault)
-             (if (kw-identical? timezone :utc)
+             (if (identical-kw? timezone :utc)
                (TimeZone/getTimeZone "UTC")
                timezone))]
 
@@ -5499,9 +5505,9 @@
   (def ^:private -tout-pending   (new-object))
   (def ^:private -tout-cancelled (new-object))
   (defn- tout-result [result_]
-    (if (kw-identical? result_ -tout-pending)
+    (if (identical-kw? result_ -tout-pending)
       :timeout/pending
-      (if (kw-identical? result_ -tout-cancelled)
+      (if (identical-kw? result_ -tout-cancelled)
         :timeout/cancelled
         @result_))))
 
@@ -5518,9 +5524,9 @@
      ITimeoutFuture
      (tf-state      [_] {:fn f :udt udt})
      (tf-poll       [_] (tout-result @result__))
-     (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
-     (tf-pending?   [_]      (kw-identical? @result__ -tout-pending))
-     (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
+     (tf-done?      [_] (not (identical-kw? @result__ -tout-pending)))
+     (tf-pending?   [_]      (identical-kw? @result__ -tout-pending))
+     (tf-cancelled? [_]      (identical-kw? @result__ -tout-cancelled))
      (tf-cancel!    [_] (compare-and-set! result__ -tout-pending -tout-cancelled))
 
      IPending (-realized?  [t] (tf-done? t))
@@ -5532,9 +5538,9 @@
      ITimeoutFuture
      (tf-state      [_] {:fn f :udt udt})
      (tf-poll       [_] (tout-result @result__))
-     (tf-done?      [_] (not (kw-identical? @result__ -tout-pending)))
-     (tf-pending?   [_]      (kw-identical? @result__ -tout-pending))
-     (tf-cancelled? [_]      (kw-identical? @result__ -tout-cancelled))
+     (tf-done?      [_] (not (identical-kw? @result__ -tout-pending)))
+     (tf-pending?   [_]      (identical-kw? @result__ -tout-pending))
+     (tf-cancelled? [_]      (identical-kw? @result__ -tout-cancelled))
      (tf-cancel!    [_]
        (if (compare-and-set! result__ -tout-pending -tout-cancelled)
          (do (.countDown latch) true)
@@ -5884,7 +5890,7 @@
     (if-not m {}
       (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
             kf (cond (nil? kf) (fn [k _] k)
-                 (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                 (identical-kw? kf :keywordize) (fn [k _] (keyword k))
                  :else kf)]
         (persistent!
           (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
@@ -5895,7 +5901,7 @@
     (if (empty? kvs) {}
         (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
               kf (cond (nil? kf) (fn [k _] k)
-                   (kw-identical? kf :keywordize) (fn [k _] (keyword k))
+                   (identical-kw? kf :keywordize) (fn [k _] (keyword k))
                    :else kf)]
           (persistent!
             (reduce-kvs
@@ -5981,7 +5987,7 @@
         (if-not ?op
           m ; Support conditional ops
           (let [[type ks valf] ?op
-                f (if (kw-identical? type :reset) (fn [_] valf) valf)]
+                f (if (identical-kw? type :reset) (fn [_] valf) valf)]
             (update-in m ks nil f))))
       m
       ops))
@@ -6006,7 +6012,12 @@
 
   (defalias ^:no-doc compile-str-filter name-filter
     {:deprecated "vX.Y.Z (YYYY-MM-DD)"
-     :doc "Renamed to `name-filter`."}))
+     :doc "Renamed to `name-filter`."})
+
+  (defn ^:no-doc ^:deprecated kw-identical?
+    "Prefer `identical-kw?` macro."
+    #?(:cljs {:tag boolean})
+    [x y] (identical-kw? x y)))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
