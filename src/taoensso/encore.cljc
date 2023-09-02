@@ -112,7 +112,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if
         if-let if-some if-not when when-not when-some when-let -cond cond
-        def* defonce cond! catching -if-cas! now-dt* now-udt* now-nano* min* max*
+        def* defonce cond! try* catching -if-cas! now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
@@ -729,41 +729,50 @@
   (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
 #?(:clj
+   (defmacro try*
+     "Like `try`, but `catch` clause classnames can be the special keywords
+       `:any` or `:common` for cross-platform catching. Addresses CLJ-1293."
+
+     {:added "vX.Y.Z (YYYY-MM-DD)"
+      :arglists '([expr catch-clause-or-clauses ?finally-clause])}
+
+     [expr & clauses]
+     (let [cljs? (some? (:ns &env))
+           clauses
+           (mapv
+             (fn [in]
+               (cond
+                 (not (list-form? in)) in
+                 :let [[s1 s2 & more]  in]
+
+                 (not= s1 'catch)    in
+                 (not (keyword? s2)) in
+
+                 :else
+                 (let [s2
+                       (case s2
+                         ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
+                         (:any    :all)     (if cljs? :default  `Throwable)
+                         (:common :default) (if cljs? 'js/Error `Exception)
+                         (throw
+                           (ex-info "Unexpected `taoensso.encore/try*` catch clause keyword"
+                             {:given    {:value s2, :type (type s2)}
+                              :expected '#{:any :common}})))]
+                   (list* 'catch s2 more))))
+             clauses)]
+
+       `(try ~expr ~@clauses))))
+
+(comment (macroexpand '(try* (/ 1 0) (catch :any t t 1 2 3) (finally 1 2 3))))
+
+#?(:clj
    (defmacro catching
-     "Cross-platform try/catch/finally."
-     ;; Very unfortunate that CLJ-1293 has not yet been addressed
-     ([try-expr                                             ] `(catching ~try-expr :all ~'__       nil         nil))
-     ([try-expr            error-sym catch-expr             ] `(catching ~try-expr :all ~error-sym ~catch-expr nil))
-     ([try-expr            error-sym catch-expr finally-expr] `(catching ~try-expr :all ~error-sym ~catch-expr ~finally-expr))
-     ([try-expr error-type error-sym catch-expr finally-expr]
-      (case error-type
-        (:common :default) ; `:default` is a poor name, here only for back compatibility
-        (if (nil? finally-expr)
-          (if (:ns &env)
-            `(try ~try-expr (catch js/Error  ~error-sym ~catch-expr))
-            `(try ~try-expr (catch Exception ~error-sym ~catch-expr)))
-          (if (:ns &env)
-            `(try ~try-expr (catch js/Error  ~error-sym ~catch-expr) (finally ~finally-expr))
-            `(try ~try-expr (catch Exception ~error-sym ~catch-expr) (finally ~finally-expr))))
-
-        (:all :any)
-        ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
-        (if (nil? finally-expr)
-          (if (:ns &env)
-            `(try ~try-expr (catch :default  ~error-sym ~catch-expr))
-            `(try ~try-expr (catch Throwable ~error-sym ~catch-expr)))
-          (if (:ns &env)
-            `(try ~try-expr (catch :default  ~error-sym ~catch-expr) (finally ~finally-expr))
-            `(try ~try-expr (catch Throwable ~error-sym ~catch-expr) (finally ~finally-expr))))
-
-        ;; Specific error-type provided
-        (if (nil? finally-expr)
-          (if (:ns &env)
-            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))
-            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))
-          (if (:ns &env)
-            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr))
-            `(try ~try-expr (catch ~error-type ~error-sym ~catch-expr))))))))
+     "Terse, cross-platform `try/catch/finally`.
+     See also `try*` for more flexibility."
+     ([try-expr                                             ] `(try* ~try-expr (catch :any        ~'_        nil)))
+     ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :any        ~error-sym ~catch-expr)))
+     ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :any        ~error-sym ~catch-expr) (finally ~finally-expr)))
+     ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
 (comment
   (macroexpand '(catching (do "foo") e e (println "finally")))
