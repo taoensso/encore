@@ -722,6 +722,12 @@
   #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
      :cljs (when (instance? ExceptionInfo ex) (.-cause              ex))))
 
+(defn- list-form?
+  "Returns true if given a list or Cons."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
+
 #?(:clj
    (defmacro catching
      "Cross-platform try/catch/finally."
@@ -1391,7 +1397,7 @@
 
 #?(:clj
    (do
-     (defn ^:no-doc runtime-form? "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (or (symbol? form) (list? form) (instance? clojure.lang.Cons form)))
+     (defn ^:no-doc runtime-form? "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (or (symbol? form) (list-form? form)))
      (defn ^:no-doc const-form?   "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (not  (runtime-form? form)))
      (defn ^:no-doc const-form    "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"} [form] (when (const-form?   form) form))))
 
