@@ -619,6 +619,18 @@
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
 
+;;;; LightAtom
+
+(deftest _light-atom
+  [(is (= @(enc/latom :foo)  :foo))
+   (is (= ((enc/latom :foo)) :foo))
+   (is (= (let [la (enc/latom     0)]  [(reset! la 1)   @la (la)])  [1     1      1]))
+   (is (= (let [la (enc/latom     0)]  [(swap!  la inc) @la (la)])  [1     1      1]))
+   (is (= (let [la (enc/latom     0) ] [(la        inc) @la (la)])  [1     1      1]))
+   (is (= (let [la (enc/latom {:a 0})] [(la :a     inc) @la (la)])  [1 {:a 1} {:a 1}]))
+   (is (true?  (compare-and-set! (enc/latom 0) 0 1)))
+   (is (false? (compare-and-set! (enc/latom 1) 0 1)))])
+
 ;;;; Name filter
 
 (deftest _name-filter
