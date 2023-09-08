@@ -6,14 +6,16 @@
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
    [taoensso.encore :as enc]
-   [taoensso.encore.ctx-filter :as cf])
+   [taoensso.encore.signals     :as sigs]
+   [taoensso.encore.signals.api :as sigs-api])
 
   #?(:cljs
      (:require-macros
       [taoensso.encore-tests
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer1 callsite-outer2]])))
+        callsite-inner callsite-outer1 callsite-outer2
+        with-ns-filter with-kind-filter with-id-filter with-min-level]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -732,98 +734,187 @@
 
             [[true true true false false false] [0 1 2 3 4 5]]))]))
 
-;;;; Context filter
+;;;; Signal filtering
 
-(deftest _context-filter
+(defn- sf-allow?
+  ([[ns-spec ns] [kind-spec kind] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec kind-spec id-spec min-level-spec)] (sf ns kind id level) true))
+  ([[ns-spec ns]                  [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec nil       id-spec min-level-spec)] (sf ns      id level) true))
+  ([[ns-spec ns]                               [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec nil       nil     min-level-spec)] (sf ns         level) true)))
+
+(deftest _sig-filter
   [(testing "Levels"
-     [(is (=   (cf/get-level-int   -10) -10))
-      (is (=   (cf/get-level-int :info)  50))
-      (is (=   (cf/get-level-int   nil)  nil))
-      (is (=   (cf/get-level-int :__nx)  nil))
+     [(is (=   (sigs/get-level-int   -10) -10))
+      (is (=   (sigs/get-level-int :info)  50))
+      (is (=   (sigs/get-level-int   nil)  nil))
+      (is (=   (sigs/get-level-int :__nx)  nil))
 
-      (is (=   (cf/valid-level-int   -10) -10))
-      (is (=   (cf/valid-level-int :info)  50))
-      ;; (is (->>          (cf/valid-level-int     nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
-      (is    (->> ((fn [x] (cf/valid-level-int x)) nil) (enc/throws? :common "Invalid level")))
+      (is (=   (sigs/valid-level-int   -10) -10))
+      (is (=   (sigs/valid-level-int :info)  50))
+      ;; (is (->>          (sigs/valid-level-int     nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
+      (is    (->> ((fn [x] (sigs/valid-level-int x)) nil) (enc/throws? :common "Invalid level")))
 
-      (is      (cf/level>= :error :info))
-      (is      (cf/level>= :error :error))
-      (is (not (cf/level>= :info  :error)))
-      (is      (cf/level>= :min   -10))])
+      (is      (sigs/level>= :error  :info))
+      (is      (sigs/level>= :error  :error))
+      (is (not (sigs/level>= :info   :error)))
+      (is      (sigs/level>= :low--- -10))])
 
-   (testing "Utils"
-     [(testing "update-level-spec"
-        [(is (=   (cf/update-level-spec nil      nil) nil))
-         (is (=   (cf/update-level-spec nil    :info) :info))
-         (is (=   (cf/update-level-spec :info :error) :error))
-         (is (->> (cf/update-level-spec nil    :__nx) (enc/throws? :common "Invalid level")))
+   (testing "update-min-level"
+     [(is (=   (sigs/update-min-level nil   nil nil    nil)    nil))
+      (is (=   (sigs/update-min-level nil   nil nil  :info)  :info))
+      (is (=   (sigs/update-min-level :info nil nil :error) :error))
+      (is (->> (sigs/update-min-level nil   nil nil  :__nx) (enc/throws? :common "Invalid level")))
 
-         (is (=   (cf/update-level-spec nil  nil  [["ns1" :info]]) [["ns1" :info]]))
-         (is (=   (cf/update-level-spec nil "ns1" :info)           [["ns1" :info]]))
-         (is (->> (cf/update-level-spec nil "ns1" [["ns1" :info]]) (enc/throws? :common "Invalid level")))
-         (is (->> (cf/update-level-spec nil  nil  [["ns1" :__nx]]) (enc/throws? :common "Invalid level")))
-         (is (->> (cf/update-level-spec nil  -1   :info)           (enc/throws? :common "Invalid name filter spec")))
+      (is (=   (sigs/update-min-level nil nil nil   [["ns1" :info]]) [["ns1" :info]]))
+      (is (=   (sigs/update-min-level nil nil "ns1" :info)           [["ns1" :info]]))
 
-         (is (=   (cf/update-level-spec :debug "ns1" :info) [["ns1" :info] ["*" :debug]]))
-         (is (=   (->
-                    :debug
-                    (cf/update-level-spec  "ns1" :info)
-                    (cf/update-level-spec  "ns2" :trace)
-                    (cf/update-level-spec  "ns3" -20)
-                    (cf/update-level-spec  "ns2" :warn))
-               [["ns2" :warn] ["ns3" -20] ["ns1" :info] ["*" :debug]]))])])
+      (is (->> (sigs/update-min-level nil nil "ns1" [["ns1" :info]]) (enc/throws? :common "Invalid level")))
+      (is (->> (sigs/update-min-level nil nil nil   [["ns1" :__nx]]) (enc/throws? :common "Invalid level")))
+      (is (->> (sigs/update-min-level nil nil -1    :info)           (enc/throws? :common "Invalid name filter")))
 
-   (testing "Filtering"
-     [(testing "basics"
-        [(is (false? (cf/filter? nil nil   nil    nil)))
-         (is (false? (cf/filter? nil nil   "ns1" :info)))
-         (is (false? (cf/filter? nil :info "ns1" :info)))
-         (is (true?  (cf/filter? nil :warn "ns1" :info)))
+      (is (=   (sigs/update-min-level :debug nil "ns1" :info) [["ns1" :info] ["*" :debug]]))
+      (is (=   (->
+                 :debug
+                 (sigs/update-min-level nil "ns1" :info)
+                 (sigs/update-min-level nil "ns2" :trace)
+                 (sigs/update-min-level nil "ns3" -20)
+                 (sigs/update-min-level nil "ns2" :warn))
+            [["ns2" :warn] ["ns3" -20] ["ns1" :info] ["*" :debug]]))
 
-         ;; (is (false? (cf/filter? (fn [_] true)  nil "ns1" :info)) "Arb ns-spec fn")
-         ;; (is (true?  (cf/filter? (fn [_] false) nil "ns1" :info)) "Arb ns-spec fn")
+      (is (=   (sigs/update-min-level [["ns1" :info]]  nil      nil :debug)  :debug))
+      (is (=   (sigs/update-min-level :info            :my-kind nil :warn)   {:default :info, :my-kind :warn}))
+      (is (=   (sigs/update-min-level {:default :info} :my-kind nil :warn)   {:default :info, :my-kind :warn}))
+      (is (=   (sigs/update-min-level {:my-kind :info} nil      nil :warn)   {:my-kind :info, :default :warn}))
+      (is (=   (sigs/update-min-level {:default :info} nil      nil :warn)   :warn))
+      (is (=   (sigs/update-min-level nil              :my-kind "ns1" :info) {:my-kind [["ns1" :info]]}))
+      (is (=   (sigs/update-min-level {:default :info} nil      "ns1" :info) [["ns1" :info] ["*" :info]]))])
 
-         (is (false? (cf/filter? "ns1"          nil "ns1" :info)))
-         (is (true?  (cf/filter? "ns2"          nil "ns1" :info)))
-         (is (false? (cf/filter? "ns*"          nil "ns1" :info)))
-         (is (false? (cf/filter? #{"ns1" "ns2"} nil "ns1" :info)))
-         (is (true?  (cf/filter? #{"ns2" "ns3"} nil "ns1" :info)))
-         (is (false? (cf/filter? #"ns(\d*)?"    nil "ns5" :info)))
-         (is (false? (cf/filter? #"ns(\d*)?"    nil "ns"  :info)))
+   (testing "Filter basics [ns level]"
+     [(is (true?  (sf-allow? [nil   nil] [nil     nil])))
+      (is (true?  (sf-allow? [nil "ns1"] [nil   :info])))
+      (is (true?  (sf-allow? [nil "ns1"] [:info :info])))
+      (is (false? (sf-allow? [nil "ns1"] [:warn :info])))
 
-         (is (false? (cf/filter? {:allow #{"ns1"}}  nil "ns1" :info)))
-         (is (false? (cf/filter? {:allow #{"ns*"}}  nil "ns1" :info)))
-         (is (false? (cf/filter? {:allow #{"*"}}    nil "ns1" :info)))
-         (is (false? (cf/filter? {:allow #{:any}}   nil "ns1" :info)))
-         (is (false? (cf/filter? {:allow "*"}       nil "ns1" :info)))
-         (is (false? (cf/filter? {:allow :any}      nil "ns1" :info)))
-         (is (true?  (cf/filter? {:allow #{}}       nil "ns1" :info)))
+      (is (true?  (sf-allow? ["ns1"          "ns1"] [nil :info])))
+      (is (false? (sf-allow? ["ns2"          "ns1"] [nil :info])))
+      (is (true?  (sf-allow? ["ns*"          "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [#{"ns1" "ns2"} "ns1"] [nil :info])))
+      (is (false? (sf-allow? [#{"ns2" "ns3"} "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [#"ns(\d*)?"    "ns5"] [nil :info])))
+      (is (true?  (sf-allow? [#"ns(\d*)?"     "ns"] [nil :info])))
 
-         (is (false? (cf/filter? {:allow #{"a.*.c"}} nil "a.b3.c"    :info)))
-         (is (false? (cf/filter? {:allow #{"a.*.c"}} nil "a.b1.b2.c" :info)))
+      (is (true?  (sf-allow? [{:allow #{"ns1"}}  "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow #{"ns*"}}  "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow #{"*"}}    "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow #{:any}}   "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow "*"}       "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow :any}      "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:allow #{}}       "ns1"] [nil :info])))
 
-         (is (false? (cf/filter? {:deny #{}}     nil "ns1" :info)))
-         (is (true? (cf/filter?  {:deny #{"*"}}  nil "ns1" :info)))
-         (is (true? (cf/filter?  {:deny #{:any}} nil "ns1" :info)))
-         (is (true? (cf/filter?  {:deny "*"}     nil "ns1" :info)))
-         (is (true? (cf/filter?  {:deny :any}    nil "ns1" :info)))
+      (is (true?  (sf-allow? [{:allow #{"a.*.c"}}    "a.b3.c"] [nil :info])))
+      (is (true?  (sf-allow? [{:allow #{"a.*.c"}} "a.b1.b2.c"] [nil :info])))
 
-         (is (true? (cf/filter? {:allow :any :deny :any} nil "ns1" :info)) "Deny > allow")
+      (is (true?  (sf-allow? [{:deny #{}}     "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:deny #{"*"}}  "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:deny #{:any}} "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:deny "*"}     "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:deny :any}    "ns1"] [nil :info])))
 
-         (is (true? (cf/filter? "ns1" nil   nil :info))                                     "ns-spec without ns")
-         (is (->>   (cf/filter? nil   :info nil nil) (enc/throws? :common "Invalid level")) "level-spec without level")])
+      (is (false? (sf-allow? [{:allow :any :deny :any} "ns1"] [nil :info])) "Deny > allow")
 
-      (testing "ns-specific levels"
-        [(is (false? (cf/filter? nil [["*" :info]] "ns1" :info)))
-         (is (true?  (cf/filter? nil [["*" :info]] "ns1" :debug)))
-         (is (false? (cf/filter? nil [["ns1" :info] ["ns1" :warn] ["*" :warn]] "ns1" :info)) "Match sequentially")
-         (is (true?  (cf/filter? nil [["ns1" :warn] ["ns1" :info] ["*" :warn]] "ns1" :info)) "Match sequentially")
+      (is (false? (sf-allow? ["ns1" nil] [nil :info]))                                          "ns spec without ns")
+      (is (->>    (sf-allow? [nil   nil] [:info nil]) (enc/throws? :common "Invalid level")) "level spec without level")])
 
-         (is (false? (cf/filter? nil [["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] "ns.public.foo"   :info)))
-         (is (true?  (cf/filter? nil [["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] "ns.internal.foo" :info)))
+   (testing "Filter with ns-specific min-levels"
+     [(is (true?  (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :info])))
+      (is (false? (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :debug])))
+      (is (true?  (sf-allow? [nil "ns1"] [[["ns1" :info] ["ns1" :warn] ["*" :warn]]  :info])) "Match sequentially")
+      (is (false? (sf-allow? [nil "ns1"] [[["ns1" :warn] ["ns1" :info] ["*" :warn]]  :info])) "Match sequentially")
 
-         (is (->> (cf/filter? nil [["*" :info]] "ns1" nil) (enc/throws? :common "Invalid level")))
-         (is (->> (cf/filter? nil [["*" :info]] nil   nil) (enc/throws? :common "Invalid level")))])])])
+      (is (true?  (sf-allow? [nil   "ns.public.foo"] [[["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] :info])))
+      (is (false? (sf-allow? [nil "ns.internal.foo"] [[["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] :info])))
+
+      (is (->>    (sf-allow? [nil "ns1"] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))
+      (is (->>    (sf-allow? [nil   nil] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))])
+
+   (testing "Filter basics [ns kind id level]"
+     [(is (true?  (sf-allow? [nil   nil] [nil nil] [nil   nil] [nil nil])))
+      (is (true?  (sf-allow? [nil   nil] [:k1 :k1] [nil   nil] [nil nil])))
+      (is (false? (sf-allow? [nil   nil] [:k1 :k2] [nil   nil] [nil nil])))
+
+      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [nil   nil] [nil nil])))
+      (is (false? (sf-allow? [:ns1 :ns2] [:k1 :k1] [nil   nil] [nil nil])))
+
+      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [nil nil])))
+      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id2] [nil nil])))
+
+      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:k1 10} 10])))
+      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:k1 20} 10])))
+
+      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:default 10} 10])))
+      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:default 20} 10])))])])
+
+;;;;
+
+(do
+  (def ^:dynamic *sig-filter*   nil)
+  (def ^:dynamic *sig-handlers* nil)
+
+  (sigs-api/def-api 4 *sig-filter* *sig-handlers* {})
+
+  (def cnt (enc/counter 0)))
+
+(deftest _signal-api
+  [(testing "Signal filtering"
+     [(is (nil? (enc/update-var-root! *sig-filter* (fn [_] nil))))
+      (is (= (set-ns-filter!       "*") {:ns-filter "*", :kind-filter nil, :id-filter nil, :min-level nil}))
+      (is (= (set-kind-filter!     "*") {:ns-filter "*", :kind-filter "*", :id-filter nil, :min-level nil}))
+      (is (= (set-id-filter!       "*") {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level nil}))
+      (is (= (set-min-level! nil :info) {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
+      (is (= @*sig-filter*              {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
+
+      (is (enc/submap? (with-ns-filter   "-" @*sig-filter*) {:ns-filter   "-"}))
+      (is (enc/submap? (with-kind-filter "-" @*sig-filter*) {:kind-filter "-"}))
+      (is (enc/submap? (with-id-filter   "-" @*sig-filter*) {:id-filter   "-"}))
+
+      (is (enc/submap? (with-min-level :kind1       100 @*sig-filter*) {:min-level {:default :info, :kind1         100  }}))
+      (is (enc/submap? (with-min-level :kind1 "ns1" 100 @*sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
+
+      (is (false?  (with-ns-filter "-"          (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-ns-filter "ns1"        (*sig-filter* "ns1" :kind1 :id1 :info))))
+
+      (is (false?  (with-kind-filter "-"        (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-kind-filter "kind1"    (*sig-filter* "ns1" :kind1 :id1 :info))))
+
+      (is (false?  (with-id-filter "-"          (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-id-filter "id1"        (*sig-filter* "ns1" :kind1 :id1 :info))))
+
+      (is (false?  (with-min-level :kind1 :warn (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-min-level :kind2 :warn (*sig-filter* "ns1" :kind1 :id1 :info))))
+
+      (is (enc/submap? (with-min-level :kind1 "ns2" 100 @*sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
+      (is (true?       (with-min-level :kind1 "ns2" 100 (*sig-filter* "ns1" :kind1 :id 50))) "Fall back to :default kind on unmatched ns")
+      (is (false?      (with-min-level :kind1 "ns2" 100 (*sig-filter* "ns2" :kind1 :id 50))))])
+
+   (testing "Signal handlers"
+     [(is (nil? (enc/update-var-root! *sig-handlers* (fn [_] nil))))
+      (is (nil? (cnt :set 0)))
+
+      (is (=           (get-handlers) nil))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:sample 0.0, :async nil}) {:hid1 {:sample 0.0}}))
+      (is (enc/submap? (get-handlers)                                                {:hid1 {:sample 0.0}}))
+
+      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
+      (is (= @cnt 0))
+
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:sample 1.0, :async nil}) {:hid1 {:sample 1.0}}))
+      (is (enc/submap? (get-handlers)                                                {:hid1 {:sample 1.0}}))
+
+      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
+      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
+      (is (= @cnt 2))
+
+      (is (nil? (remove-handler! :hid1)))
+      (is (nil? *sig-handlers*) "Removal yields non-empty map")])])
 
 ;;;;
 

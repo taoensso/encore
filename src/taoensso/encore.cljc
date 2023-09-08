@@ -4179,6 +4179,49 @@
 
 (comment :see-tests)
 
+;;;; Signals (opt-in Telemere integration)
+
+(def* ^:const have-telemere?
+  "Is `taoensso.telemere` present (not necessarily loaded)?"
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  (compile-if (io/resource "taoensso/telemere.cljc") true false))
+
+#?(:clj
+   (defmacro require-telemere-if-present
+     "Experimental, subject to change!
+     Requires Telemere if it's present, otherwise noops.
+     For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     []
+     (when have-telemere?
+       `(require 'taoensso.telemere.impl))))
+
+(comment (require-telemere-if-present))
+
+#?(:clj
+   (defmacro signal!
+     "Experimental, subject to change!
+     Generates Telemere signal if Telemere is present, otherwise noops.
+     Telemere should be required by the calling namespace,
+     see `require-telemere-if-present`.
+
+     Returns true iff Telemere was present, example:
+       (or (signal! {<signal-opts>}) (println \"Println fallback!\"))"
+     {:added "vX.Y.Z (YYYY-MM-DD)"
+      :tag #?(:cljs boolean :clj nil)
+      :arglists '([{:keys [loc kind id level data msg error ...]}])}
+     [opts]
+     (if have-telemere?
+       (let [loc (get-source &form &env)]
+         (require 'taoensso.telemere.impl) ; For macro expansion
+         `(do
+            ;; Note pre-resolved expansion
+            (taoensso.telemere.impl/signal! ~(conj {:loc loc} opts))
+            true))
+       false)))
+
+(comment (macroexpand '(signal! {:level :warn :let [x :x] :msg ["Test" "message" x] :data {:a :A :x x}})))
+
 ;;;; Thread locals
 
 #?(:clj
