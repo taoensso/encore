@@ -1,4 +1,4 @@
-(ns taoensso.encore.ctx-filter
+(ns ^:no-doc taoensso.encore.ctx-filter
   "Alpha, subject to change without notice!
   Low-level toolkit for building context filters.
   Used by Telemere, Timbre, Tufte, etc."

@@ -532,8 +532,8 @@
 ;;;; Config API
 
 (deftest config-api
-  [(is (enc/submap? (enc/get-config {:_debug? true}) {:config :submap/nx, :search []}))
-   (is (enc/submap? (enc/get-config {:_debug? true :prop [:taoensso.prop-a1 :taoensso.prop-a2 :taoensso.prop-a3]})
+  [(is (enc/submap? (enc/get-config {:debug? true}) {:config :submap/nx, :search []}))
+   (is (enc/submap? (enc/get-config {:debug? true :prop [:taoensso.prop-a1 :taoensso.prop-a2 :taoensso.prop-a3]})
          {:config :submap/nx
           :search
           [[:prop "taoensso.prop-a1"]
@@ -546,21 +546,21 @@
            [:env  "TAOENSSO_PROP_A3"]
            [:res  "taoensso.prop-a3"]]}))
 
-   (is (enc/submap? (enc/get-config {:_debug? true :prop :taoensso.encore-tests.config.str})
+   (is (enc/submap? (enc/get-config {:debug? true :prop :taoensso.encore-tests.config.str})
          {:config "foo",
           :search [[:prop "taoensso.encore-tests.config.str"]
                    [:env  "TAOENSSO_ENCORE_TESTS_CONFIG_STR"]
                    [:res  "taoensso.encore-tests.config.str"]]}))
 
-   (is (enc/submap? (enc/get-config {:_debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
-                                                            :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
+   (is (enc/submap? (enc/get-config {:debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
+                                                           :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
          {:config #?(:clj "foo/clj" :cljs "foo/cljs")}))
 
-   (is (enc/submap? (enc/get-config {:_debug? true :_debug/match ["taoensso.encore-tests.unrequired-ns/myvar-embeddable" [:debug]] :as :edn})
+   (is (enc/submap? (enc/get-config {:debug? true :debug/match ["taoensso.encore-tests.unrequired-ns/myvar-embeddable" [:debug]] :as :edn})
          {:config {:embeddable? true, :foo :bar}}))
 
    #?(:clj
-      (is (enc/submap? (enc/get-config {:_debug? true :_debug/match ["taoensso.encore-tests.unrequired-ns/myvar-unembeddable" [:debug]] :as :edn})
+      (is (enc/submap? (enc/get-config {:debug? true :debug/match ["taoensso.encore-tests.unrequired-ns/myvar-unembeddable" [:debug]] :as :edn})
             {:config {:embeddable? false, :fn :submap/ex}})))
 
    (is (= (enc/get-sys-val*        [::nx :taoensso.encore-tests.config.str]) "foo"))
@@ -571,8 +571,8 @@
 (comment
   (get-config {})
   (def foo {:fn (fn [x] (* x x))})
-  (get-config {:_debug/match ["taoensso.encore/foo" [:debug]] :as :edn})
-  (get-config {:_debug? true :prop [:p1] :as :edn}))
+  (get-config {:debug/match ["taoensso.encore/foo" [:debug]] :as :edn})
+  (get-config {:debug? true :prop [:p1] :as :edn}))
 
 ;;;; Misc
 
@@ -669,7 +669,7 @@
             [true :done]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :dropping, :buffer-size 3, :_debug/init-after 100})]
+                   r (runner/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
@@ -677,7 +677,7 @@
             [[true true true false false false] [0 1 2]]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :sliding, :buffer-size 3, :_debug/init-after 100})]
+                   r (runner/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
@@ -685,7 +685,7 @@
             [[true true true false false false] [3 4 5]]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :blocking, :buffer-size 3, :_debug/init-after 100})]
+                   r (runner/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])

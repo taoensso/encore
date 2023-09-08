@@ -1,4 +1,4 @@
-(ns taoensso.encore.runner
+(ns ^:no-doc taoensso.encore.runner
   "Alpha, subject to change without notice!
   Runner util for easily configurable a/sync fn execution.
 
@@ -12,6 +12,10 @@
   {:added "v3.67.0 (2023-09-08)"}
   (:require
    [taoensso.encore :as enc :refer [have have?]]))
+
+(comment
+  (remove-ns 'taoensso.encore.runner)
+  (:api (enc/interns-overview)))
 
 #?(:clj
    (defn runner
@@ -89,7 +93,7 @@
                        false ; Indicate that drop/s occurred
                        (recur))))))]
 
-         (if-let [msecs (get opts :_debug/init-after)]
+         (if-let [msecs (get opts :debug/init-after)]
            (do
              (future (Thread/sleep (int msecs)) @init_)
              (fn async-runner

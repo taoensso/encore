@@ -112,7 +112,7 @@
      :cljs
      (:require-macros
       [taoensso.encore :as enc-macros :refer
-       [have have! have? compile-if
+       [have have! have? compile-if try-eval
         if-let if-some if-not when when-not when-some when-let -cond cond
         def* defonce cond! try* catching -cas!? now-dt* now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
@@ -133,6 +133,42 @@
   (remove-ns 'taoensso.encore)
   (test/run-tests))
 
+;;;;
+
+(defn ^:no-doc -unexpected-arg!
+  "Private low-level util."
+  {:added "v3.66.0 (2023-08-23)"}
+  ([arg] (-unexpected-arg! arg nil))
+  ([arg {:keys [msg] :as details}]
+   (throw
+     (ex-info (or msg (str "Unexpected argument: " arg))
+       (conj {:arg {:value arg, :type (type arg)}} details)))))
+
+(defn unexpected-arg!
+  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
+  Takes optional kvs for merging into exception's data map.
+
+    (let [mode :unexpected]
+      (case mode
+        :read  (do <...>)
+        :write (do <...>)
+        (unexpected-arg! mode
+          :context  `my-function
+          :param    'mode
+          :expected #{:read :write}))) =>
+
+    Unexpected argument: :unexpected
+    {:arg {:value :unexpected, :type clojure.lang.Keyword},
+     :context 'taoensso.encore/my-function
+     :param 'mode
+     :expected #{:read :write}}"
+
+  {:added "v3.51.0 (2023-03-13)"}
+  [arg & {:keys [msg] :as details}]
+  (-unexpected-arg! arg details))
+
+(comment (unexpected-arg! :arg :expected '#{string?}))
+
 ;;;; Core macros
 
 #?(:clj
@@ -140,36 +176,22 @@
      "Evaluates `test`. If it returns logical true (and doesn't throw), expands
      to `then`, otherwise expands to `else`."
      {:style/indent 1}
-     ([test then     ] `(compile-if ~test ~then nil)) ; Back compatibility
+     ([test then     ] `(compile-if ~test ~then nil))
      ([test then else]
       (if (try (eval test) (catch Throwable _ false))
         `(do ~then)
         `(do ~else)))))
 
+#?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
+
 #?(:clj
    (defmacro try-eval
-     "Evaluates `form`. If eval doesn't throw, expands to `form`, otherwise to nil."
+     "If `form` can be successfully evaluated at macro-expansion time, expands to `form`.
+     Otherwise expands to `nil`."
      {:added "v3.50.0 (2023-03-07)"}
      [form] `(compile-if ~form ~form nil)))
 
-(comment
-  (macroexpand '(try-eval (java.util.concurrent.atomic.AtomicLong.)))
-  (macroexpand '(try-eval (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)))
-  (macroexpand '(try-eval (do (println "effect") :x))))
-
-#?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
-#?(:clj
-   (compile-if
-     ;; Avoiding for edge case where user cares about startup time and has
-     ;; `core.async` as dependency but it never gets required anywhere else
-     ;; (do (require 'clojure.core.async) true)
-     (do (or
-           (io/resource "clojure/core/async.clj")
-           (io/resource "clojure/core/async.cljc")))
-     (def have-core-async? true)
-     (def have-core-async? false)))
-
-(comment (require '[clojure.core.async] :verbose))
+(comment (macroexpand '(try-eval (com.google.common.io.BaseEncoding/base16))))
 
 #?(:clj
    (defmacro if-let
@@ -441,14 +463,6 @@
          `(cljs.core/defonce    ~sym ~@body)
          `(clojure.core/defonce ~sym ~@body)))))
 
-;;;; Core fns
-
-(def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
-(def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
-(declare merge update-in)
-
-;;;; Secondary macros
-
 #?(:clj
    (defmacro identical-kw?
      "Returns true iff two keywords are identical.
@@ -473,12 +487,6 @@
           ~(when default default)))))
 
 #?(:clj
-   (do
-     (defmacro do-nil   [& body] `(do ~@body nil))
-     (defmacro do-false [& body] `(do ~@body false))
-     (defmacro do-true  [& body] `(do ~@body true))))
-
-#?(:clj
    (defmacro doto-cond
      "Cross between `doto`, `cond->` and `as->`."
      {:style/indent 1}
@@ -490,6 +498,20 @@
        `(let [~g ~x]
           ~@(map pstep (partition 2 clauses))
           ~g))))
+
+#?(:clj
+   (do
+     (defmacro do-nil   [& body] `(do ~@body nil))
+     (defmacro do-false [& body] `(do ~@body false))
+     (defmacro do-true  [& body] `(do ~@body true))))
+
+;;;;
+
+(def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
+(def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
+(declare merge update-in)
+
+;;;;
 
 #?(:clj
    (defmacro declare-remote
@@ -580,8 +602,6 @@
                (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
                (do                           (var ~alias-sym)))))))))
 
-(declare -unexpected-arg!)
-
 #?(:clj
    (defmacro defaliases
      "Bulk version of `defalias`.
@@ -604,8 +624,9 @@
 
                 :else
                 (-unexpected-arg! x
-                  {:expected '#{symbol map}
-                   :context  `defaliases})))
+                  {:context  `defaliases
+                   :param    'alias-clause
+                   :expected '#{symbol map}})))
 
             aliases))))
 
@@ -622,9 +643,11 @@
      "Private, used by other Taoensso libs."
      {:added "v3.57.0 (2023-03-29)"}
      [& types]
-     `(do ~@(map (fn [type]
-                   `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
-                      (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
+     `(do
+        ~@(map
+            (fn [type]
+              `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
+                 (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
 
 (comment
   (do
@@ -1254,18 +1277,24 @@
   "Returns true iff given number in signed unit proportion interval ∈ℝ[-1,1]."
   [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0)))))
 
-(compile-if have-core-async?
-  (let [c ; Silly work-around for edge case described at `have-core-async`?
-        (delay
-          #?(:cljs cljs.core.async.impl.channels.ManyToManyChannel
-             :clj
-             (do
-               (require       'clojure.core.async)
-               (Class/forName "clojure.core.async.impl.channels.ManyToManyChannel"))))]
+(def ^:const have-core-async?
+  "Is `clojure.core.async` present (not necessarily loaded)?"
+  (compile-if
+    (or
+      (io/resource "clojure/core/async.cljc")
+      (io/resource "clojure/core/async.clj"))
+    true
+    false))
 
-    #?(:clj  (defn          chan? [x] (instance? @c x))
-       :cljs (defn ^boolean chan? [x] (instance? @c x))))
-  (do        (defn          chan? [x] nil)))
+(defn chan?
+  "Returns true iff given a `clojure.core.async` channel."
+  #?(:cljs {:tag boolean})
+  [x]
+  ;; Avoid actually loading `core.async`
+  #?(:clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (.getName (class x)))
+     :cljs (instance? cljs.core.async.impl.channels.ManyToManyChannel                   x)))
+
+(comment (chan? (clojure.core.async/chan)))
 
 ;;;; Type coercions
 
@@ -1437,36 +1466,6 @@
   (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
 
 ;;;;
-
-(defn ^:no-doc -unexpected-arg!
-  "Private low-level util."
-  {:added "v3.66.0 (2023-08-23)"}
-  ([arg] (-unexpected-arg! arg nil))
-  ([arg {:keys [msg] :as details}]
-   (throw
-     (ex-info (or msg (str "Unexpected argument: " arg))
-       (conj {:arg {:value arg, :type (type arg)}} details)))))
-
-(defn unexpected-arg!
-  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
-  Takes optional kvs for merging into exception's data map.
-
-    (let [mode :unexpected]
-      (case mode
-        :read  (do <...>)
-        :write (do <...>)
-        (unexpected-arg! mode
-          :expected #{:read :write}))) =>
-
-    Unexpected argument: :unexpected
-    {:arg {:value :unexpected, :type clojure.lang.Keyword},
-     :expected #{:read :write}}"
-
-  {:added "v3.51.0 (2023-03-13)"}
-  [arg & {:keys [msg] :as details}]
-  (-unexpected-arg! arg details))
-
-(comment (unexpected-arg! :arg :expected '#{string?}))
 
 (defn instance!
   "If (instance? class arg) is true, returns arg.
@@ -1870,7 +1869,8 @@
 
 (comment (exp-backoff 128))
 
-(defn chance [p] (< ^double (rand) (double p)))
+(defn chance "Returns true with probability p∈ℝ[0,1]."
+  [p] (< (Math/random) (double p)))
 
 (comment (chance 0.25))
 
@@ -3260,7 +3260,8 @@
             (assoc acc (or ?id (i)) (limit-spec n ms))) {} x))
 
       (-unexpected-arg! x
-        {:context  'taoensso.encore.limiter/coerce-limit-spec
+        {:context  `limiter
+         :param    'limiter-spec
          :expected '#{map vector}}))))
 
 (comment (qb 1e6 (coerce-limit-spec [[10 1000] [20 2000]])))
@@ -3391,7 +3392,8 @@
              :rl/peek (f1 req-id true)
 
              (-unexpected-arg! cmd
-               {:context  'taoensso.encore.limiter/check-limits!
+               {:context  `limiter
+                :param    'check-limits-command
                 :expected #{:rl/reset :rl/peek}
                 :req-id   req-id}))))]))))
 
@@ -3618,8 +3620,7 @@
 
 ;;;; Strings
 
-(def* system-newline
-  {:tag #?(:clj String :cljs string)}
+(def* ^:const system-newline
   #?(:clj  (System/getProperty "line.separator")
      :cljs "\n"))
 
@@ -4535,7 +4536,7 @@
              ;; (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]])
              match
              (or
-               (get opts :_debug/match)
+               (get opts :debug/match)
                (let [as-edn? (= as :edn)]
                  (reduce-interleave-all
                    (fn rf [_ [kind n]]
@@ -4591,13 +4592,14 @@
                     [parsed-bool source]))
 
                  (-unexpected-arg! as
-                   {:context  'taoensso.encore/get-config
+                   {:context  `get-config
+                    :param    'as
                     :expected #{nil :edn :bool}}))
 
                (when (contains? opts :default)
                  [default [:default]]))
 
-             debug? (get opts :_debug?)]
+             debug? (get opts :debug?)]
 
          (when (or match-as debug?)
            (let [[config source] match-as]
@@ -4708,6 +4710,7 @@
              :perc (perc          n)
              (-unexpected-arg! kind
                {:context  `get-num-threads
+                :param    'num-threads
                 :expected #{:num :perc}})))
          (have pos-int? n-threads)))))
 
@@ -5404,6 +5407,7 @@
             (qname x)
             (-unexpected-arg! x
               {:context  `name-filter
+               :param    'filter-input-arg
                :expected '#{string keyword symbol nil}}))))
 
       wild-str->?re-pattern
@@ -5463,6 +5467,7 @@
           :else
           (-unexpected-arg! spec
             {:context  `name-filter
+             :param    'filter-spec
              :expected '#{string keyword set regex {:allow <spec>, :deny <spec>}}})))]
 
   (defn name-filter
@@ -5471,15 +5476,14 @@
 
     Spec may be:
       - A regex pattern. Will conform on match.
-      - A str/kw/sym, in which any \"*\"s will act as #\".*\" wildcards.
-        Will conform on match.
+      - A str/kw/sym, in which \"*\"s act as wildcards. Will conform on match.
 
       - A vector or set of regex patterns or strs/kws/syms.
         Will conform on ANY match.
         If you need literal \"*\"s, use #\"\\*\" regex instead.
 
-      - {:allow <allow-spec> :deny <deny-spec>}.
-        Will conform iff `allow-spec` matches AND `deny-spec` does NOT.
+      - {:allow <spec> :deny <spec>} with specs as above.
+        Will conform iff `allow` spec matches AND `deny` spec does NOT.
 
     Resulting conform fn is useful as allowlist and/or denylist.
     Example inputs: namespace strings, class names, ids, etc.
@@ -5672,7 +5676,7 @@
     ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
 
 ;;;; DEPRECATED
-;; {:deprecated "v<x.y.z> (<yyyy-mm-dd>)" :doc "Prefer `<replacement>`"}
+;; {:deprecated "v<X.Y.Z> (<YYYY-MM-DD>)" :doc "Prefer `<replacement>`."}
 
 #?(:clj
    (defmacro deprecated
