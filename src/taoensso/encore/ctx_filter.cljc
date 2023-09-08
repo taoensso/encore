@@ -132,7 +132,7 @@
 
 (enc/def* filter?
   "Returns true iff `ns` and `level` are filtered (disallowed) by given criteria."
-  {:arglists (:arglists (meta #'-filter?))
+  {:arglists #_(:arglists (meta #'-filter?)) '([ns-spec level-spec ns level])
    :tag      #?(:cljs boolean :clj nil)}
   (enc/fmemoize -filter?))
 
