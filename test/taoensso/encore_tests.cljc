@@ -6,7 +6,6 @@
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
    [taoensso.encore :as enc]
-   [taoensso.encore.runner :as runner]
    [taoensso.encore.ctx-filter :as cf])
 
   #?(:cljs
@@ -705,12 +704,12 @@
 #?(:clj
    (deftest _runner
      [(is (= (let [a (atom nil)
-                   r (runner/runner {:mode :sync})]
+                   r (enc/runner {:mode :sync})]
                [(r (fn [] (Thread/sleep 1000) (reset! a :done))) @a])
             [true :done]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
+                   r (enc/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
@@ -718,7 +717,7 @@
             [[true true true false false false] [0 1 2]]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
+                   r (enc/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
@@ -726,7 +725,7 @@
             [[true true true false false false] [3 4 5]]))
 
       (is (= (let [a (atom [])
-                   r (runner/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
+                   r (enc/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
 
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
