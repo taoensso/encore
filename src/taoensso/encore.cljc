@@ -119,7 +119,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 67 0])
+(def encore-version [3 68 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1100,7 +1100,7 @@
      "Similar to `alter-var-root`, but cross-platform.
      Updates the root binding of var identified by given symbol.
      Returns the var's new value."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.68.0 (2023-09-25)"}
      [var-sym update-fn]
      (if (:ns &env)
        `(set!                ~var-sym (~update-fn ~var-sym))
@@ -1840,8 +1840,8 @@
      (defn ^:no-doc runtime-form? "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
      (defn ^:no-doc const-form?   "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
      (defn ^:no-doc const-form    "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
-     (defn ^:no-doc const-forms?  "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"}  [& forms] (revery? const-form?   forms))
-     (defn ^:no-doc const-forms   "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"}  [& forms] (mapv    const-form    forms))))
+     (defn ^:no-doc const-forms?  "Private util." {:added "v3.68.0 (2023-09-25)"}  [& forms] (revery? const-form?   forms))
+     (defn ^:no-doc const-forms   "Private util." {:added "v3.68.0 (2023-09-25)"}  [& forms] (mapv    const-form    forms))))
 
 ;;;; Math
 
@@ -3706,12 +3706,12 @@
 
 ;;;; Strings
 
-(def* ^:const newline  "Single system newline" {:added "vX.Y.Z (YYYY-MM-DD)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
-(def* ^:const newlines "Double system newline" {:added "vX.Y.Z (YYYY-MM-DD)"} (str newline newline))
+(def* ^:const newline  "Single system newline" {:added "v3.68.0 (2023-09-25)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
+(def* ^:const newlines "Double system newline" {:added "v3.68.0 (2023-09-25)"} (str newline newline))
 
 (defn print1
   "Prints given argument as string, and flushes output stream."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.68.0 (2023-09-25)"}
   [x]
   #?(:cljs (print (str x))
      :clj
@@ -3722,7 +3722,7 @@
 
 (defn println-atomic
   "Like `core/println` but won't interleave content from different threads."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.68.0 (2023-09-25)"}
   [x]
   #?(:cljs (println x)
      :clj
@@ -4148,7 +4148,7 @@
     (abbreviate-ns 1  'foo.bar/baz)   => 'f.bar/baz
     (abbreviate-ns 2 \"foo.bar/baz\") => \"foo.bar/baz\""
 
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.68.0 (2023-09-25)"}
   ([       x] (abbreviate-ns 1 x))
   ([n-full x]
    (let [n-full (long (have nat-int? n-full))
@@ -4183,7 +4183,7 @@
 
 (def* ^:const have-telemere?
   "Is `taoensso.telemere` present (not necessarily loaded)?"
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.68.0 (2023-09-25)"}
   (compile-if (io/resource "taoensso/telemere.cljc") true false))
 
 #?(:clj
@@ -4191,7 +4191,7 @@
      "Experimental, subject to change!
      Requires Telemere if it's present, otherwise noops.
      For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.68.0 (2023-09-25)"}
      []
      (when have-telemere?
        `(require 'taoensso.telemere.impl))))
@@ -4207,7 +4207,7 @@
 
      Returns true iff Telemere was present, example:
        (or (signal! {<signal-opts>}) (println \"Println fallback!\"))"
-     {:added "vX.Y.Z (YYYY-MM-DD)"
+     {:added "v3.68.0 (2023-09-25)"
       :tag #?(:cljs boolean :clj nil)
       :arglists '([{:keys [loc kind id level data msg error ...]}])}
      [opts]
@@ -5032,7 +5032,7 @@
       `n-threads`   - Number of threads for asynchronously executing fns.
                       NB execution order may be non-sequential when n > 1."
 
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.68.0 (2023-09-25)"}
      [{:keys [mode buffer-size n-threads thread-name daemon-threads?] :as opts
        :or
        {mode :dropping
@@ -6417,13 +6417,13 @@
 
   (def* ^:const system-newline
     "Prefer `newline`."
-    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "v3.68.0 (2023-09-25)"}
     newline)
 
   (defn ^:no-doc -unexpected-arg!
     "Prefer `unexpected-arg!`"
     {:added      "v3.66.0 (2023-08-23)"
-     :deprecated "vX.Y.Z (YYYY-MM-DD)"}
+     :deprecated "v3.68.0 (2023-09-25)"}
     ([arg        ] (unexpected-arg! arg nil))
     ([arg details] (unexpected-arg! arg details))))
 
