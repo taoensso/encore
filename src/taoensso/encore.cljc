@@ -132,6 +132,7 @@
 
 (comment
   (remove-ns 'taoensso.encore)
+  (:api (interns-overview))
   (test/run-tests))
 
 ;;;;
@@ -5678,31 +5679,37 @@
 
 ;;;; Namespaces
 
+(declare str-starts-with?)
+
 #?(:clj
    (defn interns-overview
-     "Returns {:keys [public private impl test]}, with each key mapped to
-     an alphabetical list of the relevant vars in given namespace.
+     "Returns {:keys [api public private impl test no-doc]}, with each key mapped
+     to an alphabetical list of the relevant vars in given namespace.
 
      \"impl\" vars are public vars with names that begin with \"-\" or \"_\",
      a naming convention commonly used to indicate vars intended to be treated
      as private implementation details even when public."
      ([  ] (interns-overview *ns*))
      ([ns]
-      (map-vals sort
+      (map-vals (comp vec sort)
         (reduce-kv
-          (fn [{:keys [public private impl test] :as m} k v]
+          (fn [{:keys [public private impl test no-doc] :as m} k v]
             (let [mt (meta v)]
               (cond
                 (:test    mt) (update m :test    conj k)
                 (:private mt) (update m :private conj k)
 
                 :if-let [impl?
-                         (let [[n1 n2] (name (:name mt))]
-                           (or              (#{\- \_} n1)
-                             (and (= n1 \*) (#{\- \_} n2))))]
+                         (let [sw? (partial str-starts-with? (name (:name mt)))]
+                           (and
+                             (not (sw? "->"))
+                             (some sw? ["-" "_" "*-" "*_"])))]
                 (update m :impl conj k)
 
-                :else (update m :public conj k))))
+                :let [m (update m :public conj k)]
+
+                (:no-doc mt) (update m :no-doc conj k)
+                :else        (update m :api    conj k))))
           {}
           (ns-interns ns))))))
 
