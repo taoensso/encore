@@ -1132,6 +1132,7 @@
      (defn uri?        [x] (instance? java.net.URI                      x))
      (defn indexed?    [x] (instance? clojure.lang.Indexed              x))
      (defn named?      [x] (instance? clojure.lang.Named                x))
+     (defn nameable?   [x] (or (named? x) (string? x)))
      (defn editable?   [x] (instance? clojure.lang.IEditableCollection  x))
      (defn derefable?  [x] (instance? clojure.lang.IDeref               x))
      (defn throwable?  [x] (instance? Throwable                         x))
@@ -1164,6 +1165,7 @@
      ;; (defn uri?              [x])
      (defn ^boolean indexed?    [x] (satisfies?  IIndexed            x))
      (defn ^boolean named?      [x] (implements? INamed              x))
+     (defn ^boolean nameable?   [x] (or (named? x) (string? x)))
      (defn ^boolean editable?   [x] (implements? IEditableCollection x))
      (defn ^boolean derefable?  [x] (satisfies?  IDeref              x))
      ;; (defn throwable?        [x])
@@ -5567,7 +5569,7 @@
 
   (defn name-filter
     "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
-    any name type (string, keyword, symbol).
+    any nameable type (string, keyword, symbol).
 
     Spec may be:
       - A regex pattern. Will conform on match.
