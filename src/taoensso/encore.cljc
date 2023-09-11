@@ -4138,6 +4138,46 @@
 
 (comment (const-str= "foo" ""))
 
+(defn abbreviate-ns
+  "Give any nameable type (string, keyword, symbol), returns the same
+  type with at most `n-full` (default 1) unabbreviated namespace parts.
+
+  Example:
+    (abbreviate-ns 0  :foo.bar/baz)   => :f.b/baz
+    (abbreviate-ns 1  'foo.bar/baz)   => 'f.bar/baz
+    (abbreviate-ns 2 \"foo.bar/baz\") => \"foo.bar/baz\""
+
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([       x] (abbreviate-ns 1 x))
+  ([n-full x]
+   (let [n-full (long (have nat-int? n-full))
+         [p1 p2] (str/split (as-qname x) #"/")]
+     (if-not p2
+       x
+       (let [name-part p2
+             ns-parts  (str/split p1 #"\.")
+             n-to-abbr (- (count ns-parts) n-full)
+             sb
+             (reduce-indexed
+               (fn [sb ^long idx #?(:clj ^String in :cljs ^string in)]
+                 (when-not (zero? idx) (sb-append sb "."))
+                 (if (< idx n-to-abbr)
+                   (sb-append sb (.substring in 0 1))
+                   (sb-append sb             in)))
+               (str-builder)
+               ns-parts)]
+
+         (sb-append sb "/")
+         (sb-append sb name-part)
+
+         (let [s (str sb)]
+           (cond
+             (keyword? x) (keyword s)
+             (symbol?  x) (symbol  s)
+             :else                 s)))))))
+
+(comment :see-tests)
+
 ;;;; Thread locals
 
 #?(:clj

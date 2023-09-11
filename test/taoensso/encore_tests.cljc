@@ -336,6 +336,23 @@
       (let [v (vec (range -128 128))]
         (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
 
+(deftest _abbreviate-ns
+ [(is (= (enc/abbreviate-ns 0 :foo.bar.baz)  :foo.bar.baz))
+  (is (= (enc/abbreviate-ns 0 'foo.bar.baz)  'foo.bar.baz))
+  (is (= (enc/abbreviate-ns 0 "foo.bar.baz") "foo.bar.baz"))
+
+  (is (= (enc/abbreviate-ns 0 :foo.bar/baz) :f.b/baz))
+  (is (= (enc/abbreviate-ns 1 :foo.bar/baz) :f.bar/baz))
+  (is (= (enc/abbreviate-ns 2 :foo.bar/baz) :foo.bar/baz))
+
+  (is (= (enc/abbreviate-ns 0 'foo.bar/baz) 'f.b/baz))
+  (is (= (enc/abbreviate-ns 1 'foo.bar/baz) 'f.bar/baz))
+  (is (= (enc/abbreviate-ns 2 'foo.bar/baz) 'foo.bar/baz))
+
+  (is (= (enc/abbreviate-ns 0 "foo.bar/baz") "f.b/baz"))
+  (is (= (enc/abbreviate-ns 1 "foo.bar/baz") "f.bar/baz"))
+  (is (= (enc/abbreviate-ns 2 "foo.bar/baz") "foo.bar/baz"))])
+
 ;;;; Cache API
 
 (do
