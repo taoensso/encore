@@ -558,9 +558,10 @@
        - Source var's metadata will be preserved (docstring, arglists, etc.).
        - Changes to source var's value will also be applied to alias."
 
-     ([          src-sym            ] `(defalias nil        ~src-sym nil))
-     ([alias-sym src-sym            ] `(defalias ~alias-sym ~src-sym nil))
-     ([alias-sym src-sym alias-attrs]
+     ([          src-sym                       ] `(defalias nil        ~src-sym nil          nil))
+     ([alias-sym src-sym                       ] `(defalias ~alias-sym ~src-sym nil          nil))
+     ([alias-sym src-sym alias-attrs           ] `(defalias ~alias-sym ~src-sym ~alias-attrs nil))
+     ([alias-sym src-sym alias-attrs alias-body]
       (-have? symbol? src-sym)
       (let [alias-sym (-have symbol? (or alias-sym (symbol (name src-sym))))
             compiling-cljs? (boolean (:ns &env))
@@ -575,7 +576,7 @@
 
         (if compiling-cljs?
           (let [alias-sym (with-meta alias-sym alias-attrs)]
-            `(def ~alias-sym ~src-sym))
+            `(def ~alias-sym ~(or alias-body src-sym)))
 
           (let [src-var (resolve src-sym)
                 _
@@ -594,33 +595,36 @@
                   (select-keys src-meta alias-src-attrs))
 
                 final-attrs (core-merge src-attrs alias-attrs)
-                alias-sym   (with-meta  alias-sym final-attrs)]
+                alias-sym   (with-meta  alias-sym final-attrs)
+                alias-body  (or alias-body `@~src-var)]
 
             `(do
                ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
-               (alter-meta!                  (def ~alias-sym @~src-var) conj ~final-attrs)
-               (when ~link? (-alias-link-var (var ~alias-sym) ~src-var       ~alias-attrs))
+               (alter-meta!                  (def ~alias-sym ~alias-body) conj ~final-attrs)
+               (when ~link? (-alias-link-var (var ~alias-sym) ~src-var         ~alias-attrs))
                (do                           (var ~alias-sym)))))))))
 
 #?(:clj
    (defmacro defaliases
      "Bulk version of `defalias`.
-     Takes source symbols or {:keys [alias src attrs]} maps:
+     Takes source symbols or {:keys [alias src attrs body]} maps:
        (defaliases
          {:alias my-map, :src map, :attrs {:doc \"My `map` alias\"}}
          {:alias my-vec, :src vec, :attrs {:doc \"My `vec` alias\"}})"
 
-     {:added "v3.58.0 (2023-04-09)"}
-     [& aliases]
+     {:added "v3.58.0 (2023-04-09)"
+      :arglists '([{:keys [alias src attrs body]} ...])}
+
+     [& clauses]
      `(do
         ~@(map
             (fn [x]
               (cond
                 (symbol? x) `(defalias ~x)
                 (map?    x)
-                (let [{:keys [alias src attrs]
+                (let [{:keys [alias src attrs body]
                        :or   {attrs (dissoc x :alias :src)}} x]
-                  `(defalias ~alias ~src ~attrs))
+                  `(defalias ~alias ~src ~attrs ~body))
 
                 :else
                 (-unexpected-arg! x
@@ -628,7 +632,7 @@
                    :param    'alias-clause
                    :expected '#{symbol map}})))
 
-            aliases))))
+            clauses))))
 
 (comment :see-tests)
 (comment
@@ -636,7 +640,11 @@
   (defalias ^{:doc "alias doc 1"} src* src {:doc "alias doc 2"})
   [(src*) (meta #'src*)]
   (macroexpand '(defaliases {:alias map2 :src map :doc "map2"}))
-  (do           (defaliases {:alias map2 :src map :doc "map2"})))
+  (do           (defaliases {:alias map2 :src map :doc "map2"}))
+
+  (defn myfn "myfn doc" [x y] (Thread/sleep 2000) (+ x y))
+  (defaliases {:alias myfn2 :src myfn :body (fmemoize myfn)})
+  (myfn2 1 1))
 
 #?(:clj
    (defmacro ^:no-doc deftype-print-methods
