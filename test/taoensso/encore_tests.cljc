@@ -534,7 +534,7 @@
         [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
          (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
 
-;;;; Resolving
+;;;; Vars, etc.
 
 (def myvar #?(:clj "local clj var" :cljs "local cljs var"))
 
@@ -546,6 +546,12 @@
 
    (is (= (resolve-sym                                     myvar) :taoensso.encore-tests/myvar))
    (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/myvar) :taoensso.encore-tests.unrequired-ns/myvar))])
+
+(deftest _update-var-root!
+  (let [ref #?(:clj  "local clj var (updated!)"
+               :cljs "local cljs var (updated!)")]
+    [(is (= (enc/update-var-root! myvar (fn [s] (str s " (updated!)"))) ref))
+     (is (=                       myvar                                 ref))]))
 
 ;;;; Config API
 

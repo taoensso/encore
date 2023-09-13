@@ -1094,6 +1094,19 @@
 (comment (io/resource "taoensso/encore.cljc"))
 (comment :see-tests)
 
+#?(:clj
+   (defmacro update-var-root!
+     "Similar to `alter-var-root`, but cross-platform.
+     Updates the root binding of var identified by given symbol.
+     Returns the var's new value."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     [var-sym update-fn]
+     (if (:ns &env)
+       `(set!                ~var-sym (~update-fn ~var-sym))
+       `(alter-var-root (var ~var-sym) ~update-fn))))
+
+(comment :see-tests)
+
 ;;;; Tests
 
 (defn test-fixtures
