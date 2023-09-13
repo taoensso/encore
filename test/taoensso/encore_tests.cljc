@@ -285,6 +285,16 @@
             nil)
          {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}))])
 
+(deftest _fast-merge
+  [(is (= (enc/fast-merge nil         nil)     nil))
+   (is (= (enc/fast-merge {}          nil)      {}))
+   (is (= (enc/fast-merge nil          {})      {}))
+   (is (= (enc/fast-merge {:a :A}     nil) {:a :A}))
+   (is (= (enc/fast-merge nil     {:a :A}) {:a :A}))
+
+   (is (= (enc/fast-merge {:a :A1       } {:b :B2 :c :C2}) {:a :A1, :b :B2, :c :C2}))
+   (is (= (enc/fast-merge {:a :A1 :c :C1} {:b :B2       }) {:a :A1, :b :B2, :c :C1}))])
+
 ;;;; Strings
 
 #?(:clj

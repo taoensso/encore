@@ -2460,11 +2460,27 @@
     "Like `merge-with` but does nested merging."
     [f & maps] (-merge-with true f maps)))
 
+(defn fast-merge
+  "Like `core/merge` but faster."
+  ([maps] (reduce fast-merge maps))
+  ([m1 m2]
+   (let [n2 (count m2)]
+     (if (zero? n2)
+       (or m1 m2)
+       (let [n1 (count m1)]
+         (if (>= n1 n2)
+           (reduce-kv assoc m1 m2) ; Unexpectedly faster than (conj m1 m2)
+           (reduce-kv (fn [m k v] (if (contains? m k) m (assoc m k v))) m2 m1))))))
+
+  ([m1 m2 m3   ] (-> (fast-merge m1 m2) (fast-merge m3)))
+  ([m1 m2 m3 m4] (-> (fast-merge m1 m2) (fast-merge m3) (fast-merge m4))))
+
 (comment :see-tests)
 (comment
-  (qb 1e6
-    (core-merge {:a :A1} {:a :A2})
-    (merge      {:a :A1} {:a :A2}))) ; [228.96 160.04] ~worst case
+  (qb 1e6 ; [382.24 327.81 171.19] ~worst case
+    (core-merge {:a :A1} {:a :A2} {:a :A3})
+    (merge      {:a :A1} {:a :A2} {:a :A3})
+    (fast-merge {:a :A1} {:a :A2} {:a :A3})))
 
 (defn submap?
   "Returns true iff `sub` is a (possibly nested) submap of `m`,
