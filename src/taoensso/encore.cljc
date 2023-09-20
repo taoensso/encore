@@ -66,7 +66,8 @@
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
-    memoize abs ex-message ex-cause])
+    memoize abs ex-message ex-cause
+    newline])
 
   #?(:clj
      (:require
@@ -3663,9 +3664,34 @@
 
 ;;;; Strings
 
-(def* ^:const system-newline
-  #?(:clj  (System/getProperty "line.separator")
-     :cljs "\n"))
+(def* ^:const newline  "Single system newline" {:added "vX.Y.Z (YYYY-MM-DD)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
+(def* ^:const newlines "Double system newline" {:added "vX.Y.Z (YYYY-MM-DD)"} (str newline newline))
+
+(defn print1
+  "Prints given argument as string, and flushes output stream."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  #?(:cljs (print (str x))
+     :clj
+     (let [out *out*]
+       (.append out (str x))
+       (.flush  out)
+       nil)))
+
+(defn println-atomic
+  "Like `core/println` but won't interleave content from different threads."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  #?(:cljs (println x)
+     :clj
+     (let [sw  (java.io.StringWriter.)
+           out *out*]
+       (binding [*print-readably* nil]
+         (print-method x sw))
+       (.append out (str sw newline))
+       (when *flush-on-newline*
+         (.flush out))
+       nil)))
 
 #?(:clj  (defn          str-builder? [x] (instance?            StringBuilder x))
    :cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer x)))
@@ -6150,7 +6176,12 @@
        "Prefer `-cas!?`."
        {:deprecated "v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val then & [else]]
-       `(if (-cas!? ~atom_ ~old-val ~new-val) ~then ~else))))
+       `(if (-cas!? ~atom_ ~old-val ~new-val) ~then ~else)))
+
+  (def* ^:const system-newline
+    "Prefer `newline`."
+    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    newline))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
