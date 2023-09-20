@@ -1435,12 +1435,6 @@
 
   (defn as-bool              [x] (let [?b (as-?bool   x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
-#?(:clj
-   (do
-     (defn ^:no-doc runtime-form? "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (or (symbol? form) (list-form? form)))
-     (defn ^:no-doc const-form?   "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (not  (runtime-form? form)))
-     (defn ^:no-doc const-form    "Private util." {:added "v3.67.0 (2023-09-08)"} [form] (when (const-form?   form) form))))
-
 ;;;; Validation
 
 #?(:clj
@@ -1787,6 +1781,16 @@
           (do    acc))))))
 
 (comment :see-tests)
+
+;;;;
+
+#?(:clj
+   (do
+     (defn ^:no-doc runtime-form? "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
+     (defn ^:no-doc const-form?   "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
+     (defn ^:no-doc const-form    "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
+     (defn ^:no-doc const-forms?  "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"}  [& forms] (revery? const-form?   forms))
+     (defn ^:no-doc const-forms   "Private util." {:added "vX.Y.Z (YYYY-MM-DD)"}  [& forms] (mapv    const-form    forms))))
 
 ;;;; Math
 
