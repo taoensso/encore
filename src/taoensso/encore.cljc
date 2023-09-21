@@ -2396,43 +2396,54 @@
 
 #?(:clj (defmacro new-object [] (if (:ns &env) `(cljs.core/js-obj) `(Object.))))
 
-(let [not-found (new-object)]
-  (defn ^:no-doc -merge-with [nest? f maps]
-    (reduce
-      (fn rf [acc in]
-        (cond
-          (nil? in) acc
-          :if-let [e (find in :merge/replace?)] ; Currently undocumented
-          (let [in (dissoc in :merge/replace?)]
-            (if (val e)
-              (do     in)
-              (rf acc in)))
+(defn ^:no-doc -merge-with
+  "Private low-level merge function. Flexible and optimized!"
+  ([nest? f maps] (reduce (partial -merge-with nest? f) maps))
+  ([nest? f m1 m2]
+   (cond
+     :let  [n2  (count m2)]
+     (zero? n2) (or m1 m2)
 
-          :else
-          (reduce-kv
-            (fn rf2 [acc k rv]
-              (let [lv (get acc k not-found)]
-                (cond
-                  (identical? lv not-found)
-                  (assoc acc k rv)
+     :if-let [e (find m2 :merge/replace?)] ; Currently undocumented
+     (let [m2 (dissoc m2 :merge/replace?)]
+       (if (val e)
+         (do                     m2)
+         (-merge-with nest? f m1 m2)))
 
-                  (case rv (:merge/dissoc :swap/dissoc) true false)
-                  (dissoc acc k)
+     :let [n1 (count m1)]
 
-                  (and nest? (map? rv) (map? lv))
-                  (assoc acc k (reduce-kv rf2 lv rv))
+     (>= n1 n2)
+     (reduce-kv
+       (fn [acc1 k2 v2] ; m2 kvs into m1
+         (cond
+           (case v2 (:merge/dissoc :swap/dissoc) true false) (dissoc acc1 k2)
+           :let [v1 (get m1 k2 ::nx)]
+           (and nest? (map? v1) (map? v2)) (assoc acc1 k2 (-merge-with true f v1 v2))
+           (identical-kw? v1 ::nx)         (assoc acc1 k2 v2)
+           :else
+           (let [v3 (f v1 v2)]
+             (if (case v3 (:merge/dissoc :swap/dissoc) true false)
+               (dissoc acc1 k2)
+               (assoc  acc1 k2 v3)))))
+       m1 m2)
 
-                  :else
-                  (let [new-rv (f lv rv)]
-                    (if (case new-rv (:merge/dissoc :swap/dissoc) true false)
-                      (dissoc acc k)
-                      (assoc  acc k new-rv))))))
-            (or acc {})
-            in)))
-      nil
-      maps)))
+     :else
+     (reduce-kv
+       (fn [acc2 k1 v1] ; m1 kvs into m2
+         (cond
+           :let [v2 (get m2 k1 ::nx)]
+           (case v2 (:merge/dissoc :swap/dissoc) true false) (dissoc acc2 k1)
+           (and nest? (map? v1) (map? v2)) (assoc acc2 k1 (-merge-with true f v1 v2))
+           (identical-kw? v2 ::nx)         (assoc acc2 k1 v1)
+           :else
+           (let [v3 (f v1 v2)]
+             (if (case v3 (:merge/dissoc :swap/dissoc) true false)
+               (dissoc acc2 k1)
+               (assoc  acc2 k1 v3)))))
+       m2 m1))))
 
-(do
+(let [-merge-with -merge-with]
+
   (defn merge
     "Like `core/merge` but faster, supports `:merge/dissoc` rvals."
     [& maps] (-merge-with false (fn [x y] y) maps))
@@ -2443,13 +2454,17 @@
 
   (defn nested-merge
     "Like `merge` but does nested merging."
-    [& maps] (-merge-with :nest (fn [x y] y) maps))
+    [& maps] (-merge-with true (fn [x y] y) maps))
 
   (defn nested-merge-with
     "Like `merge-with` but does nested merging."
-    [f & maps] (-merge-with :nest f maps)))
+    [f & maps] (-merge-with true f maps)))
 
 (comment :see-tests)
+(comment
+  (qb 1e6
+    (core-merge {:a :A1} {:a :A2})
+    (merge      {:a :A1} {:a :A2}))) ; [228.96 160.04] ~worst case
 
 (defn submap?
   "Returns true iff `sub` is a (possibly nested) submap of `m`,
