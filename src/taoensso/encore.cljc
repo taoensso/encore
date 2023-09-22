@@ -136,15 +136,6 @@
 
 ;;;;
 
-(defn ^:no-doc -unexpected-arg!
-  "Private low-level util."
-  {:added "v3.66.0 (2023-08-23)"}
-  ([arg] (-unexpected-arg! arg nil))
-  ([arg {:keys [msg] :as details}]
-   (throw
-     (ex-info (or msg (str "Unexpected argument: " arg))
-       (conj {:arg {:value arg, :type (type arg)}} details)))))
-
 (defn unexpected-arg!
   "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
   Takes optional kvs for merging into exception's data map.
@@ -164,9 +155,22 @@
      :param 'mode
      :expected #{:read :write}}"
 
-  {:added "v3.51.0 (2023-03-13)"}
-  [arg & {:keys [msg] :as details}]
-  (-unexpected-arg! arg details))
+  {:added "v3.51.0 (2023-03-13)"
+   :arglists
+   '([arg]
+     [arg   {:keys [msg context param expected ...]}]
+     [arg & {:keys [msg context param expected ...]}])}
+
+  ([arg            ] (unexpected-arg! arg nil))
+  ([arg details-map]
+   (throw
+     (ex-info (or (get details-map :msg) (str "Unexpected argument: " arg))
+       (conj {:arg {:value arg, :type (type arg)}} (dissoc details-map :msg)))))
+
+  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
+  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
+  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
+  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
 
 (comment (unexpected-arg! :arg :expected '#{string?}))
 
@@ -628,7 +632,7 @@
                   `(defalias ~alias ~src ~attrs ~body))
 
                 :else
-                (-unexpected-arg! x
+                (unexpected-arg! x
                   {:context  `defaliases
                    :param    'alias-clause
                    :expected '#{symbol map}})))
@@ -1474,25 +1478,47 @@
   "If (instance? class arg) is true, returns arg.
   Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
   See `unexpected-arg!` for more info."
-  {:added "v3.51.0 (2023-03-13)"}
-  [class arg & {:as details}]
-  (if (instance? class arg)
-    arg
-    (-unexpected-arg! arg
-      (conj {:expected `(~'instance? ~class ~'arg)} details))))
+  {:added "v3.51.0 (2023-03-13)"
+   :arglists
+   '([class arg]
+     [class arg   {:keys [msg context param ...]}]
+     [class arg & {:keys [msg context param ...]}])}
 
-(comment (instance! String 5 :foo :bar))
+  ([class arg            ] (instance! class arg nil))
+  ([class arg details-map]
+   (if (instance? class arg)
+     arg
+     (unexpected-arg! arg
+       (conj {:expected `(~'instance? ~class ~'arg)} details-map))))
+
+  ([class arg k1 v1                  ] (instance! class arg {k1 v1}))
+  ([class arg k1 v1 k2 v2            ] (instance! class arg {k1 v1, k2 v2}))
+  ([class arg k1 v1 k2 v2 k3 v3      ] (instance! class arg {k1 v1, k2 v2, k3 v3}))
+  ([class arg k1 v1 k2 v2 k3 v3 k4 v4] (instance! class arg {k1 v1, k2 v2, k3 v3, k4 v4})))
+
+(comment (instance! String 5 {:foo :bar}))
 
 (defn satisfies!
   "If (satisfies? protocol arg) is true, returns arg.
   Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
   See `unexpected-arg!` for more info."
-  {:added "v3.51.0 (2023-03-13)"}
-  [protocol arg & {:as details}]
-  (if (satisfies? protocol arg)
+  {:added "v3.51.0 (2023-03-13)"
+   :arglists
+   '([protocol arg]
+     [protocol arg   {:keys [msg context param ...]}]
+     [protocol arg & {:keys [msg context param ...]}])}
+
+  ([protocol arg            ] (satisfies! protocol arg nil))
+  ([protocol arg details-map]
+   (if (satisfies? protocol arg)
     arg
-    (-unexpected-arg! arg
-      (conj {:expected `(~'satisfies? ~protocol ~'arg)} details))))
+    (unexpected-arg! arg
+      (conj {:expected `(~'satisfies? ~protocol ~'arg)} details-map))))
+
+  ([protocol arg k1 v1                  ] (satisfies! protocol arg {k1 v1}))
+  ([protocol arg k1 v1 k2 v2            ] (satisfies! protocol arg {k1 v1, k2 v2}))
+  ([protocol arg k1 v1 k2 v2 k3 v3      ] (satisfies! protocol arg {k1 v1, k2 v2, k3 v3}))
+  ([protocol arg k1 v1 k2 v2 k3 v3 k4 v4] (satisfies! protocol arg {k1 v1, k2 v2, k3 v3, k4 v4})))
 
 ;;;; Keywords
 
@@ -3303,7 +3329,7 @@
           (fn [acc [n ms ?id]] ; ?id for back compatibility
             (assoc acc (or ?id (i)) (limit-spec n ms))) {} x))
 
-      (-unexpected-arg! x
+      (unexpected-arg! x
         {:context  `limiter
          :param    'limiter-spec
          :expected '#{map vector}}))))
@@ -3435,7 +3461,7 @@
 
              :rl/peek (f1 req-id true)
 
-             (-unexpected-arg! cmd
+             (unexpected-arg! cmd
                {:context  `limiter
                 :param    'check-limits-command
                 :expected #{:rl/reset :rl/peek}
@@ -4660,7 +4686,7 @@
                                 false #{"false" "0" "f" "F" "FALSE"}}})))]
                     [parsed-bool source]))
 
-                 (-unexpected-arg! as
+                 (unexpected-arg! as
                    {:context  `get-config
                     :param    'as
                     :expected #{nil :edn :bool}}))
@@ -4777,7 +4803,7 @@
            (case kind
              :num  (have pos-int? n)
              :perc (perc          n)
-             (-unexpected-arg! kind
+             (unexpected-arg! kind
                {:context  `get-num-threads
                 :param    'num-threads
                 :expected #{:num :perc}})))
@@ -5474,7 +5500,7 @@
           (nil?    x) ""
           (or
             (qname x)
-            (-unexpected-arg! x
+            (unexpected-arg! x
               {:context  `name-filter
                :param    'filter-input-arg
                :expected '#{string keyword symbol nil}}))))
@@ -5534,7 +5560,7 @@
                 re-match (fn [in] (re-match (qname! in))))))
 
           :else
-          (-unexpected-arg! spec
+          (unexpected-arg! spec
             {:context  `name-filter
              :param    'filter-spec
              :expected '#{string keyword set regex {:allow <spec>, :deny <spec>}}})))]
@@ -6181,7 +6207,14 @@
   (def* ^:const system-newline
     "Prefer `newline`."
     {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
-    newline))
+    newline)
+
+  (defn ^:no-doc -unexpected-arg!
+    "Prefer `unexpected-arg!`"
+    {:added      "v3.66.0 (2023-08-23)"
+     :deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    ([arg        ] (unexpected-arg! arg nil))
+    ([arg details] (unexpected-arg! arg details))))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
