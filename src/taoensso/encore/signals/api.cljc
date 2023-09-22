@@ -17,7 +17,7 @@
 
 #?(:clj
    (defn- api-docstring [column purpose doc-template]
-     (let [doc (format doc-template purpose purpose purpose purpose)
+     (let [doc (apply format doc-template (repeat 10 purpose))
            [l1 & lines] (str/split-lines doc)
            left-trim (- (long column) 2)]
        (reduce
@@ -48,6 +48,32 @@
              (sigs/unexpected-sf-artity! sf-arity `def-filter-api))
 
            level-aliases `(enc/defalias sigs/level-aliases)
+
+           filtering-help
+           `(def ~'filtering-help
+              ~(api-docstring 17 purpose
+                 "Your filter config determines which %s calls will be enabled.
+
+                 Filtering can occur at compile-time (=> elision), or runtime.
+                 Both compile-time and runtime config can be specified via:
+
+                   1. System values (JVM properties, environment variables, or
+                      classpath resources). See library docs for details.
+
+                   2. The filter API consting of the following:
+                     `set-ns-filter!`,     `with-ns-filter`      - For filtering by namespace
+                     `set-minimum-level!`, `with-minimum-level!` - For filtering by %s level
+                     `set-id-filter!`,     `with-id-filter`      - For filtering by %s id   (when relevant)
+                     `set-kind-filter!`,   `with-kind-filter`    - For filtering by %s kind (when relevant)
+
+                     See the relevant docstrings for details.
+
+                 Additional filtering can also be applied at the handler level,
+                 see `add-handler!` docstring for details.
+
+                 If anything is unclear, please ping me (@ptaoussanis) so that I can
+                 improve these docs!")
+              "See docstring")
 
            ns-filter
            `(do
@@ -199,9 +225,9 @@
                       ~~'form)))))]
 
        (case sf-arity
-         2 `(do ~ns-filter                         ~min-level ~level-aliases)
-         3 `(do ~ns-filter              ~id-filter ~min-level ~level-aliases)
-         4 `(do ~ns-filter ~kind-filter ~id-filter ~min-level ~level-aliases)))))
+         2 `(do ~ns-filter                         ~min-level ~level-aliases ~filtering-help)
+         3 `(do ~ns-filter              ~id-filter ~min-level ~level-aliases ~filtering-help)
+         4 `(do ~ns-filter ~kind-filter ~id-filter ~min-level ~level-aliases ~filtering-help)))))
 
 (comment
   (def ^:dynamic                  *sig-filter* nil)
@@ -311,6 +337,20 @@
                              (sigs/shutdown-handlers! ~*sig-handlers*))))))]
 
        `(do
+          (def ~'handlers-help
+            ~(api-docstring 15 purpose
+               "The handler API consists of the following:
+                 `get-handlers`    - Returns info on currently registered handlers
+                 `add-handler!`    - Used to   register handlers
+                 `remove-handler!` - Used to unregister handlers
+
+               See the relevant docstrings for details.
+
+               If anything is unclear, please ping me (@ptaoussanis) so that I can
+               improve these docs!")
+
+            "See docstring")
+
           (defn ~'get-handlers
             ~(api-docstring 0 purpose
                "Returns {<handler-id> <dispatch-opts>} for all registered %s handlers.")
@@ -369,9 +409,9 @@
                                               and 10 calls per 60   secs
 
                  `ns-filter`   - Namespace filter as in `set-ns-filter!`
-                 `kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
-                 `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
                  `min-level`   - Minimum   level  as in `set-min-level!`
+                 `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
+                 `kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
 
                  `filter-fn`
                    Optional (fn allow? [handler-arg]) that must return truthy
@@ -430,3 +470,5 @@
      `(do
         (def-filter-api  ~sf-arity ~*sig-filter*   ~opts)
         (def-handler-api ~sf-arity ~*sig-handlers* ~opts))))
+
+(comment (def-api 3 *sig-filter* *sig-handlers* {:purpose "testing"}))
