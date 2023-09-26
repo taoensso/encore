@@ -157,16 +157,13 @@
      :expected #{:read :write}}"
 
   {:added "v3.51.0 (2023-03-13)"
-   :arglists
-   '([arg]
-     [arg   {:keys [msg context param expected ...]}]
-     [arg & {:keys [msg context param expected ...]}])}
+   :arglists '([arg] [arg opts] [arg & {:as opts :keys [msg context param expected ...]}])}
 
-  ([arg            ] (unexpected-arg! arg nil))
-  ([arg details-map]
+  ([arg     ] (unexpected-arg! arg nil))
+  ([arg opts]
    (throw
-     (ex-info (or (get details-map :msg) (str "Unexpected argument: " arg))
-       (conj {:arg {:value arg, :type (type arg)}} (dissoc details-map :msg)))))
+     (ex-info (or (get opts :msg) (str "Unexpected argument: " arg))
+       (conj {:arg {:value arg, :type (type arg)}} (dissoc opts :msg)))))
 
   ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
   ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
@@ -1519,17 +1516,14 @@
   Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
   See `unexpected-arg!` for more info."
   {:added "v3.51.0 (2023-03-13)"
-   :arglists
-   '([protocol arg]
-     [protocol arg   {:keys [msg context param ...]}]
-     [protocol arg & {:keys [msg context param ...]}])}
+   :arglists '([protocol arg] [protocol arg opts] [protocol arg & {:as opts :keys [msg context param ...]}])}
 
-  ([protocol arg            ] (satisfies! protocol arg nil))
-  ([protocol arg details-map]
+  ([protocol arg     ] (satisfies! protocol arg nil))
+  ([protocol arg opts]
    (if (satisfies? protocol arg)
     arg
     (unexpected-arg! arg
-      (conj {:expected `(~'satisfies? ~protocol ~'arg)} details-map))))
+      (conj {:expected `(~'satisfies? ~protocol ~'arg)} opts))))
 
   ([protocol arg k1 v1                  ] (satisfies! protocol arg {k1 v1}))
   ([protocol arg k1 v1 k2 v2            ] (satisfies! protocol arg {k1 v1, k2 v2}))
@@ -2516,7 +2510,8 @@
     [f & maps] (-merge-with true f maps)))
 
 (defn fast-merge
-  "Like `core/merge` but faster."
+  "Like `core/merge` but faster.
+  Single arity case takes a collection of maps."
   ([maps] (reduce fast-merge maps))
   ([m1 m2]
    (let [n2 (count m2)]
@@ -2540,8 +2535,7 @@
 (defn submap?
   "Returns true iff `sub` is a (possibly nested) submap of `m`,
   i.e. iff every (nested) value in `sub` has the same (nested) value in `m`.
-
-  Warning: uses stack recursion, so supports only limited nesting."
+  Uses stack recursion so supports only limited nesting."
   [m sub]
   (reduce-kv
     (fn [_ k v]
@@ -4542,29 +4536,46 @@
 
 (defn secs->ms ^long [secs] (* (long secs)  1000))
 (defn ms->secs ^long [ms]   (quot (long ms) 1000))
-(defn ms "Returns ~number of milliseconds in period defined by given args."
-  [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}]
-  (have? #{:years :months :weeks :days :hours :mins :secs :msecs :ms}
-    :in (keys opts))
-  (round0
-    (+
-      (if years  (* (double years)  #=(* 1000 60 60 24 365))    0.0)
-      (if months (* (double months) #=(* 1000 60 60 24 29.53))  0.0)
-      (if weeks  (* (double weeks)  #=(* 1000 60 60 24 7))      0.0)
-      (if days   (* (double days)   #=(* 1000 60 60 24))        0.0)
-      (if hours  (* (double hours)  #=(* 1000 60 60))           0.0)
-      (if mins   (* (double mins)   #=(* 1000 60))              0.0)
-      (if secs   (* (double secs)   1000)                       0.0)
-      (if msecs     (double msecs)                              0.0)
-      (if ms        (double ms)                                 0.0))))
+(defn ms
+  "Returns ~number of milliseconds in period defined by given args."
+  {:arglists '([opts] [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}])}
+  (^long [{:keys [years months weeks days hours mins secs msecs ms]}]
+   (round0
+     (+
+       (if years  (* (double years)  #=(* 1000 60 60 24 365))    0.0)
+       (if months (* (double months) #=(* 1000 60 60 24 29.53))  0.0)
+       (if weeks  (* (double weeks)  #=(* 1000 60 60 24 7))      0.0)
+       (if days   (* (double days)   #=(* 1000 60 60 24))        0.0)
+       (if hours  (* (double hours)  #=(* 1000 60 60))           0.0)
+       (if mins   (* (double mins)   #=(* 1000 60))              0.0)
+       (if secs   (* (double secs)   1000)                       0.0)
+       (if msecs     (double msecs)                              0.0)
+       (if ms        (double ms)                                 0.0))))
 
-(def secs (comp ms->secs ms))
-(comment #=(ms   :years 88 :months 3 :days 33)
-         #=(secs :years 88 :months 3 :days 33))
+  (^long [k1 v1             ] (ms {k1 v1}))
+  (^long [k1 v1 k2 v2       ] (ms {k1 v1, k2 v2}))
+  (      [k1 v1 k2 v2 & more] (ms (reduce-kvs assoc {k1 v1 k2 v2} more))))
+
+(defn secs
+  "Returns ~number of seconds in period defined by given args."
+  {:arglists '([opts] [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}])}
+  (^long [opts              ] (ms->secs (ms opts)))
+  (^long [k1 v1             ] (ms->secs (ms {k1 v1})))
+  (^long [k1 v1 k2 v2       ] (ms->secs (ms {k1 v1, k2 v2})))
+  (      [k1 v1 k2 v2 & more] (ms->secs (ms (reduce-kvs assoc {k1 v1 k2 v2} more)))))
+
+(comment
+  (ms   :years 88 :months 3 :days 33)
+  (secs :years 88 :months 3 :days 33))
 
 #?(:clj
-   (defmacro msecs "Compile-time version of `ms`" [& opts]
-     (eval `(taoensso.encore/ms ~@opts))))
+   (defmacro msecs
+     "Macro version of `ms`."
+     {:arglists '([opts] [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}])}
+     ([k1 v1 & more] `(msecs ~(reduce-kvs assoc {k1 v1} (vec more))))
+     ([{:keys [years months weeks days hours mins secs msecs ms] :as opts}]
+      (have? [:ks<= #{:years :months :weeks :days :hours :mins :secs :msecs :ms}] opts)
+      (taoensso.encore/ms opts))))
 
 (comment (macroexpand '(msecs :weeks 3)))
 
