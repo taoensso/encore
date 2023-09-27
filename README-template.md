@@ -15,12 +15,12 @@ TODO Detailed description
 
 ## Latest release/s
 
-[![Clojars project][Clojars SVG]][Clojars URL]
+[![Clojars project][Clojars SVG]][Clojars URL] 
 
-TODO or
+TODO Clojars above, or
 
-- `yyyy-mm-dd` `x.y.z` (dev): [changes](../../releases/tag/vTODO)
-- `yyyy-mm-dd` `x.y.z` (stable): [changes](../../releases/tag/vTODO)
+- `YYYY-MM-DD` `vX.Y.Z` (dev): [changes](../../releases/tag/vTODO)
+- `YYYY-MM-DD` `vX.Y.Z` (stable): [changes](../../releases/tag/vTODO)
 
 [![Main tests][Main tests SVG]][Main tests URL]
 [![Graal tests][Graal tests SVG]][Graal tests URL]
@@ -40,7 +40,7 @@ See [here][GitHub releases] for earlier releases.
 
 ## Funding
 
-You can [help support][sponsor] on this project, thank you!! 🙏
+You can [help support][sponsor] continued work on this project, thank you!! 🙏
 
 ## License
 
