@@ -853,7 +853,7 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(declare submap?)
+(declare submap? rsome str-contains? re-pattern?)
 (defn ^:no-doc -matching-error
   ;; Ref. CLJ-1293
   ([  err] err)
@@ -881,29 +881,25 @@
             (and
               (-matching-error c err)
               (cond
-                (nil? pattern) true
-                (map? pattern)
+                (nil?        pattern) true
+                (set?        pattern) (rsome #(-matching-error c % err) pattern)
+                (string?     pattern) (str-contains?   (ex-message err) pattern)
+                (re-pattern? pattern) (re-find pattern (ex-message err))
+                (map?        pattern)
                 (if-let [data (ex-data err)]
                   (submap? data pattern)
                   false)
 
                 :else
-                (boolean
-                  (re-find
-                    (re-pattern pattern)
-                    (ex-message err)))))]
+                (unexpected-arg! pattern
+                  {:context  `-matching-error
+                   :expected '#{set string re-pattern map}})))]
      err
      (if-let [cause (ex-cause err)]
        (-matching-error c pattern cause) ; Try match cause
        false))))
 
-(comment
-  (-matching-error                            (catching (/ 4 0) t t))
-  (-matching-error :default #"Divide by zero" (catching (/ 4 0) t t))
-  (-matching-error :default #"Nope"           (catching (/ 4 0) t t))
-  (-matching-error :default #"Test"           (ex-info "Test" {:a :b}))
-  (-matching-error :default {:a :b}           (ex-info "Test" {:a :b :c :d}))
-  (-matching-error :ex-info {:a :b}           (ex-info "Dummy" {} (ex-info "Test" {:a :b}))))
+(comment :see-tests)
 
 #?(:clj
    (defmacro throws

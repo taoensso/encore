@@ -75,6 +75,15 @@
 
 ;;;; Errors
 
+(deftest _matching-error
+  [        (is (true?  (boolean (enc/-matching-error                                    (enc/catching (/ 4 0) t t)))))
+   #?(:clj (is (true?  (boolean (enc/-matching-error :default         "Divide by zero"  (enc/catching (/ 4 0) t t))))))
+   #?(:clj (is (true?  (boolean (enc/-matching-error :default #{"Foo" "Divide by zero"} (enc/catching (/ 4 0) t t))))))
+           (is (false? (boolean (enc/-matching-error :default #"Nope"                   (enc/catching (/ 4 0) t t)))))
+           (is (true?  (boolean (enc/-matching-error :default #"Test"                   (ex-info "Test" {:a :b})))))
+           (is (true?  (boolean (enc/-matching-error :default {:a :b}                   (ex-info "Test" {:a :b :c :d})))))
+           (is (true?  (boolean (enc/-matching-error :ex-info {:a :b}                   (ex-info "Dummy" {} (ex-info "Test" {:a :b}))))))])
+
 (deftest _throws?
   (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
         throw-uncommon (fn [] (throw #?(:clj (Error.) :cljs "Error")))]
