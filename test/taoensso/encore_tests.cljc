@@ -6,6 +6,7 @@
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
    [taoensso.encore :as enc]
+   #?(:clj [taoensso.encore.bytes :as bytes])
    [taoensso.encore.signals     :as sigs]
    [taoensso.encore.signals.api :as sigs-api])
 
@@ -742,6 +743,103 @@
                 (do (Thread/sleep 500) @a)])
 
             [[true true true false false false] [0 1 2 3 4 5]]))]))
+
+;;;; Bytes
+
+#?(:clj
+   (deftest _bytes
+     [(testing "ba-lengths"
+        [(is (=  (vec (bytes/ba->len    5 (bytes/as-ba [1 2 3]))) [1 2 3 0 0]))
+         (is (-> (vec (bytes/ba->sublen 5 (bytes/as-ba [1 2 3]))) enc/throws?))])
+
+      (testing "ba-join" (is (= (vec (bytes/ba-join nil (bytes/as-ba [0]) (bytes/as-ba [1 2]) nil (bytes/as-ba [3 4 5]) nil nil (bytes/as-ba [6]))) [0 1 2 3 4 5 6])))
+      (testing "ba-parts"
+        (let [ba (bytes/ba-join (bytes/as-ba [1 2]) (bytes/as-ba [3]) (bytes/as-ba [5 6]) (bytes/as-ba [7 8 9]))]
+          (is (= (mapv vec (bytes/ba-parts ba 0 2 1 1 0 0 0 1)) [[1 2] [3] [5] [] [] [] [6] [7 8 9]]))))
+
+      (testing "unsigned-ints"
+        [(let [n  Byte/MAX_VALUE]  (is (= (bytes/from-ubyte  (bytes/to-ubyte    n)) n)))
+         (let [n Short/MAX_VALUE]  (is (= (bytes/from-ushort (bytes/to-ushort   n)) n)))
+
+         (let [n  bytes/ubyte-max] (is (= (bytes/to-ubyte    (bytes/from-ubyte  n)) n)))
+         (let [n bytes/ushort-max] (is (= (bytes/to-ushort   (bytes/from-ushort n)) n)))])
+
+      (testing "strings"
+        [(let [s bytes/utf8-str] (is (= (-> s bytes/str->utf8-ba bytes/utf8-ba->str) s)))
+         (let [s bytes/utf8-str] (is (= (vec (bytes/as-ba s))
+                                       [-32 -78 -84 -32 -78 -66  32 -32  -78 -121 -32 -78 -78 -32 -77 -115 -32 -78 -78 -32
+                                        -78 -65  32 -32 -78 -72 -32 -78 -126 -32  -78 -83 -32 -78 -75 -32  -78 -65 -32 -78 -72])))])
+
+      (testing "chars" (let [s @#'bytes/utf8-str] (is (= (String. (bytes/as-ca s)) s))))
+      (testing "parse-buffer-len" (is (= (bytes/parse-buffer-len [1 (bytes/as-ba 3)]) 4)))
+
+      (testing "with-io"
+        [(is (= (bytes/with-in [in] (bytes/with-out [out] 1 (.writeByte out 67)) (.readByte in)) 67))
+         (is (= (vec (bytes/with-out [out] [0 (bytes/as-ba 6)] (.writeByte out 1))) [1]))])
+
+      (testing "dynamic-units"
+        [(let [ba (bytes/with-out [out] 16 (bytes/write-dynamic-uint out 0))]
+           [(is (= (count ba) 1)) ; 1+0=1 bytes
+            (is (= (bytes/with-in [in] ba (bytes/read-dynamic-uint in)) 0))])
+
+         (let [ba (bytes/with-out [out] 16 (bytes/write-dynamic-uint out bytes/ubyte-max))]
+           [(is (= (count ba) 2)) ; 1+1=2 bytes
+            (is (= (bytes/with-in [in] ba (bytes/read-dynamic-uint in)) bytes/ubyte-max))])])
+
+      (testing "unsigned-io"
+        [(is (= (bytes/with-in [in] (bytes/with-out [out] 2 (bytes/write-ubyte  out  bytes/ubyte-max)) (bytes/read-ubyte  in))  bytes/ubyte-max))
+         (is (= (bytes/with-in [in] (bytes/with-out [out] 2 (bytes/write-ushort out bytes/ushort-max)) (bytes/read-ushort in)) bytes/ushort-max))])
+
+      (testing "dynamic-bas"
+        [(let [dba (bytes/with-out [out] 1 (dotimes [_ 3] (bytes/write-dynamic-ba out nil)))]
+           (bytes/with-in [in] dba
+             (let [x1      (bytes/read-dynamic-ba  in)
+                   x2      (bytes/read-dynamic-ba! in)
+                   [x3 n3] (bytes/read-dynamic-ba* in)]
+
+               [(is (=         x1 nil))
+                (is (bytes/ba= x2 (bytes/as-ba 0)))
+                (is (=         n3 1))
+                (is (=         x3 nil))])))
+
+         (let [dba (bytes/with-out [out] 1 (dotimes [_ 3] (bytes/write-dynamic-ba out (bytes/as-ba 0))))]
+           (bytes/with-in [in] dba
+             (let [x1      (bytes/read-dynamic-ba  in)
+                   x2      (bytes/read-dynamic-ba! in)
+                   [x3 n3] (bytes/read-dynamic-ba* in)]
+
+               [(is (=         x1 nil))
+                (is (bytes/ba= x2 (bytes/as-ba 0)))
+                (is (=         n3 1))
+                (is (=         x3 nil))])))
+
+         (let [dba (bytes/with-out [out] 1 (dotimes [_ 3] (bytes/write-dynamic-ba out (bytes/as-ba [1 2 3]))))]
+           (bytes/with-in [in] dba
+             (let [x1      (bytes/read-dynamic-ba  in)
+                   x2      (bytes/read-dynamic-ba! in)
+                   [x3 n3] (bytes/read-dynamic-ba* in)]
+
+               [(is (bytes/ba= x1 (bytes/as-ba [1 2 3])))
+                (is (bytes/ba= x2 (bytes/as-ba [1 2 3])))
+                (is (=         n3 4))
+                (is (bytes/ba= x3 (bytes/as-ba [1 2 3])))])))])
+
+      (testing "dynamic-strs"
+        (let [dba
+              (bytes/with-out [out] 1
+                (bytes/write-dynamic-str out nil)
+                (bytes/write-dynamic-str out nil)
+                (bytes/write-dynamic-str out "")
+                (bytes/write-dynamic-str out "")
+                (bytes/write-dynamic-str out bytes/utf8-str))]
+
+          (bytes/with-in [in] dba
+            (let [x1 (bytes/read-dynamic-str  in)
+                  x2 (bytes/read-dynamic-str! in)
+                  x3 (bytes/read-dynamic-str  in)
+                  x4 (bytes/read-dynamic-str! in)
+                  x5 (bytes/read-dynamic-str  in)]
+              (is (= [x1 x2 x3 x4 x5] [nil "" nil "" bytes/utf8-str]))))))]))
 
 ;;;; Signal filtering
 
