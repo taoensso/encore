@@ -3,9 +3,7 @@
   Private low-level byte[] utils."
   {:added "v3.69.0 (2023-10-16)"}
   (:refer-clojure :exclude [bytes?])
-  (:require
-   [taoensso.encore :as enc :refer [have have?]])
-
+  (:require [taoensso.encore :as enc :refer [have have?]])
   (:import
    [java.nio.charset StandardCharsets]
    [java.io
@@ -18,37 +16,92 @@
   (remove-ns 'taoensso.encore.bytes)
   (:api (enc/interns-overview)))
 
-;;;; Aliases
+;;;; Unsigned ints
 
-(enc/defaliases
-  enc/bytes?
-  enc/ba=
-  enc/str->utf8-ba
-  enc/utf8-ba->str)
+(do
+  (def ^:const range-ubyte  "Max unsigned byte: 255"          (-    Byte/MAX_VALUE    Byte/MIN_VALUE))
+  (def ^:const range-ushort "Max unsigned short: 65,535"      (-   Short/MAX_VALUE   Short/MIN_VALUE))
+  (def ^:const range-uint   "Max unsigned int: 4,294,967,295" (- Integer/MAX_VALUE Integer/MIN_VALUE))
+
+  (let [fail!
+        (fn [n target-type target-min target-max]
+          (throw
+            (ex-info "Failed to cast number to typed int (exceeds type range)"
+              {:given  {:value n :type (type n)}
+               :target {:type target-type :min target-min :max target-max}})))]
+
+    (defn as-byte   ^long [^long n] (if (and (>= n    Byte/MIN_VALUE) (<= n    Byte/MAX_VALUE)) n (fail! n :byte     Byte/MIN_VALUE    Byte/MAX_VALUE)))
+    (defn as-short  ^long [^long n] (if (and (>= n   Short/MIN_VALUE) (<= n   Short/MAX_VALUE)) n (fail! n :short   Short/MIN_VALUE   Short/MAX_VALUE)))
+    (defn as-int    ^long [^long n] (if (and (>= n Integer/MIN_VALUE) (<= n Integer/MAX_VALUE)) n (fail! n :int   Integer/MIN_VALUE Integer/MAX_VALUE)))
+
+    (defn as-ubyte  ^long [^long n] (if (and (>= n 0) (<= n range-ubyte))  n (fail! n :ubyte  0 range-ubyte)))
+    (defn as-ushort ^long [^long n] (if (and (>= n 0) (<= n range-ushort)) n (fail! n :ushort 0 range-ushort)))
+    (defn as-uint   ^long [^long n] (if (and (>= n 0) (<= n range-uint))   n (fail! n :uint   0 range-uint))))
+
+  (defn to-ubyte        "Signed ℤ[-128,127] -> unsigned ℕ[0,255]"   ^long [^long n] (as-ubyte  (- n    Byte/MIN_VALUE)))
+  (defn to-ushort   "Signed ℤ[-32768 32767] -> unsigned ℕ[0,65535]" ^long [^long n] (as-ushort (- n   Short/MIN_VALUE)))
+  (defn to-uint                   "Signed ℤ -> unsigned ℕ[0,max]"   ^long [^long n] (as-uint   (- n Integer/MIN_VALUE)))
+
+  (defn from-ubyte    "Unsigned ℕ[0,255] -> signed ℤ[-128,127]"     ^long [^long n] (+ (as-ubyte  n)    Byte/MIN_VALUE))
+  (defn from-ushort "Unsigned ℕ[0,65535] -> signed ℤ[-32768,32767]" ^long [^long n] (+ (as-ushort n)   Short/MIN_VALUE))
+  (defn from-uint     "Unsigned ℕ[0,max] -> signed ℤ"               ^long [^long n] (+ (as-uint   n) Integer/MIN_VALUE))
+
+  (defn  byte->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate             1)] (.put      bb (byte  (as-byte  n))) (.array bb)))
+  (defn short->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate   Short/BYTES)] (.putShort bb (short (as-short n))) (.array bb)))
+  (defn   int->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate Integer/BYTES)] (.putInt   bb (int   (as-int   n))) (.array bb)))
+
+  (defn ba->byte  [^bytes ba] (aget ba 0))
+  (defn ba->short [^bytes ba] (let [bb (java.nio.ByteBuffer/allocate   Short/BYTES)] (.put bb ba) (.flip bb) (.getShort bb)))
+  (defn ba->int   [^bytes ba] (let [bb (java.nio.ByteBuffer/allocate Integer/BYTES)] (.put bb ba) (.flip bb) (.getInt   bb)))
+
+  (defn write-ubyte  "Writes unsigned byte  as 1 signed byte"  [^DataOutput out ubyte]  (.writeByte  out (from-ubyte  ubyte)))
+  (defn write-ushort "Writes unsigned short as 2 signed bytes" [^DataOutput out ushort] (.writeShort out (from-ushort ushort)))
+  (defn write-uint   "Writes unsigned int   as 4 signed bytes" [^DataOutput out uint]   (.writeInt   out (from-uint   uint)))
+
+  (defn read-ubyte   "Reads unsigned byte  from 1 signed byte"  ^long [^DataInput in] (to-ubyte  (.readByte  in)))
+  (defn read-ushort  "Reads unsigned short from 2 signed bytes" ^long [^DataInput in] (to-ushort (.readShort in)))
+  (defn read-uint    "Reads unsigned int   from 4 signed bytes" ^long [^DataInput in] (to-uint   (.readInt   in))))
+
+(comment
+  (enc/qb 1e6 ; [66.26 68.72 70.05]
+    (ba->byte  (byte->ba  25))
+    (ba->short (short->ba 25))
+    (ba->int   (int->ba   25))))
 
 ;;;; Basics
 
-(def ^:private ^:const utf8-str "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ")
-(defn ba-len ^long [?ba] (if ?ba (alength ^bytes ?ba) 0))
+(defn n-bytes->n-bits ^long [n-bytes] (*    (int n-bytes) 8))
+(defn n-bits->n-bytes ^long [n-bits]  (quot (int n-bits)  8))
 
-(defn ba= [?ba1 ?ba2]
-  (if-let [ba1 ?ba1]
-    (if-let [ba2 ?ba2]
-      (java.util.Arrays/equals ^bytes ba1 ^bytes ba2)
-      (zero? (alength ^bytes ba1)))
+(enc/defaliases
+  enc/bytes-class
+  enc/bytes?
+  enc/ba=
+  enc/ba-hash
 
-    (if-let [ba2 ?ba2]
-      (zero? (alength ^bytes ba2))
+  enc/utf8-ba->str
+  enc/str->utf8-ba
+
+  enc/const-ba=)
+
+(defmacro ba0 [] `(byte-array 0))
+(defn ?ba-len ^long [?ba] (if ?ba (alength ^bytes ?ba) 0))
+(defn ?ba= [?ba1 ?ba2]
+  (if-let [^bytes ba1 ?ba1]
+    (if-let [^bytes ba2 ?ba2]
+      (java.util.Arrays/equals ba1 ba2)
+      (zero? (alength ba1)))
+
+    (if-let [^bytes ba2 ?ba2]
+      (zero? (alength ba2))
       true)))
-
-(comment :see-tests)
 
 (defn ba-join*
   "Returns byte[] concatenation of >= 0 ?byte[]s."
-  ^bytes [bas]
-  (let [total-len (reduce (fn [^long acc in] (if in (+ acc (alength ^bytes in)) acc)) 0 bas)
+  ^bytes [?bas]
+  (let [total-len (reduce (fn [^long acc in] (if in (+ acc (alength ^bytes in)) acc)) 0 ?bas)
         out       (byte-array total-len)]
-    (loop [idx 0, remaining bas]
+    (loop [idx 0, remaining ?bas]
       (if-let [[in] remaining]
         (if in
           (let [len (alength ^bytes in)]
@@ -61,22 +114,24 @@
 (let [ba0 (byte-array 0)]
   (defn ba-join
     "Returns byte[] concatenation of >= 0 ?byte[]s."
-    (^bytes [       ]        ba0)
-    (^bytes [ba     ] (or ba ba0))
-    (^bytes [ba1 ba2]
+    (^bytes [         ]         ba0)
+    (^bytes [?ba      ] (or ?ba ba0))
+    (^bytes [?ba1 ?ba2]
      (enc/cond
-       (nil? ba1) (or ba2 ba0)
-       (nil? ba2) (or ba1 ba0)
+       (nil? ?ba1) (or ?ba2 ba0)
+       (nil? ?ba2) (or ?ba1 ba0)
        :else
-       (let [l1  (alength ^bytes ba1)
-             l2  (alength ^bytes ba2)
+       (let [^bytes ba1 ?ba1
+             ^bytes ba2 ?ba2
+             l1  (alength ba1)
+             l2  (alength ba2)
              out (byte-array (+ l1 l2))]
          (System/arraycopy ba1 0 out 0  l1)
          (System/arraycopy ba2 0 out l1 l2)
          (do                     out))))
 
-    (^bytes [ba1 ba2 & more]
-     (ba-join (ba-join ba1 ba2) (ba-join* more)))))
+    (^bytes [?ba1 ?ba2 & more]
+     (ba-join (ba-join ?ba1 ?ba2) (ba-join* more)))))
 
 (comment (vec (let [ba byte-array] (ba-join nil (ba [0]) (ba [1 2]) nil (ba [3 4 5]) nil nil (ba [6])))))
 
@@ -133,7 +188,6 @@
   ^bytes [target-len ^bytes ba]
   (let [actual-len (alength ba)
         target-len (int target-len)]
-
     (enc/cond
       (== target-len actual-len) ba
       (<  target-len actual-len) (java.util.Arrays/copyOf ba target-len)
@@ -142,61 +196,12 @@
         (ex-info "Given byte[] too short"
           {:length {:actual actual-len, :target target-len}})))))
 
-;;;; To/from integers
-
-(do
-  (def ^:const ubyte-max  "Max unsigned byte: 255"          (-    Byte/MAX_VALUE    Byte/MIN_VALUE))
-  (def ^:const ushort-max "Max unsigned short: 65,535"      (-   Short/MAX_VALUE   Short/MIN_VALUE))
-  (def ^:const uint-max   "Max unsigned int: 4,294,967,295" (- Integer/MAX_VALUE Integer/MIN_VALUE))
-
-  (let [fail!
-        (fn [n target-type]
-          (throw
-            (ex-info "Numerical overflow"
-              {:target-type target-type
-               :given {:value n :type (type n)}})))]
-
-    (defn as-byte   ^long [^long n] (if (and (>= n    Byte/MIN_VALUE) (<= n    Byte/MAX_VALUE)) n (fail! n :byte)))
-    (defn as-short  ^long [^long n] (if (and (>= n   Short/MIN_VALUE) (<= n   Short/MAX_VALUE)) n (fail! n :short)))
-    (defn as-int    ^long [^long n] (if (and (>= n Integer/MIN_VALUE) (<= n Integer/MAX_VALUE)) n (fail! n :int)))
-
-    (defn as-ubyte  ^long [^long n] (if (and (>= n 0) (<= n ubyte-max))  n (fail! n :ubyte)))
-    (defn as-ushort ^long [^long n] (if (and (>= n 0) (<= n ushort-max)) n (fail! n :ushort)))
-    (defn as-uint   ^long [^long n] (if (and (>= n 0) (<= n uint-max))   n (fail! n :uint)))))
-
-(do
-  (defn to-ubyte        "ℤ[-128,127] -> ℕ[0,255]"   ^long [^long n] (as-ubyte  (- n    Byte/MIN_VALUE)))
-  (defn to-ushort   "ℤ[-32768 32767] -> ℕ[0,65535]" ^long [^long n] (as-ushort (- n   Short/MIN_VALUE)))
-  (defn to-uint                   "ℤ -> ℕ[0,max]"   ^long [^long n] (as-uint   (- n Integer/MIN_VALUE)))
-
-  (defn from-ubyte    "ℕ[0,255] -> ℤ[-128,127]"     ^long [^long n] (+ (as-ubyte  n)    Byte/MIN_VALUE))
-  (defn from-ushort "ℕ[0,65535] -> ℤ[-32768,32767]" ^long [^long n] (+ (as-ushort n)   Short/MIN_VALUE))
-  (defn from-uint     "ℕ[0,max] -> ℤ"               ^long [^long n] (+ (as-uint   n) Integer/MIN_VALUE))
-
-  (defn n-bytes->n-bits ^long [n-bytes] (*    (int n-bytes) 8))
-  (defn n-bits->n-bytes ^long [n-bits]  (quot (int n-bits)  8)))
-
-(do
-  (defn  byte->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate             1)] (.put      bb (byte  (as-byte  n))) (.array bb)))
-  (defn short->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate   Short/BYTES)] (.putShort bb (short (as-short n))) (.array bb)))
-  (defn   int->ba ^bytes [n] (let [bb (java.nio.ByteBuffer/allocate Integer/BYTES)] (.putInt   bb (int   (as-int   n))) (.array bb)))
-
-  (defn ba->byte  [^bytes ba] (aget ba 0))
-  (defn ba->short [^bytes ba] (let [bb (java.nio.ByteBuffer/allocate   Short/BYTES)] (.put bb ba) (.flip bb) (.getShort bb)))
-  (defn ba->int   [^bytes ba] (let [bb (java.nio.ByteBuffer/allocate Integer/BYTES)] (.put bb ba) (.flip bb) (.getInt   bb))))
-
-(comment
-  (enc/qb 1e6 ; [66.26 68.72 70.05]
-    (ba->byte  (byte->ba  25))
-    (ba->short (short->ba 25))
-    (ba->int   (int->ba   25))))
-
 ;;;; To/from strings
 ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
 
-(def ^:const utf8-str "ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ")
-(defn utf8-?ba->str [?ba] (when-let [ba ?ba] (enc/utf8-ba->str ba)))
-(defn ?str->utf8-ba [?s]  (when-let [s  ?s]  (enc/str->utf8-ba  s)))
+(def ^:const utf8-str "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ world")
+(defn ?utf8-ba->?str [?ba] (when-let [ba ?ba] (enc/utf8-ba->str ba)))
+(defn ?str->?utf8-ba [?s]  (when-let [s  ?s]  (enc/str->utf8-ba  s)))
 (declare ca->utf8-ba chars?)
 
 (defn ^:public as-ba
@@ -224,8 +229,8 @@
 (comment (vec (as-ba 16 "hello")))
 
 (defn as-?ba
-  ([target-len x] (when x (as-ba target-len x)))
-  ([           x] (when x (as-ba            x))))
+  ([target-len ?x] (when-let [x ?x] (as-ba target-len x)))
+  ([           ?x] (when-let [x ?x] (as-ba            x))))
 
 #_
 (defn as-str ^String [x]
@@ -267,7 +272,9 @@
         in   (DataInputStream. bais)]
     (in-fn in bais)))
 
-(defn parse-buffer-len [spec]
+(defn ^:no-doc parse-buffer-len
+  "Private, implementation detail."
+  [spec]
   (reduce
     (fn [^long acc in]
       (if in
@@ -300,26 +307,33 @@
 
 ;;;;
 
-(defn read-ba! ^bytes [^DataInput in len] (let [ba (byte-array len)] (.readFully in ba) ba))
-(defn read-ba         [^DataInput in len] (when (pos? ^long len) (read-ba! in len)))
-
 (defn write-dynamic-uint
   "Writes given unsigned int to `out` as 1-5 bytes.
   Returns the number of bytes written."
   ^long [^DataOutput out unsigned-int]
   (let [n (long unsigned-int)]
-    Byte/MIN_VALUE
     ;; [-128,124] used for [0,252] ; (from-ubyte 252)
     ;; [125, 127] used to indicate typed size prefix
     (enc/cond
-      (<= n        252) (do                      (.writeByte  out (from-ubyte  n)) 1) ; 1     byte  for [0,252]
-      (<= n  ubyte-max) (do (.writeByte out 125) (.writeByte  out (from-ubyte  n)) 2) ; 1+1=2 bytes for [0,255]
-      (<= n ushort-max) (do (.writeByte out 126) (.writeShort out (from-ushort n)) 3) ; 1+2=3 bytes for [0,65535]
-      (<= n   uint-max) (do (.writeByte out 127) (.writeInt   out (from-uint   n)) 5) ; 1+4=5 bytes for [0,4294967295]
+      (<= n          252) (do                      (.writeByte  out (from-ubyte  n)) 1) ; 1     byte  for [0,252]
+      (<= n  range-ubyte) (do (.writeByte out 125) (.writeByte  out (from-ubyte  n)) 2) ; 1+1=2 bytes for [0,255]
+      (<= n range-ushort) (do (.writeByte out 126) (.writeShort out (from-ushort n)) 3) ; 1+2=3 bytes for [0,65535]
+      (<= n   range-uint) (do (.writeByte out 127) (.writeInt   out (from-uint   n)) 5) ; 1+4=5 bytes for [0,4294967295]
       :else
       (throw
-        (ex-info "Dynamic unsigned integer exceeds max"
-          {:value n, :max uint-max})))))
+        (ex-info "Dynamic unsigned int exceeds max"
+          {:value n, :max range-uint})))))
+
+(defn read-dynamic-uint
+  "Reads 1-5 bytes from `in`, and returns unsigned int."
+  ^long [^DataInput in]
+  (let [b1 (.readByte in)]
+    (case b1
+      127 (to-uint   (.readInt   in)) ; 1+4=5 bytes for [0,4294967295]
+      126 (to-ushort (.readShort in)) ; 1+2=3 bytes for [0,65535]
+      125 (to-ubyte  (.readByte  in)) ; 1+1=2 bytes for [0,255]
+      (do (to-ubyte              b1)) ; 1     byte  for [0,252]
+      )))
 
 (defn write-dynamic-ba
   "Writes possible byte[] `?ba` to `out` as 1-5 bytes.
@@ -333,35 +347,16 @@
 
     (write-dynamic-uint out 0)))
 
-(defn write-dynamic-str
-  ^long [^DataOutput out ?s] (write-dynamic-ba out (?str->utf8-ba ?s)))
+(defn read-ba ^bytes [^DataInput in len] (let [ba (byte-array len)] (.readFully in ba) ba))
+(defn read-?ba       [^DataInput in len] (when (pos? ^long len) (read-ba in len)))
 
-(defn read-dynamic-uint
-  "Reads 1-5 bytes from `in`, and returns unsigned int."
-  ^long [^DataInput in]
-  (let [b1 (.readByte in)]
-    (case b1
-      127 (to-uint   (.readInt   in)) ; 1+4=5 bytes for [0,4294967295]
-      126 (to-ushort (.readShort in)) ; 1+2=3 bytes for [0,65535]
-      125 (to-ubyte  (.readByte  in)) ; 1+1=2 bytes for [0,255]
-      (do (to-ubyte              b1)) ; 1     byte  for [0,252]
-      )))
-
-(defn skip-dynamic-ba         [^DataInput in] (.skipBytes in (read-dynamic-uint in)))
-(defn read-dynamic-ba         [^DataInput in] (read-ba    in (read-dynamic-uint in)))
-(defn read-dynamic-ba! ^bytes [^DataInput in] (read-ba!   in (read-dynamic-uint in)))
-(defn read-dynamic-ba*        [^DataInputStream in]
+(defn skip-dynamic-ba        [^DataInput in] (.skipBytes in (read-dynamic-uint in)))
+(defn read-dynamic-ba ^bytes [^DataInput in] (read-ba    in (read-dynamic-uint in)))
+(defn read-dynamic-?ba       [^DataInput in] (read-?ba   in (read-dynamic-uint in)))
+(defn read-dynamic-?ba*      [^DataInputStream in]
   (let [n0 (.available in)]
-    [(read-dynamic-ba in) (- n0 (.available in))]))
+    [(read-dynamic-?ba in) (- n0 (.available in))]))
 
-(defn read-dynamic-str          [^DataInput in]     (utf8-?ba->str (read-dynamic-ba  in)))
-(defn read-dynamic-str! ^String [^DataInput in] (enc/utf8-ba->str  (read-dynamic-ba! in)))
-
-(do
-  (defn write-ubyte  "Writes 1 byte"  [^DataOutput out n] (.writeByte  out (from-ubyte  n)))
-  (defn write-ushort "Writes 2 bytes" [^DataOutput out n] (.writeShort out (from-ushort n)))
-  (defn write-uint   "Writes 4 bytes" [^DataOutput out n] (.writeInt   out (from-uint   n)))
-
-  (defn read-ubyte  "Reads 1 byte"  ^long [^DataInput in] (to-ubyte  (.readByte  in)))
-  (defn read-ushort "Reads 2 bytes" ^long [^DataInput in] (to-ushort (.readShort in)))
-  (defn read-uint   "Reads 4 bytes" ^long [^DataInput in] (to-uint   (.readInt   in))))
+(defn write-dynamic-str   ^long [^DataOutput out ?s] (write-dynamic-ba out (?str->?utf8-ba ?s)))
+(defn  read-dynamic-str ^String [^DataInput  in]     (utf8-ba->str   (read-dynamic-ba  in)))
+(defn  read-dynamic-?str        [^DataInput  in]     (?utf8-ba->?str (read-dynamic-?ba in)))
