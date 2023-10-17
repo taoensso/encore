@@ -854,88 +854,92 @@
 (comment (caught-error-data (/ 5 0)))
 
 (declare submap? rsome str-contains? re-pattern?)
-(defn ^:no-doc -matching-error
-  ;; Ref. CLJ-1293
-  ([  err] err)
-  ([c err]
+(defn matching-error
+  "Given an error (e.g. Throwable) and matching criteria.
+  Returns the error if it matches all criteria, otherwise returns nil.
+
+  `err-type` may be:
+    - A predicate function, (fn match? [x]) -> bool
+    - A class (e.g. `ArithmeticException`, `AssertionError`, etc.)
+    - `:all`     => any    platform error (Throwable or js/Error, etc.)
+    - `:common`  => common platform error (Exception or js/Error)
+    - `:ex-info` => a `ExceptionInfo` as created by `ex-info`
+
+  `pattern` may be:
+    - A string or Regex against which `ex-message` must match
+    - A map             against which `ex-data`    must match using `submap?`
+    - A set of `patterns` as above, at least one of which must match
+
+  When an error with (nested) causes doesn't match, a match will be attempted
+  against its (nested) causes.
+
+  Low-level util, see also `throws`, `throws?`."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ([         err] err)
+  ([err-type err]
    (when-let [match?
-              (if (fn? c) ; Treat as pred
-                (c err)
+              (if (fn? err-type) ; Treat as pred
+                (err-type err)
                 #?(:clj
-                   (case c
-                     (:all        :any) (instance? Throwable                  err)
+                   (case err-type
+                     (:all    :any)     (instance? Throwable                  err)
                      (:common :default) (instance? Exception                  err)
                      :ex-info           (instance? clojure.lang.ExceptionInfo err)
-                     (do                (instance? c                          err)))
+                     (do                (instance? err-type                   err)))
 
                    :cljs
-                   (case c
+                   (case err-type
                      (:all        :any) (some?                   err)
                      (:common :default) (instance? js/Error      err)
                      :ex-info           (instance? ExceptionInfo err)
-                     (do                (instance? c             err)))))]
+                     (do                (instance? err-type      err)))))]
      err))
 
-  ([c pattern err]
+  ([err-type err-pattern err]
    (if-let [match?
             (and
-              (-matching-error c err)
+              (matching-error err-type err)
               (cond
-                (nil?        pattern) true
-                (set?        pattern) (rsome #(-matching-error c % err) pattern)
-                (string?     pattern) (str-contains?   (ex-message err) pattern)
-                (re-pattern? pattern) (re-find pattern (ex-message err))
-                (map?        pattern)
-                (if-let [data (ex-data err)]
-                  (submap? data pattern)
-                  false)
-
+                (nil?        err-pattern) true
+                (set?        err-pattern) (rsome #(matching-error err-type % err) err-pattern)
+                (string?     err-pattern) (str-contains?       (ex-message err)   err-pattern)
+                (re-pattern? err-pattern) (re-find err-pattern (ex-message err))
+                (map?        err-pattern) (when-let [data (ex-data err)] (submap? data err-pattern))
                 :else
-                (unexpected-arg! pattern
-                  {:context  `-matching-error
-                   :expected '#{set string re-pattern map}})))]
+                (unexpected-arg! err-pattern
+                  {:context  `matching-error
+                   :expected '#{set string re-err-pattern map}})))]
      err
-     (if-let [cause (ex-cause err)]
-       (-matching-error c pattern cause) ; Try match cause
-       false))))
+     ;; Try match cause
+     (when-let [cause (ex-cause err)]
+       (matching-error err-type err-pattern cause)))))
 
 (comment :see-tests)
 
 #?(:clj
    (defmacro throws
-     "Like `throws?`, but returns ?matching-error instead of true/false."
+     "Evals `form` and if it throws an error that matches given criteria using
+     `matching-error`, returns the matching error. Otherwise returns nil.
+
+     See also `matching-error`, `throws?`."
      {:added "v3.31.0 (2022-10-27)"}
-     ([          form] `                             (catching (do ~form nil) ~'t ~'t))
-     ([c         form] `(-matching-error ~c          (catching (do ~form nil) ~'t ~'t)))
-     ([c pattern form] `(-matching-error ~c ~pattern (catching (do ~form nil) ~'t ~'t)))))
+     ([                     form] `                                       (catching (do ~form nil) ~'t ~'t))
+     ([err-type             form] `(matching-error ~err-type              (catching (do ~form nil) ~'t ~'t)))
+     ([err-type err-pattern form] `(matching-error ~err-type ~err-pattern (catching (do ~form nil) ~'t ~'t)))))
 
 #?(:clj
    (defmacro throws?
-     "Evals `form` and returns true iff it throws an error that matches given
-     criteria:
-
-       - `c` may be:
-         - A predicate function, (fn match? [x]) -> bool
-         - A class (e.g. ArithmeticException, AssertionError, etc.)
-         - `:all`    => any    platform error (Throwable or js/Error, etc.)
-         - `:common` => common platform error (Exception or js/Error)
-
-       - `pattern` may be:
-         - A string or Regex against which `ex-message` will be matched.
-         - A map             against which `ex-data`    will be matched.
-
-     When an error with (nested) causes doesn't match, a match will be attempted
-     against its (nested) causes.
+     "Evals `form` and if it throws an error that matches given criteria using
+     `matching-error`, returns true. Otherwise returns false.
 
      Useful for unit tests, e.g.:
        (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
 
-     See also `throws`."
-
+     See also `matching-error`, `throws`."
      {:added "v3.31.0 (2022-10-27)"}
-     ([          form] `(boolean (throws             ~form)))
-     ([c         form] `(boolean (throws ~c          ~form)))
-     ([c pattern form] `(boolean (throws ~c ~pattern ~form)))))
+     ([                     form] `(boolean (throws                        ~form)))
+     ([err-type             form] `(boolean (throws ~err-type              ~form)))
+     ([err-type err-pattern form] `(boolean (throws ~err-type ~err-pattern ~form)))))
 
 (comment :see-tests)
 
@@ -6432,7 +6436,12 @@
     {:added      "v3.66.0 (2023-08-23)"
      :deprecated "v3.68.0 (2023-09-25)"}
     ([arg        ] (unexpected-arg! arg nil))
-    ([arg details] (unexpected-arg! arg details))))
+    ([arg details] (unexpected-arg! arg details)))
+
+  (def* ^:no-doc -matching-error
+    "Prefer `matching-error`."
+    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    matching-error))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API

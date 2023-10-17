@@ -77,13 +77,13 @@
 ;;;; Errors
 
 (deftest _matching-error
-  [        (is (true?  (boolean (enc/-matching-error                                    (enc/catching (/ 4 0) t t)))))
-   #?(:clj (is (true?  (boolean (enc/-matching-error :default         "Divide by zero"  (enc/catching (/ 4 0) t t))))))
-   #?(:clj (is (true?  (boolean (enc/-matching-error :default #{"Foo" "Divide by zero"} (enc/catching (/ 4 0) t t))))))
-           (is (false? (boolean (enc/-matching-error :default #"Nope"                   (enc/catching (/ 4 0) t t)))))
-           (is (true?  (boolean (enc/-matching-error :default #"Test"                   (ex-info "Test" {:a :b})))))
-           (is (true?  (boolean (enc/-matching-error :default {:a :b}                   (ex-info "Test" {:a :b :c :d})))))
-           (is (true?  (boolean (enc/-matching-error :ex-info {:a :b}                   (ex-info "Dummy" {} (ex-info "Test" {:a :b}))))))])
+  [(is (enc/error? (enc/matching-error                  (enc/catching ("")                       t t))))
+   (is (enc/error? (enc/matching-error :common  "Foo"   (enc/catching (throw (ex-info "Foo" {})) t t))))
+   (is (nil?       (enc/matching-error :common  "Foo"   (enc/catching (throw (ex-info "Bar" {})) t t))))
+   (is (enc/error? (enc/matching-error :common  {:a :b} (ex-info "Test"  {:a :b :c :d}))))
+   (is (enc/error? (enc/matching-error :ex-info {:a :b} (ex-info "Dummy" {} (ex-info "Test" {:a :b})))))
+   (is (enc/error? (enc/matching-error :default #{"foobar" "not a function" "cannot be cast"}
+                     (enc/catching ("") t t))))])
 
 (deftest _throws?
   (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
