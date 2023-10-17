@@ -752,6 +752,16 @@
         [(is (=  (vec (bytes/ba->len    5 (bytes/as-ba [1 2 3]))) [1 2 3 0 0]))
          (is (-> (vec (bytes/ba->sublen 5 (bytes/as-ba [1 2 3]))) enc/throws?))])
 
+      (testing "ba="
+        [(is (true?  (bytes/ba= nil              nil)))
+         (is (true?  (bytes/ba= (byte-array 0)   (byte-array 0))))
+         (is (true?  (bytes/ba= (byte-array 0)   nil)))
+         (is (true?  (bytes/ba= nil              (byte-array 0))))
+         (is (true?  (bytes/ba= (byte-array [1]) (byte-array [1]))))
+         (is (false? (bytes/ba= (byte-array [1]) nil)))
+         (is (false? (bytes/ba= (byte-array [1]) (byte-array 0))))
+         (is (false? (bytes/ba= (byte-array [1]) (byte-array [2]))))])
+
       (testing "ba-join" (is (= (vec (bytes/ba-join nil (bytes/as-ba [0]) (bytes/as-ba [1 2]) nil (bytes/as-ba [3 4 5]) nil nil (bytes/as-ba [6]))) [0 1 2 3 4 5 6])))
       (testing "ba-parts"
         (let [ba (bytes/ba-join (bytes/as-ba [1 2]) (bytes/as-ba [3]) (bytes/as-ba [5 6]) (bytes/as-ba [7 8 9]))]

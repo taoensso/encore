@@ -31,6 +31,18 @@
 (def ^:private ^:const utf8-str "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ")
 (defn ba-len ^long [?ba] (if ?ba (alength ^bytes ?ba) 0))
 
+(defn ba= [?ba1 ?ba2]
+  (if-let [ba1 ?ba1]
+    (if-let [ba2 ?ba2]
+      (java.util.Arrays/equals ^bytes ba1 ^bytes ba2)
+      (zero? (alength ^bytes ba1)))
+
+    (if-let [ba2 ?ba2]
+      (zero? (alength ^bytes ba2))
+      true)))
+
+(comment :see-tests)
+
 (defn ba-join*
   "Returns byte[] concatenation of >= 0 ?byte[]s."
   ^bytes [bas]

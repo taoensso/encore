@@ -4904,22 +4904,26 @@
 ;;;; Async
 
 #?(:clj
-   (let [ap   (fn [] (.availableProcessors (Runtime/getRuntime)))
-         perc (fn [n] (max 1 (long (Math/floor (* (/ (double (ap)) 100.0) (double n))))))]
+   (let [ap    (fn []  (.availableProcessors (Runtime/getRuntime)))
+         perc  (fn [n] (max 1 (long (Math/floor (* (/ (double (ap)) 100.0) (double n))))))
+         ratio (fn [r] (max 1 (long (Math/floor (*    (double (ap)) (double r))))))]
 
-     (defn- get-num-threads [n-threads]
+     (defn- get-num-threads ^long [n-threads]
        (if (vector? n-threads)
          (let [[kind n] n-threads]
            (case kind
-             :num  (have pos-int? n)
-             :perc (perc          n)
+             :num   (long (have pos-int? n))
+             :perc  (long (perc          n))
+             :ratio (long (ratio         n))
              (unexpected-arg! kind
                {:context  `get-num-threads
-                :param    'num-threads
-                :expected #{:num :perc}})))
-         (have pos-int? n-threads)))))
+                :param        'num-threads
+                :expected '#{<pos-int> [:perc <percent>] [:ratio <ratio>]}})))
+         (long (have pos-int? n-threads))))))
 
-(comment (get-num-threads [:perc 90]))
+(comment
+  (get-num-threads [:perc   90])
+  (get-num-threads [:ratio 0.9]))
 
 #?(:clj
    (defn future-pool
@@ -4932,7 +4936,7 @@
 
      ;; TODO Optionally use an independent pool (=> need for shutdown control)
      [n-threads]
-     (let [n    (long (get-num-threads n-threads)) ; Undocumented special vec support
+     (let [n    (get-num-threads n-threads) ; Undocumented special vec support
            s    (java.util.concurrent.Semaphore. n)
            msecs java.util.concurrent.TimeUnit/MILLISECONDS
            fp-call
