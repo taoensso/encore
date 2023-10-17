@@ -119,7 +119,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 69 0])
+(def encore-version [3 70 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -874,7 +874,7 @@
   against its (nested) causes.
 
   Low-level util, see also `throws`, `throws?`."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.70.0 (2023-10-17)"}
   ([         err] err)
   ([err-type err]
    (when-let [match?
@@ -6440,7 +6440,7 @@
 
   (def* ^:no-doc -matching-error
     "Prefer `matching-error`."
-    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "v3.70.0 (2023-10-17)"}
     matching-error))
 
 (deprecated
