@@ -4904,6 +4904,17 @@
 ;;;; Async
 
 #?(:clj
+   (defn virtual-executor
+     "Experimental, subject to change without notice!
+     Returns new virtual `java.util.concurrent.ThreadPerTaskExecutor` when
+     possible (JVM 21+), otherwise returns nil."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     []
+     (compile-if (Thread/ofVirtual)
+       (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)
+       nil)))
+
+#?(:clj
    (let [ap    (fn []  (.availableProcessors (Runtime/getRuntime)))
          perc  (fn [n] (max 1 (long (Math/floor (* (/ (double (ap)) 100.0) (double n))))))
          ratio (fn [r] (max 1 (long (Math/floor (*    (double (ap)) (double r))))))]
@@ -4926,15 +4937,137 @@
   (get-num-threads [:ratio 0.9]))
 
 #?(:clj
+   (defn pool-executor
+     "Experimental, subject to change without notice!
+     Returns new `java.util.concurrent.ThreadPoolExecutor` with given opts."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     ^java.util.concurrent.ThreadPoolExecutor
+     [{:keys [n-threads n-min-threads n-max-threads thread-name-prefix
+              daemon-threads? keep-alive-msecs queue-type queue-size]
+       :or
+       {n-threads          (+ 2 (get-num-threads [:ratio 1.0]))
+        thread-name-prefix "com.taoensso/encore-pool-"
+        daemon-threads?    true
+        keep-alive-msecs   60000
+        queue-type         :linked}}]
+
+     (let [n-min-threads    (int (or n-min-threads n-threads))
+           n-max-threads    (int (or n-max-threads n-threads))
+           keep-alive-msecs (int keep-alive-msecs)
+           queue
+           (case queue-type
+             :array (java.util.concurrent.ArrayBlockingQueue. (int queue-size))
+             :linked
+             (if queue-size
+               (java.util.concurrent.LinkedBlockingQueue. (int queue-size))
+               (java.util.concurrent.LinkedBlockingQueue.))
+             (unexpected-arg! queue-type
+               {:expected #{:array :linked}
+                :context `thread-pool}))
+
+           factory
+           (let [idx* (java.util.concurrent.atomic.AtomicInteger. 0)]
+             (reify java.util.concurrent.ThreadFactory
+               (newThread [_ runnable]
+                 (let [idx (.incrementAndGet idx*)
+                       t   (Thread. runnable (str thread-name-prefix idx))]
+                   (when daemon-threads?
+                     (.setDaemon t daemon-threads?))
+                   t))))]
+
+       (java.util.concurrent.ThreadPoolExecutor.
+         (int n-min-threads)
+         (int n-max-threads)
+         (int keep-alive-msecs)
+         java.util.concurrent.TimeUnit/MILLISECONDS
+         ^java.util.concurrent.BlockingQueue queue
+         ^java.util.concurrent.ThreadFactory factory))))
+
+(comment (pool-executor {}))
+
+#?(:clj
+   (def* ^:no-doc ^:private default-executor_
+     "Default `java.util.concurrent.ExecutorService`."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     (delay (or (virtual-executor) (pool-executor {})))))
+
+#?(:clj
+   (defn ^:no-doc binding-conveyor-fn
+     "Private, please don't use this."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     [f]
+     (let [frame (clojure.lang.Var/cloneThreadBindingFrame)]
+       (fn
+         ([            ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f))
+         ([x           ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x))
+         ([x y         ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x y))
+         ([x y z       ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x y z) )
+         ([x y z & args] (clojure.lang.Var/resetThreadBindingFrame frame) (apply f x y z args))))))
+
+#?(:clj
+   (defn future-call*
+     "Experimental, subject to change without notice!
+     Like `future-call` but supports use of given custom
+     `java.util.concurrent.ExecutorService`.
+
+     Will default to using JVM 21+ virtual threads when possible,
+     otherwise an unbounded fixed daemon thread pool.
+
+     See also `future`, `virtual-executor`, `pool-executor`."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     ([                 f] (future-call* @default-executor_ f))
+     ([executor-service f]
+      (let [f   (binding-conveyor-fn f)
+            fut (.submit ^java.util.concurrent.ExecutorService executor-service
+                  ^Callable f)]
+
+        (reify
+          clojure.lang.IPending (isRealized [_] (.isDone fut))
+          clojure.lang.IDeref   (deref      [_] (.get    fut))
+          clojure.lang.IBlockingDeref
+          (deref [_ timeout-msecs timeout-val]
+            (try
+              (.get fut timeout-msecs java.util.concurrent.TimeUnit/MILLISECONDS)
+              (catch java.util.concurrent.TimeoutException _ timeout-val)))
+
+          java.util.concurrent.Future
+          (isDone      [_] (.isDone      fut))
+          (isCancelled [_] (.isCancelled fut))
+          (get         [_             ] (.get    fut))
+          (get         [_ timeout unit] (.get    fut timeout unit))
+          (cancel      [_ interrupt?  ] (.cancel fut interrupt?)))))))
+
+#?(:clj
+   (defmacro future*
+     "Experimental, subject to change without notice!
+     Like `future` but supports use of given custom
+     `java.util.concurrent.ExecutorService`.
+
+     Will default to using JVM 21+ virtual threads when possible,
+     otherwise an unbounded fixed daemon thread pool.
+
+     See also `future-call`, `virtual-executor`, `pool-executor`."
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     ([                 form] `(future-call*                   (^{:once true} fn* [] ~form)))
+     ([executor-service form] `(future-call* ~executor-service (^{:once true} fn* [] ~form)))))
+
+(comment @(future* (do (println "running") (Thread/sleep 2000) :done)))
+
+#?(:clj
    (defn future-pool
      "Returns a simple semaphore-limited wrapper of Clojure's standard `future`:
-       (fn
-         [f] - Blocks to acquire a future, then executes (f) on that future.
-         [ ] - Blocks to acquire all futures, then immediately releases them.
-               Useful for blocking till all outstanding work completes.
-     Timeout variants are also provided."
+       (fn future-pool-fn
+         ([f] [timeout-msecs timeout-val f] [] [timeout-msecs timeout-val]))
 
-     ;; TODO Optionally use an independent pool (=> need for shutdown control)
+       Arities of returned function:
+         [f]  - Blocks to acquire a   future,  then executes (f) on that future.
+         [ ]  - Blocks to acquire ALL futures, then immediately releases them.
+                Useful for blocking till all outstanding work completes.
+
+         [timeout-msecs timeout-val f] - Variant of [f] with timeout
+         [timeout-msecs timeout-val  ] - Variant of [ ] with timeout
+
+     See also `future*` for fully custom pools, etc."
      [n-threads]
      (let [n    (get-num-threads n-threads) ; Undocumented special vec support
            s    (java.util.concurrent.Semaphore. n)
@@ -4953,13 +5086,13 @@
          ([ ] (.acquire s n) (.release s n) true)
          ([f] (.acquire s) (fp-call f))
 
-         ([^long timeout-ms timeout-val]
-          (if (.tryAcquire s n timeout-ms msecs)
-            (do (.release s n) true)
+         ([^long timeout-msecs timeout-val]
+          (if (.tryAcquire s n timeout-msecs msecs)
+            (do  (.release s n) true)
             timeout-val))
 
-         ([^long timeout-ms timeout-val f]
-          (if (.tryAcquire s timeout-ms msecs)
+         ([^long timeout-msecs timeout-val f]
+          (if (.tryAcquire s timeout-msecs msecs)
             (fp-call f)
             timeout-val))))))
 

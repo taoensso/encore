@@ -671,6 +671,21 @@
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
 
+;;;; Futures
+
+#?(:clj
+   (deftest _futures
+     (vec
+      (for [ex [(enc/virtual-executor) (enc/pool-executor {})] :when ex]
+        [(is (= "foo"     (deref (enc/future* ex (do                     "foo")))))
+         (is (= "foo"     (deref (enc/future* ex (do (Thread/sleep 1000) "foo")))))
+         (is (= "foo"     (deref (enc/future* ex (do (Thread/sleep 1000) "foo")) 4000 "timeout")))
+         (is (= "timeout" (deref (enc/future* ex (do (Thread/sleep 1000) "foo")) 100  "timeout")))
+         (is (= false (realized? (enc/future* ex (do (Thread/sleep 1000) "foo")))))
+         (let [f (enc/future* ex (do (Thread/sleep 1000) "foo"))]
+           (is (= false (realized? (do    f))))
+           (is (= true  (realized? (do @f f)))))]))))
+
 ;;;; LightAtom
 
 (deftest _light-atom
