@@ -4182,7 +4182,7 @@
 
 #?(:clj
    (defmacro require-telemere-if-present
-     "Experimental, subject to change!
+     "Experimental, subject to change without notice!
      Requires Telemere if it's present, otherwise noops.
      For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file."
      {:added "v3.68.0 (2023-09-25)"}
@@ -4194,7 +4194,7 @@
 
 #?(:clj
    (defmacro signal!
-     "Experimental, subject to change!
+     "Experimental, subject to change without notice!
      Generates Telemere signal if Telemere is present, otherwise noops.
      Telemere should be required by the calling namespace,
      see `require-telemere-if-present`.
@@ -5021,7 +5021,7 @@
 
 #?(:clj
    (defn runner
-     "Experimental, subject to chang without notice!!
+     "Experimental, subject to change without notice!!
      Returns a new stateful (fn runner ([]) ([f])) such that:
       (runner f) => Runner should execute given nullary fn according to runner opts.
                     Returns:
@@ -5077,8 +5077,8 @@
                          (loop []
                            (if-let [f (.poll abq 2000 java.util.concurrent.TimeUnit/MILLISECONDS)]
                              ;; Recur unconditionally to drain abq even when stopped
-                             (do (catching (f)) (recur))
-                             (when-not @stopped?_   (recur)))))
+                             (do (catching (f))   (recur))
+                             (when-not @stopped?_ (recur)))))
 
                        thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                        thread (Thread. wfn thread-name)]
