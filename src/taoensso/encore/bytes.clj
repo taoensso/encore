@@ -366,13 +366,13 @@
 
 (defn bitset->ba
   "Returns byte[] containing the bits in given `java.util.BitSet`."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.72.0 (2023-10-24)"}
   ^bytes [^BitSet bs] (.toByteArray bs))
 
 (defn ba->bitset
   "Returns new `java.util.BitSet` containing the bits in given byte[]."
   ;; Strange that Java doesn't have a built-in for this
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.72.0 (2023-10-24)"}
   ^BitSet [^bytes ba]
   (let [bs (BitSet. (* (alength ba) 8))]
     (areduce ba byte-idx _ bs
@@ -386,7 +386,7 @@
 (defn reduce-bitset
   "Reduces given `java.util.BitSet`, calling (rf <acc> <bit-idx>) for the int
   index of each bit in BitSet."
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.72.0 (2023-10-24)"}
   [rf init ^BitSet bs]
   (loop [bit-idx (.nextSetBit bs 0)
          acc     init]
@@ -404,7 +404,7 @@
   returns a minimal serialized byte[] that can be deserialized with `thaw-set`:
     (thaw-set {0 :el0 1 :el1 2 :el2}
       (freeze-set {:el0 0 :el1 1 :el2 2} #{:el0 :el2})) => #{:el0 :el2}"
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.72.0 (2023-10-24)"}
   [{:keys [freeze/skip-unknown?] :as bit-schema} els]
   (when-not (or (empty? els) (empty? bit-schema))
     (let [bs (java.util.BitSet.)]
@@ -428,7 +428,7 @@
   bit schema, returns the set of elements encoded in byte[]:
     (thaw-set {0 :el0 1 :el1 2 :el2}
       (freeze-set {:el0 0 :el1 1 :el2 2} #{:el0 :el2})) => #{:el0 :el2}"
-  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  {:added "v3.72.0 (2023-10-24)"}
   [{:keys [thaw/skip-unknown?] :as bit-schema} ?ba]
   (when-let [^bytes ba ?ba]
     (when-not (empty? bit-schema)

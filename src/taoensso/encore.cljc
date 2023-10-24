@@ -119,7 +119,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 71 0])
+(def encore-version [3 72 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -4908,7 +4908,7 @@
      "Experimental, subject to change without notice!
      Returns new virtual `java.util.concurrent.ThreadPerTaskExecutor` when
      possible (JVM 21+), otherwise returns nil."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      []
      (compile-if (Thread/ofVirtual)
        (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)
@@ -4940,7 +4940,7 @@
    (defn pool-executor
      "Experimental, subject to change without notice!
      Returns new `java.util.concurrent.ThreadPoolExecutor` with given opts."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      ^java.util.concurrent.ThreadPoolExecutor
      [{:keys [n-threads n-min-threads n-max-threads thread-name-prefix
               daemon-threads? keep-alive-msecs queue-type queue-size]
@@ -4988,13 +4988,13 @@
 #?(:clj
    (def* ^:no-doc ^:private default-executor_
      "Default `java.util.concurrent.ExecutorService`."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      (delay (or (virtual-executor) (pool-executor {})))))
 
 #?(:clj
    (defn ^:no-doc binding-conveyor-fn
      "Private, please don't use this."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      [f]
      (let [frame (clojure.lang.Var/cloneThreadBindingFrame)]
        (fn
@@ -5014,7 +5014,7 @@
      otherwise an unbounded fixed daemon thread pool.
 
      See also `future`, `virtual-executor`, `pool-executor`."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      ([                 f] (future-call* @default-executor_ f))
      ([executor-service f]
       (let [f   (binding-conveyor-fn f)
@@ -5047,7 +5047,7 @@
      otherwise an unbounded fixed daemon thread pool.
 
      See also `future-call`, `virtual-executor`, `pool-executor`."
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.72.0 (2023-10-24)"}
      ([                 form] `(future-call*                   (^{:once true} fn* [] ~form)))
      ([executor-service form] `(future-call* ~executor-service (^{:once true} fn* [] ~form)))))
 
