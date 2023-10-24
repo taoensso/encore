@@ -6,6 +6,7 @@
   (:require [taoensso.encore :as enc :refer [have have?]])
   (:import
    [java.nio.charset StandardCharsets]
+   [java.util BitSet]
    [java.io
     DataInput  DataInputStream
     DataOutput DataOutputStream
@@ -360,3 +361,91 @@
 (defn write-dynamic-str   ^long [^DataOutput out ?s] (write-dynamic-ba out (?str->?utf8-ba ?s)))
 (defn  read-dynamic-str ^String [^DataInput  in]     (utf8-ba->str   (read-dynamic-ba  in)))
 (defn  read-dynamic-?str        [^DataInput  in]     (?utf8-ba->?str (read-dynamic-?ba in)))
+
+;;;; `BitSet` utils
+
+(defn bitset->ba
+  "Returns byte[] containing the bits in given `java.util.BitSet`."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ^bytes [^BitSet bs] (.toByteArray bs))
+
+(defn ba->bitset
+  "Returns new `java.util.BitSet` containing the bits in given byte[]."
+  ;; Strange that Java doesn't have a built-in for this
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  ^BitSet [^bytes ba]
+  (let [bs (BitSet. (* (alength ba) 8))]
+    (areduce ba byte-idx _ bs
+      (dotimes [bit-idx 8]
+        (when (bit-test (aget ba byte-idx) bit-idx)
+          (.set bs (+ (* byte-idx 8) bit-idx)))))
+    bs))
+
+(comment (ba->bitset (bitset->ba (doto (BitSet.) (.set 0) (.set 3) (.set 5)))))
+
+(defn reduce-bitset
+  "Reduces given `java.util.BitSet`, calling (rf <acc> <bit-idx>) for the int
+  index of each bit in BitSet."
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [rf init ^BitSet bs]
+  (loop [bit-idx (.nextSetBit bs 0)
+         acc     init]
+    (if (>= bit-idx 0)
+      (let [result (rf acc bit-idx)]
+        (if (reduced? result)
+          (do                                  @result)
+          (recur (.nextSetBit bs (inc bit-idx)) result)))
+      acc)))
+
+(comment (reduce-bitset conj #{} (doto (BitSet.) (.set 0) (.set 3) (.set 5))))
+
+(defn freeze-set
+  "Given a coll of elements `els` and {<element> <unique-bit-idx>} bit schema,
+  returns a minimal serialized byte[] that can be deserialized with `thaw-set`:
+    (thaw-set {0 :el0 1 :el1 2 :el2}
+      (freeze-set {:el0 0 :el1 1 :el2 2} #{:el0 :el2})) => #{:el0 :el2}"
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [{:keys [freeze/skip-unknown?] :as bit-schema} els]
+  (when-not (or (empty? els) (empty? bit-schema))
+    (let [bs (java.util.BitSet.)]
+      (run!
+        (fn [el]
+          (if-let [bit-idx (get bit-schema el)]
+            (.set bs (int bit-idx))
+            (if skip-unknown?
+              nil
+              (throw
+                (ex-info "Failed to freeze set (encountered element not in bit schema)"
+                  {:element    {:type (type el) :value el}
+                   :bit-schema bit-schema})))))
+        els)
+      (.toByteArray bs))))
+
+(comment (vec (freeze-set {:el0 0 :el1 1 :el2 2} [:el0 :el1 :el1])))
+
+(defn thaw-set
+  "Given serialized byte[] output from `freeze-set` and {<bit-idx> <element>}
+  bit schema, returns the set of elements encoded in byte[]:
+    (thaw-set {0 :el0 1 :el1 2 :el2}
+      (freeze-set {:el0 0 :el1 1 :el2 2} #{:el0 :el2})) => #{:el0 :el2}"
+  {:added "vX.Y.Z (YYYY-MM-DD)"}
+  [{:keys [thaw/skip-unknown?] :as bit-schema} ?ba]
+  (when-let [^bytes ba ?ba]
+    (when-not (empty? bit-schema)
+      (let [bs (ba->bitset ba)]
+        (persistent!
+          (reduce-bitset
+            (fn [els bit-idx]
+              (if-let [el (get bit-schema bit-idx)]
+                (conj! els el)
+                (if skip-unknown?
+                  els
+                  (throw
+                    (ex-info "Failed to thaw set (encountered index not in bit schema)"
+                      {:bit-index  bit-idx
+                       :bit-schema bit-schema})))))
+            (transient #{}) bs))))))
+
+(comment
+  (thaw-set {0 :el0 1 :el1 2 :el2}
+    (freeze-set {:el0 0 :el1 1 :el2 2} #{:el0 :el2})))

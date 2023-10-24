@@ -884,7 +884,23 @@
                   x3 (bytes/read-dynamic-?str din)
                   x4 (bytes/read-dynamic-str  din)
                   x5 (bytes/read-dynamic-?str din)]
-              (is (= [x1 x2 x3 x4 x5] [nil "" nil "" bytes/utf8-str]))))))]))
+              (is (= [x1 x2 x3 x4 x5] [nil "" nil "" bytes/utf8-str]))))))
+
+      (testing "bitsets"
+        (let [sf {:el0 0, :el1 1, :el2 2}
+              st {0 :el0, 1 :el1, 2 :el2}]
+
+          [(is (= (bytes/thaw-set st (bytes/freeze-set sf #{              })) nil))
+           (is (= (bytes/thaw-set st (bytes/freeze-set sf  [              ])) nil))
+           (is (= (bytes/thaw-set st (bytes/freeze-set sf #{:el0          })) #{:el0}))
+           (is (= (bytes/thaw-set st (bytes/freeze-set sf  [:el0          ])) #{:el0}))
+           (is (= (bytes/thaw-set st (bytes/freeze-set sf  [:el0 :el1 :el0])) #{:el0 :el1}))
+           (is (->                   (bytes/freeze-set sf  [:el1 :el3     ])  enc/throws?))
+
+           (let [sf (assoc sf :freeze/skip-unknown? true)] (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))
+           (let [sf (assoc sf :el3 3)]                     (is (-> (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) enc/throws?)))
+           (let [sf (assoc sf :el3 3)
+                 st (assoc st :thaw/skip-unknown? true)]   (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))]))]))
 
 ;;;; Signal filtering
 
