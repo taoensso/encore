@@ -441,7 +441,7 @@
                 (if skip-unknown?
                   els
                   (throw
-                    (ex-info "Failed to thaw set (encountered index not in bit schema)"
+                    (ex-info "Failed to thaw set (encountered bit index not in bit schema)"
                       {:bit-index  bit-idx
                        :bit-schema bit-schema})))))
             (transient #{}) bs))))))
