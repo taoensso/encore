@@ -252,12 +252,12 @@
      rl-error rl-backup error-fn backp-fn]}]
 
   (let [sample-rate  (when sample (enc/as-pnum! sample))
-        rate-limiter (when-let [spec rate-limit] (enc/limiter {} spec))
+        rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
         sig-filter*  (sigs/sig-filter ns-filter kind-filter id-filter min-level)
         stopped?_    (enc/latom false)
 
-        rl-error (get dispatch-opts :rl-error  (enc/limiter {} [[1 (enc/ms :mins 10)]]))
-        rl-backp (get dispatch-opts :rl-backup (enc/limiter {} [[1 (enc/ms :mins 10)]]))
+        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 10)]]))
+        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 10)]]))
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :packp-fn  ::default)
 
@@ -273,10 +273,10 @@
              (enc/try*
                (let [allow?
                      (and
-                       (if sample-rate  (< (Math/random) ^double sample-rate)   true)
-                       (if sig-filter*  (sigs/allow-signal? signal sig-filter*) true)
-                       (if filter-fn    (filter-fn          signal)             true)
-                       (if rate-limiter (if (rate-limiter nil) false true)      true) ; Nb last (increments count)
+                       (if sample-rate (< (Math/random) ^double sample-rate)   true)
+                       (if sig-filter* (sigs/allow-signal? signal sig-filter*) true)
+                       (if filter-fn   (filter-fn          signal)             true)
+                       (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
                        )]
 
                  (when allow? (handler-fn signal))
@@ -399,7 +399,7 @@
                      0.5 => handle random 50%% of args
 
                  `rate-limit`
-                   Optional rate limit spec as provided to `taoensso.encore/limiter`,
+                   Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
                    {<limit-id> [<n-max-calls> <msecs-window>]}.
 
                    Examples:

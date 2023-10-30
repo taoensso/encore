@@ -310,16 +310,16 @@
 
 #?(:clj (enc/defonce ^:no-doc callsite-counter (enc/counter)))
 
-(let [limiters_ (enc/latom {})]
+(let [rate-limiters_ (enc/latom {})]
   (defn ^:no-doc callsite-limit!?
-    "Calls the identified stateful limiter and returns true iff limited."
+    "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag boolean})
-    [limiter-id spec req-id]
-    (let [limiter
+    [rl-id spec req-id]
+    (let [rl
           (or
-            (get (limiters_) limiter-id) ; Common case
-            (limiters_       limiter-id #(or % (enc/limiter {} spec))))]
-      (if (limiter req-id) true false))))
+            (get (rate-limiters_) rl-id) ; Common case
+            (rate-limiters_       rl-id #(or % (enc/rate-limiter {} spec))))]
+      (if (rl req-id) true false))))
 
 (comment (enc/qb 1e6 (callsite-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 165.35
 

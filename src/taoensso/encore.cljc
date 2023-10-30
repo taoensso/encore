@@ -3340,16 +3340,16 @@
             (assoc acc (or ?id (i)) (limit-spec n ms))) {} x))
 
       (unexpected-arg! x
-        {:context  `limiter
-         :param    'limiter-spec
+        {:context  `rate-limiter
+         :param    'rate-limiter-spec
          :expected '#{map vector}}))))
 
 (comment (qb 1e6 (coerce-limit-spec [[10 1000] [20 2000]])))
 
-(defn ^:no-doc limiter*
+(defn ^:no-doc rate-limiter*
   "Private low-level util.
-  Like `limiter` but returns [<state_> <limiter>]."
-  ([     spec] (limiter* nil spec))
+  Like `rate-limiter` but returns [<state_> <rate-limiter>]."
+  ([     spec] (rate-limiter* nil spec))
   ([opts spec]
    (if (empty? spec)
      [nil (constantly nil)]
@@ -3384,7 +3384,7 @@
                                          (if-let [^LimitSpec s (get spec lid)]
                                            (if (>= instant (+ (.-udt0 e) (.-ms s)))
                                              (dissoc acc lid)
-                                             acc)
+                                             (do     acc))
                                            (dissoc acc lid)))
                                        entries ; {<lid <LimitEntry>}
                                        entries)]
@@ -3392,7 +3392,7 @@
                                    (dissoc! acc rid)
                                    (assoc!  acc rid new-entries))))
                              (transient (or reqs {}))
-                             reqs))))
+                             (do            reqs)))))
 
                      #?(:clj
                         (do
@@ -3457,45 +3457,61 @@
                            (recur)))))))))]
 
        [reqs_
-        (fn check-limits!
+        (fn rate-limiter
           ([          ] (f1 nil    false))
           ([    req-id] (f1 req-id false))
           ([cmd req-id]
            (case cmd
-             :rl/reset
+             (:rl/reset :limiter/reset)
              (do
-               (if (identical-kw? req-id :rl/all)
+               (if (case req-id (:rl/all :limiter/all) true false)
                  (reset! reqs_ nil)
                  (reqs_ #(dissoc % (req-id-fn req-id))))
                nil)
 
-             :rl/peek (f1 req-id true)
+             (:rl/peek :limiter/peek) (f1 req-id true)
 
              (unexpected-arg! cmd
-               {:context  `limiter
-                :param    'check-limits-command
+               {:context  `rate-limiter
+                :param    'rate-limiter-command
                 :expected #{:rl/reset :rl/peek}
                 :req-id   req-id}))))]))))
 
-(defn limiter
-  "Rate limiter.
-  Takes {<limit-id> [<n-max-reqs> <msecs-window>]}, and returns a rate
-  limiter (fn check-limits! [req-id]) -> nil (all limits pass), or
-  [<worst-limit-id> <worst-backoff-msecs> {<limit-id> <backoff-msecs>}].
+(defn rate-limiter
+  "Takes a map spec of form {<limit-id> [<n-max-reqs> <msecs-window>]},
+  and returns a basic stateful (fn rate-limiter [req-id] [command req-id]).
 
-  Limiter fn commands:
-    :rl/peek  <req-id> - Check limits w/o side effects.
-    :rl/reset <req-id> - Reset all limits for given req-id."
+  Call fn with a single request id (e.g. username) by which to count/limit.
+  Will return:
+    - nil when all limits pass for that id, or
+    - [<worst-limit-id> <worst-backoff-msecs> {<limit-id> <backoff-msecs>}]
+      when any limits fail for that id.
 
-  ([     spec] (limiter nil spec))
-  ([opts spec] (let [[_ f] (limiter* opts spec)] f)))
+  Or call fn with an additional command argument:
+    `:rl/peek`  <req-id> - Check limits w/o incrementing count.
+    `:rl/reset` <req-id> - Reset all limits for given req-id.
+
+  Example:
+
+    (defonce my-rate-limiter
+      (rate-limiter
+        {\"1  per sec\" [1   1000]
+         \"10 per min\" [10 60000]}))
+
+    (defn send-message! [username msg-content]
+      (if-let [fail (my-rate-limiter username)]
+        (throw (ex-info \"Sorry, rate limited!\" {:fail fail}))
+        <send message>))"
+
+  ([     spec] (let [[_ f] (rate-limiter* nil  spec)] f))
+  ([opts spec] (let [[_ f] (rate-limiter* opts spec)] f)))
 
 (comment
-  (let [[s_ rl1] (limiter* {:2s [1 2000] :5s [2 5000]})]
+  (let [[s_ rl1] (rate-limiter* {:2s [1 2000] :5s [2 5000]})]
     (def s_  s_)
     (def rl1 rl1))
 
-  (qb 1e6 (rl1)) ; 151.04
+  (qb 1e6 (rl1)) ; 122.96
   (dotimes [n 1e6] (rl1 (str (rand)))) ; Test GC
   (count @s_))
 
@@ -6337,31 +6353,6 @@
   (defn ^:no-doc ^:deprecated keys>=     [m ks] (ks>=     ks m))
   (defn ^:no-doc ^:deprecated keys=nnil? [m ks] (ks-nnil? ks m))
 
-  (defn ^:no-doc ^:deprecated rate-limiter* [spec]
-    (let [ids? (rsome (fn [[_ _ id]] id) spec)
-          lfn  (limiter spec)]
-      (fn [& args]
-        (when-let [[worst-lid backoff-ms] (apply lfn args)]
-          (if ids?
-            [backoff-ms worst-lid]
-             backoff-ms)))))
-
-  (defn ^:no-doc ^:deprecated rate-limit [spec f]
-    (let [rl (rate-limiter* spec)]
-      (fn [& args]
-        (if-let [backoff (rl)]
-          [nil backoff]
-          [(f) nil]))))
-
-  ;; API changed for greater flexibility:
-  (defn ^:no-doc ^:deprecated rate-limiter [ncalls-limit window-ms] (rate-limiter* [[ncalls-limit window-ms]]))
-  (defn ^:no-doc ^:deprecated rate-limited [ncalls-limit window-ms f]
-    (let [rl (rate-limiter* [[ncalls-limit window-ms]])]
-      (fn [& args]
-        (if-let [backoff-ms (rl)]
-          {:backoff-ms backoff-ms}
-          {:result     (f)}))))
-
   ;; Used by Sente <= v1.4.0-alpha2
   (def ^:no-doc ^:deprecated logging-level (atom :debug)) ; Just ignoring this now
 
@@ -6578,7 +6569,10 @@
   (def* ^:no-doc -matching-error
     "Prefer `matching-error`."
     {:deprecated "v3.70.0 (2023-10-17)"}
-    matching-error))
+    matching-error)
+
+  (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "vX.Y.Z (YYYY-MM-DD)"} rate-limiter*)
+  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "vX.Y.Z (YYYY-MM-DD)"} rate-limiter))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
