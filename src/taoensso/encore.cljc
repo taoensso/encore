@@ -119,7 +119,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 72 0])
+(def encore-version [3 73 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -6571,8 +6571,8 @@
     {:deprecated "v3.70.0 (2023-10-17)"}
     matching-error)
 
-  (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "vX.Y.Z (YYYY-MM-DD)"} rate-limiter*)
-  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "vX.Y.Z (YYYY-MM-DD)"} rate-limiter))
+  (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter*)
+  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API

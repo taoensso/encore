@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "3.72.0"
+(defproject com.taoensso/encore "3.73.0"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Core utils library for Clojure/Script"
   :url "https://github.com/taoensso/encore"
