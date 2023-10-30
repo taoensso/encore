@@ -197,6 +197,20 @@
         (ex-info "Given byte[] too short"
           {:length {:actual actual-len, :target target-len}})))))
 
+(defn nempty-ba?
+  "Returns true iff given non-empty byte[]."
+  [?ba]
+  (if (instance? enc/bytes-class ?ba)
+    (> (alength ^bytes ?ba) 0)
+    false))
+
+(defn nempty-ba
+  "Returns argument if given non-empty byte[], otherwise returns nil."
+  [?ba]
+  (when (instance? enc/bytes-class ?ba)
+    (when (> (alength ^bytes ?ba) 0)
+      ?ba)))
+
 ;;;; To/from strings
 ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
 

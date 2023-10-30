@@ -786,6 +786,18 @@
         (let [ba (bytes/ba-join (bytes/as-ba [1 2]) (bytes/as-ba [3]) (bytes/as-ba [5 6]) (bytes/as-ba [7 8 9]))]
           (is (= (mapv vec (bytes/ba-parts ba 0 2 1 1 0 0 0 1)) [[1 2] [3] [5] [] [] [] [6] [7 8 9]]))))
 
+      (testing "nempty-bas"
+        [(false? (bytes/nempty-ba? nil))
+         (false? (bytes/nempty-ba? ""))
+         (false? (bytes/nempty-ba? (byte-array [])))
+         (true?  (bytes/nempty-ba? (byte-array [1])))
+
+         (nil? (bytes/nempty-ba nil))
+         (nil? (bytes/nempty-ba ""))
+         (nil? (bytes/nempty-ba (byte-array [])))
+         (let [ba (byte-array [1])]
+           (identical? ba (bytes/nempty-ba ba)))])
+
       (testing "unsigned-ints"
         [(let [n     Byte/MAX_VALUE] (is (= (bytes/from-ubyte  (bytes/to-ubyte    n)) n)))
          (let [n    Short/MAX_VALUE] (is (= (bytes/from-ushort (bytes/to-ushort   n)) n)))
