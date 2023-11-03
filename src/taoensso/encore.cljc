@@ -5428,36 +5428,38 @@
              :put  (adaptive-encode uri params)))))))
 
 #?(:cljs
-   (defn ajax-lite
-     "Alpha, subject to change.
-     Simple, lightweight Ajax via Google Closure.
+   (defn ajax-call
+     "Queues a lightweight Ajax call with Google Closure's `goog.net.XhrIo` and
+     returns nil, or the resulting `goog.net.XhrIo` instance if one was
+     immediately available from the XHR pool:
 
-     Returns nil, or resulting `goog.net.XhrIo` instance if one was
-     immediately available.
+       (ajax-call
+         \"http://localhost:8080/my-post-route\" ; Endpoint URL
 
-     (ajax-lite \"/my-post-route\"
-       {:method     :post
-        :params     {:username \"Rich Hickey\" :type \"Awesome\"}
-        :headers    {\"Foo\" \"Bar\"}
-        :resp-type  :text
-        :timeout-ms 7000
-        :with-credentials? false ; Enable if using CORS (requires xhr v2+)
+         {:method     :post ; ∈ #{:get :post :put}
+          :resp-type  :text ; ∈ #{:auto :edn :json :xml :text}
 
-        :xhr-pool       my-xhr-pool ; `goog.net.XhrIoPool` instance or delay
-        :xhr-cb-fn      (fn [xhr])  ; Called with `XhrIo` from pool when available
-        :xhr-timeout-ms 2500        ; Max msecs to wait on pool for `XhrIo`
-       }
-       (fn async-callback-fn [resp-map]
-         (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
-           ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
-           ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
-                            :abort :http-error :exception :xhr-pool-depleted}
-           (js/alert (str \"Ajax response: \" resp-map)))))"
+          :params     {:username \"Rich Hickey\" :type \"Awesome\"} ; Request params
+          :headers    {\"Content-Type\" \"text/plain\"} ; Request headers
 
-     [uri
-      {:as   opts
-       :keys [method params headers timeout-ms resp-type with-credentials?
-              xhr-pool xhr-cb-fn xhr-timeout-ms]
+          :timeout-ms 7000
+          :with-credentials? false ; Enable if using CORS (requires xhr v2+)
+
+          :xhr-pool       my-xhr-pool ; Optional `goog.net.XhrIoPool` instance or delay
+          :xhr-cb-fn      (fn [xhr])  ; Optional fn to call with `XhrIo` from pool when available
+          :xhr-timeout-ms 2500        ; Optional max msecs to wait on pool for `XhrIo`
+         }
+
+         (fn ajax-callback-fn [resp-map]
+           (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
+             ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
+             ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
+                              :abort :http-error :exception :xhr-pool-depleted}
+             (js/alert (str \"Ajax response: \" resp-map)))))"
+
+     [url
+      {:keys [method params headers timeout-ms resp-type with-credentials?
+              xhr-pool xhr-cb-fn xhr-timeout-ms] :as opts
        :or
        {method         :get
         timeout-ms     10000
@@ -5473,11 +5475,18 @@
            with-xhr
            (fn [xhr]
              (catching
-               (let [timeout-ms (or (:timeout opts) timeout-ms) ; Deprecated opt
-                     xhr-method (case method :get "GET" :post "POST" :put "PUT")
+               (let [timeout-ms (or (get opts :timeout) timeout-ms) ; Deprecated opt
+                     xhr-method
+                     (case method
+                       :get  "GET"
+                       :post "POST"
+                       :put  "PUT"
+                       (unexpected-arg! method
+                         {:context  `ajax-call
+                          :param    'method
+                          :expected #{:get :post :put}}))
 
-                     [xhr-uri xhr-?data]
-                     (coerce-xhr-params uri method params)
+                     [xhr-url xhr-?data] (coerce-xhr-params url method params)
 
                      xhr-headers
                      (let [headers (map-keys #(str/lower-case (name %)) headers)
@@ -5488,7 +5497,7 @@
                        (clj->js headers))
 
                      ?progress-listener
-                     (when-let [pf (:progress-fn opts)]
+                     (when-let [pf (get opts :progress-fn)]
                        (.setProgressEventsEnabled xhr true)
                        (gevents/listen xhr goog.net.EventType/PROGRESS
                          (fn [ev]
@@ -5498,8 +5507,8 @@
                                  ?ratio (when (and length-computable? (not= total 0))
                                           (/ loaded total))]
                              (pf
-                               {:?ratio ?ratio
-                                :length-computable? length-computable?
+                               {:length-computable? length-computable?
+                                :?ratio ?ratio
                                 :loaded loaded
                                 :total  total
                                 :ev     ev})))))]
@@ -5537,7 +5546,11 @@
                                            :edn  (read-edn (.getResponseText xhr))
                                            :json           (.getResponseJson xhr)
                                            :xml            (.getResponseXml  xhr)
-                                           :text           (.getResponseText xhr))
+                                           :text           (.getResponseText xhr)
+                                           (unexpected-arg! resp-type
+                                             {:context  `ajax-call
+                                              :param    'resp-type
+                                              :expected #{:auto :edn :json :xml :text}}))
 
                                          _e ; Undocumented, subject to change:
                                          {:ajax/bad-response-type resp-type
@@ -5573,7 +5586,7 @@
                  (when with-credentials?
                    (.setWithCredentials xhr true)) ; Requires xhr v2+
 
-                 (.send xhr xhr-uri xhr-method xhr-?data xhr-headers)
+                 (.send xhr xhr-url xhr-method xhr-?data xhr-headers)
 
                  (when-let [cb xhr-cb-fn] (catching (cb xhr)))
                  xhr)
@@ -6585,7 +6598,9 @@
     matching-error)
 
   (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter*)
-  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter))
+  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter)
+
+  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "vX.Y.Z (YYYY-MM-DD)"} ajax-call)))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
