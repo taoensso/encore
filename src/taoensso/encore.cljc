@@ -40,11 +40,15 @@
       `add-user`, `remove-user`, `mod-user`, etc.
 
   Commit message tags (in priority order):
-    ~      - Work-in-progress (still under development)
+    [wip]  - Work-in-progress (still under development)
+
     [mod]  - Modify     behaviour (=>          breaking), [mod!], [mod!!], etc. for attention
     [fix]  - Fix broken behaviour (=> usu. non-breaking)
     [new]  - Add new    behaviour (=>      non-breaking)
-    [nop]  - Unmodified behaviour (=>      non-breaking implementation or non-code changes, etc.)
+
+    [doc]  - Documentation changes besides those better labelled as [mod], [fix], or [new]
+    [nop]  - Other non-breaking changes (to implementation details, non-code changes, etc.)
+
     [x][y] - Single commit with multiple tags (in priority order), try avoid
 
   Example commit messages:
@@ -1843,8 +1847,8 @@
      (defn ^:no-doc runtime-form? "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
      (defn ^:no-doc const-form?   "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
      (defn ^:no-doc const-form    "Private util." {:added "v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
-     (defn ^:no-doc const-forms?  "Private util." {:added "v3.68.0 (2023-09-25)"}  [& forms] (revery? const-form?   forms))
-     (defn ^:no-doc const-forms   "Private util." {:added "v3.68.0 (2023-09-25)"}  [& forms] (mapv    const-form    forms))))
+     (defn ^:no-doc const-forms?  "Private util." {:added "v3.68.0 (2023-09-25)"} [& forms] (revery? const-form?   forms))
+     (defn ^:no-doc const-forms   "Private util." {:added "v3.68.0 (2023-09-25)"} [& forms] (mapv    const-form    forms))))
 
 ;;;; Math
 
