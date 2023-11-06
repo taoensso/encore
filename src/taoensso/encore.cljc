@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 73 0])
+(def encore-version [3 74 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -5457,6 +5457,7 @@
                               :abort :http-error :exception :xhr-pool-depleted}
              (js/alert (str \"Ajax response: \" resp-map)))))"
 
+     {:added "v3.74.0 (2023-11-06)"}
      [url
       {:keys [method params headers timeout-ms resp-type with-credentials?
               xhr-pool xhr-cb-fn xhr-timeout-ms] :as opts
@@ -6600,7 +6601,7 @@
   (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "v3.73.0 (2023-10-30)"} rate-limiter)
 
-  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "vX.Y.Z (YYYY-MM-DD)"} ajax-call)))
+  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "v3.74.0 (2023-11-06)"} ajax-call)))
 
 (deprecated
   ;; v3.66.0 (2023-08-23) - unified config API
