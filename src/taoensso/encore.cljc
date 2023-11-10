@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance!]])))
 
-(def encore-version [3 74 2])
+(def encore-version [3 75 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -758,14 +758,14 @@
      (defn ^:no-doc call-form?
        "Private, don't use.
        Returns true if given a list or Cons."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.75.0 (2024-01-29)"}
        [x]
        (or (list? x) (instance? #?(:clj clojure.lang.Cons #_:cljs #_cljs.core/Cons) x)))
 
      (defn ^:no-doc call-in-form?
        "Private, don't use.
        Returns true if given a call form, or coll form containing a call form."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.75.0 (2024-01-29)"}
        [x]
        (when x
          (cond
@@ -1126,7 +1126,7 @@
    (defmacro set-var-root!
      "Sets root binding (value) of the var identified by given symbol, and returns
      the new value. Cross-platform. See also `update-var-root!`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.75.0 (2024-01-29)"}
      [var-sym root-val]
      (if (:ns &env)
        `(set!                ~var-sym           ~root-val)
@@ -1524,7 +1524,7 @@
    (defmacro satisfies?
      "Faster `satisfies?` to work around CLJ-1814 until a proper upstream fix.
      May cache, so possibly inappropriate for dynamic work."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.75.0 (2024-01-29)"}
      [protocol x]
      (if (:ns &env)
        ;; `(cljs.core/implements? ~protocol ~x)
@@ -2037,7 +2037,7 @@
 
 (defn map-entry
   "Returns a `MapEntry` with given key and value."
-  {:added  "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added  "Encore v3.75.0 (2024-01-29)"
    :inline #?(:clj (fn [k v] `(clojure.lang.MapEntry/create ~k ~v)) :default nil)}
   [k v]
   #?(:clj  (clojure.lang.MapEntry/create k v)
@@ -2600,14 +2600,14 @@
   Wraps given predicate fn to return `Pred` for use with `submap?`, etc.
   Arity of predicate fn depends on context in which it'll be used.
   See also `pred-fn`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.75.0 (2024-01-29)"}
   ^Pred [pred-fn] (Pred. pred-fn))
 
 (defn pred-fn
   "Experimental, subject to change without notice!
   Returns unwrapped predicate fn when given `Pred`, otherwise returns nil.
   See also `pred`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.75.0 (2024-01-29)"}
   [pred]
   (when (instance? Pred pred)
     (.-pred-fn ^Pred pred)))
@@ -4194,7 +4194,7 @@
 
   Uses strong randomness when possible.
   See also `uuid-str`, `nanoid`, `rand-id-fn`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.75.0 (2024-01-29)"
    :inline #?(:default nil :clj (fn [] `(java.util.UUID/randomUUID)))}
   #?(:clj          (^java.util.UUID []  (java.util.UUID/randomUUID))
      :cljs
@@ -4442,7 +4442,7 @@
 #?(:clj
    (defn ^:no-doc reseeding-srng
      "Private, don't use. Returns a new stateful `ReseedingSRNG`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.75.0 (2024-01-29)"}
      ^ReseedingSRNG []
      (compile-if      #(java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
        (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
@@ -4495,7 +4495,7 @@
     `:rand-bytes-fn` - Optional (fn [size]) to return random byte array of given size
 
   See also `uuid-str`, `nano-id`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.75.0 (2024-01-29)"}
   [{:keys [chars ^long len rand-bytes-fn]
     :or
     {chars         :nanoid
@@ -4926,7 +4926,7 @@
    (let [cache_ (atom nil)] ; Impln detail
      (defn java-version
        "Returns Java's major version integer (8, 17, etc.)."
-       {:added "vX.Y.Z (YYYY-MM-DD)"}
+       {:added "v3.75.0 (2024-01-29)"}
        (^long [              ] (or @cache_ (reset! cache_ (java-version (System/getProperty "java.version")))))
        (^long [version-string]
         (or
@@ -4946,7 +4946,7 @@
    (defn java-version>=
      "Returns true iff Java's major version integer is >= given integer:
        (if (java-version>= 21) <then> <else>)"
-     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     {:added "v3.75.0 (2024-01-29)"}
      [n] (>= (java-version) (long n))))
 
 (comment (java-version>= 21))
@@ -5000,7 +5000,7 @@
        Function version of `get-env`:
          - Doesn't embed, or eval symbols.
          - Supports runtime args."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+       {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
         '([{:keys [as default return]} spec]
           [{:keys [as default return   spec]
@@ -5147,7 +5147,7 @@
 
        Result must be something that can be safely embedded in code during
        macro-expansion. Symbols in edn will be evaluated during expansion."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+       {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
         '([{:keys [as default return]} spec]
           [{:keys [as default return   spec]
@@ -6843,23 +6843,23 @@
        (defn- get-config-opts [opts] (dissoc (assoc opts :return :legacy :spec (get opts :prop)) :prop))
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-config
-         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          [opts] `(get-env ~(get-config-opts opts)))
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-sys-val*
-         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([spec        ] `(get-env {:as :str :spec ~spec                    }))
          ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env          }))
          ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res})))
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-sys-bool*
-         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    }))
          ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env          }))
          ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res})))
 
        (defmacro ^:no-doc ^:deprecated-nowarn read-sys-val*
-         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([spec        ] `(get-env {:as :edn :spec ~spec                    }))
          ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env          }))
          ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res})))

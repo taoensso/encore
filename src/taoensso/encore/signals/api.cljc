@@ -246,7 +246,7 @@
   "Takes ?[<unary-fn> ... <unary-fn>] and returns nil, or a single unary fn
   that is the left->right composition of the others and that short-circuits if
   any returns nil."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.75.0 (2024-01-29)"}
   [middleware]
   (enc/cond
     (empty?   middleware)    nil
@@ -516,7 +516,7 @@
    (defmacro with-handler+
      "Low-level util. Executes form with the given handler-fn registered.
      Useful for tests/debugging. See also `with-handler`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.75.0 (2024-01-29)"}
 
      ;; Given pre-wrapped handler-fn
      ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
