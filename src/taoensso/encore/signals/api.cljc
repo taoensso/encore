@@ -242,13 +242,31 @@
   #?(:clj  {:async {:mode :dropping, :buffer-size 4096, :n-threads 1, :daemon-threads? false}}
      :cljs {}))
 
+(defn ^:no-doc get-middleware-fn
+  "Takes ?[<unary-fn> ... <unary-fn>] and returns nil, or a single unary fn
+  that is the left->right composition of the others and that short-circuits if
+  any returns nil."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [middleware]
+  (enc/cond
+    (empty?   middleware)    nil
+    (= (count middleware) 1) (first middleware)
+    :else
+    (fn multi-middleware-fn [in]
+      (reduce (fn [in mf] (or (mf in) (reduced nil)))
+        in middleware))))
+
+(comment
+  ((get-middleware-fn [inc inc inc str]) 1)
+  ((get-middleware-fn [inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))]) 1))
+
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
   [handler-id handler-fn
    {:as dispatch-opts
     :keys
-    [#?(:clj async) sample rate-limit filter-fn,
-     ns-filter kind-filter id-filter min-level
+    [#?(:clj async) sample rate-limit filter-fn middleware,
+     ns-filter kind-filter id-filter min-level,
      rl-error rl-backup error-fn backp-fn]}]
 
   (let [sample-rate  (when sample (enc/as-pnum! sample))
@@ -261,6 +279,7 @@
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :packp-fn  ::default)
 
+        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed signal-value
         wrapped-handler-fn
         (fn wrapped-handler-fn
           ([] ; Shutdown
@@ -279,7 +298,12 @@
                        (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
                        )]
 
-                 (when allow? (handler-fn signal))
+                 (when allow?
+                   (when-let [sig-val (sigs/signal-value signal)]
+                     (if middleware-fn
+                       (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val))
+                       (do                                         (handler-fn sig-val)))))
+
                  nil)
 
                (catch :any t
@@ -398,16 +422,6 @@
                      0.0 => noop   every arg
                      0.5 => handle random 50%% of args
 
-                 `rate-limit`
-                   Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
-                   {<limit-id> [<n-max-calls> <msecs-window>]}.
-
-                   Examples:
-                     {\"1/sec\"  [1   1000]} => Max 1  call  per 1000 msecs
-                     {\"1/sec\"  [1   1000]
-                      \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
-                                              and 10 calls per 60   secs
-
                  `ns-filter`   - Namespace filter as in `set-ns-filter!`
                  `min-level`   - Minimum   level  as in `set-min-level!`
                  `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
@@ -420,8 +434,28 @@
                    When present, called *after* sampling and other filters, but
                    before rate limiting.
 
+                 `rate-limit`
+                   Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
+                   {<limit-id> [<n-max-calls> <msecs-window>]}.
+
+                   Examples:
+                     {\"1/sec\"  [1   1000]} => Max 1  call  per 1000 msecs
+                     {\"1/sec\"  [1   1000]
+                      \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
+                                              and 10 calls per 60   secs
+
+                 `middleware`
+                   Optional vector of unary middleware fns to apply (left-to-right/sequentially)
+                   to handler-arg right before passing to handler-fn. If any middleware fn returns
+                   nil, abort immediately without calling handler-fn.
+
+                   Useful for transforming handler-args before handling.
+
                  `error-fn` - (fn [{:keys [handler-id error]}]) to call on handler error.
-                 `backp-fn` - (fn [{:keys [handler-id      ]}]) to call on handler back pressure.")
+                 `backp-fn` - (fn [{:keys [handler-id      ]}]) to call on handler back pressure.
+
+               Flow sequence:
+                 Sample -> filters -> rate limit -> middleware -> handler-fn")
 
             (~'[handler-id handler-fn              ] (~'add-handler! ~'handler-id ~'handler-fn nil))
             (~'[handler-id handler-fn dispatch-opts]
@@ -429,8 +463,8 @@
               '([handler-id handler-fn]
                 [handler-id handler-fn
                  {:as   dispatch-opts
-                  :keys [async sample rate-limit filter-fn
-                         ns-filter kind-filter id-filter min-level
+                  :keys [async sample rate-limit filter-fn middleware,
+                         ns-filter kind-filter id-filter min-level,
                          error-fn backp-fn]}])}
 
              (when ~'handler-fn

@@ -1095,8 +1095,12 @@
   (def ^:dynamic *sig-handlers* nil)
 
   (sigs-api/def-api 4 *sig-filter* *sig-handlers* {})
+  (def cnt (enc/counter 0))
 
-  (def cnt (enc/counter 0)))
+  (deftype MySignal [level cnt]
+    sigs/IFilterableSignal
+    (signal-value  [_] cnt)
+    (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))))
 
 (deftest _signal-api
   [(testing "Signal filtering"
@@ -1135,21 +1139,48 @@
       (is (nil? (cnt :set 0)))
 
       (is (=           (get-handlers) nil))
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:sample 0.0, :async nil}) {:hid1 {:sample 0.0}}))
-      (is (enc/submap? (get-handlers)                                                {:hid1 {:sample 0.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample 0.0}) {:hid1 {:async nil, :sample 0.0}}))
+      (is (enc/submap? (get-handlers)                                                {:hid1 {:async nil, :sample 0.0}}))
 
-      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
+      (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
       (is (= @cnt 0))
 
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:sample 1.0, :async nil}) {:hid1 {:sample 1.0}}))
-      (is (enc/submap? (get-handlers)                                                {:hid1 {:sample 1.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample 1.0}) {:hid1 {:async nil, :sample 1.0}}))
+      (is (enc/submap? (get-handlers)                                                {:hid1 {:async nil, :sample 1.0}}))
 
-      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
-      (is (nil? (sigs/call-handlers! *sig-handlers* "foo")))
+      (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
+      (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
       (is (= @cnt 2))
 
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:async nil, :min-level :info}}))
+      (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
+      (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
+      (is (= @cnt 3))
+
       (is (nil? (remove-handler! :hid1)))
-      (is (nil? *sig-handlers*) "Removal yields non-empty map")])])
+      (is (nil? *sig-handlers*) "Removal yields non-empty map")
+
+      (testing "Handler middleware"
+        (let [v1 (atom ::nx)
+              v2 (atom ::nx)
+              v3 (atom ::nx)]
+
+          [(is (nil? (cnt :set 0)))
+           (is (enc/submap? (add-handler! :hid1 (fn handler-fn1 [x] (reset! v1 [(cnt) x])) {                                             }) {:hid1 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid2 (fn handler-fn2 [x] (reset! v2 [(cnt) x])) {:middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid3 (fn handler-fn3 [x] (reset! v3 [(cnt) x])) {:middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
+           (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
+
+           #?(:clj (do (Thread/sleep 2000) :sleep))
+
+           (is (= @v1 [0 "foo"]))
+           (is (= @v2 [1 "foo.mw1.mw2"]))
+           (is (= @v3 ::nx))
+           (is (= @cnt 2) "handler-fn3 never called")
+
+           (is (map? (remove-handler! :hid1)))
+           (is (map? (remove-handler! :hid2)))
+           (is (nil? (remove-handler! :hid3)))]))])])
 
 ;;;;
 

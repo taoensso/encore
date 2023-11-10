@@ -283,8 +283,8 @@
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns :kind :id :info)))])
 
 (defprotocol IFilterableSignal
-  (allow-signal? [_ sig-filter]
-    "Returns boolean indicating if given signal is allowed by given `SigFilter`."))
+  (allow-signal? [_ sig-filter] "Returns true iff given signal is allowed by given `SigFilter`.")
+  (signal-value  [_]            "Returns signal's user-facing value as given to handlers, etc."))
 
 (let [nil-sf (SigFilter. nil nil nil nil nil)]
   (defn update-sig-filter
