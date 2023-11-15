@@ -3,7 +3,7 @@
   Private utils to bootstrap a local copy of the signals API.
   Separate from `encore.signals` to avoid cyclic dependencies
   (`signals.api` needs `telemere.impl`, which needs `signals`)."
-  {:added "v3.68.0 (2023-09-25)"}
+  {:added "Encore v3.68.0 (2023-09-25)"}
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc :refer [have have?]]
