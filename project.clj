@@ -8,12 +8,12 @@
    :url  "https://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies
-  [[org.clojure/tools.reader "1.3.6"]
+  [[org.clojure/tools.reader "1.3.7"]
    [com.taoensso/truss       "1.11.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
-   :provided {:dependencies [[org.clojure/clojurescript "1.11.121"]
+   :provided {:dependencies [[org.clojure/clojurescript "1.11.132"]
                              [org.clojure/clojure       "1.11.1"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.1"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
