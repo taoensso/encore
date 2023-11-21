@@ -481,10 +481,36 @@
 
 #?(:clj
    (defmacro with-handler
-     "Low-level util. Executes form with given pre-wrapped handler-fn registered."
-     [*sig-handlers* handler-id wrapped-handler-fn form]
-     `(binding [~*sig-handlers* (assoc ~*sig-handlers* ~handler-id ~wrapped-handler-fn)]
-        ~form)))
+     "Low-level util. Executes form with ONLY the given handler-fn registered.
+     Useful for tests/debugging. See also `with-handler+`."
+
+     ;; Given pre-wrapped handler-fn
+     ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
+      `(binding [~*sig-handlers* {~handler-id ~pre-wrapped-handler-fn}]
+         ~form))
+
+     ;; Given unwrapped handler-fn
+     ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
+      `(with-handler ~*sig-handlers* ~handler-id
+         (wrap-handler ~handler-id ~unwrapped-handler-fn ~dispatch-opts)
+         ~form))))
+
+#?(:clj
+   (defmacro with-handler+
+     "Low-level util. Executes form with the given handler-fn registered.
+     Useful for tests/debugging. See also `with-handler`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+
+     ;; Given pre-wrapped handler-fn
+     ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
+      `(binding [~*sig-handlers* (assoc ~*sig-handlers* ~handler-id ~pre-wrapped-handler-fn)]
+         ~form))
+
+     ;; Given unwrapped handler-fn
+     ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
+      `(with-handler+ ~*sig-handlers* ~handler-id
+         (wrap-handler ~handler-id ~unwrapped-handler-fn ~dispatch-opts)
+         ~form))))
 
 (comment
   (def ^:dynamic                   *sig-handlers* nil)
