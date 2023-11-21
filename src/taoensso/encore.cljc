@@ -1318,7 +1318,7 @@
 
 (defn chan?
   "Returns true iff given a `clojure.core.async` channel."
-  #?(:cljs {:tag boolean})
+  #?(:cljs {:tag 'boolean})
   [x]
   ;; Avoid actually loading `core.async`
   #?(:clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (.getName (class x)))
@@ -3792,7 +3792,7 @@
 (defn str-join
   "Faster, transducer-based generalization of `clojure.string/join` with `xform`
   support."
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   ([                coll] (str-join nil       nil coll))
   ([separator       coll] (str-join separator nil coll))
   ([separator xform coll]
@@ -3991,7 +3991,7 @@
   Note that ClojureScript 1.7.145 introduced a partial fix for CLJS-911.
   A full fix could unfortunately not be introduced w/o breaking compatibility
   with the previously incorrect behaviour. CLJS-794 also remains unresolved."
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [s match replacement]
   #?(:clj (str/replace s match replacement)
      :cljs
@@ -4016,7 +4016,7 @@
   (defn ^:no-doc nil->str [x] (if (nil? x) "nil" x)) ; (undefined? x) check no longer needed for modern Cljs
 
   (defn format*
-    {:tag #?(:clj String :cljs string)}
+    {:tag #?(:clj 'String :cljs 'string)}
     (#?(:clj  [      fmt args]
         :cljs [      fmt args]) (format* nil->str fmt args))
     (#?(:clj  [xform fmt args]
@@ -4033,12 +4033,12 @@
       * Formats nil as \"nil\" rather than \"null\".
       * Provides ClojureScript support via goog.string.format (this has fewer
         formatting options than Clojure's `format`!)."
-    {:tag #?(:clj String :cljs string)}
+    {:tag #?(:clj 'String :cljs 'string)}
     [fmt & args] (format* fmt args)))
 
 (defn str-join-once
   "Like `string/join` but skips nils and duplicate separators."
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [separator coll]
   (let [sep separator]
     (if (str/blank? sep)
@@ -4073,7 +4073,7 @@
             coll))))))
 
 (defn path
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [& parts] (str-join-once "/" parts))
 
 (comment (path "foo/" nil "/bar" "baz/" "/qux/"))
@@ -4081,7 +4081,7 @@
 (defn norm-word-breaks
   "Converts all word breaks of any form and length (including line breaks of any
   form, tabs, spaces, etc.) to a single regular space."
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [s] (str/replace (str s) #"\s+" \space))
 
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
@@ -4092,7 +4092,7 @@
   Ref. <http://www.ietf.org/rfc/rfc4122.txt>,
        <https://gist.github.com/franks42/4159427>,
        <https://github.com/clojure/clojurescript/pull/194>"
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   ([max-length] (get-substr-by-len (uuid-str) 0 max-length))
   ([]
    #?(:clj (str (java.util.UUID/randomUUID))
@@ -4116,7 +4116,7 @@
 
 (defn into-str
   "Simple Hiccup-like string templating to complement Tempura."
-  {:tag #?(:clj String :cljs string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [& xs]
   (str
     (reduce
@@ -4231,7 +4231,7 @@
      Returns true iff Telemere was present, example:
        (or (signal! {<signal-opts>}) (println \"Println fallback!\"))"
      {:added "Encore v3.68.0 (2023-09-25)"
-      :tag #?(:cljs boolean :clj nil)
+      :tag #?(:cljs 'boolean :clj nil)
       :arglists '([{:keys [loc kind id level data msg error ...]}])}
      [opts]
      (if have-telemere?
@@ -6571,7 +6571,7 @@
 
   (defn ^:no-doc ^:_deprecated kw-identical?
     "Prefer `identical-kw?` macro."
-    #?(:cljs {:tag boolean})
+    #?(:cljs {:tag 'boolean})
     [x y] (identical-kw? x y))
 
   #?(:clj
