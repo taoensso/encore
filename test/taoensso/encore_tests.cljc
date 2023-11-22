@@ -207,7 +207,11 @@
    (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
    (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
    (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
-   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))])
+   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))
+   (is      (enc/submap? {:a 1 :b 2}          {:a (enc/pred odd?)
+                                               :b (enc/pred even?)}))
+   (is (not (enc/submap? {:a 1 :b 2}          {:a (enc/pred neg?)
+                                               :b (enc/pred even?)})))])
 
 (deftest _select-nested-keys
   [(is (= (enc/select-nested-keys nil    nil)) {})

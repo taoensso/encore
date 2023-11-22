@@ -2545,6 +2545,24 @@
     (merge      {:a :A1} {:a :A2} {:a :A3})
     (fast-merge {:a :A1} {:a :A2} {:a :A3})))
 
+(deftype Pred [pred-fn]) ; Note: can support any arity (unary, kv, etc.)
+(defn pred
+  "Experimental, subject to change without notice!
+  Wraps given predicate fn to return `Pred` for use with `submap?`, etc.
+  Arity of predicate fn depends on context in which it'll be used.
+  See also `pred-fn`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  ^Pred [pred-fn] (Pred. pred-fn))
+
+(defn pred-fn
+  "Experimental, subject to change without notice!
+  Returns unwrapped predicate fn when given `Pred`, otherwise returns nil.
+  See also `pred`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [pred]
+  (when (instance? Pred pred)
+    (.-pred-fn ^Pred pred)))
+
 (defn submap?
   "Returns true iff `sub` is a (possibly nested) submap of `m`,
   i.e. iff every (nested) value in `sub` has the same (nested) value in `m`.
@@ -2563,12 +2581,14 @@
               mval (get m k ::nx)]
 
           (if-let [match?
-                   (case sval
-                     ;; Special svals currently undocumented
-                     :submap/nx      (identical-kw? mval ::nx)
-                     :submap/ex (not (identical-kw? mval ::nx))
-                     :submap/some            (some? mval)
-                     (= sval mval))]
+                   (if-let [pf (pred-fn sval)]
+                     (pf mval) ; Arb pred
+                     (case sval
+                       ;; Special svals currently undocumented
+                       :submap/nx      (identical-kw? mval ::nx)
+                       :submap/ex (not (identical-kw? mval ::nx))
+                       :submap/some            (some? mval)
+                       (= sval mval)))]
             true
             (reduced false)))))
     true
