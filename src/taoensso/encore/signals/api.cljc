@@ -423,9 +423,9 @@
                      0.5 => handle random 50%% of args
 
                  `ns-filter`   - Namespace filter as in `set-ns-filter!`
-                 `min-level`   - Minimum   level  as in `set-min-level!`
-                 `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
                  `kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
+                 `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
+                 `min-level`   - Minimum   level  as in `set-min-level!`
 
                  `filter-fn`
                    Optional (fn allow? [handler-arg]) that must return truthy
@@ -455,7 +455,8 @@
                  `backp-fn` - (fn [{:keys [handler-id      ]}]) to call on handler back pressure.
 
                Flow sequence:
-                 Sample -> filters -> rate limit -> middleware -> handler-fn")
+                 Sample -> filters (sample -> ns -> kind -> id -> level -> filter-fn) ->
+                   rate limit -> middleware -> handler-fn")
 
             (~'[handler-id handler-fn              ] (~'add-handler! ~'handler-id ~'handler-fn nil))
             (~'[handler-id handler-fn dispatch-opts]
