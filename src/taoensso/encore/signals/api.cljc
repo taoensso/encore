@@ -277,7 +277,7 @@
         rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
         rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
         error-fn (get dispatch-opts :error-fn  ::default)
-        backp-fn (get dispatch-opts :packp-fn  ::default)
+        backp-fn (get dispatch-opts :backp-fn  ::default)
 
         middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed signal-value
         wrapped-handler-fn
