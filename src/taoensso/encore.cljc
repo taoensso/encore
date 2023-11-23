@@ -5489,8 +5489,8 @@
 
              run-fn
              (case mode
-               :blocking (fn [f] (or (.offer abq f) (.put abq f) false))
-               :dropping (fn [f] (or (.offer abq f)              false))
+               :blocking (fn [f] (or (.offer abq f) (do (.put abq f) false)))
+               :dropping (fn [f] (or (.offer abq f)                  false))
                :sliding
                (fn [f]
                  (or

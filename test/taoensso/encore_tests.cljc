@@ -27,7 +27,9 @@
 ;; (deftest pass (is (= 1 1)))
 ;; (deftest fail (is (= 1 0)))
 
-(defn- throw! [x] (throw (ex-info "Error" {:arg {:value x :type (type x)}})))
+(defn- throw!
+  ([ ] (throw (ex-info "TestEx" {})))
+  ([x] (throw (ex-info "TestEx" {:arg {:value x :type (type x)}}))))
 
 ;;;; Core
 
@@ -1171,7 +1173,7 @@
            (is (enc/submap? (add-handler! :hid3 (fn handler-fn3 [x] (reset! v3 [(cnt) x])) {:middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
            (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
-           #?(:clj (do (Thread/sleep 2000) :sleep))
+           #?(:clj (do (Thread/sleep 2500) :sleep))
 
            (is (= @v1 [0 "foo"]))
            (is (= @v2 [1 "foo.mw1.mw2"]))
@@ -1180,7 +1182,24 @@
 
            (is (map? (remove-handler! :hid1)))
            (is (map? (remove-handler! :hid2)))
-           (is (nil? (remove-handler! :hid3)))]))])])
+           (is (nil? (remove-handler! :hid3)))]))
+
+      (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
+        (let [fn-arg_ (atom nil)]
+          (enc/update-var-root! *sig-handlers* (fn [_] nil))
+          (add-handler! :hid1 (fn [_] (throw!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
+          (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))
+          (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error (enc/pred enc/error?)}))))
+
+      #?(:clj
+         (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
+           (let [fn-arg_ (atom nil)]
+             (enc/update-var-root! *sig-handlers* (fn [_] nil))
+             (add-handler! :hid1 (fn [_] (Thread/sleep 1000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
+             (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
+             (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
+             (Thread/sleep 2000) ; Wait for second signal to enqueue
+             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))])])
 
 ;;;;
 

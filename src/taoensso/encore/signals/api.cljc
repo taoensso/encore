@@ -308,18 +308,19 @@
 
                (catch :any t
                  (when error-fn
-                   (when-not (and rl-error (rl-error handler-id))
-                     (if-not (enc/identical-kw? error-fn ::default)
-                       (error-fn {:handler-id handler-id, :error t})
-                       (enc/signal!
-                         {:level :error
-                          :id    ::handler-error
-                          :error t
-                          :msg   "[taoensso/signals] Error executing wrapped handler fn"
-                          :data
-                          {:handler-id    handler-id
-                           :handler-fn    handler-fn
-                           :dispatch-opts dispatch-opts}}))))
+                   (enc/catching
+                     (when-not (and rl-error (rl-error handler-id))
+                       (if-not (enc/identical-kw? error-fn ::default)
+                         (error-fn {:handler-id handler-id, :error t})
+                         (enc/signal!
+                           {:level :error
+                            :id    ::handler-error
+                            :error t
+                            :msg   "[taoensso/signals] Error executing wrapped handler fn"
+                            :data
+                            {:handler-id    handler-id
+                             :handler-fn    handler-fn
+                             :dispatch-opts dispatch-opts}})))))
                  nil)))))]
 
     #?(:cljs wrapped-handler-fn
@@ -330,17 +331,18 @@
            (fn wrapped-handler-fn* [signal]
              (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
                (when backp-fn
-                 (when-not (and rl-backp (rl-backp handler-id))
-                   (if-not (enc/identical-kw? backp-fn ::default)
-                     (backp-fn {:handler-id handler-id})
-                     (enc/signal!
-                       {:level :warn
-                        :id    ::handler-back-pressure
-                        :msg   "[taoensso/signals] Back pressure on wrapped handler fn"
-                        :data
-                        {:handler-id    handler-id
-                         :handler-fn    handler-fn
-                         :dispatch-opts dispatch-opts}})))))))))))
+                 (enc/catching
+                   (when-not (and rl-backp (rl-backp handler-id))
+                     (if-not (enc/identical-kw? backp-fn ::default)
+                       (backp-fn {:handler-id handler-id})
+                       (enc/signal!
+                         {:level :warn
+                          :id    ::handler-back-pressure
+                          :msg   "[taoensso/signals] Back pressure on wrapped handler fn"
+                          :data
+                          {:handler-id    handler-id
+                           :handler-fn    handler-fn
+                           :dispatch-opts dispatch-opts}}))))))))))))
 
 #?(:clj
    (defmacro def-handler-api
@@ -412,7 +414,7 @@
                     Options for running handler asynchronously via `taoensso.encore/runner`,
                     {:keys [mode buffer-size n-threads daemon-threads? ...]}
 
-                    Supports `:blocking`, `:dropping`, and `:sliding` back-pressure modes.
+                    Supports `:blocking`, `:dropping`, and `:sliding` back pressure modes.
                     NB handling order may be non-sequential when `n-threads` > 1.
 
                  `sample`
