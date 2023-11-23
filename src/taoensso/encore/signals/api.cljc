@@ -274,8 +274,8 @@
         sig-filter*  (sigs/sig-filter ns-filter kind-filter id-filter min-level)
         stopped?_    (enc/latom false)
 
-        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 10)]]))
-        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 10)]]))
+        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
+        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :packp-fn  ::default)
 
