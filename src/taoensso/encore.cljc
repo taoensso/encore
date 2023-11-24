@@ -1931,10 +1931,18 @@
 
 (comment (exp-backoff 128))
 
-(defn chance "Returns true with probability p∈ℝ[0,1]."
-  [p] (< (Math/random) (double p)))
+(defn chance
+  "Returns true with given probability ∈ ℝ[0,1]."
+  {:tag #?(:cljs 'boolean :clj nil)
+   :inline
+   (fn [prob]
+     (if (const-form? prob)
+       `(< (Math/random) ~(as-pnum! prob))
+       `(< (Math/random)  (double  ~prob))))}
 
-(comment (chance 0.25))
+  [prob] (< (Math/random) (double prob)))
+
+(comment (chance 1.2))
 
 ;;;; Misc
 
