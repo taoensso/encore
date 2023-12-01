@@ -694,6 +694,10 @@
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
 
+(deftest _timestamps
+  [(is (true?  (enc/inst? (enc/now-inst))))
+   (is (false? (enc/inst? (enc/now-udt))))])
+
 ;;;; Futures
 
 #?(:clj

@@ -65,7 +65,7 @@
   (:refer-clojure :exclude
    [if-let if-some if-not when when-not when-some when-let cond defonce
     run! some? ident? float? boolean? uri? indexed? bytes?
-    int? pos-int? neg-int? nat-int?
+    int? pos-int? neg-int? nat-int? inst?
     simple-ident?   qualified-ident?
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
@@ -119,7 +119,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval
         if-let if-some if-not when when-not when-some when-let -cond cond
-        def* defonce cond! try* catching -cas!? now-dt* now-udt* now-nano* min* max*
+        def* defonce cond! try* catching -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
@@ -1183,6 +1183,7 @@
      (defn lazy-seq?   [x] (instance? clojure.lang.LazySeq              x))
      (defn re-pattern? [x] (instance? java.util.regex.Pattern           x))
      (defn can-meta?   [x] (instance? clojure.lang.IObj                 x)) ; Not IMeta
+     (defn inst?       [x] (instance? java.time.Instant                 x))
 
      (defn simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
      (defn qualified-ident?   [x] (and (ident?   x)       (namespace x) true))
@@ -1210,12 +1211,13 @@
      (defn ^boolean derefable?  [x] (satisfies?  IDeref              x))
      ;; (defn throwable?        [x])
      ;; (defn exception?        [x])
-     (defn ^boolean      error? [x] (instance?   js/Error             x))
-     (defn ^boolean       atom? [x] (instance?   Atom                 x))
-     (defn ^boolean  transient? [x] (instance?   ITransientCollection x))
-     (defn ^boolean   lazy-seq? [x] (instance?   LazySeq              x))
+     (defn ^boolean error?      [x] (instance?   js/Error             x))
+     (defn ^boolean atom?       [x] (instance?   Atom                 x))
+     (defn ^boolean transient?  [x] (instance?   ITransientCollection x))
+     (defn ^boolean lazy-seq?   [x] (instance?   LazySeq              x))
      (defn ^boolean re-pattern? [x] (instance?   js/RegExp            x))
-     (defn ^boolean   can-meta? [x] (implements? IWithMeta            x)) ; Not IMeta
+     (defn ^boolean can-meta?   [x] (implements? IWithMeta            x)) ; Not IMeta
+     (defn ^boolean inst?       [x] (instance?   js/Date              x))
 
      (defn ^boolean simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
      (defn ^boolean qualified-ident?   [x] (and (ident?   x)       (namespace x) true))
@@ -2986,32 +2988,72 @@
 
 ;;;; Instants
 
-(do
-  #?(:clj (defmacro now-dt*  [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
-  #?(:clj (defmacro now-udt* [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
-  (defn  now-dt       [] (now-dt*))
-  (defn now-udt ^long [] (now-udt*))
+#?(:clj
+   (defn now-udt
+     "Returns current system timestamp as milliseconds since Unix epoch."
+     {:inline (fn [] `(System/currentTimeMillis))}
+     ^long        []  (System/currentTimeMillis))
 
-  #?(:clj
-     (defmacro now-inst
-       "Returns current `java.time.Instant` (Clj), or epoch millis (Cljs)."
-       {:added "Encore v3.66.0 (2023-08-23)"} []
-       (if (:ns &env) `(js/Date.now) `(java.time.Instant/now))))
+   :cljs
+   (defn now-udt
+     "Returns current system timestamp as milliseconds since Unix epoch."
+     [] (js/Date.now)))
 
-  #?(:clj (defn now-nano ^long [] (System/nanoTime))
-     :cljs
-     (def now-nano
-       "Uses window context as epoch, Ref. <http://goo.gl/mWZWnR>"
-       (if-let [perf (and (oget js-?win "performance"))]
-         ;; Ref. <http://goo.gl/fn84us>
-         (if-let [f (or (oget perf "now")  (oget perf "mozNow") (oget perf "msNow")
-                        (oget perf "oNow") (oget perf "webkitNow"))]
-           ;; JS call returns millisecs double, accurate to 1/1000th of a ms:
-           (fn [] (* 1000000 (long (.call f perf))))
-           (fn [] (* 1000000 (now-udt*))))
-         (fn []   (* 1000000 (now-udt*))))))
+#?(:clj
+   (defn now-dt
+     "Returns current system timestamp as `java.util.Date`."
+     {:inline   (fn  [] `(java.util.Date.))}
+     ^java.util.Date []  (java.util.Date.))
 
-  #?(:clj (defmacro now-nano* [] (if (:ns &env) `(now-nano) `(System/nanoTime)))))
+   :cljs
+   (defn now-dt
+     "Returns current system timestamp as `js/Date`."
+     [] (js/Date.)))
+
+#?(:clj
+   (defn now-inst
+     "Returns current system timestamp as `java.time.Instant`."
+     {:added "Encore v3.66.0 (2023-08-23)"
+      :inline       (fn [] `(java.time.Instant/now))}
+     ^java.time.Instant []  (java.time.Instant/now))
+
+   :cljs
+   (defn now-inst
+     "Returns current system timestamp as `js/Date`."
+     {:added "Encore v3.66.0 (2023-08-23)"}
+     [] (js/Date.)))
+
+#?(:clj
+   (do
+     (defn now-chrono
+       "Returns current value of best-resolution time source as nanoseconds."
+       {:added  "Encore vX.Y.Z (YYYY-MM-DD)"
+        :inline (fn [] `(System/nanoTime))}
+       ^long        []  (System/nanoTime))
+
+     (defn now-nano
+       "Returns current value of best-resolution time source as nanoseconds."
+       {:inline (fn [] `(System/nanoTime))}
+       ^long        []  (System/nanoTime)))
+
+   :cljs
+   (if-let [perf (oget js-?win "performance")
+            pf   (or
+                   (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
+                   (oget perf "msNow") (oget perf "oNow"))]
+     (do
+       (defn now-chrono "Returns current value of best-resolution time source as float milliseconds." []                    (.call pf perf))
+       (defn now-nano   "Returns current value of best-resolution time source as long nanoseconds."   [] (Math/floor (* 1e6 (.call pf perf)))))
+     (do
+       (defn now-chrono "Returns current value of best-resolution time source as long milliseconds."  [] (* 1e6 (js/Date.now)))
+       (defn now-nano   "Returns current value of best-resolution time source as long nanoseconds."   [] (* 1e6 (js/Date.now))))))
+
+;; Specialist macros to force expanded form (useful in other macros, etc.).
+#?(:clj (defmacro ^:no-doc now-udt*    "When possible prefer `now-udt`."    [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
+#?(:clj (defmacro ^:no-doc now-dt*     "When possible prefer `now-dt`."     [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
+#?(:clj (defmacro ^:no-doc now-inst*   "When possible prefer `now-inst` ."  [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
+#?(:clj (defmacro ^:no-doc now-chrono* "When possible prefer `now-chrono`." [] (if (:ns &env) `(now-chrono)  `(System/nanoTime))))
+#?(:clj (defmacro ^:no-doc now-nano*   "When possible prefer `now-nano`."   [] (if (:ns &env) `(now-nano)    `(System/nanoTime))))
 
 ;;;; Memoization
 
@@ -3190,7 +3232,7 @@
                nil)
 
              (let [^long tick (ticker) ; Always inc, even on reads
-                   instant (if ttl? (now-udt*) 0)]
+                   instant (if ttl? (now-udt) 0)]
 
                (when (and
                        ;; We anyway have a tick, so may as well be exact
@@ -3275,7 +3317,7 @@
                  (cache_ #(dissoc % argn)))
                nil)
 
-             (let [instant (now-udt*)]
+             (let [instant (now-udt)]
 
                (when (gc-now? gc-rate)
                  (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
@@ -3418,7 +3460,7 @@
 
            f1
            (fn [rid peek?]
-             (let [instant (now-udt*)]
+             (let [instant (now-udt)]
 
                (when (and (not peek?) (gc-now? gc-rate))
                  (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
@@ -3613,7 +3655,7 @@
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
 (defn- rc-deref [^long msecs ts_ n-skip_ gc-fn]
-  (let [t1 (now-udt*)
+  (let [t1 (now-udt)
         ^long n-skip0  (n-skip_)
         ts             (ts_)
         n-total  (count ts)
@@ -3641,7 +3683,7 @@
      clojure.lang.IFn
      (invoke [this]
        (when-let [p (p_)] @p) ; Block iff latched
-       (let [t1 (now-udt*)] (ts_ #(conj % t1)))
+       (let [t1 (now-udt)] (ts_ #(conj % t1)))
        this ; Return to allow optional deref
        )
 
@@ -3662,7 +3704,7 @@
    (deftype RollingCounter [^long msecs ts_ n-skip_]
      IFn
      (-invoke [this]
-       (let [t1 (now-udt*)] (ts_ #(conj % t1)))
+       (let [t1 (now-udt)] (ts_ #(conj % t1)))
        this ; Return to allow optional deref
        )
 
@@ -6187,7 +6229,7 @@
   ([      msecs f] (call-after-timeout default-timeout-impl_ msecs f))
   ([impl_ msecs f]
    (let [msecs (long msecs)
-         udt   (+ (now-udt*) msecs) ; Approx instant to run
+         udt   (+ (now-udt) msecs) ; Approx instant to run
          result__ (latom :timeout/pending)
          #?(:clj latch) #?(:clj (CountDownLatch. 1))
          cas-f
