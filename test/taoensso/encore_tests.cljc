@@ -373,6 +373,20 @@
   (is (= (enc/abbreviate-ns 1 "foo.bar/baz") "f.bar/baz"))
   (is (= (enc/abbreviate-ns 2 "foo.bar/baz") "foo.bar/baz"))])
 
+;;;; Forms
+
+#?(:clj
+   (deftest _forms
+     [(is (false? (enc/call-form?    'foo)))
+      (is (false? (enc/call-form?    '[foo])))
+      (is (true?  (enc/call-form?    '(foo bar))))
+
+      (is (false? (enc/call-in-form? '{:a [:a1 :a2] :b #{:b1 [:b2]}})))
+      (is (true?  (enc/call-in-form? '{:a [:a1 :a2] :b #{:b1 [(b2)]}})))
+
+      (is (false? (enc/const-form? 'foo)))
+      (is (true?  (enc/const-form? :foo)))]))
+
 ;;;; Cache API
 
 (do

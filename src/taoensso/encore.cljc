@@ -746,6 +746,37 @@
           (print-method x sw) ; Bypass *out*, *print-dup*
           (.toString sw))))))
 
+;;;; Forms
+;; Useful for macros, etc.
+
+(declare rsome revery?)
+
+#?(:clj
+   (do
+     (defn ^:no-doc call-form?
+       "Private, don't use.
+       Returns true if given a list or Cons."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [x]
+       (or (list? x) (instance? #?(:clj clojure.lang.Cons #_:cljs #_cljs.core/Cons) x)))
+
+     (defn ^:no-doc call-in-form?
+       "Private, don't use.
+       Returns true if given a call form, or coll form containing a call form."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [x]
+       (when x
+         (cond
+           (call-form? x) true
+           (coll?      x) (if (rsome call-in-form? x) true false)
+           :else          false)))
+
+     (defn ^:no-doc runtime-form? "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (call-form? form)))
+     (defn ^:no-doc const-form?   "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
+     (defn ^:no-doc const-form    "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
+     (defn ^:no-doc const-forms?  "Private, don't use." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (revery? const-form?   forms))
+     (defn ^:no-doc const-forms   "Private, don't use." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (mapv    const-form    forms))))
+
 ;;;; Errors
 
 (defn ex-message
@@ -762,12 +793,6 @@
   #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
      :cljs (when (instance? ExceptionInfo ex) (.-cause              ex))))
 
-(defn- list-form?
-  "Returns true if given a list or Cons."
-  {:added "Encore v3.67.0 (2023-09-08)"}
-  [x]
-  (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
-
 #?(:clj
    (defmacro try*
      "Like `try`, but `catch` clause classnames can be the special keywords
@@ -782,7 +807,7 @@
            (mapv
              (fn [in]
                (cond
-                 (not (list-form? in)) in
+                 (not (call-form? in)) in
                  :let [[s1 s2 & more]  in]
 
                  (not= s1 'catch)    in
@@ -857,7 +882,7 @@
 
 (comment (caught-error-data (/ 5 0)))
 
-(declare submap? rsome str-contains? re-pattern?)
+(declare submap? str-contains? re-pattern?)
 (defn matching-error
   "Given an error (e.g. Throwable) and matching criteria.
   Returns the error if it matches all criteria, otherwise returns nil.
@@ -1839,16 +1864,6 @@
           (do    acc))))))
 
 (comment :see-tests)
-
-;;;;
-
-#?(:clj
-   (do
-     (defn ^:no-doc runtime-form? "Private util." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
-     (defn ^:no-doc const-form?   "Private util." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
-     (defn ^:no-doc const-form    "Private util." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
-     (defn ^:no-doc const-forms?  "Private util." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (revery? const-form?   forms))
-     (defn ^:no-doc const-forms   "Private util." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (mapv    const-form    forms))))
 
 ;;;; Math
 
