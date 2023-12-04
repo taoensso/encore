@@ -3024,36 +3024,27 @@
      [] (js/Date.)))
 
 #?(:clj
-   (do
-     (defn now-chrono
-       "Returns current value of best-resolution time source as nanoseconds."
-       {:added  "Encore vX.Y.Z (YYYY-MM-DD)"
-        :inline (fn [] `(System/nanoTime))}
-       ^long        []  (System/nanoTime))
-
-     (defn now-nano
-       "Returns current value of best-resolution time source as nanoseconds."
-       {:inline (fn [] `(System/nanoTime))}
-       ^long        []  (System/nanoTime)))
+   (defn now-nano
+     "Returns current value of best-resolution time source as nanoseconds."
+     {:inline (fn [] `(System/nanoTime))}
+     ^long        []  (System/nanoTime))
 
    :cljs
-   (if-let [perf (oget js-?win "performance")
-            pf   (or
-                   (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
-                   (oget perf "msNow") (oget perf "oNow"))]
-     (do
-       (defn now-chrono "Returns current value of best-resolution time source as float milliseconds." []                    (.call pf perf))
-       (defn now-nano   "Returns current value of best-resolution time source as long nanoseconds."   [] (Math/floor (* 1e6 (.call pf perf)))))
-     (do
-       (defn now-chrono "Returns current value of best-resolution time source as long milliseconds."  [] (* 1e6 (js/Date.now)))
-       (defn now-nano   "Returns current value of best-resolution time source as long nanoseconds."   [] (* 1e6 (js/Date.now))))))
+   (def now-nano
+     "Returns current value of best-resolution time source as nanoseconds."
+     (if-let [perf (oget js-?win "performance")
+              pf   (or
+                     (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
+                     (oget perf "msNow") (oget perf "oNow"))]
+
+       (fn [] (Math/floor (* 1e6 (.call pf perf))))
+       (fn []             (* 1e6 (js/Date.now))))))
 
 ;; Specialist macros to force expanded form (useful in other macros, etc.).
-#?(:clj (defmacro ^:no-doc now-udt*    "When possible prefer `now-udt`."    [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
-#?(:clj (defmacro ^:no-doc now-dt*     "When possible prefer `now-dt`."     [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
-#?(:clj (defmacro ^:no-doc now-inst*   "When possible prefer `now-inst` ."  [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
-#?(:clj (defmacro ^:no-doc now-chrono* "When possible prefer `now-chrono`." [] (if (:ns &env) `(now-chrono)  `(System/nanoTime))))
-#?(:clj (defmacro ^:no-doc now-nano*   "When possible prefer `now-nano`."   [] (if (:ns &env) `(now-nano)    `(System/nanoTime))))
+#?(:clj (defmacro ^:no-doc now-udt*    "When possible prefer `now-udt`."   [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
+#?(:clj (defmacro ^:no-doc now-dt*     "When possible prefer `now-dt`."    [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
+#?(:clj (defmacro ^:no-doc now-inst*   "When possible prefer `now-inst` ." [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
+#?(:clj (defmacro ^:no-doc now-nano*   "When possible prefer `now-nano`."  [] (if (:ns &env) `(now-nano)    `(System/nanoTime))))
 
 ;;;; Memoization
 
