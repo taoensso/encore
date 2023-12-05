@@ -333,7 +333,7 @@
 #?(:clj
    (defn filterable-expansion
      "Low-level util for writing macros with compile-time and runtime filtering.
-     Returns {:keys [callsite elide? allow?]}.
+     Returns {:keys [callsite-id elide? allow?]}.
 
      `macro-opts`, `opts-arg` are both of form:
        {:keys [kind id level sample rate-limit when]}.
@@ -342,15 +342,15 @@
      forms in `opts-arg`."
 
      [{:as   macro-opts
-       :keys [loc opts-arg sf-arity ct-sig-filter rt-sig-filter]}]
+       :keys [location opts-arg sf-arity ct-sig-filter rt-sig-filter]}]
 
      (when-not (or (nil? opts-arg) (map? opts-arg))
        (throw
          (ex-info "[encore/signals] `filterable-expansion` `opts-arg` must be a compile-time map"
-           {:loc loc, :opts-arg opts-arg})))
+           {:location location, :opts-arg opts-arg})))
 
-     (let [callsite (callsite-counter) ; Unique expansion id
-           {:keys [ns line column file]} loc
+     (let [callsite-id (callsite-counter) ; Unique expansion id
+           {:keys [ns line column file]} location
 
            ;; Note that while `opts-arg` must be a const (compile-time) map,
            ;; its vals are arb forms that may need eval.
@@ -371,7 +371,7 @@
                        :id    (enc/const-form    id-form)
                        :level (enc/const-form level-form)})))
 
-           base-rv {:callsite callsite}]
+           base-rv {:callsite-id callsite-id}]
 
        (if elide?
          (assoc base-rv :allow? false, :elide? true)
@@ -391,11 +391,11 @@
 
                      filter-form
                      (when-let [filter-form-entry (or (find-opt-form :filter) (find-opt-form :when))]
-                       `(let [~'this-callsite ~callsite] ~(val filter-form-entry)))
+                       `(let [~'this-callsite-id ~callsite-id] ~(val filter-form-entry)))
 
                      rl-form ; Nb last (increments count)
                      (when-let [spec-form (get-opt-form :rate-limit)]
-                       `(if (callsite-limit!? ~callsite ~spec-form nil) false true))]
+                       `(if (callsite-limit!? ~callsite-id ~spec-form nil) false true))]
 
                  `(and ~@(filter some? [sample-form sf-form filter-form rl-form])))]
 
@@ -403,7 +403,7 @@
 
 (comment
   (filterable-expansion
-    {:sf-arity 2, :rt-sig-filter `*foo*, :loc {:ns (str *ns*)}
+    {:sf-arity 2, :rt-sig-filter `*foo*, :location {:ns (str *ns*)}
      :opts-arg
      {:filter     'false
       :level      (do :info)
