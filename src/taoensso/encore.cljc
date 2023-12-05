@@ -71,7 +71,7 @@
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
     memoize abs ex-message ex-cause
-    newline])
+    newline satisfies?])
 
   #?(:clj
      (:require
@@ -121,7 +121,7 @@
         if-let if-some if-not when when-not when-some when-let -cond cond
         def* defonce cond! try* catching -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
-        identical-kw?]])))
+        identical-kw? satisfies? satisfies! instance!]])))
 
 (def encore-version [3 74 2])
 
@@ -161,7 +161,10 @@
      :expected #{:read :write}}"
 
   {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists '([arg] [arg opts] [arg & {:as opts :keys [msg context param expected ...]}])}
+   :arglists
+   '([arg]
+     [arg   {:keys [msg context param expected ...]}]
+     [arg & {:keys [msg context param expected ...]}])}
 
   ([arg     ] (unexpected-arg! arg nil))
   ([arg opts]
@@ -1204,11 +1207,11 @@
      (defn ^boolean ident?      [x] (or (keyword? x) (symbol? x)))
      (defn ^boolean boolean?    [x] (or (true?    x) (false?  x)))
      ;; (defn uri?              [x])
-     (defn ^boolean indexed?    [x] (satisfies?  IIndexed            x))
+     (defn ^boolean indexed?    [x] (implements? IIndexed            x))
      (defn ^boolean named?      [x] (implements? INamed              x))
      (defn ^boolean nameable?   [x] (or (named? x) (string? x)))
      (defn ^boolean editable?   [x] (implements? IEditableCollection x))
-     (defn ^boolean derefable?  [x] (satisfies?  IDeref              x))
+     (defn ^boolean derefable?  [x] (implements? IDeref              x))
      ;; (defn throwable?        [x])
      ;; (defn exception?        [x])
      (defn ^boolean error?      [x] (instance?   js/Error             x))
@@ -1518,48 +1521,61 @@
 
 ;;;;
 
-(defn instance!
-  "If (instance? class arg) is true, returns arg.
-  Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
-  See `unexpected-arg!` for more info."
-  {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists
-   '([class arg]
-     [class arg   {:keys [msg context param ...]}]
-     [class arg & {:keys [msg context param ...]}])}
+#?(:clj (declare caching-satisfies?))
+#?(:clj
+   (defmacro satisfies?
+     "Faster `satisfies?` to work around CLJ-1814 until a proper upstream fix.
+     May cache, so possibly inappropriate for dynamic work."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [protocol x]
+     (if (:ns &env)
+       ;; `(cljs.core/implements? ~protocol ~x)
+       `(cljs.core/satisfies?     ~protocol ~x)
+       `(caching-satisfies?       ~protocol ~x))))
 
-  ([class arg            ] (instance! class arg nil))
-  ([class arg details-map]
-   (if (instance? class arg)
-     arg
-     (unexpected-arg! arg
-       (conj {:expected `(~'instance? ~class ~'arg)} details-map))))
+#?(:clj
+   (defmacro satisfies!
+     "If (satisfies? protocol arg) is true, returns arg.
+     Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
+     See `unexpected-arg!` for more info."
+     {:added "Encore v3.51.0 (2023-03-13)"
+      :arglists
+      '([protocol arg]
+        [protocol arg   {:keys [msg context param ...]}]
+        [protocol arg & {:keys [msg context param ...]}])}
 
-  ([class arg k1 v1                  ] (instance! class arg {k1 v1}))
-  ([class arg k1 v1 k2 v2            ] (instance! class arg {k1 v1, k2 v2}))
-  ([class arg k1 v1 k2 v2 k3 v3      ] (instance! class arg {k1 v1, k2 v2, k3 v3}))
-  ([class arg k1 v1 k2 v2 k3 v3 k4 v4] (instance! class arg {k1 v1, k2 v2, k3 v3, k4 v4})))
+     ([protocol arg          ] `(satisfies! ~protocol ~arg nil))
+     ([protocol arg k1 & more] `(satisfies! ~protocol ~arg ~(apply hash-map k1 more)))
+     ([protocol arg opts]
+      (let [opts (conj {:expected `(quote (satisfies? ~protocol ~'arg))} opts)]
+        `(let [arg# ~arg]
+           (if (satisfies? ~protocol arg#)
+             arg#
+             (unexpected-arg! arg# ~opts)))))))
 
-(comment (instance! String 5 {:foo :bar}))
+(comment (macroexpand '(satisfies! my-protocol arg :k1 :v1 :k2 :v2)))
 
-(defn satisfies!
-  "If (satisfies? protocol arg) is true, returns arg.
-  Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
-  See `unexpected-arg!` for more info."
-  {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists '([protocol arg] [protocol arg opts] [protocol arg & {:as opts :keys [msg context param ...]}])}
+#?(:clj
+   (defmacro instance!
+     "If (instance? class arg) is true, returns arg.
+     Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
+     See `unexpected-arg!` for more info."
+     {:added "Encore v3.51.0 (2023-03-13)"
+      :arglists
+      '([class arg]
+        [class arg   {:keys [msg context param ...]}]
+        [class arg & {:keys [msg context param ...]}])}
 
-  ([protocol arg     ] (satisfies! protocol arg nil))
-  ([protocol arg opts]
-   (if (satisfies? protocol arg)
-    arg
-    (unexpected-arg! arg
-      (conj {:expected `(~'satisfies? ~protocol ~'arg)} opts))))
+     ([class arg          ] `(instance! ~class ~arg nil))
+     ([class arg k1 & more] `(instance! ~class ~arg ~(apply hash-map k1 more)))
+     ([class arg opts]
+      (let [opts (conj {:expected `(quote (instance? ~class ~'arg))} opts)]
+        `(let [arg# ~arg]
+           (if (instance? ~class arg#)
+             arg#
+             (unexpected-arg! arg# ~opts)))))))
 
-  ([protocol arg k1 v1                  ] (satisfies! protocol arg {k1 v1}))
-  ([protocol arg k1 v1 k2 v2            ] (satisfies! protocol arg {k1 v1, k2 v2}))
-  ([protocol arg k1 v1 k2 v2 k3 v3      ] (satisfies! protocol arg {k1 v1, k2 v2, k3 v3}))
-  ([protocol arg k1 v1 k2 v2 k3 v3 k4 v4] (satisfies! protocol arg {k1 v1, k2 v2, k3 v3, k4 v4})))
+(comment (macroexpand '(instance! String 5 :k1 :v1 :k2 :v2)))
 
 ;;;; Keywords
 
@@ -2985,6 +3001,20 @@
      (fn [v0] (swapped :swap/dissoc v0)))))
 
 (comment (pull-val! (atom {:a :A}) :b :nx))
+
+;;;;
+
+#?(:clj
+   (let [cache_ (latom {})]
+     (defn ^:no-doc caching-satisfies?
+       "Private implementation detail."
+       [protocol x]
+       (let [t (if (fn? x) ::fn (type x))]
+         (or
+           (get (cache_) t)
+           (if-let [uncachable-type? (re-find #"\d" (str t))]
+             (do               (clojure.core/satisfies? protocol x))
+             (cache_ t (fn [_] (clojure.core/satisfies? protocol x)))))))))
 
 ;;;; Instants
 

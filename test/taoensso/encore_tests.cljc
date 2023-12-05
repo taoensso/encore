@@ -74,6 +74,13 @@
          (enc/with-truss-data :dynamic-data
            (enc/have? string? 5 :data :arg-data))))])
 
+(defprotocol       IMyProtocol (my-protocol-fn [_]))
+(deftype MyType [] IMyProtocol (my-protocol-fn [_]))
+
+(deftest _satisfies?
+  [(is (true?  (enc/satisfies? IMyProtocol (MyType.))))
+   (is (false? (enc/satisfies? IMyProtocol "String")))])
+
 ;;;; Errors
 
 (deftest _matching-error
