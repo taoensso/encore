@@ -4411,23 +4411,36 @@
 ;;;; (S)RNG, etc.
 
 #?(:clj
-   (compile-if (fn [] (java.security.SecureRandom/getInstanceStrong)) ; Java 8+, blocking
-     (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstanceStrong)))
-     (def ^:private srng* (thread-local-proxy (java.security.SecureRandom/getInstance "SHA1SRNG")))))
+   (deftype ReseedingSRNG [^java.security.SecureRandom srng ^:volatile-mutable ^long call-count]
+     clojure.lang.IFn
+     (invoke [_]
+       ;; Regularly supplement seed for extra security
+       (if  (< call-count 1024)
+         (set! call-count (unchecked-inc call-count))
+         (do
+           (set! call-count 0)
+           (.setSeed srng (.generateSeed srng 8))))
+       srng)))
 
+#?(:clj
+   (defn ^:no-doc reseeding-srng
+     "Private low-level util, don't use this.
+     Returns a new stateful `ReseedingSRNG`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ^ReseedingSRNG []
+     (compile-if      #(java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
+       (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
+       (ReseedingSRNG. (java.security.SecureRandom/getInstance "SHA1SRNG") 0))))
+
+(comment (let [rsrng (reseeding-srng)] (qb 1e6 (secure-rng) (rsrng)))) ; [47.98 26.09]
+
+#?(:clj (def ^:private rsrng* (thread-local-proxy (reseeding-srng))))
 #?(:clj
    (do
      (defn secure-rng
-       "Returns a thread-local `java.security.SecureRandom`.
-       Favours security over performance. Automatically re-seeds occasionally.
-       May block while waiting on system entropy!"
-       ^java.security.SecureRandom []
-       (let [rng ^java.security.SecureRandom (.get ^ThreadLocal srng*)]
-         ;; Occasionally supplement current seed for extra security.
-         ;; Otherwise an attacker could *theoretically* observe large amounts of
-         ;; srng output to determine initial seed, Ref. <https://goo.gl/MPM91w>
-         (when (< (.nextDouble rng) 2.44140625E-4) (.setSeed rng (.generateSeed rng 8)))
-         rng))
+       "Returns a an auto-reseeding thread-local `java.security.SecureRandom`.
+       Favours security over performance. May block while waiting on entropy!"
+       ^java.security.SecureRandom [] ((.get ^ThreadLocal rsrng*)))
 
      (defn secure-rng-mock!!!
        "Returns **INSECURE** `java.security.SecureRandom` mock instance backed by
