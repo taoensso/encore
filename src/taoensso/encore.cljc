@@ -3858,25 +3858,30 @@
          (.flush out))
        nil)))
 
-#?(:clj  (defn          str-builder? [x] (instance?            StringBuilder x))
-   :cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer x)))
+#?(:clj  (defn          str-builder? [x] (instance?             StringBuilder x))
+   :cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer  x)))
 
-(def str-builder "For cross-platform string building"
-  #?(:clj  (fn (^StringBuilder [      ] (StringBuilder.))
-               (^StringBuilder [s-init] (StringBuilder. ^String s-init)))
+(defn str-builder
+  "Returns a new stateful string builder:
+    - `java.lang.StringBuilder`  for Clj
+    - `goog.string.StringBuffer` for Cljs
 
-     :cljs (fn ([      ] (goog.string.StringBuffer.))
-               ([s-init] (goog.string.StringBuffer. s-init)))))
+  See also `sb-append`."
+  #?(:clj  (^StringBuilder [                ] (StringBuilder.)))
+  #?(:cljs (               [                ] (goog.string.StringBuffer.)))
+  #?(:clj  (^StringBuilder [^String init-str] (StringBuilder.            init-str)))
+  #?(:cljs (               [^String init-str] (goog.string.StringBuffer. init-str))))
 
-(defn sb-append "For cross-platform string building"
-  #?(:clj  (^StringBuilder [^StringBuilder str-builder ^String s] (.append str-builder s))
-     :cljs (               [               str-builder         s] (.append str-builder s)))
+(defn sb-append
+  "Appends given string to given string builder. See also `str-builder.`"
+  #?(:clj  (^StringBuilder [^StringBuilder str-builder s] (.append str-builder s))
+     :cljs (               [               str-builder s] (.append str-builder s)))
   ([str-builder s & more]
    (reduce (fn [acc in] (sb-append acc in))
      (sb-append str-builder s)
      more)))
 
-(comment (str (sb-append (str-builder "a") "b" "c")))
+(comment (str (sb-append (str-builder "a") "b" "c" \d)))
 
 (defn str-rf
   "String builder reducing fn."
@@ -3890,8 +3895,7 @@
     (str (reduce str-rf (range 512)))))
 
 (defn str-join
-  "Faster, transducer-based generalization of `clojure.string/join` with `xform`
-  support."
+  "Faster, transducer-based generalization of `clojure.string/join` with `xform` support."
   {:tag #?(:clj 'String :cljs 'string)}
   ([                coll] (str-join nil       nil coll))
   ([separator       coll] (str-join separator nil coll))
