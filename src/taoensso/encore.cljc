@@ -658,7 +658,7 @@
 
 #?(:clj
    (defmacro ^:no-doc deftype-print-methods
-     "Private, used by other Taoensso libs."
+     "Private, don't use."
      {:added "Encore v3.57.0 (2023-03-29)"}
      [& types]
      `(do
@@ -783,14 +783,14 @@
 ;;;; Errors
 
 (defn ex-message
-  "Copy of `core/ex-message` (added in Clojure v1.10)"
+  "Copy of `core/ex-message` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
   [ex]
   #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
      :cljs (when (instance? js/Error  ex) (.-message              ex))))
 
 (defn ex-cause
-  "Copy of `core/ex-cause` (added in Clojure v1.10)"
+  "Copy of `core/ex-cause` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
   [ex]
   #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
@@ -2737,7 +2737,7 @@
          (get new-map k)))))
 
 (defn ^:no-doc ^LightAtom latom
-  "Private micro-optimized lightweight `atom` for internal use.
+  "Private, don't use. Micro-optimized lightweight `atom`.
   Up to 30% faster than standard atoms, with the same atomicity guarantees."
   {:added "Encore v3.67.0 (2023-09-08)"}
   [init-state]
@@ -2748,7 +2748,7 @@
 #?(:clj
    (let [atom-tag (compile-if clojure.lang.IAtom 'clojure.lang.IAtom 'clojure.lang.Atom)]
      (defmacro ^:no-doc -cas!?
-       "Private micro-optimized `compare-and-set!` for internal use."
+       "Private, don't use. Micro-optimized `compare-and-set!`."
        {:added "Encore v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val]
        (if (:ns &env)
@@ -3020,7 +3020,7 @@
 #?(:clj
    (let [cache_ (latom {})]
      (defn ^:no-doc caching-satisfies?
-       "Private implementation detail."
+       "Private, don't use."
        [protocol x]
        (let [t (if (fn? x) ::fn (type x))]
          (or
@@ -3477,7 +3477,7 @@
 (comment (qb 1e6 (coerce-limit-spec [[10 1000] [20 2000]])))
 
 (defn ^:no-doc rate-limiter*
-  "Private low-level util.
+  "Private, don't use.
   Like `rate-limiter` but returns [<state_> <rate-limiter>]."
   ([     spec] (rate-limiter* nil spec))
   ([opts spec]
@@ -4424,8 +4424,7 @@
 
 #?(:clj
    (defn ^:no-doc reseeding-srng
-     "Private low-level util, don't use this.
-     Returns a new stateful `ReseedingSRNG`."
+     "Private, don't use. Returns a new stateful `ReseedingSRNG`."
      {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
      ^ReseedingSRNG []
      (compile-if      #(java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
@@ -4946,8 +4945,8 @@
                  (vinterleave-all props envs ress)))))))
 
      (defmacro ^:no-doc get-config
-       "Returns nil, or {:keys [config source ...]}.
-       Private low-level config API util."
+       "Private, don't use. Low-level config API util.
+       Returns nil, or {:keys [config source ...]}."
        {:added "Encore v3.66.0 (2023-08-23)"
         :arglists (:arglists (meta #'-get-config))}
        [opts]
@@ -5122,7 +5121,7 @@
 
 #?(:clj
    (defn ^:no-doc binding-conveyor-fn
-     "Private, please don't use this."
+     "Private, don't use."
      {:added "Encore v3.72.0 (2023-10-24)"}
      [f]
      (let [frame (clojure.lang.Var/cloneThreadBindingFrame)]
