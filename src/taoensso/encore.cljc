@@ -4489,41 +4489,6 @@
 
 (comment (qb 1e6 (parse-alphabet nanoid-alphabet 21)))
 
-(defn secure-rand-id
-  "Experimental.
-  Given `alphabet` (a string of possible characters), returns a securely
-  random string of length `len`.
-
-  Trying to do this the obvious/naive way (by repeatedly generating a secure
-  random number and mapping it to an alphabet character with modulo) actually
-  introduces bias into ids that can be exploited by an attacker.
-
-  The method used here is designed to eliminate that bias.
-  Based on <https://bit.ly/3dtYv73>."
-
-  #?(:clj [alphabet ^long len] :cljs [alphabet len])
-  (let [#?(:clj [^byte mask step v] :cljs [mask step v])
-        (parse-alphabet alphabet len)
-
-        an (count v)
-        sb (str-builder)]
-
-    (loop []
-      (let [ba (secure-rand-bytes step)
-            result
-            (reduce-n
-              (fn [acc idx]
-                (let [alpha-idx (bit-and mask (aget ba idx))]
-                  (if (>= alpha-idx an)
-                    acc ; Out of alphabet range
-                    (let [acc (sb-append acc (v alpha-idx))]
-                      (if (== (count acc) len)
-                        (reduced (str acc))
-                        (do           acc))))))
-              sb
-              step)]
-        (if (string? result) result (recur))))))
-
 (let [alphabet (mapv str nanoid-alphabet)
       mask     0x3f]
 
@@ -4540,7 +4505,7 @@
            (str-builder)
            (alength ba)))))))
 
-(comment (qb 1e5 (secure-rand-id nanoid-alphabet 21) (nanoid) (uuid-str))) ; [343.31 205.98 82.86]
+(comment (qb 1e5 (nanoid) (uuid-str))) ; [205.98 82.86]
 
 ;;;; Hex strings
 
