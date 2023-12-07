@@ -1981,15 +1981,22 @@
 
 (comment (chance 1.2))
 
-;;;; Misc
+;;;; Cljs basics
 
 ;; js/foo      - `foo` in global object/ns (depends on *target*)
 ;; js/window   - `window` object: global ns in browsers
 ;; js/global   - `global` object: global ns in Node.js, etc.?
 ;; goog/global - Closure's environment-agnostic global object
-;;
+
 #?(:cljs (def node-target? (= *target* "nodejs")))
-#?(:cljs (def js-?win (when (exists? js/window) js/window)))
+#?(:cljs (def ^:no-doc js-?window  (when (exists? js/window)  js/window)))  ; Present iff in browser
+#?(:cljs (def ^:no-doc js-?process (when (exists? js/process) js/process))) ; Present iff in Node.js
+#?(:cljs (def ^:no-doc js-?crypto
+           (or
+             (when (exists? js/crypto) js/crypto)
+             (when (exists? js/window) (gobj/get js/window "crypto")))))
+
+;;;; Misc
 
 (defn force-ref "Like `force` for refs." [x] (if (derefable? x) (deref x) x))
 (defn force-var "Like `force` for vars." [x] (if (var?       x) (deref x) x))
@@ -2090,19 +2097,18 @@
 
 #?(:cljs
    (defn oget "Like `get` for JS objects."
-     ([  k          ] (gobj/get js/window (name k)))
-     ([o k          ] (gobj/get o         (name k) nil))
-     ([o k not-found] (gobj/get o         (name k) not-found))))
+     ([  k          ] (gobj/get js-?window (name k)))
+     ([o k          ] (gobj/get o          (name k) nil))
+     ([o k not-found] (gobj/get o          (name k) not-found))))
 
 #?(:cljs
    (let [sentinel (js-obj)]
      ;; Could also use `gobg/getValueByKeys`
      (defn oget-in "Like `get-in` for JS objects."
-       ([  ks] (oget-in js/window ks nil))
-       ([o ks] (oget-in o         ks nil))
+       ([  ks          ] (oget-in js-?window ks nil))
+       ([o ks          ] (oget-in o          ks nil))
        ([o ks not-found]
-        (loop [o o
-               ks (seq ks)]
+        (loop [o o, ks (seq ks)]
           (if ks
             (let [o (gobj/get o (name (first ks)) sentinel)]
               (if (identical? o sentinel)
@@ -3075,7 +3081,7 @@
    :cljs
    (def now-nano
      "Returns current value of best-resolution time source as nanoseconds."
-     (if-let [perf (oget js-?win "performance")
+     (if-let [perf (oget js-?window "performance")
               pf   (or
                      (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
                      (oget perf "msNow") (oget perf "oNow"))]
@@ -5473,19 +5479,20 @@
      (defn sayf [fmt & xs] (js/alert    (format* fmt xs)))))
 
 #?(:cljs
-   (defn get-win-loc "Returns `js/window`'s current location as a map."
+   (defn get-win-loc
+     "Returns current window location as
+     {:keys [href protocol hostname host pathname search hash]}."
      []
-     (when-let [js-win js-?win]
-       (when-let [loc (.-location js-win)]
-         {;; Ref. <http://bl.ocks.org/abernier/3070589>
-          :href     (.-href     loc) ; "http://www.example.org:80/foo/bar?q=baz#bang"
-          :protocol (.-protocol loc) ; "http:" ; Note the :
-          :hostname (.-hostname loc) ; "example.org"
-          :host     (.-host     loc) ; "example.org:80"
-          :pathname (.-pathname loc) ; "/foo/bar"
-          :search   (.-search   loc) ; "?q=baz"
-          :hash     (.-hash     loc) ; "#bang"
-          }))))
+     (when-let [loc (oget js-?window "location")]
+       {;; Ref. <http://bl.ocks.org/abernier/3070589>
+        :href     (.-href     loc) ; "http://www.example.org:80/foo/bar?q=baz#bang"
+        :protocol (.-protocol loc) ; "http:" ; Note the :
+        :hostname (.-hostname loc) ; "example.org"
+        :host     (.-host     loc) ; "example.org:80"
+        :pathname (.-pathname loc) ; "/foo/bar"
+        :search   (.-search   loc) ; "?q=baz"
+        :hash     (.-hash     loc) ; "#bang"
+        })))
 
 #?(:cljs
    (do
@@ -5709,7 +5716,7 @@
          :else
          (let [done?_ (latom false)]
 
-           (.setTimeout js/window
+           (js/setTimeout
              (fn xhr-timeout []
                (when (-cas!? done?_ false true)
                  (callback-fn {:?error :xhr-pool-timeout})))
@@ -6166,7 +6173,7 @@
   (deftype DefaultTimeoutImpl [#?(:clj ^java.util.Timer timer)]
                  ITimeoutImpl
     (-schedule-timeout [_ msecs f]
-      #?(:cljs (.setTimeout js/window f msecs)
+      #?(:cljs (js/setTimeout f msecs)
          :clj
          (let [tt (proxy [java.util.TimerTask] []
                     (run [] (catching (f))))]
@@ -6485,8 +6492,7 @@
 
   #?(:cljs ; Used by Sente <= v1.1.0
      (defn ^:no-doc ^:_deprecated set-exp-backoff-timeout! [nullary-f & [nattempt]]
-       (when-let [js-win js-?win]
-         (.setTimeout js-win nullary-f (exp-backoff (or nattempt 0))))))
+       (js/setTimeout nullary-f (exp-backoff (or nattempt 0)))))
 
   #?(:cljs
      (do ; Level-based Cljs logging (prefer Timbre v4+)
@@ -6746,3 +6752,6 @@
                (throw
                  (ex-info "[enc/load-edn-config] Error loading edn config"
                    (assoc error-data :opts opts) t)))))))))
+
+(do ; Not currently eliding
+  #?(:cljs (def ^:no-doc ^:_deprecated js-?win js-?window)))
