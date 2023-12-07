@@ -561,7 +561,7 @@
 
 #?(:clj
    (defmacro defalias
-     "Defines a local alias for the var identified by the given qualified
+     "Defines a local alias for the var identified by given qualified
      source symbol: (defalias my-map clojure.core/map), etc.
 
      For Clj:
@@ -1163,9 +1163,9 @@
 (comment (test-fixtures {:before (fn [])}))
 
 ;;;; Type preds, etc.
-;; - TODO Could really do with a portable ^boolean hint
-;; - Some of these have slowly been getting added to Clojure core; make sure
-;;   to :exclude any official preds using the same name
+;; - Could really do with a portable ^boolean hint
+;; - Some of these have slowly been getting added to Clojure core,
+;;   make sure to :exclude any official preds using the same name
 
 #?(:clj
    (do
@@ -1246,11 +1246,12 @@
 ;;   - long   - Specific size: long   ; Only used when emphasizing specific size
 ;;   - double - Specific size: double ; Only used when emphasizing specific size
 
-(defn #?(:clj finite-num? :cljs ^boolean finite-num?)
+(defn finite-num?
   "Returns true iff given a number (of standard type) that is:
   finite (excl. NaN and infinities)."
+  #?(:cljs {:tag 'boolean})
   [x]
-  #?(:clj (and (number? x) (Double/isFinite x)) ; Works with other types, incl. ratio
+  #?(:clj  (and (number? x) (Double/isFinite x)) ; Works with other types, incl. ratio
      :cljs (js/Number.isFinite x)
      #_
      (and
@@ -1259,9 +1260,10 @@
        (not (identical? x js/Number.POSITIVE_INFINITY))
        (not (identical? x js/Number.NEGATIVE_INFINITY)))))
 
-(defn #?(:clj int? :cljs ^boolean int?)
+(defn int?
   "Returns true iff given a number (of standard type) that is:
   a fixed-precision integer."
+  #?(:cljs {:tag 'boolean})
   [x]
   #?(:clj
      (or
@@ -1276,9 +1278,10 @@
        (finite-num? x)
        (== (js/parseFloat x) (js/parseInt x 10)))))
 
-(defn #?(:clj float? :cljs ^boolean float?)
+(defn float?
   "Returns true iff given a number (of standard type) that is:
   a fixed-precision floating-point (incl. NaN and infinities)."
+  #?(:cljs {:tag 'boolean})
   [x]
   #?(:clj (or (instance? Double x) (instance? Float x))
      :cljs
@@ -1329,12 +1332,14 @@
 
      (defn ^boolean udt?       [x] (and (int? x) (not (neg? x))))))
 
-(defn #?(:clj pnum? :cljs ^boolean pnum?)
+(defn pnum?
   "Returns true iff given number in unsigned unit proportion interval ∈ℝ[0,1]."
+  #?(:cljs {:tag 'boolean})
   [x] (and (number? x) (let [n (double x)] (and (>= n 0.0) (<= n 1.0)))))
 
-(defn #?(:clj rnum? :cljs ^boolean rnum?)
+(defn rnum?
   "Returns true iff given number in signed unit proportion interval ∈ℝ[-1,1]."
+  #?(:cljs {:tag 'boolean})
   [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0)))))
 
 (def ^:const have-core-async?
@@ -1436,9 +1441,7 @@
 (declare assoc-some)
 
 (defn- try-pred [pred x] (catching (pred x) _ false))
-
-#?(:clj  (defn          when? [pred x] (when (try-pred pred x) x))
-   :cljs (defn ^boolean when? [pred x] (when (try-pred pred x) x)))
+(defn when? #?(:cljs {:tag 'boolean}) [pred x] (when (try-pred pred x) x))
 
 (defn is!
   "Lightweight `have!` that provides less diagnostic info."
@@ -1888,7 +1891,8 @@
 (def ^:const max-long #?(:clj Long/MAX_VALUE :cljs  9007199254740991))
 (def ^:const min-long #?(:clj Long/MIN_VALUE :cljs -9007199254740991))
 
-(defn #?(:clj approx== :cljs ^boolean approx==)
+(defn approx==
+  #?(:cljs {:tag 'boolean})
   ([      x y] (< (Math/abs (- (double x) (double y))) 0.001))
   ([signf x y] (< (Math/abs (- (double x) (double y))) (double signf))))
 
@@ -1992,7 +1996,8 @@
 (defn merge-meta   [x m] (with-meta x (merge (meta x) m)))
 (defn without-meta [x] (if (meta x) (with-meta x nil) x))
 
-(defn #?(:clj some= :cljs ^boolean some=)
+(defn some=
+  #?(:cljs {:tag 'boolean})
   ([x y]        (and (some? x) (= x y)))
   ([x y & more] (and (some? x) (= x y) (revery? #(= % x) more))))
 
@@ -2034,15 +2039,24 @@
 
 ;;;; Collections
 
-#?(:clj  (defn          queue? [x] (instance? clojure.lang.PersistentQueue x))
-   :cljs (defn ^boolean queue? [x] (instance?    cljs.core.PersistentQueue x)))
+(defn queue?
+  "Returns true iff given a `PersistentQueue`."
+  #?(:cljs {:tag 'boolean})
+  [x]
+  #?(:clj  (instance? clojure.lang.PersistentQueue x)
+     :cljs (instance?    cljs.core.PersistentQueue x)))
 
-(defn queue "Returns a PersistentQueue."
+(defn queue
+  "Returns a new `PersistentQueue`."
   ([coll] (into (queue) coll))
-  ([] #?(:clj  clojure.lang.PersistentQueue/EMPTY
-         :cljs    cljs.core.PersistentQueue.EMPTY)))
+  ([    ]
+   #?(:clj clojure.lang.PersistentQueue/EMPTY
+      :cljs   cljs.core.PersistentQueue.EMPTY)))
 
-(defn queue* [& items] (queue items))
+(defn queue*
+  "Returns a new `PersistentQueue` given items."
+  [& items] (queue items))
+
 (defn ensure-vec [x] (if (vector? x) x (vec x)))
 (defn ensure-set [x] (if (set?    x) x (set x)))
 
@@ -2266,7 +2280,8 @@
 
 (defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
 
-(defn #?(:clj distinct-elements? :cljs ^boolean distinct-elements?)
+(defn distinct-elements?
+  #?(:cljs {:tag 'boolean})
   [x] (or (set? x) (= (count x) (count (ensure-set x)))))
 
 (def seq-kvs "(seq-kvs {:a :A}) => (:a :A)." (partial reduce concat))
@@ -2324,8 +2339,7 @@
 
 (defn rename-keys
   "Returns a map like the one given, replacing keys using
-  the given {<old-new> <new-key>} replacements.
-  O(min(n_replacements, n_m))."
+  given {<old-new> <new-key>} replacements. O(min(n_replacements, n_m))."
   [replacements m]
   (cond
     (nil?   m) {}
@@ -2364,10 +2378,10 @@
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
 (do
-  (defn #?(:clj ks=      :cljs ^boolean ks=)      [ks m] (=             (set (keys m)) (ensure-set ks)))
-  (defn #?(:clj ks<=     :cljs ^boolean ks<=)     [ks m] (set/subset?   (set (keys m)) (ensure-set ks)))
-  (defn #?(:clj ks>=     :cljs ^boolean ks>=)     [ks m] (set/superset? (set (keys m)) (ensure-set ks)))
-  (defn #?(:clj ks-nnil? :cljs ^boolean ks-nnil?) [ks m] (revery?     #(some? (get m %))     ks)))
+  (defn ks=      #?(:cljs {:tag 'boolean}) [ks m] (=             (set (keys m)) (ensure-set ks)))
+  (defn ks<=     #?(:cljs {:tag 'boolean}) [ks m] (set/subset?   (set (keys m)) (ensure-set ks)))
+  (defn ks>=     #?(:cljs {:tag 'boolean}) [ks m] (set/superset? (set (keys m)) (ensure-set ks)))
+  (defn ks-nnil? #?(:cljs {:tag 'boolean}) [ks m] (revery?    #(some? (get  m %))           ks)))
 
 (comment
   (ks=      #{:a :b} {:a :A :b :B  :c :C})
@@ -2403,7 +2417,8 @@
 
 (comment :see-tests)
 
-(defn #?(:clj contains-in? :cljs ^boolean contains-in?)
+(defn contains-in?
+  #?(:cljs {:tag 'boolean})
   ([coll ks k] (contains? (get-in coll ks) k))
   ([coll ks  ]
    (if (empty? ks)
@@ -2854,9 +2869,7 @@
       [(.-newv ^Swapped x) (.-returnv ^Swapped x)]
       [x x]))
 
-  #?(:clj  (defn          swapped? [x] (instance? Swapped x))
-     :cljs (defn ^boolean swapped? [x] (instance? Swapped x)))
-
+  (defn swapped? #?(:cljs {:tag 'boolean}) [x] (instance? Swapped x))
   (comment (qb 1e6 (.-newv (swapped "new" "return")))))
 
 (defn- return-swapped [^Swapped sw m0 m1]
@@ -3858,8 +3871,11 @@
          (.flush out))
        nil)))
 
-#?(:clj  (defn          str-builder? [x] (instance?             StringBuilder x))
-   :cljs (defn ^boolean str-builder? [x] (instance? goog.string.StringBuffer  x)))
+(defn str-builder?
+  #?(:cljs {:tag 'boolean})
+  [x]
+  #?(:clj  (instance?             StringBuilder x)
+     :cljs (instance? goog.string.StringBuffer  x)))
 
 (defn str-builder
   "Returns a new stateful string builder:
@@ -3917,17 +3933,20 @@
     (str-join ""  ["a" "b" "c" "d"])) ; [29.37 23.63 13.34]
   (str-join "," (comp (filter #{"a" "c"}) (map str/upper-case)) ["a" "b" "c"]))
 
-(defn #?(:clj str-contains? :cljs ^boolean str-contains?)
+(defn str-contains?
+  #?(:cljs {:tag 'boolean})
   [s substr]
   #?(:clj  (.contains ^String s ^String substr)
      :cljs (not= -1 (.indexOf s substr))))
 
-(defn #?(:clj str-starts-with? :cljs ^boolean str-starts-with?)
+(defn str-starts-with?
+  #?(:cljs {:tag 'boolean})
   [s substr]
   #?(:clj  (.startsWith ^String s ^String substr)
      :cljs (zero? (.indexOf s substr))))
 
-(defn #?(:clj str-ends-with? :cljs ^boolean str-ends-with?)
+(defn str-ends-with?
+  #?(:cljs {:tag 'boolean})
   [s substr]
   #?(:clj (.endsWith ^String s ^String substr)
      :cljs
@@ -4023,16 +4042,12 @@
 
 (comment :see-tests)
 
-(defn
-  #?(:clj           case-insensitive-str=
-     :cljs ^boolean case-insensitive-str=)
-
+(defn case-insensitive-str=
   "Returns true iff given strings are equal, ignoring case."
-  ;; Implementation detail:
-  ;; Compares normalized chars 1 by 1, so often faster than naive comparison
-  ;; of normalized strings.
-
-  {:added "Encore v3.25.0 (2022-10-13)"}
+  ;; Implementation detail: compares normalized chars 1 by 1, so often faster
+  ;; than naive comparison of normalized strings.
+  {:tag #?(:cljs 'boolean :clj nil)
+   :added "Encore v3.25.0 (2022-10-13)"}
   [s1 s2]
   #?(:clj (.equalsIgnoreCase ^String s1 ^String s2)
      :cljs
@@ -4790,14 +4805,15 @@
 
 #?(:clj
    (def file-resources-modified?
-     "Returns true iff any files backing the given named resources have changed
-     since last call."
-     (let [udts_ (atom {}) ; {<rnames> <udt-or-udts>}
+     "Returns true iff any files backing given named resources have changed since last call."
+     (let [udts_ (atom {}) ; {<rnames> <udts>}
            swap! (fn [ks v] (swap-in! udts_ ks (fn [?v] (swapped v (when (not= v ?v) v)))))
-           rnames->rgroup (fmemoize (fn [rnames] (into (sorted-set) rnames)))]
-       (fn [rnames & [?id]]
-         (let [rgroup (rnames->rgroup rnames)]
-           (swap! [?id rgroup] (mapv get-file-resource-?last-modified rgroup)))))))
+           sorted-set (fmemoize (fn [x] (into (sorted-set) x)))]
+
+       (fn [rnames & [?scope]]
+         (let [rgroup (sorted-set rnames)]
+           (swap! [?scope rgroup]
+             (mapv get-file-resource-?last-modified rgroup)))))))
 
 #?(:clj
    (def slurp-file-resource
@@ -6235,8 +6251,7 @@
      (isDone      [t]   (tf-done?      t))
      (cancel      [t _] (tf-cancel!    t))))
 
-#?(:clj  (defn          timeout-future? [x] (instance? TimeoutFuture x))
-   :cljs (defn ^boolean timeout-future? [x] (instance? TimeoutFuture x)))
+(defn timeout-future? #?(:cljs {:tag 'boolean}) [x] (instance? TimeoutFuture x))
 
 (defn call-after-timeout
   "Alpha, subject to change.
