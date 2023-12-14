@@ -71,7 +71,7 @@
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
     memoize abs ex-message ex-cause
-    newline satisfies?])
+    newline satisfies? uuid])
 
   #?(:clj
      (:require
@@ -4212,30 +4212,43 @@
 (defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
 (comment (count-words "Hello this is a    test"))
 
+(defn uuid
+  "For Clj: returns a random `java.util.UUID`.
+  For Cljs: returns a random UUID string.
+
+  Uses strong randomness when possible.
+  See also `uuid-str`, `nanoid`, `rand-id-fn`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :inline #?(:cljs nil :clj (fn [] `(java.util.UUID/randomUUID)))}
+  #?(:clj       (^java.util.UUID []  (java.util.UUID/randomUUID))
+     :cljs
+     ([]
+      (if-let [f (oget js-?crypto "randomUUID")]
+        (.call f js-?crypto)
+        (let [^string quad-hex
+              (fn []
+                (let [unpadded-hex ^string (.toString (rand-int 65536) 16)]
+                  (case (count   unpadded-hex)
+                    1 (str "000" unpadded-hex)
+                    2 (str "00"  unpadded-hex)
+                    3 (str "0"   unpadded-hex)
+                      (do        unpadded-hex))))
+
+              ver-trip-hex ^string (.toString (bit-or 0x4000 (bit-and 0x0fff (rand-int 65536))) 16)
+              res-trip-hex ^string (.toString (bit-or 0x8000 (bit-and 0x3fff (rand-int 65536))) 16)]
+
+          (str (quad-hex) (quad-hex) "-" (quad-hex) "-" ver-trip-hex "-" res-trip-hex "-"
+               (quad-hex) (quad-hex) (quad-hex)))))))
+
 (defn uuid-str
-  "Returns a UUIDv4 string of form \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".
-  Ref. <http://www.ietf.org/rfc/rfc4122.txt>,
-       <https://gist.github.com/franks42/4159427>,
-       <https://github.com/clojure/clojurescript/pull/194>"
+  "Returns a random UUID string of given length (max 36).
+  Uses strong randomness when possible. See also `uuid`, `nanoid`, `rand-id-fn`."
   {:tag #?(:clj 'String :cljs 'string)}
-  ([max-length] (get-substr-by-len (uuid-str) 0 max-length))
-  ([]
-   #?(:clj (str (java.util.UUID/randomUUID))
-      :cljs
-      (let [^string quad-hex
-            (fn []
-              (let [unpadded-hex ^string (.toString (rand-int 65536) 16)]
-                (case (count   unpadded-hex)
-                  1 (str "000" unpadded-hex)
-                  2 (str "00"  unpadded-hex)
-                  3 (str "0"   unpadded-hex)
-                  (do          unpadded-hex))))
-
-            ver-trip-hex ^string (.toString (bit-or 0x4000 (bit-and 0x0fff (rand-int 65536))) 16)
-            res-trip-hex ^string (.toString (bit-or 0x8000 (bit-and 0x3fff (rand-int 65536))) 16)]
-
-        (str (quad-hex) (quad-hex) "-" (quad-hex) "-" ver-trip-hex "-" res-trip-hex "-"
-          (quad-hex) (quad-hex) (quad-hex))))))
+  ;; 128 bits of entropy with default length (36)
+  ([max-len] (get-substr-by-len (uuid-str) 0 max-len))
+  ([       ]
+   #?(:clj (str (uuid))
+      :cljs     (uuid))))
 
 (comment (qb 1e6 (uuid-str 5)))
 
@@ -4462,55 +4475,123 @@
 (comment :see-tests)
 
 (defn secure-rand-bytes
-  "Returns `size` random bytes using `secure-rng` or `js/window.crypto`."
+  "Returns a random byte array of given size. Uses strong randomness when possible."
   #?(:clj (^bytes [size] (let [ba (byte-array size)] (.nextBytes (secure-rng) ba) ba))
      :cljs
      ([size]
-      (when-let [crypto (.-crypto js/window)]
-        (let [ba (js/Uint8Array. size)] (.getRandomValues crypto ba) ba)))))
+      (let [ba (js/Uint8Array. size)]
+        (if-let [crypto js-?crypto]
+          (.getRandomValues crypto ba)
+          (dotimes [i size] (aset ba i (Math/floor (* 256 (js/Math.random))))))
+        ba))))
 
 (comment
   (qb  1e6 (secure-rand-bytes 21)) ; 1021.07
   (do (seq (secure-rand-bytes 21))))
 
-(def           ^:const nanoid-alphabet "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
-(def ^:private          parse-alphabet
-  "Ref.
-    Java impl.: <https://bit.ly/3dtYv73>,
-      JS impl.: <https://bit.ly/3fYv1zT>,
-    Motivation: <https://bit.ly/2VhWuEO>"
-  (fmemoize
-    (fn [alphabet len]
-      (let [an   (count alphabet)
-            len  (long  len)
-            _    (when (or (< an 1) (> an 256)) (throw (ex-info "`alphabet`: must be ℕ∈[1,256]" {})))
-            _    (when (<= len 0)               (throw (ex-info      "`len`: must be ℕ∈[0,∞)"   {})))
-            ;;   (2 << (int) Math.floor(Math.log(alphabet.length - 1) / Math.log(2))) - 1;
-            mask (dec (bit-shift-left 2 (int (Math/floor (/ (Math/log (dec an)) (Math/log 2))))))
-            ;;   (int) Math.ceil(1.6 * mask * size / alphabet.length);
-            step (long (Math/ceil (/ (* (* 1.6 mask) len) an)))]
+(defn rand-id-fn
+  "Returns a (fn rand-id []) that returns random id strings.
+  Uses strong randomness when possible.
 
-        [mask step (mapv str alphabet)]))))
+  Options include:
+    `:chars`         - ∈ #{<string> :nanoid :alphanumeric :no-look-alikes ...}
+    `:len`           - Length of id strings to generate
+    `:rand-bytes-fn` - Optional (fn [size]) to return random byte array of given size
 
-(comment (qb 1e6 (parse-alphabet nanoid-alphabet 21)))
+  See also `uuid-str`, `nano-id`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [{:keys [chars ^long len rand-bytes-fn]
+    :or
+    {chars         :nanoid
+     len           21
+     rand-bytes-fn secure-rand-bytes}}]
 
-(let [alphabet (mapv str nanoid-alphabet)
-      mask     0x3f]
+  (let [chars
+        (case chars
+          :alphanumeric    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"   ; 62 chars
+          :nanoid          "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_" ; 64 chars
+          :nanoid-readable "346789ABCDEFGHJKLMNPQRTUVWXYabcdefghijkmnpqrtwxyz"                ; 49 chars, no look-alikes
+          :numbers         "0123456789"                                                       ; 10 chars
+          :alpha-lowercase "abcdefghijklmnopqrstuvwxyz"                                       ; 26 chars
+          :alpha-uppercase "ABCDEFGHIJKLMNOPQRSTUVWXYZ"                                       ; 26 chars
+          :hex-lowercase   "0123456789abcdef"                                                 ; 16 chars
+          :hex-uppercase   "0123456789ABCDEF"                                                 ; 16 chars
+          (have string? chars))
+
+        nchars       (count chars)
+        max-char-idx (dec  nchars)
+        chars #?(:clj (.toCharArray (str chars)) :cljs (object-array chars))
+
+        ;; (bit-and <rand-byte> <mask>) uniformly maps <rand-byte> (256 vals) to
+        ;; the valid subset of <rand-char-idx> (<256) *without* bias. Downside is that
+        ;; invalid char-idxs need to be discarded, hence the stepping mechanism and
+        ;; need for extra bytes when nchars∤256.
+        mask ; Set all bits except the most significant, Ref. <https://bit.ly/3dtYv73>
+        (bit-and -1
+          (dec
+            (bit-shift-left 2
+              (int (Math/floor (/ (Math/log (dec nchars)) (Math/log 2)))))))
+
+        ;; Calculate size of random byte arrays to fill
+        exp-bytes (double (/ (* mask len) nchars))
+        stepn     (int (max 2 (Math/ceil (* 0.2 exp-bytes)))) ; Used iff step1 insufficient
+        step1 ; Size of initial random byte array
+        (int
+          (if (zero? (int (mod 256 nchars)))
+            len ; n|256 => no discarding (steps) needed
+            (Math/ceil (* 1.2 exp-bytes))))]
+
+    (fn rand-id []
+      (let [sb (str-builder)]
+        (loop [idx 0, max-idx (dec step1), ^bytes rand-bytes (rand-bytes-fn step1)]
+
+          (let [possible-ch-idx (bit-and (aget rand-bytes idx) mask)]
+            (when (<= possible-ch-idx max-char-idx)
+              (.append sb (aget chars possible-ch-idx))))
+
+          (cond
+            (== (.length sb) len) (str sb)
+            (== idx      max-idx) (recur 0 (dec stepn) (rand-bytes-fn stepn))
+            :else (recur (unchecked-inc idx) max-idx rand-bytes)))))))
+
+(comment
+  (let [f0 nanoid
+        f1 (rand-id-fn {:len 21, :chars :nanoid})
+        f2 (rand-id-fn {:len 22, :chars :no-look-alikes})]
+    (qb 1e6 (uuid-str) (f0) (f1) (f2))) ; [234.65 346.14 399.66 544.64]
+
+  ;; Bits of entropy
+  (/ (Math/log (Math/pow 16 32)) (Math/log 2)) ;                uuid:  128
+  (/ (Math/log (Math/pow 64 21)) (Math/log 2)) ;          nanoid(21):  126
+  (/ (Math/log (Math/pow 49 23)) (Math/log 2)) ; nanoid-readable(23): ~129
+  )
+
+(let [chars
+      (let [s "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"]
+        #?(:clj (.toCharArray s) :cljs (object-array s)))]
 
   (defn nanoid
-    "Experimental. Optimized variant of `secure-rand-id` that returns Nano IDs,
-    Ref. <https://github.com/ai/nanoid>."
-    ([   ] (nanoid 21))
-    ([len]
-     (let [ba (secure-rand-bytes len) #_(byte-array [81 -125 -54 -45 -108 99])]
-       (str
-         (reduce-n
-           (fn [acc idx]
-             (sb-append acc (alphabet (bit-and mask (aget ba idx)))))
-           (str-builder)
-           (alength ba)))))))
+    "Returns a random \"Nano ID\" of given length, Ref. <https://github.com/ai/nanoid>.
+    Uses strong randomness when possible. See also `uuid-str`, `rand-id-fn`."
+    {:tag #?(:clj 'String :cljs 'string)}
 
-(comment (qb 1e5 (nanoid) (uuid-str))) ; [205.98 82.86]
+    ;; Slightly faster, variable-length version of (rand-id-fn {:chars :nanoid}).
+    ;; 126 bits of entropy with default length (21).
+    ([         ] (nanoid 21))
+    ([^long len]
+     (let [sb (str-builder)
+           ba (secure-rand-bytes len)
+           max-idx (dec len)]
+
+       (loop [idx 0]
+         ;; nchars|256 so (bit-and <rand-byte> 0x3f) yields uniform distribution
+         ;; of chars without need for stepping
+         (.append sb (aget chars (bit-and (aget ba idx) 0x3f)))
+         (when (< idx max-idx) (recur (unchecked-inc idx))))
+
+       (str sb)))))
+
+(comment (qb 1e6 (nanoid) (uuid-str))) ; [341.65 225.23]
 
 ;;;; Hex strings
 
