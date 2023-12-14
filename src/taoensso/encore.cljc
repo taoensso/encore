@@ -4372,29 +4372,53 @@
      {:added "Encore v3.68.0 (2023-09-25)"}
      []
      (when have-telemere?
-       `(require 'taoensso.telemere.impl))))
+       `(require 'taoensso.telemere))))
 
 (comment (require-telemere-if-present))
 
 #?(:clj
    (defmacro signal!
      "Experimental, subject to change without notice!
-     Generates Telemere signal if Telemere is present, otherwise noops.
-     Telemere should be required by the calling namespace,
-     see `require-telemere-if-present`.
+     If Telemere is present, expands to Telemere signal call and returns true.
+     Otherwise noops and returns false.
 
-     Returns true iff Telemere was present, example:
-       (or (signal! {<signal-opts>}) (println \"Println fallback!\"))"
+     NB: *must* be used with `require-telemere-if-present`!
+
+     Example usage:
+
+       (ns my-ns
+         (:require [taoensso.encore :as enc]))
+
+       (enc/require-telemere-if-present) ; At top of file, just below `ns` form
+
+       ;; Later in your code...
+
+       (or
+         (enc/signal! {<signal-opts>})   ; Expands to Telemere signal call
+         (println \"Println fallback!\") ; Fallback if Telemere not present
+         )
+
+     For info on signal options, see Telemere documentation [1] or
+     `taoensso.telemere/signal!` docstring [2].
+
+     [1] Ref. <https://github.com/taoensso/telemere#documentation>
+     [2] Ref. <https://taoensso.github.io/telemere/taoensso.telemere.html#var-signal.21>"
      {:added "Encore v3.68.0 (2023-09-25)"
       :tag #?(:cljs 'boolean :clj nil)
-      :arglists '([{:keys [loc kind id level data msg error ...]}])}
+      :arglists
+      '([{:as opts
+          :keys
+          [elidable? location timestamp uid middleware,
+           sample ns kind id level filter when rate-limit,
+           ctx parent trace?, let data msg error run & user-opts]}])}
+
      [opts]
      (if have-telemere?
-       (let [loc (get-source &form &env)]
-         (require 'taoensso.telemere.impl) ; For macro expansion
+       (let [location (get-source &form &env)]
+         (require 'taoensso.telemere) ; For macro expansion
          `(do
             ;; Note pre-resolved expansion
-            (taoensso.telemere.impl/signal! ~(conj {:loc loc} opts))
+            (taoensso.telemere/signal! ~(conj {:location location} opts))
             true))
        false)))
 
