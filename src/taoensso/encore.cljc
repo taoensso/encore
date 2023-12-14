@@ -1,6 +1,6 @@
 (ns taoensso.encore
   "Extended core library for Clojure/Script that emphasizes:
-    * Cross platform API compatibility
+    * Cross-platform API
     * Flexibility
     * Performance
     * Backwards compatibility
@@ -40,16 +40,16 @@
       `add-user`, `remove-user`, `mod-user`, etc.
 
   Commit message tags (in priority order):
-    [wip]  - Work-in-progress (still under development)
+    [wip]   - Work-in-progress (still under development)
 
-    [mod]  - Modify     behaviour (=>          breaking), [mod!], [mod!!], etc. for attention
-    [fix]  - Fix broken behaviour (=> usu. non-breaking)
-    [new]  - Add new    behaviour (=>      non-breaking)
+    [mod]   - Modify     behaviour (=>          breaking), [mod!], [mod!!], etc. for attention
+    [fix]   - Fix broken behaviour (=> usu. non-breaking)
+    [new]   - Add new    behaviour (=>      non-breaking)
 
-    [doc]  - Documentation changes besides those better labelled as [mod], [fix], or [new]
-    [nop]  - Other non-breaking changes (to implementation details, non-code changes, etc.)
+    [doc]   - Documentation changes besides those better labelled as [mod], [fix], or [new]
+    [nop]   - Other non-breaking changes (to implementation details, non-code changes, etc.)
 
-    [x][y] - Single commit with multiple tags (in priority order), try avoid
+    [x] [y] - Single commit with multiple tags (in priority order), try avoid
 
   Example commit messages:
     v1.0.0 (2022-01-27) ; Tagged release
@@ -427,14 +427,14 @@
    :clj
    (defn some?
      {:inline (fn [x] `(if (identical? ~x nil) false true))}
-     [x] (if (identical? x nil) false true)))
+     [x]               (if (identical?  x nil) false true)))
 
 (defmacro or-some
   "Like `or`, but returns the first non-nil form (may be falsey)."
   {:added "Encore v3.67.0 (2023-09-08)"}
-  ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))
+  ([        ] nil)
   ([x       ] x)
-  ([        ] nil))
+  ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#))))
 
 (comment (or-some nil nil false true))
 
@@ -1071,8 +1071,8 @@
 
 #?(:clj
    (defn get-source
-     "Returns {:keys [ns line column file]} callsite and file info given a
-     macro's compile-time `&form` and `&env` vals. See also `keep-callsite`."
+     "Returns {:keys [ns line column file]} source location given a macro's
+     compile-time `&form` and `&env` vals. See also `keep-callsite`."
      {:added "Encore v3.61.0 (2023-07-07)"}
      [macro-form macro-env]
      (let [{:keys [line column file]} (meta macro-form)
@@ -2661,8 +2661,7 @@
          (get new-map k)))))
 
 (defn ^:no-doc ^LightAtom latom
-  "Private implementation detail.
-  Micro-optimized lightweight `atom` for internal use.
+  "Private micro-optimized lightweight `atom` for internal use.
   Up to 30% faster than standard atoms, with the same atomicity guarantees."
   {:added "Encore v3.67.0 (2023-09-08)"}
   [init-state]
@@ -2673,8 +2672,7 @@
 #?(:clj
    (let [atom-tag (compile-if clojure.lang.IAtom 'clojure.lang.IAtom 'clojure.lang.Atom)]
      (defmacro ^:no-doc -cas!?
-       "Private implementation detail.
-       Micro-optimized `compare-and-set!` for internal use."
+       "Private micro-optimized `compare-and-set!` for internal use."
        {:added "Encore v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val]
        (if (:ns &env)
@@ -3370,18 +3368,14 @@
            reqs_  (latom nil) ; {<rid> {<lid> <LimitEntry>}}
            spec   (coerce-limit-spec spec) ; {<lid> <LimitSpec>}
 
-           {:keys [req-id-fn gc-every]
-            :or   {req-id-fn identity
-                   gc-every  1.6e4}}
-           opts ; Undocumented
+           {:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
 
            gc-now? gc-now?
            gc-rate (let [gce (long gc-every)] (/ 1.0 gce))
 
            f1
            (fn [rid peek?]
-             (let [instant (now-udt*)
-                   rid (req-id-fn rid)]
+             (let [instant (now-udt*)]
 
                (when (and (not peek?) (gc-now? gc-rate))
                  (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
@@ -3479,7 +3473,7 @@
              (do
                (if (case req-id (:rl/all :limiter/all) true false)
                  (reset! reqs_ nil)
-                 (reqs_ #(dissoc % (req-id-fn req-id))))
+                 (reqs_ #(dissoc % req-id)))
                nil)
 
              (:rl/peek :limiter/peek) (f1 req-id true)
@@ -4716,10 +4710,12 @@
    (defn get-pom-version
      "Returns POM version string for given Maven dependency, or nil."
      [dep-sym]
-     (let [path (clojure.core/format "META-INF/maven/%s/%s/pom.properties"
-                  (or (namespace dep-sym)
-                    (name      dep-sym))
-                  (name dep-sym))]
+     (let [path
+           (clojure.core/format "META-INF/maven/%s/%s/pom.properties"
+             (or (namespace dep-sym)
+                 (name      dep-sym))
+             (name dep-sym))]
+
        (when-let [props (io/resource path)]
          (with-open [stream (io/input-stream props)]
            (let [props (doto (java.util.Properties.) (.load stream))]
@@ -5628,9 +5624,11 @@
 
 #?(:clj
    (defn session-swap
-     "Small util to help correctly manage (modify) funtional sessions. Please use
-     this when writing Ring middleware! It's *so* easy to get this wrong and end up
-     with subtle, tough-to-diagnose issues."
+     "Util to help correctly update Ring sessions (something easy to get wrong!).
+
+     Given a Ring request (rreq) and Ring response (rresp), returns a new
+     Ring response with the response session updated to be (f <old-session>)
+     or (apply f <old-session> args)."
      [rreq rresp f & args]
      (when rresp
        (let [base (get rresp :session (get rreq :session))

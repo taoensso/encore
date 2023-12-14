@@ -1,5 +1,5 @@
 (ns ^:no-doc taoensso.encore.bytes
-  "Experimental, subject to change without notice!!
+  "Experimental, subject to change without notice!
   Private low-level byte[] utils."
   {:added "Encore v3.69.0 (2023-10-16)"}
   (:refer-clojure :exclude [bytes?])

@@ -1,5 +1,5 @@
 (ns ^:no-doc taoensso.encore.signals
-  "Experimental, subject to change without notice!!
+  "Experimental, subject to change without notice!
   Private low-level signal toolkit for use by Telemere, Tufte, Timbre, etc.
 
   \"Signal\" is used here as an internal name for any
