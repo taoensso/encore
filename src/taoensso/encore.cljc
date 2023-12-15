@@ -4874,19 +4874,23 @@
 
 (comment (qb 1e5 (.format (simple-date-format "yyyy-MMM-dd") (Date.))))
 
-;;;; Macro env
+;;;; Locals
 
 #?(:clj
-   (defmacro get-env []
+   (defmacro ^:no-doc get-locals
+     "Private, don't use."
+     []
      (let [ks (reduce
                 (fn [acc in]
                   (if (str-starts-with? (name in) "__") ; Hide privates
-                    acc ; Strip primitive tags which can cause issues:
+                    (do   acc)
                     (conj acc (without-meta in))))
                 [] (keys &env))]
        `(zipmap '~ks ~ks))))
 
-(comment [(let [x :x] (get-env)) ((fn [^long x] (get-env)) 0)])
+(comment
+  [(let [x :x] (get-locals)) ((fn [^long x] (get-locals)) 0)
+   (let [x :x] (get-env))    ((fn [^long x] (get-env))    0)])
 
 ;;;; IO
 
@@ -4995,200 +4999,180 @@
 
 (comment (java-version>= 21))
 
-;;;; Config API
-;; Utils to allow indirect/ops methods for modifying (initial) config
+;;;; Env config API
+
+;; Notes:
+;;   - Cljs must embed config in code (no runtime access to environmental config).
+;;   - Embed config => macro, no runtime arg support, locally eval all symbols.
+;;   - Locally eval symbols => no support for foreign unrequired namespaces.
 
 #?(:clj
    (let [pname   (fn [x] (str-replace                 (as-qname x)  #"/" "."))
          ename   (fn [x] (str-replace (str/upper-case (as-qname x)) #"[./-]" "_"))
-         add-ext (fn [s ext] (when-not (str/ends-with? s ext) (str s ext)))]
+         add-ext (fn [s ext] (when-not (str/ends-with? s ext) (str s ext)))
+         parse-opts
+         (fn [opts-or-spec]
+           (if (map? opts-or-spec)
+             (do     opts-or-spec)
+             {:spec  opts-or-spec}))]
 
-     (defn ^:no-doc -get-config
-       "Implementation detail for `get-config*`."
-       [{:as opts :keys [prop env res res-prop res-env as default
-                         target macro-env]
-         :or
-         {env     :auto
-          res     :auto
-          res-env :auto}}]
+     (defn ^:no-doc get-env*
+       "Private, don't use.
+       Function version of `get-env`:
+         - Doesn't embed, or eval symbols.
+         - Supports runtime args."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+        :arglists
+        '([{:keys [as default]} spec]
+          [{:keys [as default   spec]}])}
 
-       (let [res ; Configurable resource name
-             (if-let [[res* _source]
-                      (when-not (get opts :no-recur?)
-                        (-get-config {:target target :prop res-prop :env res-env
-                                      :no-recur? true}))]
-               res* res)
+       ([opts    spec] (get-env* (assoc opts :spec spec)))
+       ([opts-or-spec]
+        (let [opts (parse-opts opts-or-spec)
+              {:keys [as default spec, return macro-env]
+               :or   {as     :str
+                      return :value}} opts
 
-             env   (if (= env :auto) prop env)
-             res   (if (= res :auto) prop env)
+              ;;; Advanced opts, undocumented
+              target  (get opts :target (if (:ns macro-env) :cljs :clj))
+              prop    (get opts :prop spec)
+              env     (get opts :env  spec)
+              res
+              (if-let [configurable-res
+                       (when            (get opts ::allow-recur? true)
+                         (let [res-prop (get opts :res-prop)
+                               env-prop (get opts :env-prop)]
 
-             props (when prop (mapv #(vector :prop (pname %)) (if (vector? prop) prop [prop])))
-             envs  (when env  (mapv #(vector :env  (ename %)) (if (vector? env)  env  [env])))
-             ress  (when res  (mapv #(vector :res  (pname %)) (if (vector? res)  res  [res])))
+                           (when (or res-prop env-prop)
+                             (get-env*
+                               {::allow-recur? false,
+                                :macro-env macro-env, :target target,
+                                :prop res-prop, :env env-prop, :res nil,
+                                :return :value}))))]
+                configurable-res
+                (get opts :res spec))
 
-             ;; search (vinterleave-all props envs ress)
-             ;; (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]])
-             match
-             (or
-               (get opts :debug/match)
-               (let [as-edn? (= as :edn)]
-                 (reduce-interleave-all
-                   (fn rf [_ [kind n]]
-                     (when n
-                       (case kind
-                         :prop (if-let [v (System/getProperty n)] (reduced [v [:property n]]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*])))
-                         :env  (if-let [v (System/getenv      n)] (reduced [v [:env-var  n]]) (when-let [n* (and as-edn? (add-ext n "_EDN"))] (rf nil [kind n*])))
-                         :res  (if-let [v (slurp-resource     n)] (reduced [v [:resource n]]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*]))))))
-                   nil
-                   [props envs ress])))
+              props  (when prop (mapv #(vector :prop (pname (have const-form? %))) (if (vector? prop) prop [prop])))
+              envs   (when env  (mapv #(vector :env  (ename (have const-form? %))) (if (vector? env)  env  [env])))
+              ress   (when res  (mapv #(vector :res  (pname (have const-form? %))) (if (vector? res)  res  [res])))
+              debug? (= return :debug)
 
-             match-as
-             (or
-               (case as
-                 nil match
-                 :edn
-                 (when-let [[edn source] match]
-                  (let [clj
-                        (try
-                          (read-edn (get opts :read-opts) edn)
-                          (catch Throwable t
+              ;;                  (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]]) ; => [:p1 :e1 :r1 :p2 :r2 :r3]
+              search (when debug? (vinterleave-all props envs ress))
+              match ; ?[source str-val]
+              (or
+                (get opts :debug/match)
+                (let [as-edn? (= as :edn)] ; Undocumented auto extension
+                  (reduce-interleave-all
+                    (fn rf [_ [kind n]]
+                      (when n
+                        (case kind
+                          :prop (if-let [v (System/getProperty n)] (reduced [[:prop n] v]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*])))
+                          :env  (if-let [v (System/getenv      n)] (reduced [[:env  n] v]) (when-let [n* (and as-edn? (add-ext n "_EDN"))] (rf nil [kind n*])))
+                          :res  (if-let [v (slurp-resource     n)] (reduced [[:res  n] v]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*]))))))
+                    nil
+                    [props envs ress])))
+
+              match-as ; ?[source as-val]
+              (or
+                (case as
+                  :str match ; ?[source str-val]
+                  :bool
+                  (when-let [[source bool-str] match]
+                    (let [parsed-bool
+                          (case bool-str
+                            ("true"  "1" "t" "T" "TRUE")  true
+                            ("false" "0" "f" "F" "FALSE") false
                             (throw
-                              (ex-info "[enc/config-api] Error reading edn"
-                                {:edn edn :source source :target target} t))))
+                              (ex-info "[encore/get-env*] Error parsing as boolean"
+                                {:bool-str bool-str
+                                 :source   source
+                                 :target   target
+                                 :expected
+                                 {true  #{"true"  "1" "t" "T" "TRUE"}
+                                  false #{"false" "0" "f" "F" "FALSE"}}})))]
+                      [source parsed-bool]))
 
-                        clj
-                        (if (and (symbol? clj) (get opts :resolve-sym? true))
-                          ;; Unlike ordinary edn read, presume that lone symbols
-                          ;; are intended to resolve to their val
-                          (if-let [;; Only resolve Clj syms
-                                   rsym (resolve-sym nil #_macro-env clj true)]
-                            {::resolved rsym}
-                            (throw
-                              (ex-info "[enc/config-api] Error resolving Clj symbol in edn"
-                                {:symbol clj :edn edn :source source :target target})))
-                          clj)]
-                    [clj source]))
+                  :edn
+                  (when-let [[source edn] match]
+                    (let [clj
+                          (try
+                            (read-edn (get opts :read-opts) edn)
+                            (catch Throwable t
+                              (throw
+                                (ex-info "[encore/get-env*] Error reading as edn"
+                                  {:edn edn :source source :target target} t))))]
+                      [source clj]))
 
-                 :bool
-                 (when-let [[bool-str source] match]
-                  (let [parsed-bool
-                        (case bool-str
-                          ("true"  "1" "t" "T" "TRUE")  true
-                          ("false" "0" "f" "F" "FALSE") false
-                          (throw
-                            (ex-info "[encore/config-api] Error parsing boolean"
-                              {:bool-str bool-str
-                               :source   source
-                               :target   target
-                               :expected
-                               {true  #{"true"  "1" "t" "T" "TRUE"}
-                                false #{"false" "0" "f" "F" "FALSE"}}})))]
-                    [parsed-bool source]))
+                  (unexpected-arg! as
+                    {:context  `get-env*
+                     :param    'as
+                     :expected #{:str :edn :bool}}))
 
-                 (unexpected-arg! as
-                   {:context  `get-config
-                    :param    'as
-                    :expected #{nil :edn :bool}}))
+                (when (contains? opts :default)
+                  [:default default]))]
 
-               (when (contains? opts :default)
-                 [default [:default]]))
+          (when (or match-as debug?)
+            (let [[source value] match-as]
+              (case return
+                :value                      value
+                :legacy            {:config value, :source source} ; Back compatibility
+                :map   (assoc-some {:value  value, :source source} :target target)
+                :debug (assoc-some {:value  value, :source source} :target target, :search search)
+                (unexpected-arg! return
+                  {:context  `get-env*
+                   :param    'return
+                   :expected #{:value :map}})))))))
 
-             debug? (get opts :debug?)]
+     (defmacro get-env
+       "Cross-platform util for embedding environmental config during macro expansion.
 
-         (when (or match-as debug?)
-           (let [[config source] match-as]
-             (assoc-some {}
-               :target target
-               :config config
-               :source source
-               :search
-               (when debug?
-                 (vinterleave-all props envs ress)))))))
+       Given a const kw/string id or vector of desc-priority alternatives, returns and
+       parses (according to the `:as` option) the first of the following that exists:
+         - JVM         property value   for id
+         - Environment variable value   for id
+         - Classpath   resource content for id
 
-     (defmacro ^:no-doc get-config
-       "Private, don't use. Low-level config API util.
-       Returns nil, or {:keys [config source ...]}."
-       {:added "Encore v3.66.0 (2023-08-23)"
-        :arglists (:arglists (meta #'-get-config))}
-       [opts]
-       (if (:ns &env)
-         ;; Embed compile-time val (val must be embeddable)
-         (let [opts (assoc (have [:or nil? map?] opts) :target :cljs :macro-env &env)]
-           (when-let [{:keys [config] :as m} (-get-config opts)]
-             (if-let [rsym (::resolved config)]
-               (assoc m :config (eval rsym))
-               (do    m))))
+       Search order for alternatives: [<prop1> <env1> <res1>, <prop2> <env2> <res2>, ...].
 
-         ;; Get val at runtime
-         `(when-let [{config# :config :as m#} (-get-config (assoc ~opts :target :clj))]
-            (if-let [rsym# (::resolved config#)]
-              (assoc m# :config (eval rsym#))
-              (do    m#)))))))
+       So (get-env [:my-app/alt1 :my-app/alt2]) will parse and return the first of:
+         `my-app.alt1` JVM         property value
+         `MY_APP_ALT1` environment variable value
+         `my-app.alt1` classpath   resource content
+
+         `my-app.alt2` JVM         property value
+         `MY_APP_ALT2` environment variable value
+         `my-app.alt2` classpath   resource content
+
+       Alts can be customized by platform using reader conditionals, e.g.:
+        (get-env
+          [#?(:clj  :my-app/config.clj.edn
+              :cljs :my-app/config.cljs.edn) ; Platform-specific
+           :my-app/config.edn ; General/fallback
+          ])
+
+       Options:
+         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default :str)
+         `:default` - Fallback to return if no value found during search (default nil)
+
+       Result must be something that can be safely embedded in code during
+       macro-expansion. Symbols in edn will be evaluated during expansion."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+        :arglists
+        '([opts-or-spec]
+          [opts    spec])}
+
+       ([            ] `(get-locals)) ; Back compatibility
+       ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc        opts               :macro-env &env :spec spec)))
+       ([opts-or-spec] (have? const-form? opts-or-spec) (get-env* (assoc (parse-opts opts-or-spec) :macro-env &env))))))
 
 (comment :see-tests)
-
-#?(:clj
-   (defmacro get-sys-val*
-     "Returns nil, or the first of the following:
-       - Named JVM         property value   (as string)
-       - Named environment variable value   (as string)
-       - Named classpath   resource content (as string)
-
-     Vectors may be used to provide descending-preference alternatives:
-       (get-sys-val* #?(:clj  [:my-app.config.clj.txt  :my-app.config.txt]
-                        :cljs [:my-app.config.cljs.txt :my-app.config.txt]))
-
-     Match order: [<prop1> <env1> <res1> <prop2> <env2> <res2> ...]."
-     {:added "Encore v3.66.0 (2023-08-23)"}
-     ([prop        ] `(:config (get-config {:prop ~prop})))
-     ([prop env    ] `(:config (get-config {:prop ~prop :env ~env})))
-     ([prop env res] `(:config (get-config {:prop ~prop :env ~env :res ~res})))))
-
-#?(:clj
-   (defmacro get-sys-bool*
-     "Returns nil, or the first of the following:
-       - Named JVM         property value   (parsed as boolean)
-       - Named environment variable value   (parsed as boolean)
-       - Named classpath   resource content (parsed as boolean)
-       - Provided `default` value
-
-     Vectors may be used to provide descending-preference alternatives:
-       (get-sys-bool* #?(:clj  [:my-app.config.clj.bool  :my-app.config.bool]
-                         :cljs [:my-app.config.cljs.bool :my-app.config.bool]))
-
-     Match order: [<prop1> <env1> <res1> <prop2> <env2> <res2> ...].
-
-     Parsing logic:
-       - Return `true`  if value is ∈ #{\"true\"  \"1\" \"t\" \"T\" \"TRUE\"}
-       - Return `false` if value is ∈ #{\"false\" \"0\" \"f\" \"F\" \"FALSE\"}
-       - Throws for all other values"
-     {:added "Encore v3.66.0 (2023-08-23)"}
-     ([default prop        ] `(:config (get-config {:as :bool :default ~default :prop ~prop})))
-     ([default prop env    ] `(:config (get-config {:as :bool :default ~default :prop ~prop :env ~env})))
-     ([default prop env res] `(:config (get-config {:as :bool :default ~default :prop ~prop :env ~env :res ~res})))))
-
-#?(:clj
-   (defmacro read-sys-val*
-     "Returns nil, or the first of the following:
-       - Named JVM         property value   (read as edn)
-       - Named environment variable value   (read as edn)
-       - Named classpath   resource content (read as edn)
-
-     Vectors may be used to provide descending-preference alternatives:
-       (read-sys-val* #?(:clj  [:my-app.config.clj.edn  :my-app.config.edn]
-                         :cljs [:my-app.config.cljs.edn :my-app.config.edn]))
-
-     Match order: [<prop1> <env1> <res1> <prop2> <env2> <res2> ...].
-
-     If result is a single symbol, it must resolve to an available Clj var.
-     The var's value will then be returned, or an exception will be thrown.
-
-     NB: when targeting Cljs, the final value must be something that can be
-     safely embedded in code during macro expansion."
-     {:added "Encore v3.66.0 (2023-08-23)"}
-     ([prop        ] `(:config (get-config {:as :edn :prop ~prop})))
-     ([prop env    ] `(:config (get-config {:as :edn :prop ~prop :env ~env})))
-     ([prop env res] `(:config (get-config {:as :edn :prop ~prop :env ~env :res ~res})))))
+(comment
+  (def myvar "myvar")
+  (macroexpand '(get-env {:as :edn, :return :debug, :default "my-default"}                                     ::nx))
+  (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/myvar}"]} ::nx))
+  (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/nx}"]}    ::nx))
+  (defn foo [x] (get-env {:spec [:const x]})))
 
 ;;;; Async
 
@@ -6442,7 +6426,7 @@
      "Elides body when `taoensso.elide-deprecated` JVM property or
      `TAOENSSO_ELIDE_DEPRECATED` environment variable is ∈ #{\"true\" \"TRUE\"}."
      [& body]
-     (let [elide? (get-sys-bool* false :taoensso.elide-deprecated)]
+     (let [elide? (get-env {:as :bool} :taoensso.elide-deprecated)]
        (when-not elide? `(do ~@body)))))
 
 (deprecated
@@ -6865,37 +6849,55 @@
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call)))
 
 (deprecated
-  ;; v3.66.0 (2023-08-23) - unified config API
   #?(:clj
      (do
+       (defn- get-config-opts [opts] (dissoc (assoc opts :return :legacy :spec (get opts :prop)) :prop))
+
+       (defmacro ^:no-doc get-config
+         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         [opts] `(get-env ~(get-config-opts opts)))
+
+       (defmacro ^:no-doc get-sys-val*
+         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         ([spec        ] `(get-env {:as :str :spec ~spec                    }))
+         ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env          }))
+         ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res})))
+
+       (defmacro ^:no-doc get-sys-bool*
+         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    }))
+         ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env          }))
+         ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res})))
+
+       (defmacro ^:no-doc read-sys-val*
+         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+         ([spec        ] `(get-env {:as :edn :spec ~spec                    }))
+         ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env          }))
+         ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res})))
+
        (defn ^:no-doc get-sys-val
-         "Prefer new cross-platform `get-sys-val*` macro."
-         {:_deprecated "Encore v3.66.0 (2023-08-23)"}
-         ([prop    ] (get-sys-val* prop))
-         ([prop env] (get-sys-val* prop env :auto)))
+         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+         ([spec    ] (get-env* {:as :str :spec spec}))
+         ([spec env] (get-env* {:as :str :spec spec :env env})))
 
        (defn ^:no-doc read-sys-val
-         "Prefer new cross-platform `read-sys-val*` macro."
-         {:_deprecated "Encore v3.66.0 (2023-08-23)"}
-         ([prop    ] (read-sys-val* prop))
-         ([prop env] (read-sys-val* prop env)))
+         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+         ([spec    ] (get-env* {:as :edn :spec spec}))
+         ([spec env] (get-env* {:as :edn :spec spec :env env})))
 
        (defn ^:no-doc get-sys-bool
-         "Prefer new cross-platform `get-sys-bool*` macro."
-         {:_deprecated "Encore v3.66.0 (2023-08-23)"}
-         ([default prop    ] (get-sys-bool* default prop))
-         ([default prop env] (get-sys-bool* default prop env)))
+         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+         ([default spec    ] (get-env* {:as :bool :default default :spec spec}))
+         ([default spec env] (get-env* {:as :bool :default default :spec spec :env env})))
 
        (defn ^:no-doc load-edn-config
-         "Prefer new cross-platform `read-sys-val*` macro."
-         {:added      "Encore v3.39.0 (2022-11-23)"
-          :_deprecated "Encore v3.66.0 (2023-08-23)"}
+         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
          [opts]
          (let [{:keys [error-data validator default]} opts
                have-default? (contains? opts :default)]
            (try
              (when (and validator have-default?) (have? validator default))
-             (when-let [{:keys [config] :as m} (get-config opts)]
+             (when-let [{:keys [config] :as m} (get-env* (get-config-opts opts))]
                (let [config
                      (if (and (map? config) (map? default))
                        (nested-merge default config)

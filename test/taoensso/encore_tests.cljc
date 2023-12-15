@@ -606,7 +606,10 @@
 
 ;;;; Vars, etc.
 
-(def myvar #?(:clj "local clj var" :cljs "local cljs var"))
+(defn var-fn [n] (* n n))
+(def  var-cljc
+  #?(:clj  "local var-cljc/clj"
+     :cljs "local var-cljc/cljs"))
 
 #?(:clj (defmacro resolve-sym [sym] (keyword (enc/resolve-sym &env sym true))))
 
@@ -614,59 +617,77 @@
   [(is (= (resolve-sym __nx)     nil))
    (is (= (resolve-sym __nx/foo) nil))
 
-   (is (= (resolve-sym                                     myvar) :taoensso.encore-tests/myvar))
-   (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/myvar) :taoensso.encore-tests.unrequired-ns/myvar))])
+   (is (= (resolve-sym                                     var-cljc) :taoensso.encore-tests/var-cljc))
+   (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/var-cljc) :taoensso.encore-tests.unrequired-ns/var-cljc))])
 
 (deftest _update-var-root!
-  (let [ref #?(:clj  "local clj var (updated!)"
-               :cljs "local cljs var (updated!)")]
-    [(is (= (enc/update-var-root! myvar (fn [s] (str s " (updated!)"))) ref))
-     (is (=                       myvar                                 ref))]))
+  (let [init var-cljc]
+    [(is (= (enc/update-var-root! var-cljc (fn [s] (str s ".2"))) (str init ".2")))
+     (is (=                       var-cljc                        (str init ".2")))
+     (is (= (enc/update-var-root! var-cljc (fn [_] init))              init))
+     (is (=                       var-cljc                             init))]))
 
-;;;; Config API
+;;;; Env config API
 
-(deftest config-api
-  [(is (enc/submap? (enc/get-config {:debug? true}) {:config :submap/nx, :search []}))
-   (is (enc/submap? (enc/get-config {:debug? true :prop [:taoensso.prop-a1 :taoensso.prop-a2 :taoensso.prop-a3]})
-         {:config :submap/nx
-          :search
-          [[:prop "taoensso.prop-a1"]
-           [:env  "TAOENSSO_PROP_A1"]
-           [:res  "taoensso.prop-a1"]
-           [:prop "taoensso.prop-a2"]
-           [:env  "TAOENSSO_PROP_A2"]
-           [:res  "taoensso.prop-a2"]
-           [:prop "taoensso.prop-a3"]
-           [:env  "TAOENSSO_PROP_A3"]
-           [:res  "taoensso.prop-a3"]]}))
+(deftest _get-env
+  [(is (= (enc/get-env {             } ::nx) nil))
+   (is (= (enc/get-env {:default  nil} ::nx) nil))
+   (is (= (enc/get-env {:default :foo} ::nx) :foo))
 
-   (is (enc/submap? (enc/get-config {:debug? true :prop :taoensso.encore-tests.config.str})
-         {:config "foo",
-          :search [[:prop "taoensso.encore-tests.config.str"]
-                   [:env  "TAOENSSO_ENCORE_TESTS_CONFIG_STR"]
-                   [:res  "taoensso.encore-tests.config.str"]]}))
+   (is (= (enc/get-env {:return :map             } ::nx) nil))
+   (is (= (enc/get-env {:return :map :default nil} ::nx) {:value nil, :source :default, :target #?(:clj :clj :cljs :cljs)}))
 
-   (is (enc/submap? (enc/get-config {:debug? true :prop #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
-                                                           :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str])})
-         {:config #?(:clj "foo/clj" :cljs "foo/cljs")}))
+   (is (enc/submap? (enc/get-env {:return :debug} [:foo.bar.a1 :foo.bar/a2 :foo.bar-a3])
+         {:search
+          [[:prop "foo.bar.a1"]
+           [:env  "FOO_BAR_A1"]
+           [:res  "foo.bar.a1"]
+           [:prop "foo.bar.a2"]
+           [:env  "FOO_BAR_A2"]
+           [:res  "foo.bar.a2"]
+           [:prop "foo.bar-a3"]
+           [:env  "FOO_BAR_A3"]
+           [:res  "foo.bar-a3"]]})
 
-   (is (enc/submap? (enc/get-config {:debug? true :debug/match ["taoensso.encore-tests.unrequired-ns/myvar-embeddable" [:debug]] :as :edn})
-         {:config {:embeddable? true, :foo :bar}}))
+     "Basic search behaviour")
 
-   #?(:clj
-      (is (enc/submap? (enc/get-config {:debug? true :debug/match ["taoensso.encore-tests.unrequired-ns/myvar-unembeddable" [:debug]] :as :edn})
-            {:config {:embeddable? false, :fn :submap/ex}})))
+   (is (= (enc/submap? (enc/get-env {:return :debug}
+                         #?(:clj  [:foo.clj  :foo.default]
+                            :cljs [:foo.cljs :foo.default]))
+            {:search
+             #?(:clj  [[:prop "foo.clj"]  [:env "FOO_CLJ"]  [:res "foo.clj"]  [:prop "foo.default"] [:env "FOO_DEFAULT"] [:res "foo.default"]])
+             #?(:cljs [[:prop "foo.cljs"] [:env "FOO_CLJS"] [:res "foo.cljs"] [:prop "foo.default"] [:env "FOO_DEFAULT"] [:res "foo.default"]])}))
 
-   (is (= (enc/get-sys-val*        [::nx :taoensso.encore-tests.config.str]) "foo"))
-   (is (= (enc/get-sys-bool* false [::nx :taoensso.encore-tests.config.bool]) true))
-   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config.edn]) {:kw :my-kw :str "foo" :int 5 :vec [:x]}))
-   (is (= (enc/read-sys-val*       [::nx :taoensso.encore-tests.config])     {:kw :my-kw :str "foo" :int 5 :vec [:x]}) "Auto .edn extension")])
+     "Can use reader conditionals to easily offer optional platform-specific config")
+
+
+   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* x x))"]}               ::nx) 5) 25) "Can embed inline functions via edn")
+   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
+   (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "local var-cljc/clj"
+                                                                                                           :cljs "local var-cljc/cljs")))
+   (testing "Needs :jvm-opts"
+     [(is (enc/submap? (enc/get-env {:return :debug} :taoensso.encore-tests.config.str)
+            {:value "foo"
+             :search
+             [[:prop "taoensso.encore-tests.config.str"]
+              [:env  "TAOENSSO_ENCORE_TESTS_CONFIG_STR"]
+              [:res  "taoensso.encore-tests.config.str"]]}))
+
+      (is (=
+            (enc/get-env #?(:clj  [:taoensso.encore-tests.config.clj.str  :taoensso.encore-tests.config.str]
+                            :cljs [:taoensso.encore-tests.config.cljs.str :taoensso.encore-tests.config.str]))
+            #?(:clj "foo/clj" :cljs "foo/cljs")))
+
+      (is (= (enc/get-env {}          [::nx :taoensso.encore-tests.config.str])  "foo"))
+      (is (= (enc/get-env {:as :bool} [::nx :taoensso.encore-tests.config.bool]) true))
+      (is (= (enc/get-env {:as :edn}  [::nx :taoensso.encore-tests.config.edn])  {:kw :my-kw :str "foo" :int 5 :vec [:x]}))
+      (is (= (enc/get-env {:as :edn}  [::nx :taoensso.encore-tests.config])      {:kw :my-kw :str "foo" :int 5 :vec [:x]}) "Auto .edn extension")])])
 
 (comment
-  (get-config {})
   (def foo {:fn (fn [x] (* x x))})
-  (get-config {:debug/match ["taoensso.encore/foo" [:debug]] :as :edn})
-  (get-config {:debug? true :prop [:p1] :as :edn}))
+  (enc/get-env {} nil)
+  (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
+  (enc/get-env {:as :edn :debug? true} [:p1]))
 
 ;;;; Misc
 

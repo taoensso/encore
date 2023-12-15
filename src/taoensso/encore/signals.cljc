@@ -30,7 +30,7 @@
   (enc/nested-merge
     {          :trace 10 :debug 20         :info 50 :warn 60 :error 70 :fatal  80 :report  90
      :low--- 0 :low-- 10 :low-  20 :low 30 :med  50 :high 60 :high+ 70 :high++ 80 :high+++ 90}
-    (enc/read-sys-val* :taoensso.encore.signals/level-aliases)))
+    (enc/get-env {:as :edn} :taoensso.encore.signals/level-aliases)))
 
 (let [expected (conj (set (keys level-aliases)) 'integer)]
   (defn ^:no-doc bad-level!
