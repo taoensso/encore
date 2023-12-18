@@ -61,15 +61,15 @@
                       classpath resources). See library docs for details.
 
                    2. The filter API consting of the following:
-                     `set-ns-filter!`,     `with-ns-filter`      - For filtering by namespace
-                     `set-minimum-level!`, `with-minimum-level!` - For filtering by %s level
-                     `set-id-filter!`,     `with-id-filter`      - For filtering by %s id   (when relevant)
-                     `set-kind-filter!`,   `with-kind-filter`    - For filtering by %s kind (when relevant)
+                     `set-ns-filter!`,     `with-ns-filter`      - For filtering calls by namespace
+                     `set-minimum-level!`, `with-minimum-level!` - For filtering calls by %s level
+                     `set-id-filter!`,     `with-id-filter`      - For filtering calls by %s id   (when relevant)
+                     `set-kind-filter!`,   `with-kind-filter`    - For filtering calls by %s kind (when relevant)
 
                      See the relevant docstrings for details.
 
-                 Additional filtering can also be applied at the handler level,
-                 see `add-handler!` docstring for details.
+                 Additional filtering can also be applied on a per-handler basis, see 
+                 `add-handler!` for details.
 
                  If anything is unclear, please ping me (@ptaoussanis) so that I can
                  improve these docs!")
@@ -79,7 +79,7 @@
            `(do
               (defn ~'set-ns-filter!
                 ~(api-docstring 19 purpose
-                   "Sets %s namespace filter based on given `ns-filter` spec.
+                   "Sets %s call namespace filter based on given `ns-filter` spec.
 
                    `ns-filter` may be:
                      - A regex pattern of namespace/s to allow.
@@ -93,7 +93,7 @@
 
               (defmacro ~'with-ns-filter
                 ~(api-docstring 19 purpose
-                   "Executes form with given %s namespace filter in effect.
+                   "Executes form with given %s call namespace filter in effect.
                    See `set-ns-filter!` for details.")
                 ~'[ns-filter form]
                 `(binding [~'~*sig-filter* (sigs/update-sig-filter ~'~*sig-filter* {:ns-filter ~~'ns-filter})]
@@ -103,7 +103,7 @@
            `(do
               (defn ~'set-kind-filter!
                 ~(api-docstring 19 purpose
-                   "Sets %s kind filter based on given `kind-filter` spec.
+                   "Sets %s call kind filter based on given `kind-filter` spec.
 
                    `kind-filter` may be:
                      - A regex pattern of kind/s to allow.
@@ -117,7 +117,7 @@
 
               (defmacro ~'with-kind-filter
                 ~(api-docstring 19 purpose
-                   "Executes form with given %s kind filter in effect.
+                   "Executes form with given %s call kind filter in effect.
                    See `set-kind-filter!` for details.")
                 ~'[kind-filter form]
                 `(binding [~'~*sig-filter* (sigs/update-sig-filter ~'~*sig-filter* {:kind-filter ~~'kind-filter})]
@@ -127,7 +127,7 @@
            `(do
               (defn ~'set-id-filter!
                 ~(api-docstring 19 purpose
-                   "Sets %s id filter based on given `id-filter` spec.
+                   "Sets %s call id filter based on given `id-filter` spec.
 
                    `id-filter` may be:
                      - A regex pattern of id/s to allow.
@@ -141,7 +141,7 @@
 
               (defmacro ~'with-id-filter
                 ~(api-docstring 19 purpose
-                   "Executes form with given %s id filter in effect.
+                   "Executes form with given %s call id filter in effect.
                    See `set-id-filter!` for details.")
                 ~'[id-filter form]
                 `(binding [~'~*sig-filter* (sigs/update-sig-filter ~'~*sig-filter* {:id-filter ~~'id-filter})]
@@ -153,7 +153,7 @@
              `(do
                 (defn ~'set-min-level!
                   ~(api-docstring 21 purpose
-                     "Sets minimum %s level based on given `min-level` spec.
+                     "Sets minimum %s call level based on given `min-level` spec.
 
                      `min-level` may be:
                        - An integer.
@@ -174,7 +174,7 @@
 
                 (defmacro ~'with-min-level
                   ~(api-docstring 21 purpose
-                     "Executes form with given minimum %s level in effect.
+                     "Executes form with given minimum %s call level in effect.
                      See `set-min-level!` for details.")
                   (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
                   (~'[ns-filter min-level form]
@@ -189,7 +189,7 @@
              `(do
                 (defn ~'set-min-level!
                   ~(api-docstring 21 purpose
-                     "Sets minimum %s level based on given `min-level` spec.
+                     "Sets minimum %s call level based on given `min-level` spec.
 
                       `min-level` may be:
                         - An integer.
@@ -213,7 +213,7 @@
 
                 (defmacro ~'with-min-level
                   ~(api-docstring 21 purpose
-                     "Executes form with given minimum %s level in effect.
+                     "Executes form with given minimum %s call level in effect.
                      See `set-min-level!` for details.")
                   (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
                   (~'[kind ns-filter min-level form]
@@ -448,17 +448,31 @@
 
                  `middleware`
                    Optional vector of unary middleware fns to apply (left-to-right/sequentially)
-                   to handler-arg right before passing to handler-fn. If any middleware fn returns
-                   nil, abort immediately without calling handler-fn.
+                   to `handler-arg` before passing to `handler-fn`. If any middleware fn returns
+                   nil, aborts immediately without calling `handler-fn`.
 
-                   Useful for transforming handler-args before handling.
+                   Useful for transforming `handler-arg` before handling.
 
                  `error-fn` - (fn [{:keys [handler-id error]}]) to call on handler error.
                  `backp-fn` - (fn [{:keys [handler-id      ]}]) to call on handler back pressure.
 
                Flow sequence:
-                 Sample -> filters (sample -> ns -> kind -> id -> level -> filter-fn) ->
-                   rate limit -> middleware -> handler-fn")
+
+                 1. Per call (n=1):
+                   a. Sampling
+                   b. Filtering (namespace, kind, id, level, filter-fn)
+                   c. Rate limiting
+                   d. Middleware
+
+                 2. Per handler (n>=0):
+                   a. Sampling
+                   b. Filtering (namespace, kind, id, level, filter-fn)
+                   c. Rate limiting
+                   d. Middleware
+                   e. Hander fn
+
+                 Note: call filters should generally be at least as permissive as handler filters,
+                 otherwise calls will be suppressed before reaching handlers.")
 
             (~'[handler-id handler-fn              ] (~'add-handler! ~'handler-id ~'handler-fn nil))
             (~'[handler-id handler-fn dispatch-opts]
