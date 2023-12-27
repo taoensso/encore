@@ -1126,14 +1126,27 @@
 
 #?(:clj
    (defmacro update-var-root!
-     "Similar to `alter-var-root`, but cross-platform.
-     Updates the root binding of var identified by given symbol.
-     Returns the var's new value."
+     "Updates root binding (value) of the var identified by given symbol, and returns
+     the new value:
+       (update-var-root! my-var (fn [old-root-val] <new-root-val>)) => <new-root-val>
+
+     Similar to `alter-var-root` but cross-platform and takes a symbol rather than a var.
+     See also `set-var-root!`."
      {:added "Encore v3.68.0 (2023-09-25)"}
      [var-sym update-fn]
      (if (:ns &env)
        `(set!                ~var-sym (~update-fn ~var-sym))
        `(alter-var-root (var ~var-sym) ~update-fn))))
+
+#?(:clj
+   (defmacro set-var-root!
+     "Sets root binding (value) of the var identified by given symbol, and returns
+     the new value. Cross-platform. See also `update-var-root!`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [var-sym root-val]
+     (if (:ns &env)
+       `(set!                ~var-sym           ~root-val)
+       `(alter-var-root (var ~var-sym) (fn [_#] ~root-val)))))
 
 (comment :see-tests)
 
