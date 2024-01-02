@@ -659,6 +659,17 @@
 ;;;; Misc
 
 #?(:clj
+   (deftest _java-version
+     [(is (= 2  (enc/java-version "1.2")))
+      (is (= 6  (enc/java-version "1.6.0_23")))
+      (is (= 8  (enc/java-version "1.8.0_302")))
+      (is (= 9  (enc/java-version "9.0.1")))
+      (is (= 11 (enc/java-version "11.0.12")))
+      (is (= 16 (enc/java-version "16-ea")))
+      (is (= 17 (enc/java-version "17")))
+      (is (= 21 (enc/java-version "21")))]))
+
+#?(:clj
    (deftest _secure-rng-mock
      [(is (=
             (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])

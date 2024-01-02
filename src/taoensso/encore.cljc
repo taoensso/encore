@@ -4909,6 +4909,8 @@
 
 (comment (slurp-file-resource "log4j.properties"))
 
+;;;;
+
 #?(:clj
    (defn get-pom-version
      "Returns POM version string for given Maven dependency, or nil."
@@ -4933,6 +4935,37 @@
           (catch java.net.UnknownHostException _ nil))))
 
 (comment (get-hostname))
+
+#?(:clj
+   (let [cache_ (atom nil)] ; Impln detail
+     (defn java-version
+       "Returns Java's major version integer (8, 17, etc.)."
+       {:added "vX.Y.Z (YYYY-MM-DD)"}
+       (^long [              ] (or @cache_ (reset! cache_ (java-version (System/getProperty "java.version")))))
+       (^long [version-string]
+        (or
+          (when-let [^String s version-string]
+            (catching
+              (Integer/parseInt
+                (or ; Ref. <https://stackoverflow.com/a/2591122>
+                  (when     (.startsWith s "1.")                  (.substring s 2 3))    ; "1.6.0_23", etc.
+                  (let [idx (.indexOf    s ".")] (when (pos? idx) (.substring s 0 idx))) ; "9.0.1",    etc.
+                  (let [idx (.indexOf    s "-")] (when (pos? idx) (.substring s 0 idx))) ; "16-ea",    etc.
+                  (do                                                         s)))))
+          (throw
+            (ex-info "Failed to parse Java version string (unexpected form)"
+              {:version-string version-string})))))))
+
+(comment :see-tests)
+
+#?(:clj
+   (defn java-version>=
+     "Returns true iff Java's major version integer is >= given integer:
+       (if (java-version>= 21) <then> <else>)"
+     {:added "vX.Y.Z (YYYY-MM-DD)"}
+     [n] (>= (java-version) (long n))))
+
+(comment (java-version>= 21))
 
 ;;;; Config API
 ;; Utils to allow indirect/ops methods for modifying (initial) config
