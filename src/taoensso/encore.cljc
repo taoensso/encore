@@ -886,65 +886,61 @@
 (comment (caught-error-data (/ 5 0)))
 
 (declare submap? str-contains? re-pattern?)
+
 (defn matching-error
   "Given an error (e.g. Throwable) and matching criteria.
   Returns the error if it matches all criteria, otherwise returns nil.
 
-  `err-type` may be:
+  `kind` may be:
     - A predicate function, (fn match? [x]) -> bool
     - A class (e.g. `ArithmeticException`, `AssertionError`, etc.)
     - `:all`     => any    platform error (Throwable or js/Error, etc.)
     - `:common`  => common platform error (Exception or js/Error)
     - `:ex-info` => a `ExceptionInfo` as created by `ex-info`
+    - A set of `kind`s as above, at least one of which must match
 
   `pattern` may be:
     - A string or Regex against which `ex-message` must match
     - A map             against which `ex-data`    must match using `submap?`
-    - A set of `patterns` as above, at least one of which must match
+    - A set of `pattern`s as above, at least one of which must match
 
   When an error with (nested) causes doesn't match, a match will be attempted
   against its (nested) causes.
 
   Low-level util, see also `throws`, `throws?`."
   {:added "Encore v3.70.0 (2023-10-17)"}
-  ([         err] err)
-  ([err-type err]
+  ([     err] err)
+  ([kind err]
    (when-let [match?
-              (if (fn? err-type) ; Treat as pred
-                (err-type err)
-                #?(:clj
-                   (case err-type
-                     (:all    :any)     (instance? Throwable                  err)
-                     (:common :default) (instance? Exception                  err)
-                     :ex-info           (instance? clojure.lang.ExceptionInfo err)
-                     (do                (instance? err-type                   err)))
-
-                   :cljs
-                   (case err-type
-                     (:all        :any) (some?                   err)
-                     (:common :default) (instance? js/Error      err)
-                     :ex-info           (instance? ExceptionInfo err)
-                     (do                (instance? err-type      err)))))]
+              (cond
+                (fn?  kind) (kind err)                           ; pred kind
+                (set? kind) (rsome #(matching-error % err) kind) ; set  kind
+                :else
+                (case kind
+                  (:all    :any)     #?(:clj (instance? Throwable                  err) :cljs (some?                   err))
+                  (:common :default) #?(:clj (instance? Exception                  err) :cljs (instance? js/Error      err))
+                  :ex-info           #?(:clj (instance? clojure.lang.ExceptionInfo err) :cljs (instance? ExceptionInfo err))
+                  (do                        (instance? kind                       err))))]
      err))
 
-  ([err-type err-pattern err]
+  ([kind pattern err]
    (if-let [match?
             (and
-              (matching-error err-type err)
+              (matching-error kind err)
               (cond
-                (nil?        err-pattern) true
-                (set?        err-pattern) (rsome #(matching-error err-type % err) err-pattern)
-                (string?     err-pattern) (str-contains?       (ex-message err)   err-pattern)
-                (re-pattern? err-pattern) (re-find err-pattern (ex-message err))
-                (map?        err-pattern) (when-let [data (ex-data err)] (submap? data err-pattern))
+                (nil?        pattern) true
+                (set?        pattern) (rsome #(matching-error kind % err) pattern)
+                (string?     pattern) (str-contains?   (ex-message   err) pattern)
+                (re-pattern? pattern) (re-find pattern (ex-message   err))
+                (map?        pattern) (when-let [data (ex-data err)] (submap? data pattern))
                 :else
-                (unexpected-arg! err-pattern
+                (unexpected-arg! pattern
                   {:context  `matching-error
-                   :expected '#{set string re-err-pattern map}})))]
+                   :expected '#{nil set string re-pattern map}})))]
      err
      ;; Try match cause
      (when-let [cause (ex-cause err)]
-       (matching-error err-type err-pattern cause)))))
+       (matching-error kind pattern cause)))))
 
 (comment :see-tests)
 
@@ -955,9 +951,9 @@
 
      See also `matching-error`, `throws?`."
      {:added "Encore v3.31.0 (2022-10-27)"}
-     ([                     form] `                                       (catching (do ~form nil) ~'t ~'t))
-     ([err-type             form] `(matching-error ~err-type              (catching (do ~form nil) ~'t ~'t)))
-     ([err-type err-pattern form] `(matching-error ~err-type ~err-pattern (catching (do ~form nil) ~'t ~'t)))))
+     ([             form] `                               (catching (do ~form nil) ~'t ~'t))
+     ([kind         form] `(matching-error ~kind          (catching (do ~form nil) ~'t ~'t)))
+     ([kind pattern form] `(matching-error ~kind ~pattern (catching (do ~form nil) ~'t ~'t)))))
 
 #?(:clj
    (defmacro throws?
@@ -969,9 +965,9 @@
 
      See also `matching-error`, `throws`."
      {:added "Encore v3.31.0 (2022-10-27)"}
-     ([                     form] `(boolean (throws                        ~form)))
-     ([err-type             form] `(boolean (throws ~err-type              ~form)))
-     ([err-type err-pattern form] `(boolean (throws ~err-type ~err-pattern ~form)))))
+     ([             form] `(boolean (throws                ~form)))
+     ([kind         form] `(boolean (throws ~kind          ~form)))
+     ([kind pattern form] `(boolean (throws ~kind ~pattern ~form)))))
 
 (comment :see-tests)
 
