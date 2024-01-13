@@ -2459,7 +2459,7 @@
 #?(:clj (defmacro new-object [] (if (:ns &env) `(cljs.core/js-obj) `(Object.))))
 
 (defn ^:no-doc -merge-with
-  "Private low-level merge function. Flexible and optimized!"
+  "Private, don't use. Low-level merge function, flexible and optimized."
   ([nest? f maps] (reduce (partial -merge-with nest? f) maps))
   ([nest? f m1 m2]
    (cond
@@ -2524,7 +2524,7 @@
 
 (defn fast-merge
   "Like `core/merge` but faster.
-  Single arity case takes a collection of maps."
+  Doesn't support zero arity, single arity case takes a collection of maps."
   ([maps] (reduce fast-merge maps))
   ([m1 m2]
    (let [n2 (count m2)]
