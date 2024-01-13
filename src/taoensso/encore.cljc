@@ -2460,7 +2460,7 @@
 
 (defn ^:no-doc -merge-with
   "Private, don't use. Low-level merge function, flexible and optimized."
-  ([nest? f maps] (reduce (partial -merge-with nest? f) maps))
+  ([nest? f maps] (reduce (partial -merge-with nest? f) nil maps))
   ([nest? f m1 m2]
    (cond
      :let  [n2  (count m2)]
@@ -2525,7 +2525,7 @@
 (defn fast-merge
   "Like `core/merge` but faster.
   Doesn't support zero arity, single arity case takes a collection of maps."
-  ([maps] (reduce fast-merge maps))
+  ([maps] (reduce fast-merge nil maps))
   ([m1 m2]
    (let [n2 (count m2)]
      (if (zero? n2)

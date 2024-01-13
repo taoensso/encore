@@ -275,7 +275,8 @@
    (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
 
 (deftest _merge-with
-  [(is (= (enc/merge nil         nil)     nil))
+  [(is (= (enc/merge)                     nil))
+   (is (= (enc/merge nil         nil)     nil))
    (is (= (enc/merge {}          nil)      {}))
    (is (= (enc/merge nil          {})      {}))
    (is (= (enc/merge {:a :A}     nil) {:a :A}))
@@ -298,7 +299,9 @@
          {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}))])
 
 (deftest _fast-merge
-  [(is (= (enc/fast-merge nil         nil)     nil))
+  [(is (= (enc/fast-merge [])                  nil))
+   (is (= (enc/fast-merge nil)                 nil))
+   (is (= (enc/fast-merge nil         nil)     nil))
    (is (= (enc/fast-merge {}          nil)      {}))
    (is (= (enc/fast-merge nil          {})      {}))
    (is (= (enc/fast-merge {:a :A}     nil) {:a :A}))
