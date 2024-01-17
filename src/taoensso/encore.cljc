@@ -1979,7 +1979,7 @@
 
 (defn chance
   "Returns true with given probability ∈ ℝ[0,1]."
-  {:tag #?(:cljs 'boolean :clj nil)
+  {:tag #?(:cljs 'boolean :default nil)
    :inline
    (fn [prob]
      (if (const-form? prob)
@@ -3297,7 +3297,7 @@
                        (== (rem tick gc-every) 0)
                        (>= (count (cache_)) (* 1.1 size)))
 
-                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
+                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
 
                    (when (-cas!? latch_ nil latch)
                      ;; First prune ttl-expired stuff
@@ -3341,7 +3341,7 @@
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
 
-                     _ #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :cljs nil)
+                     _ #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
                      ^TickedCacheEntry e
                      (cache_ args
                        (fn swap-fn [?e]
@@ -3377,7 +3377,7 @@
              (let [instant (now-udt)]
 
                (when (gc-now? gc-rate)
-                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
+                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
                    (when (-cas!? latch_ nil latch)
                      (cache_
                        (fn swap-fn [m]
@@ -3399,7 +3399,7 @@
 
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
-                     _      #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :cljs nil)
+                     _      #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
                      ^SimpleCacheEntry e
                      (cache_ args
                        (fn swap-fn [?e]
@@ -3520,7 +3520,7 @@
              (let [instant (now-udt)]
 
                (when (and (not peek?) (gc-now? gc-rate))
-                 (let [latch #?(:clj (CountDownLatch. 1) :cljs nil)]
+                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
                    (when (-cas!? latch_ nil latch)
                      (reqs_
                        (fn swap-fn [reqs] ; {<rid> <entries>}
@@ -3587,7 +3587,7 @@
 
                      ;; Passed all limits, ready to commit increments:
                      (if-let [l (latch_)]
-                       #?(:clj (do (.await ^CountDownLatch l) (recur)) :cljs nil)
+                       #?(:clj (do (.await ^CountDownLatch l) (recur)) :default nil)
                        (let [new-entries
                              (reduce-kv
                                (fn [acc lid ^LimitSpec s]
@@ -4069,7 +4069,7 @@
   "Returns true iff given strings are equal, ignoring case."
   ;; Implementation detail: compares normalized chars 1 by 1, so often faster
   ;; than naive comparison of normalized strings.
-  {:tag #?(:cljs 'boolean :clj nil)
+  {:tag #?(:cljs 'boolean :default nil)
    :added "Encore v3.25.0 (2022-10-13)"}
   [s1 s2]
   #?(:clj (.equalsIgnoreCase ^String s1 ^String s2)
@@ -4236,8 +4236,8 @@
   Uses strong randomness when possible.
   See also `uuid-str`, `nanoid`, `rand-id-fn`."
   {:added "Encore vX.Y.Z (YYYY-MM-DD)"
-   :inline #?(:cljs nil :clj (fn [] `(java.util.UUID/randomUUID)))}
-  #?(:clj       (^java.util.UUID []  (java.util.UUID/randomUUID))
+   :inline #?(:default nil :clj (fn [] `(java.util.UUID/randomUUID)))}
+  #?(:clj          (^java.util.UUID []  (java.util.UUID/randomUUID))
      :cljs
      ([]
       (if-let [f (oget js-?crypto "randomUUID")]
@@ -4404,7 +4404,7 @@
      [1] Ref. <https://github.com/taoensso/telemere#documentation>
      [2] Ref. <https://taoensso.github.io/telemere/taoensso.telemere.html#var-signal.21>"
      {:added "Encore v3.68.0 (2023-09-25)"
-      :tag #?(:cljs 'boolean :clj nil)
+      :tag #?(:cljs 'boolean :default nil)
       :arglists
       '([{:as opts
           :keys
