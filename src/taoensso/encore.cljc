@@ -2055,6 +2055,14 @@
 
 ;;;; Collections
 
+(defn map-entry
+  "Returns a `MapEntry` with given key and value."
+  {:added  "Encore vX.Y.Z (YYYY-MM-DD)"
+   :inline #?(:clj (fn [k v] `(clojure.lang.MapEntry/create ~k ~v)) :default nil)}
+  [k v]
+  #?(:clj  (clojure.lang.MapEntry/create k v)
+     :cljs              (MapEntry.       k v nil)))
+
 (defn queue?
   "Returns true iff given a `PersistentQueue`."
   #?(:cljs {:tag 'boolean})

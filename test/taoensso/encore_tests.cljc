@@ -207,6 +207,10 @@
 
 ;;;; Collections
 
+(deftest _map-entry
+  [(is (= (enc/map-entry :k :v) (enc/map-entry :k :v)))
+   (is (= (enc/map-entry :k :v) (find         {:k :v} :k)))])
+
 (deftest _get1
   [(is (= (enc/get1 {:a :A}  :b       ::nx) ::nx))
    (is (= (enc/get1 {:a nil} :a       ::nx) nil))
