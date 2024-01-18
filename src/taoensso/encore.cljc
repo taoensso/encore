@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw?]])))
 
-(def encore-version [3 74 1])
+(def encore-version [3 74 2])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
