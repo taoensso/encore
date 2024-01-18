@@ -7,7 +7,7 @@
 (enc/deprecated
   #?(:clj
      (defmacro ^:no-doc expect
-       {:deprecated "v3.31.0 (2022-10-27)"
+       {:_deprecated "v3.31.0 (2022-10-27)"
         :doc "Prefer `clojure.test/is`, etc."}
        ([             expr] `(test/is                        ~expr))
        ([         val expr] `(test/is                (= ~val ~expr)))
@@ -22,7 +22,7 @@
 
   #?(:clj
      (defmacro ^:no-doc use-fixtures
-       {:deprecated "v3.31.0 (2022-10-27)"
+       {:_deprecated "v3.31.0 (2022-10-27)"
         :doc "Prefer `encore/test-fixtures`"}
        [fixture-type & fixtures]
        (have? [:el #{:each :once}] fixture-type)
