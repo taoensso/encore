@@ -644,7 +644,6 @@
 
             clauses))))
 
-(comment :see-tests)
 (comment
   (defn src "src doc 1" [] "val1")
   (defalias ^{:doc "alias doc 1"} src* src {:doc "alias doc 2"})
@@ -942,8 +941,6 @@
      (when-let [cause (ex-cause err)]
        (matching-error kind pattern cause)))))
 
-(comment :see-tests)
-
 #?(:clj
    (defmacro throws
      "Evals `form` and if it throws an error that matches given criteria using
@@ -968,8 +965,6 @@
      ([             form] `(boolean (throws                ~form)))
      ([kind         form] `(boolean (throws ~kind          ~form)))
      ([kind pattern form] `(boolean (throws ~kind ~pattern ~form)))))
-
-(comment :see-tests)
 
 (let [get-default-error-fn
       (fn [base-data]
@@ -1011,8 +1006,6 @@
                 :v   {:value v   :type (type v)}}}
               t))))))))
 
-(comment :see-tests)
-
 (defn catching-xform
   "Like `catching-rf`, but applies to a transducer (`xform`).
 
@@ -1028,8 +1021,6 @@
   {:added "Encore v3.32.0 (2022-11-07)"}
   ([error-fn xform] (comp (fn [rf] (catching-rf error-fn rf)) xform))
   ([         xform] (comp           catching-rf               xform)))
-
-(comment :see-tests)
 
 ;;;; Vars, etc.
 
@@ -1067,7 +1058,7 @@
                 (when (catching (do (require (symbol ns)) true))
                   (resolve-auto macro-env sym))))))))))
 
-(comment (resolve-sym nil 'string?) :see-tests)
+(comment (resolve-sym nil 'string?))
 
 #?(:clj
    (defmacro keep-callsite
@@ -1090,8 +1081,6 @@
 
      {:added "Encore v3.61.0 (2023-07-07)"}
      [& body] `(with-meta (do ~@body) (meta ~'&form))))
-
-(comment :see-tests)
 
 #?(:clj
    (defn get-source
@@ -1118,7 +1107,6 @@
             file))})))
 
 (comment (io/resource "taoensso/encore.cljc"))
-(comment :see-tests)
 
 #?(:clj
    (defmacro update-var-root!
@@ -1143,8 +1131,6 @@
      (if (:ns &env)
        `(set!                ~var-sym           ~root-val)
        `(alter-var-root (var ~var-sym) (fn [_#] ~root-val)))))
-
-(comment :see-tests)
 
 ;;;; Tests
 
@@ -1800,8 +1786,6 @@
               (next ys))))
         acc))))
 
-(comment :see-tests)
-
 (do
   (deftype ^:no-doc Tup2 [x y  ])
   (deftype ^:no-doc Tup3 [x y z]))
@@ -1857,8 +1841,6 @@
       (unreduced (.-y tuple))
       (unreduced (.-z tuple))])))
 
-(comment :see-tests)
-
 (defn reduce-interleave-all
   "Reduces sequence of elements interleaved from given `colls`.
   (reduce-interleave-all conj [] [[:a :b] [1 2 3]]) => [:a 1 :b 2 3]"
@@ -1892,8 +1874,6 @@
         (if next-colls
           (recur acc next-colls)
           (do    acc))))))
-
-(comment :see-tests)
 
 ;;;; Math
 
@@ -2142,8 +2122,6 @@
   ([m k        not-found] (get m k not-found))
   ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
   ([m k1 k2 k3 not-found] (if-let [e (and m (or (find m k1) (find m k2) (find m k3)))] (val e) not-found)))
-
-(comment :see-tests)
 
 (do
   (defn conj-some "Conjoins each non-nil value."
@@ -2438,8 +2416,6 @@
 
          (assoc-in m ks new))))))
 
-(comment :see-tests)
-
 (defn contains-in?
   #?(:cljs {:tag 'boolean})
   ([coll ks k] (contains? (get-in coll ks) k))
@@ -2447,8 +2423,6 @@
    (if (empty? ks)
      false
      (fsplit-last ks (fn [ks lk] (contains-in? coll ks lk))))))
-
-(comment :see-tests)
 
 (defn dissoc-in
   ([m ks dissoc-k       ] (update-in m ks nil (fn [m] (if m (dissoc m dissoc-k) :update/abort))))
@@ -2463,8 +2437,6 @@
    (if (empty? m)
      (do       m)
      (fsplit-last ks (fn [ks lk] (dissoc-in m ks lk))))))
-
-(comment :see-tests)
 
 (defn node-paths
   ([          m      ] (node-paths associative? m nil))
@@ -2529,7 +2501,6 @@
   ([c1 c2 c3        ] (vinterleave-all       [c1 c2 c3]))
   ([c1 c2 c3 & colls] (vinterleave-all (into [c1 c2 c3] colls))))
 
-(comment :see-tests)
 (comment
   (qb 1e5
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))
@@ -2617,7 +2588,6 @@
   ([m1 m2 m3   ] (-> (fast-merge m1 m2) (fast-merge m3)))
   ([m1 m2 m3 m4] (-> (fast-merge m1 m2) (fast-merge m3) (fast-merge m4))))
 
-(comment :see-tests)
 (comment
   (qb 1e6 ; [382.24 327.81 171.19] ~worst case
     (core-merge {:a :A1} {:a :A2} {:a :A3})
@@ -2673,8 +2643,6 @@
     true
     sub))
 
-(comment :see-tests)
-
 (defn select-nested-keys
   "Like `select-keys` but supports nested key spec:
 
@@ -2715,7 +2683,6 @@
 
       (transient {}) key-spec)))
 
-(comment :see-tests)
 (comment
   (qb 1e5 ; [18.86 22.74]
     (select-nested-keys  {:a 1 :b 1 :c 1} [:a :c])
@@ -3411,8 +3378,6 @@
 
      :else (cache f))))
 
-(comment :see-tests)
-
 (defn memoize
   "Alternative way to call `cache`, provided mostly for back compatibility.
   See `cache` docstring for details."
@@ -3473,8 +3438,6 @@
        (have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
 
        `(def ~sym (cache ~cache-opts (fn ~@body))))))
-
-(comment :see-tests)
 
 ;;;; Rate limits
 
@@ -4027,8 +3990,6 @@
          :else
          (.substring s start-idx end-idx))))))
 
-(comment :see-tests)
-
 (comment
   (qb 1e5
     (subs              "hello world"   0 11)
@@ -4062,8 +4023,6 @@
 
          :else
          (.substring s start-idx end-idx))))))
-
-(comment :see-tests)
 
 (defn case-insensitive-str=
   "Returns true iff given strings are equal, ignoring case."
@@ -4355,8 +4314,6 @@
              (symbol?  x) (symbol  s)
              :else                 s)))))))
 
-(comment :see-tests)
-
 ;;;; Signals (opt-in Telemere integration)
 
 (def* ^:const have-telemere?
@@ -4512,8 +4469,6 @@
          (proxy [java.security.SecureRandom] []
            (getAlgorithm [] (str "INSECURE deterministic, seed=" long-seed))
            (nextBytes [^bytes ba] (.nextBytes insecure-rng ba)))))))
-
-(comment :see-tests)
 
 (defn secure-rand-bytes
   "Returns a random byte array of given size. Uses strong randomness when possible."
@@ -4694,7 +4649,6 @@
          (defn- ba->hex-str-hf ^String [^bytes ba] (.formatHex hf ba))
          (defn- hex-str->ba-hf ^bytes  [^String s] (.parseHex  hf s))))))
 
-(comment :see-tests)
 (comment
   (vec (-hex-str->ba (-ba->hex-str (byte-array [1 2 3 4 5 6 120 -120 127]))))
   (let [ba (byte-array (range -128 128))]
@@ -4988,8 +4942,6 @@
             (ex-info "Failed to parse Java version string (unexpected form)"
               {:version-string version-string})))))))
 
-(comment :see-tests)
-
 #?(:clj
    (defn java-version>=
      "Returns true iff Java's major version integer is >= given integer:
@@ -5206,7 +5158,6 @@
        ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc        opts               :macro-env &env :spec spec)))
        ([opts-or-spec] (have? const-form? opts-or-spec) (get-env* (assoc (parse-opts opts-or-spec) :macro-env &env))))))
 
-(comment :see-tests)
 (comment
   (def myvar "myvar")
   (do           (get-env {:as :edn, :return :debug} [:a.b/c<.platform><.edn>]))
@@ -5460,7 +5411,6 @@
               (throw t)
               (get f*-result :okay))))))))
 
-(comment :see-tests)
 (comment
   (let [fp (future-pool 6)] ; Shared future pool
     (def f1 (pre-cache 3 fp (fn [] (Thread/sleep 1000) :f1)))
@@ -6302,7 +6252,6 @@
             (ex-info "[encore/name-filter] `allow-spec` and `deny-spec` cannot both be nil"
               {:allow-spec allow-spec :deny-spec deny-spec})))))))
 
-(comment :see-tests)
 (comment (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo")))) ; 118.25
 
 ;;;; Namespaces
