@@ -5007,9 +5007,36 @@
 ;;   - Locally eval symbols => no support for foreign unrequired namespaces.
 
 #?(:clj
-   (let [pname   (fn [x] (str-replace                 (as-qname x)  #"/" "."))
-         ename   (fn [x] (str-replace (str/upper-case (as-qname x)) #"[./-]" "_"))
-         add-ext (fn [s ext] (when-not (str/ends-with? s ext) (str s ext)))
+   (let [pattern-platform #"\<(.)?platform(.)?\>"
+         pattern-opt      #"\<(.+?)\>"]
+
+     (defn- prep-env-ids
+       "Handles id prep for `get-env`:
+         :a<XplatformY><optional> =>
+           [\"a.bXcljYoptional\" \"a.bXcljY\" \"a.boptional\" \"a.b\"], etc."
+       [target tf x]
+       (when x
+         (if (vector? x)
+           (into [] (comp (map #(prep-env-ids target tf %)) cat (distinct)) x)
+           (let [s  (as-qname (have const-form? x))
+                 tf (or tf identity)
+
+                 without-platform                 (str/replace s pattern-platform "")
+                 with-platform       (when target (str/replace s pattern-platform (fn [[_ pre post]] (str pre (name target) post))))
+                 without-opt (fn [s] (when s      (str/replace s pattern-opt      "")))
+                 with-opt    (fn [s] (when s      (str/replace s pattern-opt      (fn [[_ cnt]] cnt))))]
+
+             (into [] (comp (filter identity) (distinct) (map tf))
+               [(with-opt    with-platform)
+                (without-opt with-platform)
+                (with-opt    without-platform)
+                (without-opt without-platform)])))))))
+
+(comment (prep-env-ids :clj vector [:a<XplatformY><optional> :b<XplatformY><optional> :a]))
+
+#?(:clj
+   (let [pname (fn [s] (-> s (str-replace #"/" ".")))
+         ename (fn [s] (-> s (str-replace #"[./-]" "_") (str/upper-case)))
          parse-opts
          (fn [opts-or-spec]
            (if (map? opts-or-spec)
@@ -5023,8 +5050,10 @@
          - Supports runtime args."
        {:added "Encore vX.Y.Z (YYYY-MM-DD)"
         :arglists
-        '([{:keys [as default]} spec]
-          [{:keys [as default   spec]}])}
+        '([{:keys [as default return]} spec]
+          [{:keys [as default return   spec]
+            :or   {as     :str
+                   return :value}}])}
 
        ([opts    spec] (get-env* (assoc opts :spec spec)))
        ([opts-or-spec]
@@ -5034,44 +5063,34 @@
                       return :value}} opts
 
               ;;; Advanced opts, undocumented
-              target  (get opts :target (if (:ns macro-env) :cljs :clj))
-              prop    (get opts :prop spec)
-              env     (get opts :env  spec)
-              res
-              (if-let [configurable-res
-                       (when            (get opts ::allow-recur? true)
-                         (let [res-prop (get opts :res-prop)
-                               env-prop (get opts :env-prop)]
+              target (get opts :target (if (:ns macro-env) :cljs :clj))
+              custom-res
+              (when            (get opts ::allow-recur? true)
+                (let [res-prop (get opts :res-prop)
+                      env-prop (get opts :env-prop)]
+                  (when (or res-prop env-prop)
+                    (get-env*
+                      {::allow-recur? false,
+                       :macro-env macro-env, :target target,
+                       :prop res-prop, :env env-prop, :res nil,
+                       :return :value}))))
 
-                           (when (or res-prop env-prop)
-                             (get-env*
-                               {::allow-recur? false,
-                                :macro-env macro-env, :target target,
-                                :prop res-prop, :env env-prop, :res nil,
-                                :return :value}))))]
-                configurable-res
-                (get opts :res spec))
+              props     (prep-env-ids target (fn [id] [:prop (pname id)])                (get opts :prop spec))
+              envs      (prep-env-ids target (fn [id] [:env  (ename id)])                (get opts :env  spec))
+              ress      (prep-env-ids target (fn [id] [:res  (pname id)]) (or custom-res (get opts :res  spec)))
+              to-search [props envs ress] ; (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]]) ; => [:p1 :e1 :r1 :p2 :r2 :r3]
 
-              props  (when prop (mapv #(vector :prop (pname (have const-form? %))) (if (vector? prop) prop [prop])))
-              envs   (when env  (mapv #(vector :env  (ename (have const-form? %))) (if (vector? env)  env  [env])))
-              ress   (when res  (mapv #(vector :res  (pname (have const-form? %))) (if (vector? res)  res  [res])))
-              debug? (= return :debug)
-
-              ;;                  (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]]) ; => [:p1 :e1 :r1 :p2 :r2 :r3]
-              search (when debug? (vinterleave-all props envs ress))
               match ; ?[source str-val]
               (or
                 (get opts :debug/match)
-                (let [as-edn? (= as :edn)] ; Undocumented auto extension
-                  (reduce-interleave-all
-                    (fn rf [_ [kind n]]
-                      (when n
-                        (case kind
-                          :prop (if-let [v (System/getProperty n)] (reduced [[:prop n] v]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*])))
-                          :env  (if-let [v (System/getenv      n)] (reduced [[:env  n] v]) (when-let [n* (and as-edn? (add-ext n "_EDN"))] (rf nil [kind n*])))
-                          :res  (if-let [v (slurp-resource     n)] (reduced [[:res  n] v]) (when-let [n* (and as-edn? (add-ext n ".edn"))] (rf nil [kind n*]))))))
-                    nil
-                    [props envs ress])))
+                (reduce-interleave-all
+                  (fn rf [_ in]
+                    (let [[kind n] in]
+                      (case kind
+                        :prop (when-let [v (System/getProperty n)] (reduced [in v]))
+                        :env  (when-let [v (System/getenv      n)] (reduced [in v]))
+                        :res  (when-let [v (slurp-resource     n)] (reduced [in v])))))
+                  nil to-search))
 
               match-as ; ?[source as-val]
               (or
@@ -5112,55 +5131,76 @@
                 (when (contains? opts :default)
                   [:default default]))]
 
-          (when (or match-as debug?)
+          (when (or match-as (= return :debug))
             (let [[source value] match-as]
               (case return
                 :value                      value
                 :legacy            {:config value, :source source} ; Back compatibility
                 :map   (assoc-some {:value  value, :source source} :target target)
-                :debug (assoc-some {:value  value, :source source} :target target, :search search)
+                :debug (assoc-some {:value  value, :source source} :target target, :search (vinterleave-all to-search))
                 (unexpected-arg! return
                   {:context  `get-env*
                    :param    'return
                    :expected #{:value :map}})))))))
 
      (defmacro get-env
-       "Cross-platform util for embedding environmental config during macro expansion.
+       "Cross-platform util for embedding flexible environmental config during
+       macro expansion. Used by other Taoensso libraries.
 
-       Given a const kw/string id or vector of desc-priority alternatives, returns and
-       parses (according to the `:as` option) the first of the following that exists:
-         - JVM         property value   for id
-         - Environment variable value   for id
-         - Classpath   resource content for id
+       Given a const kw/string id or vector of desc-priority alternative ids,
+       parse and return the first of the following that exists:
+         - JVM         property value   for id (\"prop\")
+         - Environment variable value   for id (\"env\")
+         - Classpath   resource content for id (\"res\")
 
-       Search order for alternatives: [<prop1> <env1> <res1>, <prop2> <env2> <res2>, ...].
+       Ids may include optional segment in `<>` tag (e.g. `<.edn>`).
+       Ids may include `<.?platform.?>` tag for auto replacement, useful
+       for supporting platform-specific config.
 
-       So (get-env [:my-app/alt1 :my-app/alt2]) will parse and return the first of:
-         `my-app.alt1` JVM         property value
-         `MY_APP_ALT1` environment variable value
-         `my-app.alt1` classpath   resource content
+       Search order: desc by combined [alt-index platform(y/n) optional(y/n)].
 
-         `my-app.alt2` JVM         property value
-         `MY_APP_ALT2` environment variable value
-         `my-app.alt2` classpath   resource content
+       (get-env {:as :edn} [:my-app/alt1<.platform><.edn> :my-app/alt2])
+       will parse and return the first of the following that exists:
 
-       Alts can be customized by platform using reader conditionals, e.g.:
-        (get-env
-          [#?(:clj  :my-app/config.clj.edn
-              :cljs :my-app/config.cljs.edn) ; Platform-specific
-           :my-app/config.edn ; General/fallback
-          ])
+         1. Alt1 +platform +optional (content type)
+           1a. `my-app.alt1.clj.edn` JVM         property value
+           1b. `MY_APP_ALT1_CLJ_EDN` environment variable value
+           1c. `my-app.alt1.clj.edn` classpath   resource content
+
+         2. Alt1 +platform -optional (content type)
+           2a. `my-app.alt1.clj`     JVM         property value
+           2b. `MY_APP_ALT1_CLJ`     environment variable value
+           2c. `my-app.alt1.clj`     classpath   resource content
+
+         3. Alt1 -platform +optional (content type)
+           3a. `my-app.alt1.edn`     JVM         property value
+           3b. `MY_APP_ALT1_EDN`     environment variable value
+           3c. `my-app.alt1.edn`     classpath   resource content
+
+         4. Alt1 -platform -optional (content type)
+           4a. `my-app.alt1`         JVM         property value
+           4b. `MY_APP_ALT1`         environment variable value
+           4c. `my-app.alt1`         classpath   resource content
+
+         5. Alt2
+           5a. `my-app.alt2`         JVM         property value
+           5b. `MY_APP_ALT2`         environment variable value
+           5c. `my-app.alt2`         classpath   resource content
 
        Options:
-         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default :str)
-         `:default` - Fallback to return if no value found during search (default nil)
+         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default :str).
+         `:default` - Fallback to return if no value found during search (default nil).
+         `:return`  - Return type ∈ #{:value :map :debug} (default :value).
+                      TIP: Use `:debug` to inspect/verify search behaviour!
 
        Result must be something that can be safely embedded in code during
        macro-expansion. Symbols in edn will be evaluated during expansion."
        {:added "Encore vX.Y.Z (YYYY-MM-DD)"
         :arglists
-        '([opts-or-spec]
-          [opts    spec])}
+        '([{:keys [as default return]} spec]
+          [{:keys [as default return   spec]
+            :or   {as     :str
+                   return :value}}])}
 
        ([            ] `(get-locals)) ; Back compatibility
        ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc        opts               :macro-env &env :spec spec)))
@@ -5169,6 +5209,7 @@
 (comment :see-tests)
 (comment
   (def myvar "myvar")
+  (do           (get-env {:as :edn, :return :debug} [:a.b/c<.platform><.edn>]))
   (macroexpand '(get-env {:as :edn, :return :debug, :default "my-default"}                                     ::nx))
   (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/myvar}"]} ::nx))
   (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/nx}"]}    ::nx))

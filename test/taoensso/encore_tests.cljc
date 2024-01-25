@@ -629,6 +629,20 @@
 
 ;;;; Env config API
 
+#?(:clj
+   (deftest _prep-env-ids
+     [(is (= (#'enc/prep-env-ids nil nil    nil)             nil))
+      (is (= (#'enc/prep-env-ids nil nil     :a)             ["a"]))
+      (is (= (#'enc/prep-env-ids nil nil    [:a])            ["a"]))
+      (is (= (#'enc/prep-env-ids nil nil    [:a :a])         ["a"]))
+      (is (= (#'enc/prep-env-ids nil nil    [:a :b])         ["a" "b"]))
+      (is (= (#'enc/prep-env-ids nil vector [:a :b])         [["a"] ["b"]]))
+      (is (= (#'enc/prep-env-ids :p  vector [:a :b])         [["a"] ["b"]]))
+      (is (= (#'enc/prep-env-ids :p  vector [:a :b<o>])      [["a"] ["bo"] ["b"]]))
+      (is (= (#'enc/prep-env-ids :p  vector [:a :<o1>b<o2>]) [["a"] ["o1bo2"] ["b"]]))
+      (is (= (#'enc/prep-env-ids :p  vector [:a<.platform> :c :b<.platform-><o> :c])
+            [["a.p"] ["a"] ["c"] ["b.p-o"] ["b.p-"] ["bo"] ["b"]]))]))
+
 (deftest _get-env
   [(is (= (enc/get-env {             } ::nx) nil))
    (is (= (enc/get-env {:default  nil} ::nx) nil))
@@ -637,29 +651,30 @@
    (is (= (enc/get-env {:return :map             } ::nx) nil))
    (is (= (enc/get-env {:return :map :default nil} ::nx) {:value nil, :source :default, :target #?(:clj :clj :cljs :cljs)}))
 
-   (is (enc/submap? (enc/get-env {:return :debug} [:foo.bar.a1 :foo.bar/a2 :foo.bar-a3])
+   (is (enc/submap? (enc/get-env {:return :debug} [:a<.platform> :b])
          {:search
-          [[:prop "foo.bar.a1"]
-           [:env  "FOO_BAR_A1"]
-           [:res  "foo.bar.a1"]
-           [:prop "foo.bar.a2"]
-           [:env  "FOO_BAR_A2"]
-           [:res  "foo.bar.a2"]
-           [:prop "foo.bar-a3"]
-           [:env  "FOO_BAR_A3"]
-           [:res  "foo.bar-a3"]]})
+          #?(:clj  [[:prop "a.clj"]  [:env "A_CLJ"]  [:res "a.clj"]  [:prop "a"] [:env "A"] [:res "a"] [:prop "b"] [:env "B"] [:res "b"]]
+             :cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a"] [:env "A"] [:res "a"] [:prop "b"] [:env "B"] [:res "b"]])})
+     "Basic search, with dynamic platform")
 
-     "Basic search behaviour")
+   (is (enc/submap? (enc/get-env {:as :edn :target :p :return :debug} [:a<.platform><.edn> :b :<platform.>c<.edn>])
+         {:search
+          [[:prop "a.p.edn"] [:env "A_P_EDN"] [:res "a.p.edn"]
+           [:prop "a.p"]     [:env "A_P"]     [:res "a.p"]
+           [:prop "a.edn"]   [:env "A_EDN"]   [:res "a.edn"]
+           [:prop "a"]       [:env "A"]       [:res "a"]
+           [:prop "b"]       [:env "B"]       [:res "b"]
+           [:prop "p.c.edn"] [:env "P_C_EDN"] [:res "p.c.edn"]
+           [:prop "p.c"]     [:env "P_C"]     [:res "p.c"]
+           [:prop "c.edn"]   [:env "C_EDN"]   [:res "c.edn"]
+           [:prop "c"]       [:env "C"]       [:res "c"]]})
+     "Extensive search, with fixed platform")
 
-   (is (= (enc/submap? (enc/get-env {:return :debug}
-                         #?(:clj  [:foo.clj  :foo.default]
-                            :cljs [:foo.cljs :foo.default]))
+   (is (= (enc/submap? (enc/get-env {:return :debug} [#?(:clj :a.clj :cljs :a.cljs) :a.default])
             {:search
-             #?(:clj  [[:prop "foo.clj"]  [:env "FOO_CLJ"]  [:res "foo.clj"]  [:prop "foo.default"] [:env "FOO_DEFAULT"] [:res "foo.default"]])
-             #?(:cljs [[:prop "foo.cljs"] [:env "FOO_CLJS"] [:res "foo.cljs"] [:prop "foo.default"] [:env "FOO_DEFAULT"] [:res "foo.default"]])}))
-
-     "Can use reader conditionals to easily offer optional platform-specific config")
-
+             #?(:clj  [[:prop "a.clj"]  [:env "A_CLJ"]  [:res "a.clj"]  [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])
+             #?(:cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])}))
+     "Can also use platform-specific ids")
 
    (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* x x))"]}               ::nx) 5) 25) "Can embed inline functions via edn")
    (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
@@ -680,14 +695,13 @@
 
       (is (= (enc/get-env {}          [::nx :taoensso.encore-tests.config.str])  "foo"))
       (is (= (enc/get-env {:as :bool} [::nx :taoensso.encore-tests.config.bool]) true))
-      (is (= (enc/get-env {:as :edn}  [::nx :taoensso.encore-tests.config.edn])  {:kw :my-kw :str "foo" :int 5 :vec [:x]}))
-      (is (= (enc/get-env {:as :edn}  [::nx :taoensso.encore-tests.config])      {:kw :my-kw :str "foo" :int 5 :vec [:x]}) "Auto .edn extension")])])
+      (is (= (enc/get-env {:as :edn}  [::nx :taoensso.encore-tests.config.edn])  {:kw :my-kw :str "foo" :int 5 :vec [:x]}))])])
 
 (comment
   (def foo {:fn (fn [x] (* x x))})
   (enc/get-env {} nil)
   (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
-  (enc/get-env {:as :edn :debug? true} [:p1]))
+  (enc/get-env {:as :edn :return :debug} [:p1]))
 
 ;;;; Misc
 
