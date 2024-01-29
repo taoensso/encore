@@ -6857,7 +6857,7 @@
          ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env}))
          ([spec        ]
           (if (str-starts-with? (str *ns*) "taoensso.nippy")
-            `(get-env* {:as :edn :spec ~spec}) ; Back compatibility (don't embed)
+            `(get-env* {:as :str :spec ~spec}) ; Back compatibility (don't embed)
             `(get-env  {:as :str :spec ~spec}))))
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-sys-bool*
