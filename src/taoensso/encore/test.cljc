@@ -1,4 +1,4 @@
-(ns ^:no-doc taoensso.encore.test
+(ns ^:no-doc ^:deprecated-nowarn taoensso.encore.test
   {:deprecated "Encore v3.31.0 (2022-10-27)"}
   (:require
    [clojure.test    :as test]
@@ -6,8 +6,8 @@
 
 (enc/deprecated
   #?(:clj
-     (defmacro ^:no-doc expect
-       {:_deprecated "Encore v3.31.0 (2022-10-27)"
+     (defmacro ^:no-doc ^:deprecated-nowarn expect
+       {:deprecated "Encore v3.31.0 (2022-10-27)"
         :doc "Prefer `clojure.test/is`, etc."}
        ([             expr] `(test/is                        ~expr))
        ([         val expr] `(test/is                (= ~val ~expr)))
@@ -21,7 +21,7 @@
     `(fn [f#] (~before) (f#) (~after)))
 
   #?(:clj
-     (defmacro ^:no-doc use-fixtures
+     (defmacro ^:no-doc ^:deprecated-nowarn use-fixtures
        {:deprecated "_Encore v3.31.0 (2022-10-27)"
         :doc "Prefer `encore/test-fixtures`"}
        [fixture-type & fixtures]

@@ -6410,6 +6410,8 @@
 
 ;;;; DEPRECATED
 ;; {:deprecated "v<X.Y.Z> (<YYYY-MM-DD>)" :doc "Prefer `<replacement>`."}
+;; Note `:deprecated-nowarn` meta used as workaround for long-standing
+;; CLJS-2000, Ref. <https://clojure.atlassian.net/browse/CLJS-2000>.
 
 #?(:clj
    (defmacro deprecated
@@ -6420,9 +6422,9 @@
        (when-not elide? `(do ~@body)))))
 
 (deprecated
-  (defn ^:no-doc -swap-val!
+  (defn ^:no-doc ^:deprecated-nowarn -swap-val!
     "Prefer `latom`."
-    {:_deprecated "Encore v3.67.0 (2023-09-08)"}
+    {:deprecated "Encore v3.67.0 (2023-09-08)"}
     [atom_ k f]
     (loop []
       (let [m0 @atom_
@@ -6432,63 +6434,62 @@
           v1
           (recur)))))
 
-  #?(:cljs (def ^:no-doc ^:_deprecated regular-num?        finite-num?))
-  #?(:cljs (def ^:no-doc ^:_deprecated get-window-location get-win-loc))
-  #?(:clj  (def ^:no-doc ^:_deprecated srng                secure-rng))
-  (def ^:no-doc ^:_deprecated backport-run!   run!)
-  (def ^:no-doc ^:_deprecated fq-name         as-qname)
-  (def ^:no-doc ^:_deprecated qname           as-qname)
-  (def ^:no-doc ^:_deprecated merge-deep-with nested-merge-with)
-  (def ^:no-doc ^:_deprecated merge-deep      nested-merge)
-  (def ^:no-doc ^:_deprecated parse-bool      as-?bool)
-  (def ^:no-doc ^:_deprecated parse-int       as-?int)
-  (def ^:no-doc ^:_deprecated parse-float     as-?float)
-  (def ^:no-doc ^:_deprecated swapped*        swapped)
-  (def ^:no-doc ^:_deprecated memoize-a0_     memoize)
-  (def ^:no-doc ^:_deprecated memoize-a1_     memoize)
-  (def ^:no-doc ^:_deprecated a0-memoize_     memoize)
-  (def ^:no-doc ^:_deprecated a1-memoize_     memoize)
-  (def ^:no-doc ^:_deprecated memoize-1       memoize-last)
-  (def ^:no-doc ^:_deprecated memoize1        memoize-last)
-  (def ^:no-doc ^:_deprecated memoize*        memoize)
-  (def ^:no-doc ^:_deprecated memoize_        memoize)
-  (def ^:no-doc ^:_deprecated nnil?           some?)
-  (def ^:no-doc ^:_deprecated nneg-num?       nat-num?)
-  (def ^:no-doc ^:_deprecated nneg-int?       nat-int?)
-  (def ^:no-doc ^:_deprecated nneg-float?     nat-float?)
-  (def ^:no-doc ^:_deprecated uint?           nat-int?)
-  (def ^:no-doc ^:_deprecated pint?           pos-int?)
-  (def ^:no-doc ^:_deprecated nnil=           some=)
-  (def ^:no-doc ^:_deprecated as-?uint        as-?nat-int)
-  (def ^:no-doc ^:_deprecated as-?pint        as-?pos-int)
-  (def ^:no-doc ^:_deprecated as-?ufloat      as-?nat-float)
-  (def ^:no-doc ^:_deprecated as-?pfloat      as-?pos-float)
-  (def ^:no-doc ^:_deprecated as-uint         as-nat-int)
-  (def ^:no-doc ^:_deprecated as-pint         as-pos-int)
-  (def ^:no-doc ^:_deprecated as-ufloat       as-nat-float)
-  (def ^:no-doc ^:_deprecated as-pfloat       as-pos-float)
-  (def ^:no-doc ^:_deprecated run!*           run!)
-  (def ^:no-doc ^:_deprecated ?subvec<idx     (comp not-empty get-subvec))
-  (def ^:no-doc ^:_deprecated ?subvec<len     (comp not-empty get-subvector))
-  (def ^:no-doc ^:_deprecated nano-time       now-nano)
-  (def ^:no-doc ^:_deprecated -swap-cache!    -swap-val!)
-  (def ^:no-doc ^:_deprecated -unswapped      swapped-vec)
-  (def ^:no-doc ^:_deprecated -vswapped       swapped-vec)
-  (def ^:no-doc ^:_deprecated -swap-k!        -swap-val!)
-  (def ^:no-doc ^:_deprecated update-in*      update-in)
-  (def ^:no-doc ^:_deprecated idx-fn          counter)
-  (def ^:no-doc ^:_deprecated vec*            ensure-vec)
-  (def ^:no-doc ^:_deprecated set*            ensure-set)
-  (def ^:no-doc ^:_deprecated have-transducers? true)
+  #?(:cljs (def ^:no-doc ^:deprecated-nowarn ^:deprecated regular-num?        finite-num?))
+  #?(:cljs (def ^:no-doc ^:deprecated-nowarn ^:deprecated get-window-location get-win-loc))
+  #?(:clj  (def ^:no-doc ^:deprecated-nowarn ^:deprecated srng                secure-rng))
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated backport-run!   run!)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated fq-name         as-qname)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated qname           as-qname)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated merge-deep-with nested-merge-with)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated merge-deep      nested-merge)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated parse-bool      as-?bool)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated parse-int       as-?int)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated parse-float     as-?float)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated swapped*        swapped)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize-a0_     memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize-a1_     memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated a0-memoize_     memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated a1-memoize_     memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize-1       memoize-last)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize1        memoize-last)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize*        memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated memoize_        memoize)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nnil?           some?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nneg-num?       nat-num?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nneg-int?       nat-int?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nneg-float?     nat-float?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated uint?           nat-int?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated pint?           pos-int?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nnil=           some=)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-?uint        as-?nat-int)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-?pint        as-?pos-int)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-?ufloat      as-?nat-float)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-?pfloat      as-?pos-float)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-uint         as-nat-int)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-pint         as-pos-int)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-ufloat       as-nat-float)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-pfloat       as-pos-float)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated run!*           run!)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated ?subvec<idx     (comp not-empty get-subvec))
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated ?subvec<len     (comp not-empty get-subvector))
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated nano-time       now-nano)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated -swap-cache!    -swap-val!)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated -unswapped      swapped-vec)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated -vswapped       swapped-vec)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated -swap-k!        -swap-val!)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated update-in*      update-in)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated idx-fn          counter)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated vec*            ensure-vec)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated set*            ensure-set)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated have-transducers? true)
 
-  (def ^:no-doc ^:_deprecated     pval?    pnum?)
-  (def ^:no-doc ^:_deprecated as-?pval as-?pnum)
-  (def ^:no-doc ^:_deprecated  as-pval  as-pnum)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated     pval?    pnum?)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated as-?pval as-?pnum)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated  as-pval  as-pnum)
 
-  (defn ^:no-doc get-substr
-    {:_deprecated "Encore v3.26.0 (2022-10-14)"
-     :doc "Prefer `get-substr-by-idx`."
-     :no-doc true}
+  (defn ^:no-doc ^:deprecated-nowarn get-substr
+    {:deprecated "Encore v3.26.0 (2022-10-14)"
+     :doc "Prefer `get-substr-by-idx`."}
     ([s ^long start]
      #?(:cljs (.substring s start)
         :clj
@@ -6508,10 +6509,9 @@
             ""
             (.substring ^String s start end))))))
 
-  (defn get-substring
-    {:_deprecated "Encore v3.26.0 (2022-10-14)"
-     :doc "Prefer `get-substr-by-len`."
-     :no-doc true}
+  (defn ^:no-doc ^:deprecated-nowarn get-substring
+    {:deprecated "Encore v3.26.0 (2022-10-14)"
+     :doc "Prefer `get-substr-by-len`."}
     ([s ^long start]
      #?(:cljs (as-?nempty-str (.substr s start))
         :clj
@@ -6543,12 +6543,12 @@
                   nil
                   (.substring ^String s start end)))))))))
 
-  (def ^:no-doc ^:_deprecated ?substr<idx (comp as-?nempty-str get-substr))
-  (def ^:no-doc ^:_deprecated ?substr<len (comp as-?nempty-str get-substring))  
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated ?substr<idx (comp as-?nempty-str get-substr))
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated ?substr<len (comp as-?nempty-str get-substring))  
 
   ;; Used by old versions of Timbre, Tufte
   (let [nolist? #(contains? #{nil [] #{}} %)]
-    (defn ^:no-doc ^:_deprecated compile-ns-filter
+    (defn ^:no-doc ^:deprecated-nowarn ^:deprecated compile-ns-filter
       ([ns-pattern         ] (compile-ns-filter ns-pattern nil))
       ([whitelist blacklist]
 
@@ -6556,99 +6556,98 @@
          (fn [_] true) ; Unfortunate API choice
          (name-filter {:allow whitelist :deny blacklist})))))
 
-  #?(:clj (defn ^:no-doc ^:_deprecated set-body      [rresp body]    (ring-set-body      body    rresp)))
-  #?(:clj (defn ^:no-doc ^:_deprecated set-status    [rresp code]    (ring-set-status    code    rresp)))
-  #?(:clj (defn ^:no-doc ^:_deprecated merge-headers [rresp headers] (ring-merge-headers headers rresp)))
-  #?(:clj (def  ^:no-doc ^:_deprecated redirect-resp ring-redirect-resp))
+  #?(:clj (defn ^:no-doc ^:deprecated-nowarn ^:deprecated set-body      [rresp body]    (ring-set-body      body    rresp)))
+  #?(:clj (defn ^:no-doc ^:deprecated-nowarn ^:deprecated set-status    [rresp code]    (ring-set-status    code    rresp)))
+  #?(:clj (defn ^:no-doc ^:deprecated-nowarn ^:deprecated merge-headers [rresp headers] (ring-merge-headers headers rresp)))
+  #?(:clj (def  ^:no-doc ^:deprecated-nowarn ^:deprecated redirect-resp ring-redirect-resp))
 
   #?(:clj
      (do
-       (defmacro ^:no-doc ^:_deprecated if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
-       (defmacro ^:no-doc ^:_deprecated when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
-       (defmacro ^:no-doc ^:_deprecated if-not*       [& args]  `(taoensso.encore/if-not        ~@args))
-       (defmacro ^:no-doc ^:_deprecated cond*         [& args]  `(taoensso.encore/cond          ~@args))
-       (defmacro ^:no-doc ^:_deprecated defonce*      [& args]  `(taoensso.encore/defonce       ~@args))
-       (defmacro ^:no-doc ^:_deprecated have-in       [a1 & an] `(taoensso.encore/have  ~a1 :in ~@an))
-       (defmacro ^:no-doc ^:_deprecated have-in!      [a1 & an] `(taoensso.encore/have! ~a1 :in ~@an))
-       (defmacro ^:no-doc ^:_deprecated cond-throw    [& args]  `(taoensso.encore/cond!         ~@args))
-       (defmacro ^:no-doc ^:_deprecated catch-errors* [& args]  `(taoensso.encore/catching      ~@args))
-       (defmacro ^:no-doc ^:_deprecated use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
-       (defmacro ^:no-doc ^:_deprecated nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
-       (defmacro ^:no-doc ^:_deprecated qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
-       (defmacro ^:no-doc ^:_deprecated catch-errors  [& body]
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated if-lets       [& args]  `(taoensso.encore/if-let        ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated when-lets     [& args]  `(taoensso.encore/when-let      ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated if-not*       [& args]  `(taoensso.encore/if-not        ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated cond*         [& args]  `(taoensso.encore/cond          ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated defonce*      [& args]  `(taoensso.encore/defonce       ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated have-in       [a1 & an] `(taoensso.encore/have  ~a1 :in ~@an))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated have-in!      [a1 & an] `(taoensso.encore/have! ~a1 :in ~@an))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated cond-throw    [& args]  `(taoensso.encore/cond!         ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated catch-errors* [& args]  `(taoensso.encore/catching      ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated catch-errors  [& body]
          `(catching [(do ~@body) nil] e# [nil e#]))
 
-       (defmacro ^:no-doc ^:_deprecated -vol!       [val]           `(volatile!     ~val))
-       (defmacro ^:no-doc ^:_deprecated -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
-       (defmacro ^:no-doc ^:_deprecated -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated -vol!       [val]           `(volatile!     ~val))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated -vol-swap!  [vol_ f & args] `(vswap!  ~vol_ ~f ~@args))
 
-       (defmacro thrown
-         {:_deprecated "Encore v3.31.0 (2022-10-27)"
-          :doc "Prefer `throws`."
-          :no-doc true}
+       (defmacro ^:no-doc ^:deprecated-nowarn thrown
+         {:deprecated "Encore v3.31.0 (2022-10-27)"
+          :doc "Prefer `throws`."}
          [& args] `(throws ~@args))))
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
-  #?(:cljs (defn ^:no-doc ^:_deprecated undefined->nil [x] (if (undefined? x) nil x)))
-  (defn ^:no-doc ^:_deprecated spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
-  (defn ^:no-doc ^:_deprecated spaced-str [xs] (str/join " " #?(:clj xs :cljs (mapv undefined->nil xs))))
+  #?(:cljs (defn ^:no-doc ^:deprecated-nowarn ^:deprecated undefined->nil [x] (if (undefined? x) nil x)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated spaced-str-with-nils [xs] (str/join " " (mapv nil->str xs)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated spaced-str [xs] (str/join " " #?(:clj xs :cljs (mapv undefined->nil xs))))
 
   ;; Arg order changed for easier partials, etc.:
-  (defn ^:no-doc ^:_deprecated round [n & [type nplaces]] (round* (or type :round) nplaces n))
-  (defn ^:no-doc ^:_deprecated approx=
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated round [n & [type nplaces]] (round* (or type :round) nplaces n))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated approx=
     ([x y      ] (approx==       x y))
     ([x y signf] (approx== signf x y)))
 
   ;; & coll changed to coll:
-  (defn ^:no-doc ^:_deprecated join-once [sep & coll] (str-join-once sep coll))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated join-once [sep & coll] (str-join-once sep coll))
 
   #?(:clj
      (do ;; Used by Carmine <= v2.7.0
-       (defmacro ^:no-doc ^:_deprecated repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
-       (defmacro ^:no-doc ^:_deprecated repeatedly-into* ; Used by Nippy < v2.10
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated repeatedly-into* ; Used by Nippy < v2.10
          [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))))
   
-  (defn ^:no-doc ^:_deprecated nnil-set [x] (disj (ensure-set x) nil))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated nnil-set [x] (disj (ensure-set x) nil))
 
   ;;; Arg order changed for easier partials
-  (defn ^:no-doc ^:_deprecated keys=      [m ks] (ks=      ks m))
-  (defn ^:no-doc ^:_deprecated keys<=     [m ks] (ks<=     ks m))
-  (defn ^:no-doc ^:_deprecated keys>=     [m ks] (ks>=     ks m))
-  (defn ^:no-doc ^:_deprecated keys=nnil? [m ks] (ks-nnil? ks m))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated keys=      [m ks] (ks=      ks m))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated keys<=     [m ks] (ks<=     ks m))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated keys>=     [m ks] (ks>=     ks m))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated keys=nnil? [m ks] (ks-nnil? ks m))
 
   ;; Used by Sente <= v1.4.0-alpha2
-  (def ^:no-doc ^:_deprecated logging-level (atom :debug)) ; Just ignoring this now
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated logging-level (atom :debug)) ; Just ignoring this now
 
   #?(:cljs ; Used by Sente <= v1.1.0
-     (defn ^:no-doc ^:_deprecated set-exp-backoff-timeout! [nullary-f & [nattempt]]
+     (defn ^:no-doc ^:deprecated-nowarn ^:deprecated set-exp-backoff-timeout! [nullary-f & [nattempt]]
        (js/setTimeout nullary-f (exp-backoff (or nattempt 0)))))
 
   #?(:cljs
      (do ; Level-based Cljs logging (prefer Timbre v4+)
-       (defonce ^:no-doc ^:_deprecated ^:dynamic *log-level* :debug)
+       (defonce ^:no-doc ^:deprecated-nowarn ^:deprecated ^:dynamic *log-level* :debug)
        (def ^:private log?
          (let [->n {:trace 1 :debug 2 :info 3 :warn 4 :error 5 :fatal 6 :report 7}]
            (fn [level] (>= (->n level) (->n *log-level*)))))
 
-       (defn ^:no-doc ^:_deprecated tracef  [fmt & xs] (when (log? :trace)  (apply logf fmt xs)))
-       (defn ^:no-doc ^:_deprecated debugf  [fmt & xs] (when (log? :debug)  (apply logf fmt xs)))
-       (defn ^:no-doc ^:_deprecated infof   [fmt & xs] (when (log? :info)   (apply logf fmt xs)))
-       (defn ^:no-doc ^:_deprecated warnf   [fmt & xs] (when (log? :warn)   (apply logf (str "WARN: "  fmt) xs)))
-       (defn ^:no-doc ^:_deprecated errorf  [fmt & xs] (when (log? :error)  (apply logf (str "ERROR: " fmt) xs)))
-       (defn ^:no-doc ^:_deprecated fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
-       (defn ^:no-doc ^:_deprecated reportf [fmt & xs] (when (log? :report) (apply logf fmt xs)))))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated tracef  [fmt & xs] (when (log? :trace)  (apply logf fmt xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated debugf  [fmt & xs] (when (log? :debug)  (apply logf fmt xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated infof   [fmt & xs] (when (log? :info)   (apply logf fmt xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated warnf   [fmt & xs] (when (log? :warn)   (apply logf (str "WARN: "  fmt) xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated errorf  [fmt & xs] (when (log? :error)  (apply logf (str "ERROR: " fmt) xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated fatalf  [fmt & xs] (when (log? :fatal)  (apply logf (str "FATAL: " fmt) xs)))
+       (defn ^:no-doc ^:deprecated-nowarn ^:deprecated reportf [fmt & xs] (when (log? :report) (apply logf fmt xs)))))
 
-  (defn ^:no-doc ^:_deprecated greatest [coll & [?comparator]]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated greatest [coll & [?comparator]]
     (let [comparator (or ?comparator rcompare)]
       (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
 
-  (defn ^:no-doc ^:_deprecated least [coll & [?comparator]]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated least [coll & [?comparator]]
     (let [comparator (or ?comparator rcompare)]
       (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
 
-  (defn ^:no-doc ^:_deprecated clj1098 "Ref. <http://goo.gl/0GzRuz>" [x] (or x {}))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated clj1098 "Ref. <http://goo.gl/0GzRuz>" [x] (or x {}))
 
-  (defn ^:no-doc ^:_deprecated distinct-by
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated distinct-by
     "Prefer `xdistinct`."
     [keyfn coll]
     (let [step (fn step [xs seen]
@@ -6662,7 +6661,7 @@
                     xs seen)))]
       (step coll #{})))
 
-  (defn ^:no-doc ^:_deprecated distinctv
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated distinctv
     "Prefer `xdistinct`."
     ([      coll] (distinctv identity coll))
     ([keyfn coll]
@@ -6675,7 +6674,7 @@
                 coll)]
        (persistent! (nth tr 0)))))
 
-  (defn ^:no-doc ^:_deprecated map-kvs [kf vf m]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated map-kvs [kf vf m]
     "Prefer `reduce-kv`."
     (if-not m {}
       (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
@@ -6686,7 +6685,7 @@
           (reduce-kv (fn [m k v] (assoc! m (kf k v) (vf k v)))
             (transient {}) m)))))
 
-  (defn ^:no-doc ^:_deprecated as-map [kvs & [kf vf]]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated as-map [kvs & [kf vf]]
     "Prefer `reduce-kvs`."
     (if (empty? kvs) {}
         (let [vf (cond (nil? vf) (fn [_ v] v) :else vf)
@@ -6697,11 +6696,11 @@
             (reduce-kvs
               (fn [m k v] (assoc! m (kf k v) (vf k v))) (transient {}) kvs)))))
 
-  (defn ^:no-doc ^:_deprecated keywordize-map [m] (map-keys keyword m))
-  (defn ^:no-doc ^:_deprecated removev [pred coll] (filterv (complement pred) coll))
-  (defn ^:no-doc ^:_deprecated nvec? [n x] (and (vector? x) (= (count x) n)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated keywordize-map [m] (map-keys keyword m))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated removev [pred coll] (filterv (complement pred) coll))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated nvec? [n x] (and (vector? x) (= (count x) n)))
 
-  (defn ^:no-doc ^:_deprecated memoized [cache f & args]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated memoized [cache f & args]
     (if-not cache ; {<args> <delay-val>}
       (apply f args)
       @(-swap-val! cache args (fn [?dv] (if ?dv ?dv (delay (apply f args)))))))
@@ -6713,7 +6712,7 @@
 
   (comment (translate-signed-idx -3 5))
 
-  (defn ^:no-doc ^:_deprecated sub-indexes
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated sub-indexes
     [x start-idx & {:keys [^long max-len ^long end-idx]}]
     (let [start-idx  ^long start-idx
           xlen       (count x) ; also = max-exclusive-end-idx
@@ -6729,7 +6728,7 @@
         [0 0] ; Disallow wrapping
         [start-idx* end-idx*])))
 
-  (defn ^:no-doc ^:_deprecated substr
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated substr
     "Prefer `get-substr-by-idx` or `get-substr-by-len`"
     [s start-idx & [?max-len]]
     (let [[start-idx* end-idx*] (sub-indexes s start-idx :max-len ?max-len)]
@@ -6738,22 +6737,22 @@
 
   (comment (substr "hello" -1 1))
 
-  (defn ^:no-doc ^:_deprecated subvec*
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated subvec*
     "Prefer `get-subvec` or `get-subvector`"
     [v start-idx & [?max-len]]
     (let [[start-idx* end-idx*] (sub-indexes v start-idx :max-len ?max-len)]
       (subvec v start-idx* end-idx*)))
 
-  (def  ^:no-doc ^:_deprecated sentinel (new-object))
-  (defn ^:no-doc ^:_deprecated sentinel?     [x] (identical? x sentinel))
-  (defn ^:no-doc ^:_deprecated nil->sentinel [x] (if (nil? x) sentinel x))
-  (defn ^:no-doc ^:_deprecated sentinel->nil [x] (if (sentinel? x) nil x))
+  (def  ^:no-doc ^:deprecated-nowarn ^:deprecated sentinel (new-object))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated sentinel?     [x] (identical? x sentinel))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated nil->sentinel [x] (if (nil? x) sentinel x))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated sentinel->nil [x] (if (sentinel? x) nil x))
 
-  (defn ^:no-doc ^:_deprecated  singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
-  (defn ^:no-doc ^:_deprecated ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
-  (defn ^:no-doc ^:_deprecated ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated  singleton? [coll] (if (counted? coll) (= (count coll) 1) (not (next coll))))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated ->?singleton [coll] (when (singleton? coll) (let [[c1] coll] c1)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated ->vec [x] (cond (vector? x) x (sequential? x) (vec x) :else [x]))
 
-  (defn ^:no-doc ^:_deprecated fzipmap [ks vs]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated fzipmap [ks vs]
     (loop [m  (transient {})
            ks (seq ks)
            vs (seq vs)]
@@ -6763,15 +6762,15 @@
           (next ks)
           (next vs)))))
 
-  (defn ^:no-doc ^:_deprecated filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v)         m    (dissoc m k))) m m)))
-  (defn ^:no-doc ^:_deprecated remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k)         m))    m m)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated filter-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v)         m    (dissoc m k))) m m)))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated remove-kvs [pred m] (if (nil? m) {} (reduce-kv (fn [m k v] (if (pred k v) (dissoc m k)         m))    m m)))
 
-  (defn ^:no-doc ^:_deprecated revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
-  (defn ^:no-doc ^:_deprecated revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated revery     [pred coll] (reduce    (fn [acc in]  (if (pred in)  coll (reduced nil))) coll coll))
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated revery-kv  [pred coll] (reduce-kv (fn [acc k v] (if (pred k v) coll (reduced nil))) coll coll))
 
-  (def ^:no-doc ^:_deprecated every revery)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated every revery)
 
-  (defn ^:no-doc ^:_deprecated replace-in [m & ops]
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated replace-in [m & ops]
     (reduce
       (fn [m ?op]
         (if-not ?op
@@ -6783,58 +6782,58 @@
       ops))
 
   (let [return (fn [m0 v0 m1 v1] [v0 v1])]
-    (defn ^:no-doc ^:_deprecated swap-in!*
+    (defn ^:no-doc ^:deprecated-nowarn ^:deprecated swap-in!*
       "Prefer `swap-in!` with `swapped` return value."
       ([atom_              f] (-swap-k0! return atom_              f))
       ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
       ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
 
-    (defn ^:no-doc ^:_deprecated swap-val!*
+    (defn ^:no-doc ^:deprecated-nowarn ^:deprecated swap-val!*
       "Prefer `swap-val!` with `swapped` return value."
       ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
       ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
 
-  (def ^:no-doc ^:_deprecated dswap! swap-in!*)
-  (def ^:no-doc ^:_deprecated swap!* swap-in!*)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated dswap! swap-in!*)
+  (def ^:no-doc ^:deprecated-nowarn ^:deprecated swap!* swap-in!*)
 
-  #?(:clj (defalias ^:no-doc ^:_deprecated taoensso.truss/get-dynamic-assertion-data))
-  #?(:clj (defalias ^:no-doc ^:_deprecated taoensso.truss/with-dynamic-assertion-data))
+  #?(:clj (defalias ^:no-doc ^:deprecated-nowarn ^:deprecated taoensso.truss/get-dynamic-assertion-data))
+  #?(:clj (defalias ^:no-doc ^:deprecated-nowarn ^:deprecated taoensso.truss/with-dynamic-assertion-data))
 
-  (defalias ^:no-doc compile-str-filter name-filter
-    {:_deprecated "Encore v3.67.0 (2023-09-08)"
+  (defalias ^:no-doc ^:deprecated-nowarn compile-str-filter name-filter
+    {:deprecated "Encore v3.67.0 (2023-09-08)"
      :doc "Renamed to `name-filter`."})
 
-  (defn ^:no-doc ^:_deprecated kw-identical?
+  (defn ^:no-doc ^:deprecated-nowarn ^:deprecated kw-identical?
     "Prefer `identical-kw?` macro."
     #?(:cljs {:tag 'boolean})
     [x y] (identical-kw? x y))
 
   #?(:clj
-     (defmacro ^:no-doc -if-cas!
+     (defmacro ^:no-doc ^:deprecated-nowarn -if-cas!
        "Prefer `-cas!?`."
-       {:_deprecated "Encore v3.67.0 (2023-09-08)"}
+       {:deprecated "Encore v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val then & [else]]
        `(if (-cas!? ~atom_ ~old-val ~new-val) ~then ~else)))
 
-  (def* ^:const system-newline
+  (def* ^:const ^:no-doc ^:deprecated-nowarn system-newline
     "Prefer `newline`."
-    {:_deprecated "Encore v3.68.0 (2023-09-25)"}
+    {:deprecated "Encore v3.68.0 (2023-09-25)"}
     newline)
 
-  (defn ^:no-doc -unexpected-arg!
+  (defn ^:no-doc ^:deprecated-nowarn -unexpected-arg!
     "Prefer `unexpected-arg!`"
     {:added      "Encore v3.66.0 (2023-08-23)"
-     :_deprecated "Encore v3.68.0 (2023-09-25)"}
+     :deprecated "Encore v3.68.0 (2023-09-25)"}
     ([arg        ] (unexpected-arg! arg nil))
     ([arg details] (unexpected-arg! arg details)))
 
-  (def* ^:no-doc -matching-error
+  (def* ^:no-doc ^:deprecated-nowarn -matching-error
     "Prefer `matching-error`."
-    {:_deprecated "Encore v3.70.0 (2023-10-17)"}
+    {:deprecated "Encore v3.70.0 (2023-10-17)"}
     matching-error)
 
-  (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:_deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
-  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:_deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
+  (def* ^:no-doc ^:deprecated-nowarn limiter* "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
+  (def* ^:no-doc ^:deprecated-nowarn limiter  "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call)))
 
@@ -6843,45 +6842,45 @@
      (do
        (defn- get-config-opts [opts] (dissoc (assoc opts :return :legacy :spec (get opts :prop)) :prop))
 
-       (defmacro ^:no-doc get-config
-         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+       (defmacro ^:no-doc ^:deprecated-nowarn get-config
+         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
          [opts] `(get-env ~(get-config-opts opts)))
 
-       (defmacro ^:no-doc get-sys-val*
-         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+       (defmacro ^:no-doc ^:deprecated-nowarn get-sys-val*
+         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
          ([spec        ] `(get-env {:as :str :spec ~spec                    }))
          ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env          }))
          ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res})))
 
-       (defmacro ^:no-doc get-sys-bool*
-         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+       (defmacro ^:no-doc ^:deprecated-nowarn get-sys-bool*
+         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
          ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    }))
          ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env          }))
          ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res})))
 
-       (defmacro ^:no-doc read-sys-val*
-         {:_deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
+       (defmacro ^:no-doc ^:deprecated-nowarn read-sys-val*
+         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)" :doc "Prefer `get-env`."}
          ([spec        ] `(get-env {:as :edn :spec ~spec                    }))
          ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env          }))
          ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res})))
 
-       (defn ^:no-doc get-sys-val
-         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+       (defn ^:no-doc ^:deprecated-nowarn get-sys-val
+         {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
          ([spec    ] (get-env* {:as :str :spec spec}))
          ([spec env] (get-env* {:as :str :spec spec :env env})))
 
-       (defn ^:no-doc read-sys-val
-         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+       (defn ^:no-doc ^:deprecated-nowarn read-sys-val
+         {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
          ([spec    ] (get-env* {:as :edn :spec spec}))
          ([spec env] (get-env* {:as :edn :spec spec :env env})))
 
-       (defn ^:no-doc get-sys-bool
-         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+       (defn ^:no-doc ^:deprecated-nowarn get-sys-bool
+         {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
          ([default spec    ] (get-env* {:as :bool :default default :spec spec}))
          ([default spec env] (get-env* {:as :bool :default default :spec spec :env env})))
 
-       (defn ^:no-doc load-edn-config
-         {:_deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
+       (defn ^:no-doc ^:deprecated-nowarn load-edn-config
+         {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
          [opts]
          (let [{:keys [error-data validator default]} opts
                have-default? (contains? opts :default)]
@@ -6901,4 +6900,4 @@
                    (assoc error-data :opts opts) t)))))))))
 
 (do ; Not currently eliding
-  #?(:cljs (def ^:no-doc ^:_deprecated js-?win js-?window)))
+  #?(:cljs (def ^:no-doc ^:deprecated-nowarn ^:deprecated js-?win js-?window)))
