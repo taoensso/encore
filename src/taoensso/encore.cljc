@@ -6418,7 +6418,7 @@
      "Elides body when `taoensso.elide-deprecated` JVM property or
      `TAOENSSO_ELIDE_DEPRECATED` environment variable is ∈ #{\"true\" \"TRUE\"}."
      [& body]
-     (let [elide? (get-env {:as :bool} :taoensso.elide-deprecated)]
+     (let [elide? (get-env {:as :bool} :taoensso.elide-deprecated<.platform>)]
        (when-not elide? `(do ~@body)))))
 
 (deprecated
