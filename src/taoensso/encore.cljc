@@ -4970,8 +4970,13 @@
        (when x
          (if (vector? x)
            (into [] (comp (map #(prep-env-ids target tf %)) cat (distinct)) x)
-           (let [s  (as-qname (have const-form? x))
-                 tf (or tf identity)
+           (let [tf (or tf identity)
+                 s  (as-qname
+                      (if (const-form? x)
+                        x
+                        (throw
+                          (ex-info "[encore/get-env] Ids must be const forms"
+                            {:id x}))))
 
                  without-platform                 (str/replace s pattern-platform "")
                  with-platform       (when target (str/replace s pattern-platform (fn [[_ pre post]] (str pre (name target) post))))
@@ -4990,7 +4995,7 @@
    (let [pname (fn [s] (-> s (str-replace #"/" ".")))
          ename (fn [s] (-> s (str-replace #"[./-]" "_") (str/upper-case)))
          parse-opts
-         (fn [opts-or-spec]
+         (fn        [opts-or-spec]
            (if (map? opts-or-spec)
              (do     opts-or-spec)
              {:spec  opts-or-spec}))]
@@ -5155,7 +5160,7 @@
                    return :value}}])}
 
        ([            ] `(get-locals)) ; Back compatibility
-       ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc        opts               :macro-env &env :spec spec)))
+       ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc             opts          :macro-env &env :spec spec)))
        ([opts-or-spec] (have? const-form? opts-or-spec) (get-env* (assoc (parse-opts opts-or-spec) :macro-env &env))))))
 
 (comment
@@ -6848,36 +6853,39 @@
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-sys-val*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
-         ([spec        ] `(get-env {:as :str :spec ~spec                    }))
-         ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env          }))
-         ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res})))
+         ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res}))
+         ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env}))
+         ([spec        ]
+          (if (str-starts-with? (str *ns*) "taoensso.nippy")
+            `(get-env* {:as :edn :spec ~spec}) ; Back compatibility (don't embed)
+            `(get-env  {:as :str :spec ~spec}))))
 
        (defmacro ^:no-doc ^:deprecated-nowarn get-sys-bool*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
-         ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    }))
+         ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res}))
          ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env          }))
-         ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res})))
+         ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    })))
 
        (defmacro ^:no-doc ^:deprecated-nowarn read-sys-val*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
-         ([spec        ] `(get-env {:as :edn :spec ~spec                    }))
+         ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res}))
          ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env          }))
-         ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res})))
+         ([spec        ] `(get-env {:as :edn :spec ~spec                    })))
 
        (defn ^:no-doc ^:deprecated-nowarn get-sys-val
          {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
-         ([spec    ] (get-env* {:as :str :spec spec}))
-         ([spec env] (get-env* {:as :str :spec spec :env env})))
+         ([spec env] (get-env* {:as :str :spec spec :env env}))
+         ([spec    ] (get-env* {:as :str :spec spec})))
 
        (defn ^:no-doc ^:deprecated-nowarn read-sys-val
          {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
-         ([spec    ] (get-env* {:as :edn :spec spec}))
-         ([spec env] (get-env* {:as :edn :spec spec :env env})))
+         ([spec env] (get-env* {:as :edn :spec spec :env env}))
+         ([spec    ] (get-env* {:as :edn :spec spec})))
 
        (defn ^:no-doc ^:deprecated-nowarn get-sys-bool
          {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
-         ([default spec    ] (get-env* {:as :bool :default default :spec spec}))
-         ([default spec env] (get-env* {:as :bool :default default :spec spec :env env})))
+         ([default spec env] (get-env* {:as :bool :default default :spec spec :env env}))
+         ([default spec    ] (get-env* {:as :bool :default default :spec spec})))
 
        (defn ^:no-doc ^:deprecated-nowarn load-edn-config
          {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}
