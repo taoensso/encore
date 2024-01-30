@@ -9,7 +9,7 @@
   comfortable reading this source. Not providing much beginner-oriented
   documentation for this, sorry.
 
-  Quick Taoensso naming conventions:
+  Common naming conventions used across my libs:
     **foo** - Dynamic var
     foo!    - Fn with side effects, or that should otherwise be used cautiously
     foo?    - Truthy val or fn that returns truthy val
@@ -508,12 +508,6 @@
        `(let [~g ~x]
           ~@(map pstep (partition 2 clauses))
           ~g))))
-
-#?(:clj
-   (do
-     (defmacro do-nil   [& body] `(do ~@body nil))
-     (defmacro do-false [& body] `(do ~@body false))
-     (defmacro do-true  [& body] `(do ~@body true))))
 
 ;;;;
 
@@ -3073,7 +3067,7 @@
        (fn [] (Math/floor (* 1e6 (.call pf perf))))
        (fn []             (* 1e6 (js/Date.now))))))
 
-;; Specialist macros to force expanded form (useful in other macros, etc.).
+;; Specialist macros to force expanded form (useful for Cljs, other macros, etc.).
 #?(:clj (defmacro ^:no-doc now-udt*    "When possible prefer `now-udt`."   [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
 #?(:clj (defmacro ^:no-doc now-dt*     "When possible prefer `now-dt`."    [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
 #?(:clj (defmacro ^:no-doc now-inst*   "When possible prefer `now-inst` ." [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
@@ -3097,7 +3091,7 @@
 
 (defn fmemoize
   "For Clj: fastest possible memoize. Non-racey, 0-7 arity only.
-  For Cljs: just passes through to `core/memoize`."
+  For Cljs: same as `core/memoize`."
   [f]
   #?(:cljs (cljs.core/memoize f)
      :clj
@@ -4926,7 +4920,7 @@
    (let [cache_ (atom nil)] ; Impln detail
      (defn java-version
        "Returns Java's major version integer (8, 17, etc.)."
-       {:added "v3.75.0 (2024-01-29)"}
+       {:added "Encore v3.75.0 (2024-01-29)"}
        (^long [              ] (or @cache_ (reset! cache_ (java-version (System/getProperty "java.version")))))
        (^long [version-string]
         (or
@@ -4946,7 +4940,7 @@
    (defn java-version>=
      "Returns true iff Java's major version integer is >= given integer:
        (if (java-version>= 21) <then> <else>)"
-     {:added "v3.75.0 (2024-01-29)"}
+     {:added "Encore v3.75.0 (2024-01-29)"}
      [n] (>= (java-version) (long n))))
 
 (comment (java-version>= 21))
@@ -6840,7 +6834,13 @@
   (def* ^:no-doc ^:deprecated-nowarn limiter* "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc ^:deprecated-nowarn limiter  "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
 
-  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call)))
+  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
+
+  #?(:clj
+     (do
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated do-nil   [& body] `(do ~@body nil))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated do-false [& body] `(do ~@body false))
+       (defmacro ^:no-doc ^:deprecated-nowarn ^:deprecated do-true  [& body] `(do ~@body true)))))
 
 (deprecated
   #?(:clj
@@ -6904,7 +6904,7 @@
 
              (catch Throwable t
                (throw
-                 (ex-info "[enc/load-edn-config] Error loading edn config"
+                 (ex-info "[encore/load-edn-config] Error loading edn config"
                    (assoc error-data :opts opts) t)))))))))
 
 (do ; Not currently eliding
