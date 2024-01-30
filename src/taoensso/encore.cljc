@@ -205,8 +205,15 @@
 
 #?(:clj
    (defmacro if-let
-     "Like `core/if-let` but can bind multiple values for `then` iff all tests
-     are truthy, supports internal unconditional `:let`s."
+     "Supersets `core/if-let` functionality. Like `core/if-let` but supports multiple
+     bindings, and unconditional bindings with `:let`:
+
+     (if-let [x       (rand-nth [:x1 :x2 false nil    ])  ; Bind truthy x, or -> `else`
+              :let [y (rand-nth [:y1 :y2 false nil x  ])] ; Bind any    y
+              z       (rand-nth [:z1 :z2 false nil x y])  ; Bind truthy z, or -> `else`
+              ]
+       [:then-clause x y z]
+       [:else-clause])"
      {:style/indent 1}
      ([bindings then     ] `(if-let ~bindings ~then nil))
      ([bindings then else]
@@ -224,8 +231,15 @@
 
 #?(:clj
    (defmacro if-some
-     "Like `core/if-some` but can bind multiple values for `then` iff all tests
-     are non-nil, supports internal unconditional `:let`s."
+     "Supersets `core/if-some` functionality. Like `core/if-some` but supports multiple
+     bindings, and unconditional bindings with `:let`:
+
+     (if-some [x       (rand-nth [:x1 :x2 false nil    ])  ; Bind non-nil x, or -> `else`
+               :let [y (rand-nth [:y1 :y2 false nil x  ])] ; Bind any     y
+               z       (rand-nth [:z1 :z2 false nil x y])  ; Bind non-nil z, or -> `else`
+               ]
+       [:then-clause x y z]
+       [:else-clause])"
      {:style/indent 1}
      ([bindings then] `(if-some ~bindings ~then nil))
      ([bindings then else]
@@ -243,8 +257,8 @@
 
 #?(:clj
    (defmacro if-not
-     "Like `core/if-not` but acts like `if-let` when given a binding vector
-     as test expr."
+     "Supersets `core/if-not` functionality.
+     Same as `encore/if-let` with `then` `and `else` forms swapped."
      ;; Also avoids unnecessary `(not test)`
      {:style/indent 1}
      ([test-or-bindings then]
@@ -258,9 +272,23 @@
         `(if     ~test-or-bindings ~else ~then)))))
 
 #?(:clj
+   (defmacro when-let
+     "Supersets `core/when-let` functionality. Like `core/when-let` but supports multiple
+     bindings, and unconditional bindings with `:let`:
+
+     (when-let [x       (rand-nth [:x1 :x2 false nil    ])  ; Bind truthy x, or -> nil
+                :let [y (rand-nth [:y1 :y2 false nil x  ])] ; Bind any    y
+                z       (rand-nth [:z1 :z2 false nil x y])  ; Bind truthy z, or -> nil
+                ]
+       [:body x y z])"
+     ;; Now a feature subset of all-case `when`
+     {:style/indent 1}
+     [bindings & body] `(if-let ~bindings (do ~@body))))
+
+#?(:clj
    (defmacro when
-     "Like `core/when` but acts like `when-let` when given a binding vector
-     as test expr."
+     "Supersets `core/when` and `core/when-let` functionality. When `test-or-bindings` is
+     a vector, same as `encore/when-let`. Otherwise same as `core/when`."
      {:style/indent 1}
      [test-or-bindings & body]
      (if (vector? test-or-bindings)
@@ -269,8 +297,8 @@
 
 #?(:clj
    (defmacro when-not
-     "Like `core/when-not` but acts like `when-let` when given a binding vector
-     as test expr."
+     "Supersets `core/when-not` functionality.
+     Same as `encore/if-let` with `body` as `else` form."
      {:style/indent 1}
      [test-or-bindings & body]
      (if (vector? test-or-bindings)
@@ -279,19 +307,19 @@
 
 #?(:clj
    (defmacro when-some
+     "Supersets `core/when-some` functionality. Like `core/when-some` but supports multiple
+     bindings, and unconditional bindings with `:let`:
+
+     (when-some [x       (rand-nth [:x1 :x2 false nil    ])  ; Bind non-nil x, or -> `else`
+                 :let [y (rand-nth [:y1 :y2 false nil x  ])] ; Bind any     y
+                 z       (rand-nth [:z1 :z2 false nil x y])  ; Bind non-nil z, or -> `else`
+                 ]
+       [:body x y z])"
      {:style/indent 1}
      [test-or-bindings & body]
      (if (vector? test-or-bindings)
        `(if-some       ~test-or-bindings  (do ~@body) nil)
        `(if      (nil? ~test-or-bindings) nil (do ~@body)))))
-
-#?(:clj
-   (defmacro when-let
-     "Like `core/when-let` but can bind multiple values for `body` iff all tests
-     are truthy, supports internal unconditional `:let`s."
-     {:style/indent 1}
-     ;; Now a feature subset of all-case `when`
-     [bindings & body] `(if-let ~bindings (do ~@body))))
 
 (comment
   (if-let   [a :a b (= a :a)] [a b] "else")
@@ -366,8 +394,8 @@
 
 #?(:clj
    (defmacro cond
-     "Like `core/cond` but supports implicit final `else` clause, and special
-     clause keywords for advanced behaviour:
+     "Supersets `core/cond` functionality. Like `core/cond` but supports implicit
+     final `else` clause, and special clause keywords for advanced behaviour:
 
      (cond
        :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
@@ -382,7 +410,7 @@
                  z nil]
        \"y and z were both non-nil\")
 
-     :let support inspired by <https://github.com/Engelberg/better-cond>.
+     `:let` support inspired by <https://github.com/Engelberg/better-cond>.
      Simple, flexible way to eliminate deeply-nested control flow code."
 
      ;; Also avoids unnecessary `(if :else ...)`, etc.
@@ -426,9 +454,14 @@
    (cond  :if-let [a nil] a (= 1 0) "1=0" #_"default")
    (cond! :if-let [a nil] a (= 1 0) "1=0" #_"default")])
 
-#?(:cljs (defn ^boolean some? [x] (if (nil? x) false true))
+#?(:cljs
+   (defn ^boolean some?
+     "Same as `core/some?` (added in Clojure v1.6)."
+     [x] (if (nil? x) false true))
+
    :clj
    (defn some?
+     "Same as `core/some?` (added in Clojure v1.6)."
      {:inline (fn [x] `(if (identical? ~x nil) false true))}
      [x]               (if (identical?  x nil) false true)))
 
@@ -487,7 +520,7 @@
 
 #?(:clj
    (defmacro case-eval
-     "Like `case` but evals test constants for their compile-time value."
+     "Like `case` but test expressions are evaluated for their compile-time value."
      {:style/indent 1}
      [expr & clauses]
      (let [default (when (odd? (count clauses)) (last clauses))
@@ -776,14 +809,14 @@
 ;;;; Errors
 
 (defn ex-message
-  "Copy of `core/ex-message` (added in Clojure v1.10)."
+  "Same as `core/ex-message` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
   [ex]
   #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
      :cljs (when (instance? js/Error  ex) (.-message              ex))))
 
 (defn ex-cause
-  "Copy of `core/ex-cause` (added in Clojure v1.10)."
+  "Same as `core/ex-cause` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
   [ex]
   #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
@@ -4340,13 +4373,13 @@
        (ns my-ns
          (:require [taoensso.encore :as enc]))
 
-       (enc/require-telemere-if-present) ; At top of file, just below `ns` form
+       (encore/require-telemere-if-present) ; At top of file, just below `ns` form
 
        ;; Later in your code...
 
        (or
-         (enc/signal! {<signal-opts>})   ; Expands to Telemere signal call
-         (println \"Println fallback!\") ; Fallback if Telemere not present
+         (encore/signal! {<signal-opts>}) ; Expands to Telemere signal call
+         (println \"Println fallback!\")  ; Fallback if Telemere not present
          )
 
      For info on signal options, see Telemere documentation [1] or
