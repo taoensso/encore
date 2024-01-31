@@ -2336,8 +2336,12 @@
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
 (defn into!
-  ([to       from] (reduce          conj! to from))
-  ([to xform from] (transduce xform conj! to from)))
+  "Like `core/into` but assumes `to!` is a transient, and doesn't call
+  `persist!` when done. Useful as a performance optimization in some cases."
+  #_([            ]                        [])
+  ([to!           ]                        to!)
+  ([to!       from] (reduce          conj! to! from))
+  ([to! xform from] (transduce xform conj! to! from)))
 
 (defn xdistinct
   ([] (distinct)) ; core now has a distinct transducer
