@@ -2344,21 +2344,24 @@
   ([to! xform from] (transduce xform conj! to! from)))
 
 (defn xdistinct
-  ([] (distinct)) ; core now has a distinct transducer
+  "Returns a stateful transducer like (core/distinct) that supports an optional
+  key function. Retains only items with distinct (keyfn <item>)."
+  ([     ] (distinct)) ; core now has a distinct transducer
   ([keyfn]
    (fn [rf]
      (let [seen_ (volatile! (transient #{}))]
        (fn
-         ([         ] (rf))
-         ([acc      ] (rf acc))
-         ([acc input]
-          (let [k (keyfn input)]
+         ([      ] (rf))
+         ([acc   ] (rf acc))
+         ([acc in]
+          (let [k (keyfn in)]
             (if (contains? @seen_ k)
               acc
-              (do (vswap! seen_ conj! k)
-                  (rf acc input))))))))))
+              (do
+                (vswap! seen_ conj! k)
+                (rf acc in))))))))))
 
-(comment (into [] (xdistinct) [1 2 3 1 4 5 2 6 7 1]))
+(comment (into [] (xdistinct identity) [1 2 3 1 4 5 2 6 7 1]))
 
 (let [p! persistent!, t transient] ; Note `mapv`-like nil->{} semantics
   (defn invert-map       [m]                 (p! (reduce-kv (fn [m k v] (assoc! m v    k))  (t {}) m)))
