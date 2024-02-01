@@ -269,7 +269,9 @@
      ns-filter kind-filter id-filter min-level,
      rl-error rl-backup error-fn backp-fn]}]
 
-  (let [sample-rate  (when sample (enc/as-pnum! sample))
+  (let [;; Must be const for now, use filter-fn for dynamic sampling
+        sample-rate  (when sample (enc/as-pnum! sample))
+
         rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
         sig-filter*  (sigs/sig-filter ns-filter kind-filter id-filter min-level)
         stopped?_    (enc/latom false)
