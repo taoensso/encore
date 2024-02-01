@@ -20,7 +20,7 @@ jobs:
 
       - uses: DeLaGuardo/setup-clojure@10.0
         with:
-          lein: 2.10.0 # latest ; 2.11.0/1 seems to break Graal tests, unsure why
+          lein: latest
           bb: latest
 
       - uses: actions/cache@v3
