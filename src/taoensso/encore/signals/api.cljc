@@ -311,7 +311,7 @@
                (catch :any t
                  (when error-fn
                    (enc/catching
-                     (when-not (and rl-error (rl-error handler-id))
+                     (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
                        (if-not (enc/identical-kw? error-fn ::default)
                          (error-fn {:handler-id handler-id, :error t})
                          (enc/signal!
@@ -334,7 +334,7 @@
              (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
                (when backp-fn
                  (enc/catching
-                   (when-not (and rl-backp (rl-backp handler-id))
+                   (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
                      (if-not (enc/identical-kw? backp-fn ::default)
                        (backp-fn {:handler-id handler-id})
                        (enc/signal!

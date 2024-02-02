@@ -283,6 +283,7 @@
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns :kind :id :info)))])
 
 (defprotocol IFilterableSignal
+  "Protocol that app/library signal-like types must implement to support signal API."
   (allow-signal? [_ sig-filter] "Returns true iff given signal is allowed by given `SigFilter`.")
   (signal-value  [_]            "Returns signal's user-facing value as given to handlers, etc."))
 
