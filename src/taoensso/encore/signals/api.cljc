@@ -300,13 +300,13 @@
                        (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
                        )]
 
-                 (when allow?
-                   (when-let [sig-val (sigs/signal-value signal)]
-                     (if middleware-fn
-                       (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val))
-                       (do                                         (handler-fn sig-val)))))
-
-                 nil)
+                 (or
+                   (when allow?
+                     (when-let [sig-val (sigs/signal-value signal)]
+                       (if middleware-fn
+                         (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val) true)
+                         (do                                         (handler-fn sig-val) true))))
+                   false))
 
                (catch :any t
                  (when error-fn
@@ -323,7 +323,7 @@
                             {:handler-id    handler-id
                              :handler-fn    handler-fn
                              :dispatch-opts dispatch-opts}})))))
-                 nil)))))]
+                 false)))))]
 
     #?(:cljs wrapped-handler-fn
        :clj
