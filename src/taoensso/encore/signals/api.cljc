@@ -286,7 +286,11 @@
         (fn wrapped-handler-fn
           ([] ; Shutdown
            (when (enc/-cas!? stopped?_ false true)
-             (enc/catching (handler-fn)) ; Notify handler-fn to shutdown
+             (enc/try*
+               (handler-fn) ; Notify handler-fn to shutdown
+               (catch :any t
+                 (when (and error-fn (not (enc/identical-kw? error-fn ::default)))
+                   (enc/catching (error-fn {:handler-id handler-id, :error t}))))) ; No :handler-arg
              true))
 
           ([signal]
@@ -313,7 +317,7 @@
                    (enc/catching
                      (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
                        (if-not (enc/identical-kw? error-fn ::default)
-                         (error-fn {:handler-id handler-id, :error t})
+                         (error-fn {:handler-id handler-id, :handler-arg signal, :error t})
                          (enc/signal!
                            {:level :error
                             :id    ::handler-error
@@ -322,6 +326,7 @@
                             :data
                             {:handler-id    handler-id
                              :handler-fn    handler-fn
+                             :handler-arg   signal
                              :dispatch-opts dispatch-opts}})))))
                  false)))))]
 
@@ -455,8 +460,8 @@
 
                    Useful for transforming `handler-arg` before handling.
 
-                 `error-fn` - (fn [{:keys [handler-id error]}]) to call on handler error.
-                 `backp-fn` - (fn [{:keys [handler-id      ]}]) to call on handler back pressure.
+                 `error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
+                 `backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back pressure.
 
                Flow sequence:
 
