@@ -1136,7 +1136,7 @@
 
   (deftype MySignal [level cnt]
     sigs/IFilterableSignal
-    (signal-value  [_] cnt)
+    (signal-value  [_ _] cnt)
     (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))))
 
 (deftest _signal-api

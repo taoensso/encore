@@ -7,7 +7,9 @@
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc :refer [have have?]]
-   [taoensso.encore.signals :as sigs]))
+   [taoensso.encore.signals :as sigs])
+
+  #?(:clj (:import [taoensso.encore.signals HandlerContext])))
 
 (enc/require-telemere-if-present) ; Requires `telemere.impl`
 
@@ -269,8 +271,12 @@
      ns-filter kind-filter id-filter min-level,
      rl-error rl-backup error-fn backp-fn]}]
 
-  (let [;; Must be const for now, use filter-fn for dynamic sampling
-        sample-rate  (when sample (enc/as-pnum! sample))
+  (let [[sample-rate sample-rate-fn]
+        (when      sample
+          (if (fn? sample)
+            [nil                sample] ; Dynamic rate (use dynamic binding, deref atom, etc.)
+            [(enc/as-pnum! sample) nil] ; Static  rate
+            ))
 
         rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
         sig-filter*  (sigs/sig-filter ns-filter kind-filter id-filter min-level)
@@ -296,7 +302,8 @@
           ([signal]
            (when-not (stopped?_)
              (enc/try*
-               (let [allow?
+               (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (double (f))))
+                     allow?
                      (and
                        (if sample-rate (< (Math/random) ^double sample-rate)   true)
                        (if sig-filter* (sigs/allow-signal? signal sig-filter*) true)
@@ -306,7 +313,7 @@
 
                  (or
                    (when allow?
-                     (when-let [sig-val (sigs/signal-value signal)]
+                     (when-let [sig-val (sigs/signal-value signal (sigs/HandlerContext. sample-rate))]
                        (if middleware-fn
                          (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val) true)
                          (do                                         (handler-fn sig-val) true))))
@@ -425,9 +432,9 @@
                     NB handling order may be non-sequential when `n-threads` > 1.
 
                  `sample`
-                   Optional sample rate ∈ℝ[0,1].
+                   Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
                    When present, handle only this (random) proportion of args:
-                     1.0 => handle every arg
+                     1.0 => handle every arg (same as `nil` rate, default)
                      0.0 => noop   every arg
                      0.5 => handle random 50%% of args
 

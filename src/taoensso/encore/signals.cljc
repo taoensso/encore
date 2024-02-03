@@ -282,10 +282,12 @@
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns       :id :info)))
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns :kind :id :info)))])
 
+(deftype HandlerContext [sample-rate]) ; Using an object for future extensibility (extra fields, etc.)
+
 (defprotocol IFilterableSignal
   "Protocol that app/library signal-like types must implement to support signal API."
-  (allow-signal? [_ sig-filter] "Returns true iff given signal is allowed by given `SigFilter`.")
-  (signal-value  [_]            "Returns signal's user-facing value as given to handlers, etc."))
+  (allow-signal? [_ sig-filter]      "Returns true iff given signal is allowed by given `SigFilter`.")
+  (signal-value  [_ handler-context] "Returns signal's user-facing value as given to handlers, etc."))
 
 (let [nil-sf (SigFilter. nil nil nil nil nil)]
   (defn update-sig-filter
