@@ -5,11 +5,11 @@
 
 ### Core utils library for Clojure/Script
 
-A set of general-purpose extensions for Clojure/Script with a heavy emphasis on cross-platform consistency.
+A set of general-purpose cross-platform utilities for Clojure/Script. Or: what happens when you spend way too much time with Clojure :-)
 
-**Or**: What happens when you spend way too much time with Clojure.
+Encore is intended mainly as a private dependency for [my other libraries](https://www.taoensso.com/my-work), or for **advanced users** who are comfortable reading the docstrings, source, and commit history for more info.
 
-**Note**: This library is intended mostly for my own use or for **advanced users** who are comfortable reading the source code and commit history for more info.
+Always use the **latest stable version** of Encore when possible.
 
 ## Latest release/s
 

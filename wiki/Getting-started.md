@@ -15,4 +15,6 @@ And setup your namespace imports:
 
 # Usage
 
-Encore is currently **undocumented** since it's intended mostly for my own use, or for advanced users who are comfortable reading the source code and commit history for more info. Apologies!
+No further info available here, sorry!
+
+Encore is intended mainly as a private dependency for [my other libraries](https://www.taoensso.com/my-work), or for **advanced users** who are comfortable reading the docstrings, source, and commit history for more info.
