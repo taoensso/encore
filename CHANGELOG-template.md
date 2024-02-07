@@ -2,7 +2,7 @@ This project uses [**Break Versioning**](https://www.taoensso.com/break-versioni
 
 ---
 
-# `vX.Y.Z` (yyyy-mm-dd)
+# `vX.Y.Z` (YYYY-MM-DD)
 
 > 📦 [Available on Clojars](https://clojars.org/com.taoensso/TODO/versions/X.Y.Z), this project uses [Break Versioning](https://www.taoensso.com/break-versioning).
 

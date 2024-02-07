@@ -27,11 +27,19 @@ TODO Clojars above, or
 
 See [here][GitHub releases] for earlier releases.
 
-## Why <TODO>?
+## Why TODO?
 
 - Reason 1 (TODO)
 - Reason 2 (TODO)
 - ... (TODO)
+
+## Video demo
+
+See for  intro and usage:
+
+<a href="https://www.youtube.com/watch?v=TODO_ID" target="_blank">
+ <img src="https://img.youtube.com/vi/TODO_ID/maxresdefault.jpg" alt="TODO demo video" width="640" border="0" />
+</a>
 
 ## Documentation
 

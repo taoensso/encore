@@ -7,21 +7,36 @@
   {:name "Eclipse Public License - v 1.0"
    :url  "https://www.eclipse.org/legal/epl-v10.html"}
 
+  :test-paths ["test" #_"src"]
+
   :dependencies
   [[org.clojure/tools.reader "1.3.7"]
    [com.taoensso/truss       "1.11.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
-   :provided {:dependencies [[org.clojure/clojurescript "1.11.132"]
+   :provided {:injections   [(println "Lein profile: :provided")]
+              :dependencies [[org.clojure/clojurescript "1.11.132"]
                              [org.clojure/clojure       "1.11.1"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.1"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
 
-   :test
-   {:jvm-opts
-    ["-Dtaoensso.elide-deprecated=true"
+   :graal-tests
+   {:injections   [(println "Lein profile: :graal-tests")]
+    :source-paths ["test"]
+    :main taoensso.graal-tests
+    :aot [taoensso.graal-tests]
+    :uberjar-name "graal-tests.jar"
+    :dependencies
+    [[org.clojure/clojure                  "1.11.1"]
+     [com.github.clj-easy/graal-build-time "1.0.5"]]}
+
+   :dev
+   {:injections [(println "Lein profile: :dev")]
+    :jvm-opts
+    ["-server"
+     "-Dtaoensso.elide-deprecated=true"
      "-Dtaoensso.encore-tests.config.str=foo"
      "-Dtaoensso.encore-tests.config.clj.str=foo/clj"
      "-Dtaoensso.encore-tests.config.cljs.str=foo/cljs"
@@ -35,20 +50,8 @@
 
     :dependencies
     [[org.clojure/test.check "1.1.1"]
-     [org.clojure/core.async "1.6.681"]]}
+     [org.clojure/core.async "1.6.681"]]
 
-   :graal-tests
-   {:source-paths ["test"]
-    :main taoensso.graal-tests
-    :aot [taoensso.graal-tests]
-    :uberjar-name "graal-tests.jar"
-    :dependencies
-    [[org.clojure/clojure                  "1.11.1"]
-     [com.github.clj-easy/graal-build-time "1.0.5"]]}
-
-   :dev [:c1.11 :test :dev+]
-   :dev+
-   {:jvm-opts ["-server"]
     :plugins
     [[lein-pprint    "1.3.2"]
      [lein-ancient   "0.7.0"]
@@ -58,8 +61,6 @@
     :codox
     {:language #{:clojure :clojurescript}
      :base-language :clojure}}}
-
-  :test-paths ["test" #_"src"]
 
   :cljsbuild
   {:test-commands {"node" ["node" "target/test.js"]}
