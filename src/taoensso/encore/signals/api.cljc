@@ -296,7 +296,7 @@
                (handler-fn) ; Notify handler-fn to shutdown
                (catch :any t
                  (when (and error-fn (not (enc/identical-kw? error-fn ::default)))
-                   (enc/catching (error-fn {:handler-id handler-id, :error t}))))) ; No :handler-arg
+                   (enc/catching (error-fn {:handler-id handler-id, :error t}))))) ; No :raw-signal
              true))
 
           ([signal]
@@ -307,7 +307,7 @@
                      (and
                        (if sample-rate (< (Math/random) ^double sample-rate)   true)
                        (if sig-filter* (sigs/allow-signal? signal sig-filter*) true)
-                       (if filter-fn   (filter-fn          signal)             true)
+                       (if filter-fn   (filter-fn #_signal)                    true)
                        (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
                        )]
 
@@ -324,7 +324,7 @@
                    (enc/catching
                      (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
                        (if-not (enc/identical-kw? error-fn ::default)
-                         (error-fn {:handler-id handler-id, :handler-arg signal, :error t})
+                         (error-fn {:handler-id handler-id, :raw-signal signal, :error t})
                          (enc/signal!
                            {:level :error
                             :id    ::handler-error
@@ -333,7 +333,7 @@
                             :data
                             {:handler-id    handler-id
                              :handler-fn    handler-fn
-                             :handler-arg   signal
+                             :raw-signal    signal
                              :dispatch-opts dispatch-opts}})))))
                  false)))))]
 
@@ -444,11 +444,9 @@
                  `min-level`   - Minimum   level  as in `set-min-level!`
 
                  `filter-fn`
-                   Optional (fn allow? [handler-arg]) that must return truthy
-                   for `handler-fn` to be called for given `handler-arg`.
-
-                   When present, called *after* sampling and other filters, but
-                   before rate limiting.
+                   Optional nullary (fn allow? []) that must return truthy for handler to be
+                   called. When present, called *after* sampling and other filters, but before
+                   rate limiting.
 
                  `rate-limit`
                    Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
