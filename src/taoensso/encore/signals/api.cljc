@@ -302,10 +302,10 @@
           ([signal]
            (when-not (stopped?_)
              (enc/try*
-               (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (double (f))))
+               (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
                      allow?
                      (and
-                       (if sample-rate (< (Math/random) ^double sample-rate)   true)
+                       (if sample-rate (< (Math/random) (double sample-rate))  true)
                        (if sig-filter* (sigs/allow-signal? signal sig-filter*) true)
                        (if filter-fn   (filter-fn #_signal)                    true)
                        (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
@@ -313,7 +313,7 @@
 
                  (or
                    (when allow?
-                     (when-let [sig-val (sigs/signal-value signal (sigs/HandlerContext. sample-rate))]
+                     (when-let [sig-val (sigs/signal-value signal (when sample-rate (sigs/HandlerContext. sample-rate)))]
                        (if middleware-fn
                          (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val) true)
                          (do                                         (handler-fn sig-val) true))))

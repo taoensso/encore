@@ -1197,6 +1197,25 @@
       (is (nil? (remove-handler! :hid1)))
       (is (nil? *sig-handlers*) "Removal yields non-empty map")
 
+      (testing "Handler sampling"
+        (let [n-sampled
+              (fn [sample-rate]
+                (let [c (enc/counter)]
+                  (dotimes [_ 1000]
+                    (sigs/call-handlers!
+                      {"h1" (sigs-api/wrap-handler "h1" (fn [x] (c) x) {:sample sample-rate})}
+                      (MySignal. :info "foo")))
+                  @c))]
+
+          [(is (=  1000 (n-sampled        nil))        "No sampling (const)")
+           (is (=  1000 (n-sampled (fn [] nil)))       "No sampling (fn)")
+           (is (=  1000 (n-sampled        1.0))      "100% sampling (const)")
+           (is (=  1000 (n-sampled (fn [] 1.0)))     "100% sampling (fn)")
+           (is (=  0    (n-sampled        0.0))        "0% sampling (const)")
+           (is (=  0    (n-sampled (fn [] 0.0)))       "0% sampling (fn)")
+           (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
+           (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
+
       (testing "Handler middleware"
         (let [v1 (atom ::nx)
               v2 (atom ::nx)
