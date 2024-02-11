@@ -4400,7 +4400,7 @@
       '([{:as opts
           :keys
           [elidable? location timestamp uid middleware,
-           sample ns kind id level filter when rate-limit,
+           sample-rate ns kind id level filter when rate-limit,
            ctx parent trace?, let data msg error run & user-opts]}])}
 
      [opts]

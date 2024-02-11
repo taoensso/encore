@@ -1176,14 +1176,14 @@
       (is (nil? (cnt :set 0)))
 
       (is (=           (get-handlers) nil))
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample 0.0}) {:hid1 {:async nil, :sample 0.0}}))
-      (is (enc/submap? (get-handlers)                                                {:hid1 {:async nil, :sample 0.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:async nil, :sample-rate 0.0}}))
+      (is (enc/submap? (get-handlers)                                                     {:hid1 {:async nil, :sample-rate 0.0}}))
 
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
       (is (= @cnt 0))
 
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample 1.0}) {:hid1 {:async nil, :sample 1.0}}))
-      (is (enc/submap? (get-handlers)                                                {:hid1 {:async nil, :sample 1.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:async nil, :sample-rate 1.0}}))
+      (is (enc/submap? (get-handlers)                                                     {:hid1 {:async nil, :sample-rate 1.0}}))
 
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
@@ -1203,7 +1203,7 @@
                 (let [c (enc/counter)]
                   (dotimes [_ 1000]
                     (sigs/call-handlers!
-                      {"h1" (sigs-api/wrap-handler "h1" (fn [x] (c) x) {:sample sample-rate})}
+                      {"h1" (sigs-api/wrap-handler "h1" (fn [x] (c) x) {:sample-rate sample-rate})}
                       (MySignal. :info "foo")))
                   @c))]
 

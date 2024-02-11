@@ -267,15 +267,15 @@
   [handler-id handler-fn
    {:as dispatch-opts
     :keys
-    [#?(:clj async) sample rate-limit filter-fn middleware,
+    [#?(:clj async) sample-rate rate-limit filter-fn middleware,
      ns-filter kind-filter id-filter min-level,
      rl-error rl-backup error-fn backp-fn]}]
 
   (let [[sample-rate sample-rate-fn]
-        (when      sample
-          (if (fn? sample)
-            [nil                sample] ; Dynamic rate (use dynamic binding, deref atom, etc.)
-            [(enc/as-pnum! sample) nil] ; Static  rate
+        (when      sample-rate
+          (if (fn? sample-rate)
+            [nil                sample-rate] ; Dynamic rate (use dynamic binding, deref atom, etc.)
+            [(enc/as-pnum! sample-rate) nil] ; Static  rate
             ))
 
         rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
@@ -431,7 +431,7 @@
                     Supports `:blocking`, `:dropping`, and `:sliding` back pressure modes.
                     NB handling order may be non-sequential when `n-threads` > 1.
 
-                 `sample`
+                 `sample-rate`
                    Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
                    When present, handle only this (random) proportion of args:
                      1.0 => handle every arg (same as `nil` rate, default)
@@ -492,7 +492,7 @@
               '([handler-id handler-fn]
                 [handler-id handler-fn
                  {:as   dispatch-opts
-                  :keys [async sample rate-limit filter-fn middleware,
+                  :keys [async sample-rate rate-limit filter-fn middleware,
                          ns-filter kind-filter id-filter min-level,
                          error-fn backp-fn]}])}
 

@@ -339,7 +339,7 @@
      Returns {:keys [callsite-id elide? allow?]}.
 
      `macro-opts`, `opts-arg` are both of form:
-       {:keys [kind id level sample rate-limit when]}.
+       {:keys [kind id level sample-rate rate-limit when]}.
 
      Caller is responsible for protecting against possible multiple eval of
      forms in `opts-arg`."
@@ -379,11 +379,11 @@
        (if elide?
          (assoc base-rv :allow? false, :elide? true)
          (let [allow?-form
-               (let [sample-form
-                     (when-let [rate-form (get-opt-form :sample)]
-                       (if (enc/const-form? rate-form)
-                         (do                         `(< (Math/random) ~(enc/as-pnum! rate-form)))
-                         `(if-let [~'rate ~rate-form] (< (Math/random)  (double     ~'rate)) true)))
+               (let [sample-rate-form
+                     (when-let [sr-form (get-opt-form :sample-rate)]
+                       (if (enc/const-form? sr-form)
+                         (do                     `(< (Math/random) ~(enc/as-pnum! sr-form)))
+                         `(if-let [~'sr ~sr-form] (< (Math/random)  (double     ~'sr)) true)))
 
                      sf-form
                      (case (int (or sf-arity -1))
@@ -400,7 +400,7 @@
                      (when-let [spec-form (get-opt-form :rate-limit)]
                        `(if (callsite-limit!? ~callsite-id ~spec-form nil) false true))]
 
-                 `(and ~@(filter some? [sample-form sf-form filter-form rl-form])))]
+                 `(and ~@(filter some? [sample-rate-form sf-form filter-form rl-form])))]
 
            (assoc base-rv :allow? allow?-form))))))
 
@@ -408,10 +408,10 @@
   (filterable-expansion
     {:sf-arity 2, :rt-sig-filter `*foo*, :location {:ns (str *ns*)}
      :opts-arg
-     {:filter     'false
-      :level      (do :info)
-      :sample     0.3
-      :rate-limit [[1 1000]]}}))
+     {:filter      'false
+      :level       (do :info)
+      :sample-rate 0.3
+      :rate-limit  [[1 1000]]}}))
 
 ;;;; Signal handling
 
