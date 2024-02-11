@@ -7,8 +7,7 @@
    [clojure.string  :as str]
    [taoensso.encore :as enc]
    #?(:clj [taoensso.encore.bytes :as bytes])
-   [taoensso.encore.signals     :as sigs]
-   [taoensso.encore.signals.api :as sigs-api])
+   [taoensso.encore.signals       :as sigs])
 
   #?(:cljs
      (:require-macros
@@ -1131,7 +1130,7 @@
   (def ^:dynamic *sig-filter*   nil)
   (def ^:dynamic *sig-handlers* nil)
 
-  (sigs-api/def-api 4 *sig-filter* *sig-handlers* {})
+  (sigs/def-api 4 *sig-filter* *sig-handlers* {})
   (def cnt (enc/counter 0))
 
   (deftype MySignal [level cnt]
@@ -1203,7 +1202,7 @@
                 (let [c (enc/counter)]
                   (dotimes [_ 1000]
                     (sigs/call-handlers!
-                      {"h1" (sigs-api/wrap-handler "h1" (fn [x] (c) x) {:sample-rate sample-rate})}
+                      {"h1" (sigs/wrap-handler "h1" (fn [x] (c) x) {:sample-rate sample-rate})}
                       (MySignal. :info "foo")))
                   @c))]
 

@@ -4361,9 +4361,7 @@
      Requires Telemere if it's present, otherwise noops.
      For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file."
      {:added "Encore v3.68.0 (2023-09-25)"}
-     []
-     (when have-telemere?
-       `(require 'taoensso.telemere))))
+     [] (when have-telemere? `(require 'taoensso.telemere))))
 
 (comment (require-telemere-if-present))
 
