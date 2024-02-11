@@ -1222,9 +1222,9 @@
               v3 (atom ::nx)]
 
           [(is (nil? (cnt :set 0)))
-           (is (enc/submap? (add-handler! :hid1 (fn handler-fn1 [x] (reset! v1 [(cnt) x])) {                                             }) {:hid1 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid2 (fn handler-fn2 [x] (reset! v2 [(cnt) x])) {:middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid3 (fn handler-fn3 [x] (reset! v3 [(cnt) x])) {:middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {                                             }) {:hid1 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
            (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
            #?(:clj (do (Thread/sleep 2500) :sleep))
@@ -1232,7 +1232,7 @@
            (is (= @v1 [0 "foo"]))
            (is (= @v2 [1 "foo.mw1.mw2"]))
            (is (= @v3 ::nx))
-           (is (= @cnt 2) "handler-fn3 never called")
+           (is (= @cnt 2) "hf3 never called")
 
            (is (map? (remove-handler! :hid1)))
            (is (map? (remove-handler! :hid2)))

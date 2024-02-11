@@ -287,7 +287,7 @@
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :backp-fn  ::default)
 
-        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed signal-value
+        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
         wrapped-handler-fn
         (fn wrapped-handler-fn
           ([] ; Shutdown
@@ -299,9 +299,9 @@
                    (enc/catching (error-fn {:handler-id handler-id, :error t}))))) ; No :raw-signal
              true))
 
-          ([signal]
+          ([signal] ; Raw signal
            (when-not (stopped?_)
-             (enc/try*
+             (enc/try* ; Non-specific (global) trap for perf
                (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
                      allow?
                      (and
@@ -313,8 +313,11 @@
 
                  (or
                    (when allow?
-                     (when-let [sig-val (sigs/signal-value signal (when sample-rate (sigs/HandlerContext. sample-rate)))]
-                       (if middleware-fn
+                     (when-let [sig-val ; Raw signal -> library-level handler-arg
+                                (sigs/signal-value signal
+                                  (when sample-rate (sigs/HandlerContext. sample-rate)))]
+
+                       (if middleware-fn ; Library-level handler-arg -> arb user-level value
                          (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val) true)
                          (do                                         (handler-fn sig-val) true))))
                    false))
