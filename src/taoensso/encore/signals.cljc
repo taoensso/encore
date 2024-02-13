@@ -601,7 +601,7 @@
 
                      See the relevant docstrings for details.
 
-                 Additional filtering can also be applied on a per-handler basis, see 
+                 Additional filtering can also be applied on a per-handler basis, see
                  `add-handler!` for details.
 
                  If anything is unclear, please ping me (@ptaoussanis) so that I can
