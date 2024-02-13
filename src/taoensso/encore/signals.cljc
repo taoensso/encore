@@ -352,8 +352,7 @@
          (ex-info "[encore/signals] `filterable-expansion` `opts-arg` must be a compile-time map"
            {:location location, :opts-arg opts-arg})))
 
-     (let [callsite-id (callsite-counter) ; Unique expansion id
-           {:keys [ns line column file]} location
+     (let [{:keys [ns line column file]} location
 
            ;; Note that while `opts-arg` must be a const (compile-time) map,
            ;; its vals are arb forms that may need eval.
@@ -373,6 +372,10 @@
                        :kind  (enc/const-form  kind-form)
                        :id    (enc/const-form    id-form)
                        :level (enc/const-form level-form)})))
+
+           ;; Unique id for this callsite expansion, changes on every eval. Means rate limiter
+           ;; will get reset on eval during REPL work, etc.
+           callsite-id (callsite-counter)
 
            base-rv {:callsite-id callsite-id}]
 
@@ -601,7 +604,7 @@
 
                      See the relevant docstrings for details.
 
-                 Additional filtering can also be applied on a per-handler basis, see 
+                 Additional filtering can also be applied on a per-handler basis, see
                  `add-handler!` for details.
 
                  If anything is unclear, please ping me (@ptaoussanis) so that I can
