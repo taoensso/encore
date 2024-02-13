@@ -400,8 +400,9 @@
                        `(let [~'this-callsite-id ~callsite-id] ~(val filter-form-entry)))
 
                      rl-form ; Nb last (increments count)
-                     (when-let [spec-form (get-opt-form :rate-limit)]
-                       `(if (callsite-limit!? ~callsite-id ~spec-form nil) false true))]
+                     (when-let [spec-form   (get-opt-form :rate-limit)]
+                       (let    [rl-rid-form (get-opt-form :rl-rid)] ; Advanced, undocumented
+                         `(if (callsite-limit!? ~callsite-id ~spec-form ~rl-rid-form) false true)))]
 
                  `(and ~@(filter some? [sample-rate-form sf-form filter-form rl-form])))]
 
