@@ -4359,7 +4359,8 @@
    (defmacro require-telemere-if-present
      "Experimental, subject to change without notice!
      Requires Telemere if it's present, otherwise noops.
-     For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file."
+     For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file.
+     Used in cooperation with `signal!`."
      {:added "Encore v3.68.0 (2023-09-25)"}
      [] (when have-telemere? `(require 'taoensso.telemere))))
 
@@ -4368,50 +4369,44 @@
 #?(:clj
    (defmacro signal!
      "Experimental, subject to change without notice!
-     If Telemere is present, expands to Telemere signal call and returns true.
-     Otherwise noops and returns false.
+     Expands to Telemere signal call if Telemere is present, otherwise expands
+     to `fallback`.
 
-     NB: *must* be used with `require-telemere-if-present`!
+     MUST be used with `require-telemere-if-present`:
 
-     Example usage:
-
-       (ns my-ns
-         (:require [taoensso.encore :as enc]))
-
+       (ns my-ns (:require [taoensso.encore :as enc]))
        (encore/require-telemere-if-present) ; At top of file, just below `ns` form
 
-       ;; Later in your code...
+       (encore/signal! {<signal-opts> :fallback (println \"Prints iff Telemere not present\")})
 
-       (or
-         (encore/signal! {<signal-opts>}) ; Expands to Telemere signal call
-         (println \"Println fallback!\")  ; Fallback if Telemere not present
-         )
+     For info on signal options, see:
+       - Telemere documentation,                 Ref. <https://tinyurl.com/za3bmeub>
+       - `taoensso.telemere/signal!` docstring,  Ref. <https://tinyurl.com/2r8ba98d>"
 
-     For info on signal options, see Telemere documentation [1] or
-     `taoensso.telemere/signal!` docstring [2].
-
-     [1] Ref. <https://github.com/taoensso/telemere#documentation>
-     [2] Ref. <https://taoensso.github.io/telemere/taoensso.telemere.html#var-signal.21>"
      {:added "Encore v3.68.0 (2023-09-25)"
       :tag #?(:cljs 'boolean :default nil)
       :arglists
       '([{:as opts
           :keys
-          [#_defaults elidable? location timestamp uid middleware,
+          [fallback,
+           #_defaults elidable? location timestamp uid middleware,
            sample-rate ns kind id level filter when rate-limit,
            ctx parent trace?, let data msg error run & user-opts]}])}
 
      [opts]
+     (have? map? opts)
      (if have-telemere?
-       (let [location (get-source &form &env)]
-         (require 'taoensso.telemere) ; For macro expansion
-         `(do
-            ;; Note pre-resolved expansion
-            (taoensso.telemere/signal! ~(conj {:location location} opts))
-            true))
-       false)))
+       (do
+         (do    (require 'taoensso.telemere)) ; For macro expansion
+         (keep-callsite `(taoensso.telemere/signal! ~(dissoc opts :fallback))))
 
-(comment (macroexpand '(signal! {:level :warn :let [x :x] :msg ["Test" "message" x] :data {:a :A :x x}})))
+       `(let  ~(get opts :let []) ; Currently undocumented
+          (do ~(get opts :fallback))))))
+
+(comment
+  (macroexpand
+    '(signal! {:level :warn :let [x :x] :msg ["Test" "message" x] :data {:a :A :x x}
+               :fallback (println ["fallback" x])})))
 
 ;;;; Thread locals
 
