@@ -385,8 +385,8 @@
                (let [sample-rate-form
                      (when-let [sr-form (get-opt-form :sample-rate)]
                        (if (enc/const-form? sr-form)
-                         (do                     `(< (Math/random) ~(enc/as-pnum! sr-form)))
-                         `(if-let [~'sr ~sr-form] (< (Math/random)  (double     ~'sr)) true)))
+                         (do                     `(< ~'(Math/random) ~(enc/as-pnum! sr-form)))
+                         `(if-let [~'sr ~sr-form] (< ~'(Math/random)  (double     ~'sr)) true)))
 
                      sf-form
                      (case (int (or sf-arity -1))
