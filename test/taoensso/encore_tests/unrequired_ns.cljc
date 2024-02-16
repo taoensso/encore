@@ -2,6 +2,7 @@
   "A namespace not required by any of the others,
   for testing auto-requiring resolves, etc.")
 
-(def var-cljc
-  #?(:clj  "foreign var-cljc/clj"
-     :cljs "foreign var-cljc/cljs"))
+(def ^:dummy-meta var-cljc
+           "foreign.doc:var-cljc"
+  #?(:clj  "foreign.val:var-cljc/clj"
+     :cljs "foreign.val:var-cljc/cljs"))

@@ -3057,36 +3057,36 @@
 
 #?(:clj
    (defn now-udt
-     "Returns current system timestamp as milliseconds since Unix epoch."
+     "Returns current system instant as milliseconds since Unix epoch."
      {:inline (fn [] `(System/currentTimeMillis))}
      ^long        []  (System/currentTimeMillis))
 
    :cljs
    (defn now-udt
-     "Returns current system timestamp as milliseconds since Unix epoch."
+     "Returns current system insant as milliseconds since Unix epoch."
      [] (js/Date.now)))
 
 #?(:clj
    (defn now-dt
-     "Returns current system timestamp as `java.util.Date`."
+     "Returns current system instant as `java.util.Date`."
      {:inline   (fn  [] `(java.util.Date.))}
      ^java.util.Date []  (java.util.Date.))
 
    :cljs
    (defn now-dt
-     "Returns current system timestamp as `js/Date`."
+     "Returns current system instant as `js/Date`."
      [] (js/Date.)))
 
 #?(:clj
    (defn now-inst
-     "Returns current system timestamp as `java.time.Instant`."
+     "Returns current system instant as `java.time.Instant`."
      {:added "Encore v3.66.0 (2023-08-23)"
       :inline       (fn [] `(java.time.Instant/now))}
      ^java.time.Instant []  (java.time.Instant/now))
 
    :cljs
    (defn now-inst
-     "Returns current system timestamp as `js/Date`."
+     "Returns current system instant as `js/Date`."
      {:added "Encore v3.66.0 (2023-08-23)"}
      [] (js/Date.)))
 
@@ -6386,8 +6386,8 @@
      clojure.lang.IPending (isRealized  [t] (tf-done? t))
      clojure.lang.IDeref   (deref       [_] (.await latch) (result__))
      clojure.lang.IBlockingDeref
-     (deref [_ timeout-ms timeout-val]
-       (if (.await latch timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
+     (deref [_ timeout-msecs timeout-val]
+       (if (.await latch timeout-msecs java.util.concurrent.TimeUnit/MILLISECONDS)
          (result__)
          timeout-val))
 

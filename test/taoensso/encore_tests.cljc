@@ -33,18 +33,23 @@
 ;;;; Core
 
 (do
+  (defn var-fn [n] (* n n))
+  #?(:clj  (def ^:dummy-meta var-clj  "doc:var-clj"           "val:var-clj"))
+  #?(:cljs (def ^:dummy-meta var-cljs "doc:var-cljs"          "val:var-cljs"))
+  (do      (def ^:dummy-meta var-cljc "doc:var-cljc" #?(:clj  "val:var-cljc/clj"
+                                                        :cljs "val:var-cljc/cljs"))))
+
+(do
   (defn- test-fn "doc a" [x] x)
-  (enc/defalias                 test-fn-alias-1 test-fn)
-  (enc/defalias ^{:doc "doc b"} test-fn-alias-2 test-fn)
-  (enc/defalias ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
-  (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs {:doc "doc d"}})
-  (enc/defaliases {:src test-fn :alias test-fn-alias-5         :doc "doc e"})
+  (enc/defalias                        test-fn-alias-1 test-fn)
+  (enc/defalias        ^{:doc "doc b"} test-fn-alias-2 test-fn)
+  (enc/defalias        ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs  {:doc "doc d"}})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-5          :doc "doc e"})
 
-  #?(:clj (defmacro ^:private test-macro [x] `~x))
-  #?(:clj (enc/defalias test-macro-alias test-macro))
-
-  #?(:cljs (def ^:private cljs-var "cljs-var-doc" "cljs-var-val"))
-  #?(:cljs (enc/defalias  cljs-var-alias           cljs-var)))
+  #?(:clj  (defmacro ^:private test-macro [x] `~x))
+  #?(:clj  (enc/defalias test-macro-alias test-macro))
+  #?(:cljs (enc/defalias var-cljs-alias   var-cljs)))
 
 (deftest _defalias
   ;; [1] v3.47.0+: Cljs aliases no longer copy metadata
@@ -57,9 +62,9 @@
 
    (is (= (test-macro-alias :x) :x))
 
-      #?(:cljs (is (=     cljs-var-alias                "cljs-var-val")))
-      #?(:cljs (is (= (-> cljs-var       var meta :doc) "cljs-var-doc")))
-   ;; #?(:cljs (is (= (-> cljs-var-alias var meta :doc) "cljs-var-doc"))) ; [1]
+      #?(:cljs (is (=     var-cljs-alias                "val:var-cljs")))
+      #?(:cljs (is (= (-> var-cljs       var meta :doc) "doc:var-cljs")))
+   ;; #?(:cljs (is (= (-> var-cljs-alias var meta :doc) "doc:var-cljs"))) ; [1]
    ])
 
 (deftest _truss-invariants
@@ -605,12 +610,7 @@
 
 ;;;; Vars, etc.
 
-(defn var-fn [n] (* n n))
-(def  var-cljc
-  #?(:clj  "local var-cljc/clj"
-     :cljs "local var-cljc/cljs"))
-
-#?(:clj (defmacro resolve-sym [sym] (keyword (enc/resolve-sym &env sym true))))
+#?(:clj (defmacro resolve-sym [sym] (keyword (enc/resolve-sym &env sym :may-require-ns))))
 
 (deftest _resolve
   [(is (= (resolve-sym __nx)     nil))
@@ -677,8 +677,8 @@
 
    (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* x x))"]}               ::nx) 5) 25) "Can embed inline functions via edn")
    (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
-   (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "local var-cljc/clj"
-                                                                                                           :cljs "local var-cljc/cljs")))
+   (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "val:var-cljc/clj"
+                                                                                                           :cljs "val:var-cljc/cljs")))
    (testing "Needs :jvm-opts"
      [(is (enc/submap? (enc/get-env {:return :debug} :taoensso.encore-tests.config.str)
             {:value "foo"
