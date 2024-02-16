@@ -4389,7 +4389,7 @@
       '([{:as opts
           :keys
           [fallback,
-           #_defaults elidable? location timestamp uid middleware,
+           #_defaults elidable? location instant uid middleware,
            sample-rate ns kind id level filter when rate-limit,
            ctx parent trace?, let data msg error run & user-opts]}])}
 
