@@ -5098,14 +5098,25 @@
 
                   :edn
                   (when-let [[source edn] match]
-                    (let [clj
+                    (let [x
                           (try
                             (read-edn (get opts :read-opts) edn)
                             (catch Throwable t
                               (throw
                                 (ex-info "[encore/get-env*] Error reading as edn"
                                   {:edn edn :source source :target target} t))))]
-                      [source clj]))
+
+                      ;; Allow `get-env` in ns1 to include lone sym from unrequired ns2.
+                      ;; Useful when ns1 is a library, and ns2 is a user namespace.
+                      ;;
+                      ;; Undocumented, kept only for back-compatibility (Timbre, etc.).
+                      ;; Better to avoid this pattern since Cljs can't support it
+                      ;; even after CLJS-1346.
+                      (when (and (symbol? x) (get opts :require-sym-ns? (= target :clj)))
+                        (when-let [clj-ns (namespace x)]
+                          (catching (require (symbol clj-ns)))))
+
+                      [source x]))
 
                   (unexpected-arg! as
                     {:context  `get-env*
@@ -6877,7 +6888,11 @@
 (deprecated
   #?(:clj
      (do
-       (defn- get-config-opts [opts] (dissoc (assoc opts :return :legacy :spec (get opts :prop)) :prop))
+       (defn- get-config-opts [opts]
+         (let [edn? (= (get opts :as) :edn)
+               spec    (get opts :prop)
+               spec (if edn? (keyword (str (as-qname spec) "<.edn>")) spec)]
+           (dissoc (assoc opts :return :legacy :spec spec) :prop)))
 
        (defmacro ^:no-doc get-config
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
