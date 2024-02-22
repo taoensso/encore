@@ -2150,6 +2150,14 @@
   ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
   ([m k1 k2 k3 not-found] (if-let [e (and m (or (find m k1) (find m k2) (find m k3)))] (val e) not-found)))
 
+#?(:clj
+   (defmacro get-or
+     "Macro version of `get` that only evaluates `not-found` when key `k` doesn't
+     exist in map `m`. Useful when `not-found` is expensive or contains side-effects."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ([m k          ]             `(get  ~m ~k))
+     ([m k not-found] `(if-let [e# (find ~m ~k)] (val e#) ~not-found))))
+
 (do
   (defn conj-some "Conjoins each non-nil value."
     ([             ] [])
