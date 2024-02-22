@@ -6900,12 +6900,12 @@
 
        (defmacro ^:no-doc get-sys-val*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
-         ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res}))
-         ([spec env    ] `(get-env {:as :str :spec ~spec :env ~env}))
-         ([spec        ]
+         ([spec        ] ^:deprecation-nowarn `(get-sys-val* ~spec ~spec ~spec))
+         ([spec env    ] ^:deprecation-nowarn `(get-sys-val* ~spec ~env  ~spec))
+         ([spec env res]
           (if (str-starts-with? (str *ns*) "taoensso.nippy")
-            `(get-env* {:as :str :spec ~spec}) ; Back compatibility (don't embed)
-            `(get-env  {:as :str :spec ~spec}))))
+            `(get-env* {:as :str :spec ~spec :env ~env :res ~res}) ; Back compatibility (don't embed)
+            `(get-env  {:as :str :spec ~spec :env ~env :res ~res}))))
 
        (defmacro ^:no-doc get-sys-bool*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
