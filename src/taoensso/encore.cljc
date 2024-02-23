@@ -4965,14 +4965,6 @@
 (comment (get-pom-version 'com.taoensso/encore))
 
 #?(:clj
-   (defn get-hostname "Returns local hostname string, or nil."
-     []
-     (try (.getHostName (java.net.InetAddress/getLocalHost))
-          (catch java.net.UnknownHostException _ nil))))
-
-(comment (get-hostname))
-
-#?(:clj
    (let [cache_ (atom nil)] ; Impln detail
      (defn java-version
        "Returns Java's major version integer (8, 17, etc.)."
@@ -5233,6 +5225,12 @@
   (defn foo [x] (get-env {:spec [:const x]})))
 
 ;;;; Async
+
+#?(:clj
+   (defmacro ^:no-doc threaded "Private, don't use."
+     [& body] `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))))
+
+(comment (threaded (println "Runs on daemon thread")))
 
 #?(:clj
    (defn virtual-executor
@@ -5587,6 +5585,64 @@
     (qb 1e6 ; [40.68 158.46]
       (r1 (fn []))
       (r2 (fn [])))))
+
+;;;; Hostname
+
+#?(:clj
+   (let [cache_ (latom nil) ; ?[promise udt]
+         cache-update-pending?_ (latom false)]
+
+     (defn ^String get-hostname
+       "Returns local hostname string, or `fallback` (default nil).
+       Can be slow, prefer 3-arity caching variant when possible."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD) (arities: 1, 2, 3)"}
+       ([        ] (get-hostname nil))
+       ([fallback]
+        (try
+          (.getHostName (java.net.InetAddress/getLocalHost))
+          (catch Throwable _ fallback)))
+
+       ([timeout-msecs timeout-val]
+        (let [p (promise)]
+          (future* (p (get-hostname timeout-val)))
+          (deref    p timeout-msecs timeout-val)))
+
+       ;; Note custom cache semantics, unlike standard ttl cache.
+       ;; When cache is stale, continue to deliver pre-existing (stale) cache
+       ;; until a new (fresh) value becomes available.
+       ([^long cache-msecs timeout-msecs timeout-val]
+        (loop [force-use-cache? false]
+
+          (if (or force-use-cache? (cache-update-pending?_))
+            (let [[p] (cache_)] (deref p timeout-msecs timeout-val))
+            (let [t1 (System/currentTimeMillis)]
+              (if-let [[p ^long t0] (cache_)]
+                (if (< (- t1 t0) cache-msecs) ; Have fresh cache
+                  (deref p timeout-msecs timeout-val)
+                  (do
+                    ;; Ensure exactly 1 async thread is updating cache
+                    (when (compare-and-set! cache-update-pending?_ false true)
+                      (threaded
+                        (if-let [new-hostname (get-hostname nil)] ; Take as long as needed
+                          (reset! cache_ [((promise) new-hostname) t1]) ; Update p and t
+                          (reset! cache_ [p                        t1]) ; Update only  t
+                          )
+                        (reset! cache-update-pending?_ false)))
+                    (recur true)))
+
+                (let [p (promise)]
+                  (when (compare-and-set! cache_ nil [p t1]) ; First call
+                    ;; Init cache with pending init value
+                    (threaded (p (get-hostname timeout-val))))
+                  (recur true))))))))))
+
+(comment
+  (defn-cached get-hostname-ttl {:ttl-ms (msecs :mins 1)} [] (get-hostname 5000 "UnknownHost"))
+  (qb 1e5 ; [4.58 466.53 7.51 9.32]
+    (get-hostname                      "UnknownHost") ; Blocking
+    (get-hostname                 5000 "UnknownHost") ; With timeout
+    (get-hostname (msecs :mins 1) 5000 "UnknownHost") ; With timeout + cache
+    (get-hostname-ttl)))
 
 ;;;; Benchmarking
 
