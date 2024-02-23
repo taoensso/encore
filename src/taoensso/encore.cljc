@@ -2234,7 +2234,7 @@
 
   ;; Handy as l>r merge
   (defn assoc-nx "Assocs each kv iff its key doesn't already exist."
-    ([m k v] (if (contains? m k) m (assoc m k v)))
+    ([m k v      ] (if (contains? m k) m (assoc m k v)))
     ([m k v & kvs] (reduce-kvs assoc-nx (assoc-nx m k v) kvs))
     ([m       kvs]
      (reduce-kvs
