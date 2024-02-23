@@ -162,6 +162,17 @@
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in rf")])
 
+(deftest _counters
+  (let [c (enc/counter)]
+    [(is (= @c        0))
+     (is (= (c)       0))
+     (is (= @c        1))
+     (is (= (c 5)     1))
+     (is (= @c        6))
+     (is (= (c :+= 2) 8))
+     (is (= (c :=+ 2) 8))
+     (is (= @c        10))]))
+
 ;;;; Reductions
 
 (deftest _reduce-zip
@@ -222,6 +233,16 @@
    (is (= (enc/get1 {:a nil} :a       ::nx) nil))
    (is (= (enc/get1 {:a nil} :b :a    ::nx) nil))
    (is (= (enc/get1 {:a nil} :c :b :a ::nx) nil))])
+
+(deftest _get*
+  [(let [c (enc/counter)] (is (and (= (enc/get* {:a  :A}                         (do (c) :a) (do (c) ::nx))   :A) (= @c 1)) "truthy v1"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a  :A}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2)) "fallback"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}                         (do (c) :a) (do (c) ::nx))  nil) (= @c 1)) "falsey v1"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2)) "fallback"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 2)) "falsey v2"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 3)) "fallback"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 3)) "falsey k3"))
+   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 4)) "fallback"))])
 
 (deftest _submap?
   [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
@@ -724,17 +745,6 @@
       (is (not=
             (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])
             (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
-
-(deftest _counters
-  (let [c (enc/counter)]
-    [(is (= @c        0))
-     (is (= (c)       0))
-     (is (= @c        1))
-     (is (= (c 5)     1))
-     (is (= @c        6))
-     (is (= (c :+= 2) 8))
-     (is (= (c :=+ 2) 8))
-     (is (= @c        10))]))
 
 (deftest _rolling-sequentials
   [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))

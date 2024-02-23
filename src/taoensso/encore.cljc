@@ -2141,22 +2141,37 @@
             o))))))
 
 (defn get1
-  "Like `get` but returns val for first given key that exists in map.
-  Useful for key aliases or fallbacks when vals may be falsey.
-  Equivalent to (if (contains? m k1) (get m k1)
-                  (if (contains? m k2) (get m k2) ...))."
+  "Like `get` but returns val for first key that exists in map.
+  Useful for key aliases or fallbacks. See also `get*`."
   {:added "Encore v3.67.0 (2023-09-08)"}
+  ([m k                 ] (get m k))
   ([m k        not-found] (get m k not-found))
   ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
   ([m k1 k2 k3 not-found] (if-let [e (and m (or (find m k1) (find m k2) (find m k3)))] (val e) not-found)))
 
 #?(:clj
-   (defmacro get-or
-     "Macro version of `get` that only evaluates `not-found` when key `k` doesn't
-     exist in map `m`. Useful when `not-found` is expensive or contains side-effects."
+   (defmacro get*
+     "Macro version of `get` that:
+
+      1. Avoids unnecessary evaluation of `not-found`.
+         Useful when `not-found` is expensive or contains side-effects.
+
+      2. Supports multiple prioritized keys (k1, k2, etc.). Returns val for first
+         key that exists in map. Useful for key aliases or fallbacks.
+
+    Equivalent to:
+
+      (cond
+        (contains? m k1) (get m k1)
+        (contains? m k2) (get m k2)
+        ...
+        :else            not-found)"
+
      {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
-     ([m k          ]             `(get  ~m ~k))
-     ([m k not-found] `(if-let [e# (find ~m ~k)] (val e#) ~not-found))))
+     ([m k                 ]                                      `(get  ~m ~k))
+     ([m k        not-found]              `(if-let [e#             (find ~m ~k)                               ] (val e#) ~not-found))
+     ([m k1 k2    not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2)))              ] (val e#) ~not-found)))
+     ([m k1 k2 k3 not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2) (find m# ~k3)))] (val e#) ~not-found)))))
 
 (do
   (defn conj-some "Conjoins each non-nil value."
