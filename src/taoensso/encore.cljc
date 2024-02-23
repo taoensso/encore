@@ -11,9 +11,9 @@
 
   Common naming conventions used across my libs:
     **foo** - Dynamic var
-    foo!    - Fn with side effects, or that should otherwise be used cautiously
+    foo!    - Fn with side-effects, or that should otherwise be used cautiously
     foo?    - Truthy val or fn that returns truthy val
-    foo!?   - Fn that has side effects (or requires caution) and that return
+    foo!?   - Fn that has side-effects (or requires caution) and that return
               a truthy val. Note: !?, not ?!
     foo$    - Fn that's notably expensive to compute (e.g. hits db)
     foo_    - Derefable val (e.g. atom, volatile, delay, etc.)
@@ -400,7 +400,7 @@
      (cond
        :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
        :binding [*x* \"x\"] ; Establish dynamic binding/s for remaining forms
-       :do      (println (str \"x value: \" x)) ; Eval expr for side effects
+       :do      (println (str \"x value: \" x)) ; Eval expr for side-effects
 
        :if-let [y \"y\"
                 z nil]
@@ -5339,11 +5339,11 @@
               (catch java.util.concurrent.TimeoutException _ timeout-val)))
 
           java.util.concurrent.Future
-          (isDone      [_] (.isDone      fut))
-          (isCancelled [_] (.isCancelled fut))
-          (get         [_             ] (.get    fut))
-          (get         [_ timeout unit] (.get    fut timeout unit))
-          (cancel      [_ interrupt?  ] (.cancel fut interrupt?)))))))
+          (isDone      [_             ] (.isDone      fut))
+          (isCancelled [_             ] (.isCancelled fut))
+          (get         [_             ] (.get         fut))
+          (get         [_ timeout unit] (.get         fut timeout unit))
+          (cancel      [_ interrupt?  ] (.cancel      fut interrupt?)))))))
 
 #?(:clj
    (defmacro future*
@@ -5415,7 +5415,7 @@
 
 #?(:clj
    (defn pre-cache
-     "Given a nullary fn `f` that is non-idempotent and free of side effects,
+     "Given a nullary fn `f` that is non-idempotent and free of side-effects,
      returns a wrapped version of `f` that asynchronously maintains a cache
      of up to `n-capacity` pre-computed return values of (f).
 
