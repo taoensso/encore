@@ -10,7 +10,7 @@
   :test-paths ["test" #_"src"]
 
   :dependencies
-  [[org.clojure/tools.reader "1.3.7"]
+  [[org.clojure/tools.reader "1.4.0"]
    [com.taoensso/truss       "1.11.0"]]
 
   :profiles
