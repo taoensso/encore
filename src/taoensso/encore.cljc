@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance!]])))
 
-(def encore-version [3 81 0])
+(def encore-version [3 82 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -2167,7 +2167,7 @@
         ...
         :else            not-found)"
 
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.82.0 (2024-02-23)"}
      ([m k                 ]                                      `(get  ~m ~k))
      ([m k        not-found]              `(if-let [e#             (find ~m ~k)                               ] (val e#) ~not-found))
      ([m k1 k2    not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2)))              ] (val e#) ~not-found)))
@@ -5595,7 +5595,7 @@
      (defn ^String get-hostname
        "Returns local hostname string, or `fallback` (default nil).
        Can be slow, prefer 3-arity caching variant when possible."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD) (arities: 1, 2, 3)"}
+       {:added "Encore v3.82.0 (2024-02-23) (arities: 1, 2, 3)"}
        ([        ] (get-hostname nil))
        ([fallback]
         (try
