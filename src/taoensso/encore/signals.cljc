@@ -5,9 +5,9 @@
   \"Signal\" is used here as an internal name for any
   abstract event/object/data that:
     - Originates in an ns (generated or received there, etc.)
-    - Has a level (priority, significance, etc.)
+    - Has a level (priority/significance/etc.)
     - May have an identifier
-    - May have a kind (type, taxonomy, etc.)"
+    - May have a kind (type/taxonomy/etc.)"
 
   {:added "Encore v3.68.0 (2023-09-25)"}
   (:require
@@ -896,8 +896,8 @@
                     NB handling order may be non-sequential when `n-threads` > 1.
 
                  `priority`
-                   Optional priority ∈ℤ that determines the order in which handlers will be
-                   called (default 100).
+                   Optional handler priority ∈ℤ (default 100). Handlers will be called in
+                   descending priority order.
 
                  `sample-rate`
                    Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
