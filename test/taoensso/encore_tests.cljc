@@ -1185,20 +1185,20 @@
       (is (nil? (cnt :set 0)))
 
       (is (=           (get-handlers) nil))
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:async nil, :sample-rate 0.0}}))
-      (is (enc/submap? (get-handlers)                                                     {:hid1 {:async nil, :sample-rate 0.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+      (is (enc/submap? (get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
 
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
       (is (= @cnt 0))
 
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:async nil, :sample-rate 1.0}}))
-      (is (enc/submap? (get-handlers)                                                     {:hid1 {:async nil, :sample-rate 1.0}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+      (is (enc/submap? (get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
 
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
       (is (= @cnt 2))
 
-      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:async nil, :min-level :info}}))
+      (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
       (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
       (is (= @cnt 3))

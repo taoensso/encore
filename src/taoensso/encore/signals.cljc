@@ -805,14 +805,16 @@
             "See docstring")
 
           (defn ~'get-handlers
-            ~(api-docstring 0 purpose
-               "Returns {<handler-id> <dispatch-opts>} for all registered %s handlers.")
+            ~(api-docstring 15 purpose
+               "Returns {<handler-id> {:keys [dispatch-opts handler-fn]}} for all
+               registered %s handlers.")
             [] (-get-handlers ~*sig-handlers*))
 
           (defn ~'remove-handler!
             ~(api-docstring 15 purpose
-               "Deregisters %s handler with given id, and returns {<handler-id> <disaptch-opts>}
-                for all %s handlers still registered.")
+               "Deregisters %s handler with given id, and returns
+               {<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
+               still registered.")
             ~'[handler-id]
             (-get-handlers
               (enc/update-var-root! ~*sig-handlers*
@@ -820,8 +822,9 @@
 
           (defn ~'add-handler!
             ~(api-docstring 15 purpose
-               "Registers given %s handler and returns {<handler-id> <dispatch-opts>}
-               for all handlers now registered.
+               "Registers given %s handler and returns
+               {<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
+               now registered.
 
                `handler-fn` should be a fn of 1-2 arities:
                  ([handler-arg]) => Handle the given argument (e.g. write to disk/db, etc.)
@@ -913,7 +916,8 @@
                (let [dispatch-opts# (enc/nested-merge ~default-dispatch-opts ~base-dispatch-opts ~'dispatch-opts)
                      wrapped-handler-fn#
                      (with-meta (wrap-handler ~'handler-id ~'handler-fn dispatch-opts#)
-                       dispatch-opts#)]
+                       {:dispatch-opts dispatch-opts#
+                        :handler-fn    ~'handler-fn})]
 
                  (-get-handlers
                    (enc/update-var-root! ~*sig-handlers*
