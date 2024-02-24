@@ -419,21 +419,30 @@
 
 ;;;; Signal handling
 
-(comment (enc/defonce ^:dynamic *sig-handlers* "?{<handler-id> <wrapped-handler-fn>}" nil))
+(comment
+  (enc/defonce ^:dynamic *sig-handlers*
+    "?{[<priority> <handler-id>] <wrapped-handler-fn>} sorted map"
+    nil))
 
-(defn ^:no-doc -get-handlers [handlers] (when handlers (enc/map-vals meta handlers)))
+(defn ^:no-doc -get-handlers [handlers]
+  (when handlers
+    (reduce-kv
+      (fn [m [_priority handler-id] handler-fn]
+        (assoc m handler-id   (meta handler-fn)))
+      nil
+      handlers)))
 
 (defn call-handlers!
   "Calls given handlers with the given signal.
   Signal's type must implement `IFilterableSignal`."
   [handlers signal]
-  (enc/run-kv! (fn [_handler-id handler-fn] (handler-fn signal)) handlers)
+  (enc/run-kv! (fn [_ handler-fn] (handler-fn signal)) handlers)
   nil)
 
 (defn shutdown-handlers!
   "Shuts down given handlers by calling them with no args."
   [handlers]
-  (enc/run-kv! (fn [_handler-id handler-fn] (enc/catching (handler-fn))) handlers)
+  (enc/run-kv! (fn [_ handler-fn] (enc/catching (handler-fn))) handlers)
   nil)
 
 (defn get-middleware-fn
@@ -454,9 +463,11 @@
   ((get-middleware-fn [inc inc inc str]) 1)
   ((get-middleware-fn [inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))]) 1))
 
+(def ^:private default-handler-priority 100)
 (def ^:private default-dispatch-opts
-  #?(:clj  {:async {:mode :dropping, :buffer-size 4096, :n-threads 1, :daemon-threads? false}}
-     :cljs {}))
+  #?(:cljs {:priority default-handler-priority}
+     :clj  {:priority default-handler-priority,
+            :async {:mode :dropping, :buffer-size 4096, :n-threads 1, :daemon-threads? false}}))
 
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
@@ -464,14 +475,15 @@
 
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
-  [handler-id handler-fn
-   {:as dispatch-opts
-    :keys
-    [#?(:clj async) sample-rate rate-limit filter-fn middleware,
-     ns-filter kind-filter id-filter min-level,
-     rl-error rl-backup error-fn backp-fn]}]
+  [handler-id handler-fn, base-dispatch-opts dispatch-opts]
+  (let [dispatch-opts (enc/nested-merge default-dispatch-opts base-dispatch-opts dispatch-opts)
+        {:keys
+         [#?(:clj async) priority sample-rate rate-limit filter-fn middleware,
+          ns-filter kind-filter id-filter min-level,
+          rl-error rl-backup error-fn backp-fn]}
+        dispatch-opts
 
-  (let [[sample-rate sample-rate-fn]
+        [sample-rate sample-rate-fn]
         (when      sample-rate
           (if (fn? sample-rate)
             [nil                sample-rate] ; Dynamic rate (use dynamic binding, deref atom, etc.)
@@ -532,23 +544,59 @@
                                     *default-handler-error-fn*
                                     error-fn)]
                          (error-fn {:handler-id handler-id, :raw-signal signal, :error t})))))
-                 false)))))]
+                 false)))))
 
-    #?(:cljs wrapped-handler-fn
-       :clj
-       (if-not async
-         wrapped-handler-fn
-         (let [runner (enc/runner (have map? async))]
-           (fn wrapped-handler-fn* [signal]
-             (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
-               (when backp-fn
-                 (enc/catching
-                   (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
-                     (let [backp-fn
-                           (if (enc/identical-kw? backp-fn ::default)
-                             *default-handler-backp-fn*
-                             backp-fn)]
-                       (backp-fn {:handler-id handler-id}))))))))))))
+        wrapped-handler-fn*
+        #?(:cljs wrapped-handler-fn
+           :clj
+           (if-not async
+             wrapped-handler-fn
+             (let [runner (enc/runner (have map? async))]
+               (fn wrapped-handler-fn* [signal]
+                 (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
+                   (when backp-fn
+                     (enc/catching
+                       (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
+                         (let [backp-fn
+                               (if (enc/identical-kw? backp-fn ::default)
+                                 *default-handler-backp-fn*
+                                 backp-fn)]
+                           (backp-fn {:handler-id handler-id}))))))))))]
+
+    (with-meta wrapped-handler-fn*
+      {:dispatch-opts dispatch-opts
+       :handler-fn    handler-fn})))
+
+(defn ^:no-doc remove-handler
+  "Returns updated, non-empty handlers map."
+  [handlers handler-id]
+  (not-empty
+    (reduce-kv
+      (fn [m [_priority handler-id* :as k] handler-fn]
+        (if (= handler-id* handler-id)
+          (dissoc m k)
+          (do     m)))
+      handlers
+      handlers)))
+
+(comment (remove-handler (sorted-map [5 :a] :A [8 :b] :B) :a))
+
+(defn ^:no-doc add-handler
+  "Returns updated, non-empty handlers map."
+
+  ;; Given pre-wrapped handler-fn
+  ([handlers handler-id pre-wrapped-handler-fn]
+   (let [priority (get-in (meta pre-wrapped-handler-fn) [:dispatch-opts :priority] default-handler-priority)]
+     (not-empty
+       (into
+         (sorted-map-by enc/rcompare) ; High priority handlers first
+         (assoc (remove-handler handlers handler-id) [priority handler-id]
+           pre-wrapped-handler-fn)))))
+
+  ;; Given unwrapped handler-fn
+  ([handlers handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts]
+   (add-handler handlers handler-id
+     (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts))))
 
 ;;;; Local API
 
@@ -806,19 +854,19 @@
 
           (defn ~'get-handlers
             ~(api-docstring 15 purpose
-               "Returns {<handler-id> {:keys [dispatch-opts handler-fn]}} for all
+               "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all
                registered %s handlers.")
             [] (-get-handlers ~*sig-handlers*))
 
           (defn ~'remove-handler!
             ~(api-docstring 15 purpose
                "Deregisters %s handler with given id, and returns
-               {<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
+               ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
                still registered.")
             ~'[handler-id]
             (-get-handlers
               (enc/update-var-root! ~*sig-handlers*
-                (fn [m#] (not-empty (dissoc m# ~'handler-id))))))
+                (fn [m#] (remove-handler m# ~'handler-id)))))
 
           (defn ~'add-handler!
             ~(api-docstring 15 purpose
@@ -846,6 +894,10 @@
 
                     Supports `:blocking`, `:dropping`, and `:sliding` back pressure modes.
                     NB handling order may be non-sequential when `n-threads` > 1.
+
+                 `priority`
+                   Optional priority ∈ℤ that determines the order in which handlers will be
+                   called (default 100).
 
                  `sample-rate`
                    Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
@@ -908,20 +960,15 @@
               '([handler-id handler-fn]
                 [handler-id handler-fn
                  {:as   dispatch-opts
-                  :keys [async sample-rate rate-limit filter-fn middleware,
+                  :keys [async priority sample-rate rate-limit filter-fn middleware,
                          ns-filter kind-filter id-filter min-level,
                          error-fn backp-fn]}])}
 
-             (when ~'handler-fn
-               (let [dispatch-opts# (enc/nested-merge ~default-dispatch-opts ~base-dispatch-opts ~'dispatch-opts)
-                     wrapped-handler-fn#
-                     (with-meta (wrap-handler ~'handler-id ~'handler-fn dispatch-opts#)
-                       {:dispatch-opts dispatch-opts#
-                        :handler-fn    ~'handler-fn})]
-
-                 (-get-handlers
-                   (enc/update-var-root! ~*sig-handlers*
-                     (fn [m#] (not-empty (assoc m# ~'handler-id wrapped-handler-fn#)))))))))
+             (-get-handlers
+               (enc/update-var-root! ~*sig-handlers*
+                 (fn [m#]
+                   (add-handler m# ~'handler-id ~'handler-fn,
+                     ~base-dispatch-opts ~'dispatch-opts))))))
 
           ~add-shutdown-hook))))
 
@@ -932,13 +979,12 @@
 
      ;; Given pre-wrapped handler-fn
      ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
-      `(binding [~*sig-handlers* {~handler-id ~pre-wrapped-handler-fn}]
+      `(binding [~*sig-handlers* (add-handler {} ~handler-id ~pre-wrapped-handler-fn)]
          ~form))
 
      ;; Given unwrapped handler-fn
      ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
-      `(with-handler ~*sig-handlers* ~handler-id
-         (wrap-handler ~handler-id ~unwrapped-handler-fn ~dispatch-opts)
+      `(binding [~*sig-handlers* (add-handler {} ~handler-id ~unwrapped-handler-fn, nil ~dispatch-opts)]
          ~form))))
 
 #?(:clj
@@ -949,13 +995,12 @@
 
      ;; Given pre-wrapped handler-fn
      ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
-      `(binding [~*sig-handlers* (assoc ~*sig-handlers* ~handler-id ~pre-wrapped-handler-fn)]
+      `(binding [~*sig-handlers* (add-handler ~*sig-handlers* ~handler-id ~pre-wrapped-handler-fn)]
          ~form))
 
      ;; Given unwrapped handler-fn
      ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
-      `(with-handler+ ~*sig-handlers* ~handler-id
-         (wrap-handler ~handler-id ~unwrapped-handler-fn ~dispatch-opts)
+      `(binding [~*sig-handlers* (add-handler ~*sig-handlers* ~handler-id ~unwrapped-handler-fn, nil ~dispatch-opts)]
          ~form))))
 
 (comment

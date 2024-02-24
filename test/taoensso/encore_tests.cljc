@@ -1206,14 +1206,37 @@
       (is (nil? (remove-handler! :hid1)))
       (is (nil? *sig-handlers*) "Removal yields non-empty map")
 
+      (testing "Handler priorities"
+        (let [handler-order
+              (fn [p1 p2 p3 p4]
+                (let [log_ (atom [])
+                      log! (fn [hid] (swap! log_ conj hid))
+                      handlers
+                      (-> {}
+                        (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
+                        (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
+                        (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
+                        (sigs/add-handler :hid4 (fn [_] (log! 4)) nil {:async nil, :priority p4}))]
+
+                  (sigs/call-handlers! handlers (MySignal. :info "foo"))
+                  @log_))]
+
+          [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
+           (is (= (handler-order 1 2 3 4) [4 3 2 1]))
+           (is (= (handler-order 2 1 4 1) [3 1 4 2]))]))
+
       (testing "Handler sampling"
         (let [n-sampled
               (fn [sample-rate]
-                (let [c (enc/counter)]
+                (let [c (enc/counter)
+                      handlers
+                      {:hid1
+                       (sigs/wrap-handler :hid1 (fn [x] (c) x) nil
+                         {:sample-rate sample-rate, :async {:mode :sync}})}]
+
                   (dotimes [_ 1000]
-                    (sigs/call-handlers!
-                      {"h1" (sigs/wrap-handler "h1" (fn [x] (c) x) {:sample-rate sample-rate})}
-                      (MySignal. :info "foo")))
+                    (sigs/call-handlers! handlers (MySignal. :info "foo")))
+
                   @c))]
 
           [(is (=  1000 (n-sampled        nil))        "No sampling (const)")
@@ -1225,15 +1248,34 @@
            (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
            (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
 
+      (testing "Handler priorities"
+        (let [handler-order
+              (fn [p1 p2 p3 p4]
+                (let [log_ (atom [])
+                      log! (fn [hid] (swap! log_ conj hid))
+                      handlers
+                      (-> {}
+                        (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
+                        (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
+                        (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
+                        (sigs/add-handler :hid4 (fn [_] (log! 4)) nil {:async nil, :priority p4}))]
+
+                  (sigs/call-handlers! handlers (MySignal. :info "foo"))
+                  @log_))]
+
+          [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
+           (is (= (handler-order 1 2 3 4) [4 3 2 1]))
+           (is (= (handler-order 2 1 4 1) [3 1 4 2]))]))
+
       (testing "Handler middleware"
         (let [v1 (atom ::nx)
               v2 (atom ::nx)
               v3 (atom ::nx)]
 
           [(is (nil? (cnt :set 0)))
-           (is (enc/submap? (add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {                                             }) {:hid1 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                               }) {:hid1 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
+           (is (enc/submap? (add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
            (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
            #?(:clj (do (Thread/sleep 2500) :sleep))
