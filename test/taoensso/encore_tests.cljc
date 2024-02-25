@@ -1229,7 +1229,7 @@
 
           [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
            (is (= (handler-order 1 2 3 4) [4 3 2 1]))
-           (is (= (handler-order 2 1 4 1) [3 1 4 2]))]))
+           (is (= (handler-order 2 1 4 3) [3 4 1 2]))]))
 
       (testing "Handler sampling"
         (let [n-sampled
@@ -1252,25 +1252,6 @@
            (is (=  0    (n-sampled (fn [] 0.0)))       "0% sampling (fn)")
            (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
            (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
-
-      (testing "Handler priorities"
-        (let [handler-order
-              (fn [p1 p2 p3 p4]
-                (let [log_ (atom [])
-                      log! (fn [hid] (swap! log_ conj hid))
-                      handlers
-                      (-> {}
-                        (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
-                        (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
-                        (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
-                        (sigs/add-handler :hid4 (fn [_] (log! 4)) nil {:async nil, :priority p4}))]
-
-                  (sigs/call-handlers! handlers (MySignal. :info "foo"))
-                  @log_))]
-
-          [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
-           (is (= (handler-order 1 2 3 4) [4 3 2 1]))
-           (is (= (handler-order 2 1 4 1) [3 1 4 2]))]))
 
       (testing "Handler middleware"
         (let [v1 (atom ::nx)
