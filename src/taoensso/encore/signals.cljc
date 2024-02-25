@@ -419,16 +419,18 @@
 
 ;;;; Signal handling
 
-(comment
-  (enc/defonce ^:dynamic *sig-handlers*
-    "?{[<priority> <handler-id>] <wrapped-handler-fn>} sorted map"
-    nil))
+(comment (enc/defonce ^:dynamic *sig-handlers* "?[<wrapped-handler-fn>]" nil))
 
-(defn ^:no-doc -get-handlers [handlers]
+(defn ^:no-doc get-handlers
+  "Returns non-empty ?{<handler-id> <handler-meta>}."
+  [handlers]
   (when handlers
-    (reduce-kv
-      (fn [m [_priority handler-id] handler-fn]
-        (assoc m handler-id   (meta handler-fn)))
+    (reduce
+      (fn [m handler-fn]
+        (let [handler-meta (meta handler-fn)]
+          (assoc m
+            (get    handler-meta :handler-id)
+            (dissoc handler-meta :handler-id))))
       nil
       handlers)))
 
@@ -436,14 +438,12 @@
   "Calls given handlers with the given signal.
   Signal's type must implement `IFilterableSignal`."
   [handlers signal]
-  (enc/run-kv! (fn [_ handler-fn] (handler-fn signal)) handlers)
-  nil)
+  (run! (fn [handler-fn] (handler-fn signal)) handlers))
 
 (defn shutdown-handlers!
   "Shuts down given handlers by calling them with no args."
   [handlers]
-  (enc/run-kv! (fn [_ handler-fn] (enc/catching (handler-fn))) handlers)
-  nil)
+  (run! (fn [handler-fn] (enc/catching (handler-fn))) handlers))
 
 (defn get-middleware-fn
   "Takes ?[<unary-fn> ... <unary-fn>] and returns nil, or a single unary fn
@@ -564,34 +564,27 @@
                            (backp-fn {:handler-id handler-id}))))))))))]
 
     (with-meta wrapped-handler-fn*
-      {:dispatch-opts dispatch-opts
-       :handler-fn    handler-fn})))
+      {:handler-id    handler-id
+       :handler-fn    handler-fn
+       :dispatch-opts dispatch-opts})))
 
 (defn ^:no-doc remove-handler
-  "Returns updated, non-empty handlers map."
+  "Returns updated, non-empty handlers vec."
   [handlers handler-id]
   (not-empty
-    (reduce-kv
-      (fn [m [_priority handler-id* :as k] handler-fn]
-        (if (= handler-id* handler-id)
-          (dissoc m k)
-          (do     m)))
-      handlers
+    (filterv #(not= (get (meta %) :handler-id) handler-id)
       handlers)))
 
-(comment (remove-handler (sorted-map [5 :a] :A [8 :b] :B) :a))
+(comment (remove-handler [(with-meta (fn []) {:handler-id :hid1})
+                          (with-meta (fn []) {:handler-id :hid2})] :hid1))
 
 (defn ^:no-doc add-handler
-  "Returns updated, non-empty handlers map."
+  "Returns updated, non-empty handlers vec."
 
   ;; Given pre-wrapped handler-fn
   ([handlers handler-id pre-wrapped-handler-fn]
-   (let [priority (get-in (meta pre-wrapped-handler-fn) [:dispatch-opts :priority] default-handler-priority)]
-     (not-empty
-       (into
-         (sorted-map-by enc/rcompare) ; High priority handlers first
-         (assoc (remove-handler handlers handler-id) [priority handler-id]
-           pre-wrapped-handler-fn)))))
+   (enc/sortv #(get-in (meta %) [:dispatch-opts :priority] default-handler-priority) enc/rcompare
+     (conj (or (remove-handler handlers handler-id) []) pre-wrapped-handler-fn)))
 
   ;; Given unwrapped handler-fn
   ([handlers handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts]
@@ -856,7 +849,7 @@
             ~(api-docstring 15 purpose
                "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all
                registered %s handlers.")
-            [] (-get-handlers ~*sig-handlers*))
+            [] (get-handlers ~*sig-handlers*))
 
           (defn ~'remove-handler!
             ~(api-docstring 15 purpose
@@ -864,7 +857,7 @@
                ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
                still registered.")
             ~'[handler-id]
-            (-get-handlers
+            (get-handlers
               (enc/update-var-root! ~*sig-handlers*
                 (fn [m#] (remove-handler m# ~'handler-id)))))
 
@@ -964,7 +957,7 @@
                          ns-filter kind-filter id-filter min-level,
                          error-fn backp-fn]}])}
 
-             (-get-handlers
+             (get-handlers
                (enc/update-var-root! ~*sig-handlers*
                  (fn [m#]
                    (add-handler m# ~'handler-id ~'handler-fn,

@@ -1236,9 +1236,8 @@
               (fn [sample-rate]
                 (let [c (enc/counter)
                       handlers
-                      {:hid1
-                       (sigs/wrap-handler :hid1 (fn [x] (c) x) nil
-                         {:sample-rate sample-rate, :async {:mode :sync}})}]
+                      [(sigs/wrap-handler :hid1 (fn [x] (c) x) nil
+                         {:sample-rate sample-rate, :async {:mode :sync}})]]
 
                   (dotimes [_ 1000]
                     (sigs/call-handlers! handlers (MySignal. :info "foo")))
