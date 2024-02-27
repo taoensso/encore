@@ -33,7 +33,7 @@
 ;;;; Core
 
 (do
-  (defn var-fn [n] (* n n))
+  (defn var-fn [n] (* (long n) (long n)))
   #?(:clj  (def ^:dummy-meta var-clj  "doc:var-clj"           "val:var-clj"))
   #?(:cljs (def ^:dummy-meta var-cljs "doc:var-cljs"          "val:var-cljs"))
   (do      (def ^:dummy-meta var-cljc "doc:var-cljc" #?(:clj  "val:var-cljc/clj"
@@ -696,7 +696,7 @@
              #?(:cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])}))
      "Can also use platform-specific ids")
 
-   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* x x))"]}               ::nx) 5) 25) "Can embed inline functions via edn")
+   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* (long x) (long x)))"]} ::nx) 5) 25) "Can embed inline functions via edn")
    (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
    (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "val:var-cljc/clj"
                                                                                                            :cljs "val:var-cljc/cljs")))

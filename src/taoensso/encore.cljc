@@ -730,7 +730,7 @@
      (if-not (string? s)
        (throw
          (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
-           {:arg {:value s :type (type s)}}))
+           {:arg {:value s, :type (type s)}}))
 
        (let [readers (get opts :readers ::dynamic)
              default (get opts :default ::dynamic)
@@ -1019,18 +1019,18 @@
 
        (fn catching-rf
          ([       ] (catching (rf)        t (error-fn {:rf rf :call '(rf)} t)))
-         ([acc    ] (catching (rf acc)    t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc :type (type acc)}}} t)))
-         ([acc in ] (catching (rf acc in) t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc :type (type acc)}
-                                                                                        :in  {:value in  :type (type in)}}} t)))
+         ([acc    ] (catching (rf acc)    t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc, :type (type acc)}}} t)))
+         ([acc in ] (catching (rf acc in) t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc, :type (type acc)}
+                                                                                        :in  {:value in,  :type (type in)}}} t)))
          ([acc k v]
           (catching (rf acc k v) t
             (error-fn
               {:rf     rf
                :call '(rf acc k v)
                :args
-               {:acc {:value acc :type (type acc)}
-                :k   {:value k   :type (type k)}
-                :v   {:value v   :type (type v)}}}
+               {:acc {:value acc, :type (type acc)}
+                :k   {:value k,   :type (type k)}
+                :v   {:value v,   :type (type v)}}}
               t))))))))
 
 (defn catching-xform
@@ -1476,7 +1476,7 @@
        (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
          (assoc-some
            {:pred pred
-            :arg  {:value x :type (type x)}}
+            :arg  {:value x, :type (type x)}}
            :data data))))))
 
 (comment [(is! false) (is! nil) (is! string? 5) (when? string? "foo")])
@@ -1485,7 +1485,7 @@
   (throw
     (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
       {:pred-kind kind
-       :arg {:value x :type (type x)}})))
+       :arg {:value x, :type (type x)}})))
 
 (let [-as-throw -as-throw]
   (defn as-nzero             [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
@@ -1949,7 +1949,7 @@
            :trunc (long       n*)
            (throw
              (ex-info "[encore/round*] Unexpected round kind (expected ∈ #{:round :floor :ceil :trunc})"
-               {:kind {:value kind :type (type kind)}})))]
+               {:kind {:value kind, :type (type kind)}})))]
 
      (if-not modifier
        (do (long   rounded))                  ; Returns long
@@ -4136,7 +4136,7 @@
             form
             (throw
               (ex-info "[encore/norm-str] Unrecognized normalization form (expected ∈ #{:nfc :nfkc :nfd :nfkd <java.text.Normalizer$Form>})"
-                {:form {:value form :type (type form)}}))))))))
+                {:form {:value form, :type (type form)}}))))))))
 
 (comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
 
@@ -5409,7 +5409,7 @@
                  (.release s)
                  (throw
                    (ex-info "[encore/future-pool] Unexpected arg type (expected function)"
-                     {:arg {:value f :type (type f)}})))))]
+                     {:arg {:value f, :type (type f)}})))))]
 
        (fn fp
          ([ ] (.acquire s n) (.release s n) true)
@@ -6170,7 +6170,7 @@
       (if (pred x)
         x
         (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)"
-                 {:unstub {:value x :type (type x)}})))))
+                 {:unstub {:value x, :type (type x)}})))))
 
   #?(:clj
      (defmacro ^:no-doc -intern-stub [ns stub-sym stub-var src]
