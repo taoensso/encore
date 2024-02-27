@@ -15,7 +15,7 @@
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
         callsite-inner callsite-outer1 callsite-outer2
-        with-ns-filter with-kind-filter with-id-filter with-min-level]])))
+        with-ns-filter with-kind-filter with-id-filter with-min-level sig-exp]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -1148,6 +1148,17 @@
     (signal-value  [_ _] cnt)
     (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))))
 
+#?(:clj
+   (defmacro sig-exp
+     "Macro wrapper around `sigs/filterable-expansion`."
+     {:arglists (:arglists (meta #'sigs/filterable-expansion))}
+     [opts]
+     `(quote
+        ~(sigs/filterable-expansion
+           {:macro-form &form :macro-env &env, :sf-arity 4
+            :ct-sig-filter nil :rt-sig-filter `*sig-filter*}
+           opts))))
+
 (deftest _signal-api
   [(testing "Signal filtering"
      [(is (nil? (enc/update-var-root! *sig-filter* (fn [_] nil))))
@@ -1290,7 +1301,35 @@
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
              (Thread/sleep 2000) ; Wait for second signal to enqueue
-             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))])])
+             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))])
+
+   (testing "Filterable expansion"
+     [(is (enc/submap? (sig-exp {:level :info})
+            {:callsite-id (enc/pred nat-int?)
+             :allow?      (enc/pred enc/call-form?) ; (*sig-filter* nil nil nil :info), etc.
+             :elide?      :submap/nx
+             :location
+             {:ns     (enc/pred string?)
+              :line   (enc/pred nat-int?)
+              :column (enc/pred nat-int?)
+              :file   (enc/pred string?)}}) "Basic expansion")
+
+      (testing "Can override `allow?`"
+        [(is (enc/submap? (sig-exp {:level :info, :allow?             true}) {:allow? true}))
+         (is (enc/submap? (sig-exp {:level :info, :allow?            false}) {:allow? false}))
+         (is (enc/submap? (sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
+
+      (is (enc/submap? (sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
+      (is (enc/submap? (sig-exp {:level :info, :ns "my-sig-ns", :kind :my-sig-kind, :id :my-sig-id, :callsite-id -1
+                                 :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
+            {:callsite-id -1
+             :allow?
+             '(clojure.core/and
+               (clojure.core/< (Math/random) 0.5)
+               (clojure.core/if-let [sf taoensso.encore-tests/*sig-filter*] (sf "my-sig-ns" :my-sig-kind :my-sig-id :info) true)
+               (clojure.core/let [this-callsite-id -1] (> 1 0))
+               (if (taoensso.encore.signals/callsite-limit!? -1 [[1 1000]] nil) false true))})
+        "Full `allow?` expansion")])])
 
 ;;;;
 

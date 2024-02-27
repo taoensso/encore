@@ -334,88 +334,99 @@
         :expected #{2 3 4}})))
 
 #?(:clj
+   (defn- const-form! [param form]
+     (if (enc/const-form? form)
+       (do                form)
+       (throw
+         (ex-info "[encore/signals] `filterable-expansion` arg must be a const (compile-time) value"
+           {:param param, :form form})))))
+
+#?(:clj
    (defn filterable-expansion
      "Low-level util for writing macros with compile-time and runtime filtering.
-     Returns {:keys [callsite-id elide? allow?]}.
-
-     `macro-opts`, `opts-arg` are both of form:
-       {:keys [kind id level sample-rate rate-limit when]}.
+     Returns {:keys [callsite-id location elide? allow?]}.
 
      Caller is responsible for protecting against possible multiple eval of
-     forms in `opts-arg`."
+     forms in `opts`."
 
-     [{:as   macro-opts
-       :keys [location opts-arg sf-arity ct-sig-filter rt-sig-filter]}]
+     {:arglists
+      '([{:keys [macro-form macro-env, sf-arity ct-sig-filter rt-sig-filter]}]
+        [{:keys
+          [elide? allow? callsite-id,
+           elidable? location sample-rate ns kind id level filter/when rate-limit rl-rid]}])}
 
-     (when-not (or (nil? opts-arg) (map? opts-arg))
-       (throw
-         (ex-info "[encore/signals] `filterable-expansion` `opts-arg` must be a compile-time map"
-           {:location location, :opts-arg opts-arg})))
+     [{:keys [macro-form macro-env, sf-arity ct-sig-filter rt-sig-filter]} opts]
 
-     (let [{:keys [ns line column file]} location
+     (const-form! 'opts           opts) ; Must be const map, though vals may be arb forms
+     (enc/have? [:or nil? map?]   opts)
+     (const-form! 'elide?    (get opts :elide?))
+     (const-form! 'elidable? (get opts :elidable?))
 
-           ;; Note that while `opts-arg` must be a const (compile-time) map,
-           ;; its vals are arb forms that may need eval.
-           find-opt-form (fn [k] (or (find macro-opts k) (find opts-arg k)))
-           get-opt-form  (fn [k] (when-let [e (find-opt-form k)] (val e)))
-
-           kind-form    (get-opt-form :kind)
-           id-form      (get-opt-form :id)
-           level-form   (get-opt-form :level)
+     (let [location       (get opts :location (enc/get-source macro-form macro-env))
+           sig-ns-form    (get opts :ns)
+           sig-kind-form  (get opts :kind)
+           sig-id-form    (get opts :id)
+           sig-level-form (get opts :level)
            _
-           (when (enc/const-form? level-form)
-             (valid-level         level-form))
+           (when (enc/const-form? sig-level-form)
+             (valid-level         sig-level-form))
 
            elide?
-           (when-let [sf ct-sig-filter]
-             (not (sf {:ns    (enc/const-form         ns)
-                       :kind  (enc/const-form  kind-form)
-                       :id    (enc/const-form    id-form)
-                       :level (enc/const-form level-form)})))
+           (and
+             (get opts :elidable? true)
+             (get opts :elide?
+               (when-let [sf ct-sig-filter]
+                 (not (sf {:ns    (enc/const-form    sig-ns-form)
+                           :kind  (enc/const-form  sig-kind-form)
+                           :id    (enc/const-form    sig-id-form)
+                           :level (enc/const-form sig-level-form)})))))
 
-           ;; Unique id for this callsite expansion, changes on every eval. Means rate limiter
-           ;; will get reset on eval during REPL work, etc.
-           callsite-id (callsite-counter)
-
-           base-rv {:callsite-id callsite-id}]
+           ;; Unique id for this callsite expansion, changes on every eval.
+           ;; Means rate limiter will get reset on eval during REPL work, etc.
+           callsite-id (get opts :callsite-id (callsite-counter))
+           base-rv {:callsite-id callsite-id, :location location}]
 
        (if elide?
-         (assoc base-rv :allow? false, :elide? true)
+         (assoc base-rv :elide? true)
          (let [allow?-form
-               (let [sample-rate-form
-                     (when-let [sr-form (get-opt-form :sample-rate)]
-                       (if (enc/const-form? sr-form)
-                         (do                     `(< ~'(Math/random) ~(enc/as-pnum! sr-form)))
-                         `(if-let [~'sr ~sr-form] (< ~'(Math/random)  (double     ~'sr)) true)))
+               (get opts :allow?
+                 (let [sample-rate-form
+                       (when-let [sr-form (get opts :sample-rate)]
+                         (if (enc/const-form? sr-form)
+                           (do                     `(< ~'(Math/random) ~(enc/as-pnum! sr-form)))
+                           `(if-let [~'sr ~sr-form] (< ~'(Math/random)  (double     ~'sr)) true)))
 
-                     sf-form
-                     (case (int (or sf-arity -1))
-                       2 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns                     ~level-form) true)
-                       3 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns            ~id-form ~level-form) true)
-                       4 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns ~kind-form ~id-form ~level-form) true)
-                       (unexpected-sf-artity! sf-arity `callsite-filter))
+                       sf-form
+                       (case (int (or sf-arity -1))
+                         2 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form                             ~sig-level-form) true)
+                         3 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form                ~sig-id-form ~sig-level-form) true)
+                         4 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form ~sig-kind-form ~sig-id-form ~sig-level-form) true)
+                         (unexpected-sf-artity! sf-arity `callsite-filter))
 
-                     filter-form
-                     (when-let [filter-form-entry (or (find-opt-form :filter) (find-opt-form :when))]
-                       `(let [~'this-callsite-id ~callsite-id] ~(val filter-form-entry)))
+                       filter-form
+                       (when-let [filter-form (enc/get1 opts :filter :when nil)]
+                         `(let [~'this-callsite-id ~callsite-id] ~filter-form))
 
-                     rl-form ; Nb last (increments count)
-                     (when-let [spec-form   (get-opt-form :rate-limit)]
-                       (let    [rl-rid-form (get-opt-form :rl-rid)] ; Advanced, undocumented
-                         `(if (callsite-limit!? ~callsite-id ~spec-form ~rl-rid-form) false true)))]
+                       rl-form ; Nb last (increments count)
+                       (when-let [spec-form   (get opts :rate-limit)]
+                         (let    [rl-rid-form (get opts :rl-rid)] ; Advanced, undocumented
+                           `(if (callsite-limit!? ~callsite-id ~spec-form ~rl-rid-form) false true)))]
 
-                 `(and ~@(filter some? [sample-rate-form sf-form filter-form rl-form])))]
+                   `(and ~@(filter some? [sample-rate-form sf-form filter-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
 (comment
   (filterable-expansion
-    {:sf-arity 2, :rt-sig-filter `*foo*, :location {:ns (str *ns*)}
-     :opts-arg
-     {:filter      'false
-      :level       (do :info)
-      :sample-rate 0.3
-      :rate-limit  [[1 1000]]}}))
+    {:sf-arity 2, :rt-sig-filter `*foo*}
+    {:location    {:ns (str *ns*)}
+     :line        42
+     :filter      'false
+     ;; :elide?   true
+     ;; :allow?   false
+     :level       (do :info)
+     :sample-rate 0.3
+     :rate-limit  [[1 1000]]}))
 
 ;;;; Signal handling
 

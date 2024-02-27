@@ -780,15 +780,14 @@
 
 (declare rsome revery?)
 
+(defn ^:no-doc call-form?
+  "Private, don't use.
+  Returns true if given a list or Cons."
+  {:added "Encore v3.75.0 (2024-01-29)"}
+  [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
+
 #?(:clj
    (do
-     (defn ^:no-doc call-form?
-       "Private, don't use.
-       Returns true if given a list or Cons."
-       {:added "Encore v3.75.0 (2024-01-29)"}
-       [x]
-       (or (list? x) (instance? #?(:clj clojure.lang.Cons #_:cljs #_cljs.core/Cons) x)))
-
      (defn ^:no-doc call-in-form?
        "Private, don't use.
        Returns true if given a call form, or coll form containing a call form."
@@ -4411,8 +4410,8 @@
       :arglists
       '([{:as opts
           :keys
-          [fallback,
-           #_defaults elidable? location instant uid middleware,
+          [#_defaults #_elide? #_allow? #_callsite-id, fallback,
+           elidable? location instant uid middleware,
            sample-rate ns kind id level filter when rate-limit,
            ctx parent trace?, let data msg error run & user-opts]}])}
 
