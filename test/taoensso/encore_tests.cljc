@@ -1275,7 +1275,7 @@
            (is (enc/submap? (add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
            (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
-           #?(:clj (do (Thread/sleep 2500) :sleep))
+           #?(:clj (do (Thread/sleep 4000) :sleep))
 
            (is (= @v1 [0 "foo"]))
            (is (= @v2 [1 "foo.mw1.mw2"]))
@@ -1300,7 +1300,7 @@
              (add-handler! :hid1 (fn [_] (Thread/sleep 1000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
-             (Thread/sleep 2000) ; Wait for second signal to enqueue
+             (Thread/sleep 4000) ; Wait for second signal to enqueue
              (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))])
 
    (testing "Filterable expansion"

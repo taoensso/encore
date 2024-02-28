@@ -1806,7 +1806,7 @@
       (if (and xs ys)
         (let [result (rf acc (first xs) (first ys))]
           (if (reduced? result)
-            @result
+            (deref result)
             (recur result
               (next xs)
               (next ys))))
@@ -1887,7 +1887,7 @@
 
                     (if (reduced? res)
                       (reduced (Tup2. @res nil))
-                      (do      (Tup2. res
+                      (do      (Tup2.  res
                                  (if next-in
                                    (conj (or ncs []) next-in)
                                    (do       ncs))))))))
@@ -2047,9 +2047,9 @@
 (defn assert-min-encore-version
   "Version check for dependency conflicts, etc."
   [min-version]
-  (let [[xc yc zc] encore-version
-        [xm ym zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
-        [xm ym zm] (mapv #(or % 0) [xm ym zm])]
+  (let [[^long xc ^long yc ^long zc] encore-version
+        [      xm       ym       zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
+        [^long xm ^long ym ^long zm] (mapv #(or % 0) [xm ym zm])]
 
     (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
       (throw
@@ -5701,7 +5701,7 @@
        (let [nanosecs
              (if (= nthreads 1)
                (time-ns (dotimes [_ nlaps] (f)))
-               (let [nlaps-per-thread (/ nlaps nthreads)]
+               (let [nlaps-per-thread (/ (long nlaps) (long nthreads))]
                  (time-ns
                    (let [futures (repeatedly-into [] nthreads
                                    (fn [] (future (dotimes [_ nlaps-per-thread] (f)))))]
@@ -6758,11 +6758,11 @@
 
   (defn ^:no-doc ^:deprecated greatest [coll & [?comparator]]
     (let [comparator (or ?comparator rcompare)]
-      (reduce #(if (pos? (comparator %1 %2)) %2 %1) coll)))
+      (reduce #(if (pos? (long (comparator %1 %2))) %2 %1) coll)))
 
   (defn ^:no-doc ^:deprecated least [coll & [?comparator]]
     (let [comparator (or ?comparator rcompare)]
-      (reduce #(if (neg? (comparator %1 %2)) %2 %1) coll)))
+      (reduce #(if (neg? (long (comparator %1 %2))) %2 %1) coll)))
 
   (defn ^:no-doc ^:deprecated clj1098 "Ref. <http://goo.gl/0GzRuz>" [x] (or x {}))
 
@@ -6956,7 +6956,6 @@
   (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
-
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
