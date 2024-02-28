@@ -1783,6 +1783,22 @@
     (rsome #(when (string? %) %) [:a :b :c :d "boo"])
     (rfirst        string?       [:a :b :c :d "boo"])))
 
+#?(:clj
+   (defn reduce-iterator!
+     "Reduces given `java.util.Iterator`, mutating it. Note that most colls
+     providing iterators implement `java.lang.Iterable`, so support `seq` directly."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [rf init iterator]
+     (if-let [^java.util.Iterator it iterator]
+       (loop [acc init]
+         (if (.hasNext it)
+           (let [acc (rf acc (.next it))]
+             (if (reduced? acc)
+               (deref acc)
+               (recur acc)))
+           acc))
+       init)))
+
 (defn reduce-zip
   "Reduces given sequential xs and ys as pairs (e.g. key-val pairs).
   Calls (rf acc x y) for each sequential pair.
