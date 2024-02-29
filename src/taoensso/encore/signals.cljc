@@ -362,24 +362,31 @@
      (const-form! 'elide?    (get opts :elide?))
      (const-form! 'elidable? (get opts :elidable?))
 
-     (let [location       (get opts :location (enc/get-source macro-form macro-env))
-           sig-ns-form    (get opts :ns)
-           sig-kind-form  (get opts :kind)
-           sig-id-form    (get opts :id)
-           sig-level-form (get opts :level)
+     (let [location (get opts :location (enc/get-source macro-form macro-env))
+           location
+           (enc/assoc-some nil
+             :ns     (get opts :ns     (get location :ns))     ;   Documented override
+             :line   (get opts :line   (get location :line))   ; Undocumented override
+             :column (get opts :column (get location :column)) ; ''
+             :file   (get opts :file   (get location :file)))  ; ''
+
+           ns-form    (get location :ns)
+           kind-form  (get opts     :kind)
+           id-form    (get opts     :id)
+           level-form (get opts     :level)
            _
-           (when (enc/const-form? sig-level-form)
-             (valid-level         sig-level-form))
+           (when (enc/const-form? level-form)
+             (valid-level         level-form))
 
            elide?
            (and
              (get opts :elidable? true)
              (get opts :elide?
                (when-let [sf ct-sig-filter]
-                 (not (sf {:ns    (enc/const-form    sig-ns-form)
-                           :kind  (enc/const-form  sig-kind-form)
-                           :id    (enc/const-form    sig-id-form)
-                           :level (enc/const-form sig-level-form)})))))
+                 (not (sf {:ns    (enc/const-form    ns-form)
+                           :kind  (enc/const-form  kind-form)
+                           :id    (enc/const-form    id-form)
+                           :level (enc/const-form level-form)})))))
 
            ;; Unique id for this callsite expansion, changes on every eval.
            ;; Means rate limiter will get reset on eval during REPL work, etc.
@@ -398,9 +405,9 @@
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form                             ~sig-level-form) true)
-                         3 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form                ~sig-id-form ~sig-level-form) true)
-                         4 `(if-let [~'sf ~rt-sig-filter] (~'sf ~sig-ns-form ~sig-kind-form ~sig-id-form ~sig-level-form) true)
+                         2 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form                     ~level-form) true)
+                         3 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form            ~id-form ~level-form) true)
+                         4 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
                          (unexpected-sf-artity! sf-arity `callsite-filter))
 
                        filter-form
