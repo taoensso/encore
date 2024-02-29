@@ -2356,23 +2356,22 @@
 
 (comment (into [] (xdistinct identity) [1 2 3 1 4 5 2 6 7 1]))
 
-(let [p! persistent!, t transient] ; Note `mapv`-like nil->{} semantics
-  (defn invert-map       [m]                 (p! (reduce-kv (fn [m k v] (assoc! m v    k))  (t {}) m)))
-  (defn map-keys       [f m]                 (p! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (t {}) m)))
-  (defn map-vals       [f m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (assoc! m k (f v))) (t  m) m))))
-  (defn filter-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) m (dissoc! m k))) (t m) m))))
-  (defn filter-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) m (dissoc! m k))) (t m) m))))
-  (defn remove-keys [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred k) (dissoc! m k) m)) (t m) m))))
-  (defn remove-vals [pred m] (if (nil? m) {} (p! (reduce-kv (fn [m k v] (if (pred v) (dissoc! m k) m)) (t m) m)))))
+(let [p! persistent!, tr transient]
+  (defn invert-map  "Returns given ?map with keys and vals inverted, dropping non-unique vals!"     [         m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m         v         k))    (tr {}) m))))
+  (defn map-keys    "Returns given ?map with (key-fn <key>) keys."                                  [key-fn   m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m (key-fn k)        v))    (tr {}) m))))
+  (defn map-vals    "Returns given ?map with (val-fn <val>) vals."                                  [val-fn   m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m         k (val-fn v)))   (tr  m) m))))
+  (defn filter-keys "Returns given ?map, retaining only keys for which (key-pred <key>) is truthy." [key-pred m] (if (nil? m) m (p! (reduce-kv (fn [m k _] (if (key-pred k) m (dissoc! m k))) (tr  m) m))))
+  (defn filter-vals "Returns given ?map, retaining only keys for which (val-pred <val>) is truthy." [val-pred m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (if (val-pred v) m (dissoc! m k))) (tr  m) m))))
+  (defn remove-keys "Returns given ?map, removing keys for which (key-pred <key>) is truthy."       [key-pred m] (filter-keys (complement key-pred) m))
+  (defn remove-vals "Returns given ?map, removing keys for which (val-pred <val>) is truthy."       [val-pred m] (filter-vals (complement val-pred) m)))
 
 (defn rename-keys
   "Returns a map like the one given, replacing keys using
   given {<old-new> <new-key>} replacements. O(min(n_replacements, n_m))."
   [replacements m]
   (cond
-    (nil?   m) {}
     (empty? m)            m ; Preserve metadata
-    (empty? replacements) m
+    (empty? replacements) m ; ''
 
     (> (count m) (count replacements))
     (persistent!
@@ -2397,11 +2396,12 @@
 (comment (rename-keys {:a :X} {:a :A :b :B :c :C}))
 
 (defn keys-by
-  "Returns {(f x) x} map for xs in `coll`."
+  "Returns {(f x) x} ?map for xs in `coll`."
   [f coll]
-  (persistent!
-    (reduce (fn [acc x] (assoc! acc (f x) x))
-      (transient {}) coll)))
+  (when-not (empty? coll)
+    (persistent!
+      (reduce (fn [acc x] (assoc! acc (f x) x))
+        (transient {}) coll))))
 
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
@@ -2688,27 +2688,29 @@
 
   {:added "Encore v3.34.0 (2022-11-16)"}
   [src-map key-spec]
-  (persistent!
-    (reduce
-      (fn rf [acc spec-in]
-        (if (map? spec-in)
+  (if (or (empty? src-map) (empty? key-spec))
+    {} ; Retain `select-keys` nil->{} semantics
+    (persistent!
+      (reduce
+        (fn rf [acc spec-in]
+          (if (map? spec-in)
 
-          (reduce-kv
-            (fn [acc k nested-spec-in]
+            (reduce-kv
+              (fn [acc k nested-spec-in]
+                (if (contains? src-map k)
+                  (let [src-val (get src-map k)]
+                    (if (map? src-val)
+                      (assoc! acc k (select-nested-keys src-val nested-spec-in))
+                      (assoc! acc k                     src-val)))
+                  acc))
+              acc spec-in)
+
+            (let [k spec-in]
               (if (contains? src-map k)
-                (let [src-val (get src-map k)]
-                  (if (map? src-val)
-                    (assoc! acc k (select-nested-keys src-val nested-spec-in))
-                    (assoc! acc k                     src-val)))
-                acc))
-            acc spec-in)
+                (assoc!  acc k (get src-map k))
+                (do      acc)))))
 
-         (let [k spec-in]
-           (if (contains? src-map k)
-             (assoc!  acc k (get src-map k))
-             (do      acc)))))
-
-      (transient {}) key-spec)))
+        (transient {}) key-spec))))
 
 (comment
   (qb 1e5 ; [18.86 22.74]
