@@ -77,7 +77,7 @@
      (:require
       [clojure.string  :as str]
       [clojure.set     :as set]
-      [clojure.java.io :as io]
+      [clojure.java.io :as jio]
       [clojure.walk    :as walk :refer [macroexpand-all]]
       ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
@@ -593,14 +593,16 @@
 
      For Clj:
        - Source var's metadata will be preserved (docstring, arglists, etc.).
-       - Changes to source var's value will also be applied to alias."
+       - Changes to source var's value will also be applied to alias.
 
-     ([          src-sym                       ] `(defalias nil        ~src-sym nil          nil))
-     ([alias-sym src-sym                       ] `(defalias ~alias-sym ~src-sym nil          nil))
-     ([alias-sym src-sym alias-attrs           ] `(defalias ~alias-sym ~src-sym ~alias-attrs nil))
-     ([alias-sym src-sym alias-attrs alias-body]
-      (-have? symbol? src-sym)
-      (let [alias-sym (-have symbol? (or alias-sym (symbol (name src-sym))))
+     See also `defaliases`."
+
+     ([      src                       ] `(defalias nil    ~src nil          nil))
+     ([alias src                       ] `(defalias ~alias ~src nil          nil))
+     ([alias src alias-attrs           ] `(defalias ~alias ~src ~alias-attrs nil))
+     ([alias src alias-attrs alias-body]
+      (let [src-sym   (-have symbol? src)
+            alias-sym (-have symbol? (or alias (symbol (name src-sym))))
             compiling-cljs? (boolean (:ns &env))
             alias-attrs
             (if (string? alias-attrs) ; Back compatibility
@@ -1119,9 +1121,9 @@
            (if-not (:ns macro-env)
              *file* ; Compiling clj
              (or    ; Compiling cljs
-               (when-let [url (and file (catching (io/resource file)))]
-                 (catching (.getPath (io/file url)))
-                 (do                 (str     url)))
+               (when-let [url (and file (catching (jio/resource file)))]
+                 (catching (.getPath (jio/file url)))
+                 (do                 (str      url)))
                file))]
 
        {:ns     (str *ns*)
@@ -1132,7 +1134,7 @@
           (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
             file))})))
 
-(comment (io/resource "taoensso/encore.cljc"))
+(comment (jio/resource "taoensso/encore.cljc"))
 
 #?(:clj
    (defmacro update-var-root!
@@ -1367,8 +1369,8 @@
   "Is `clojure.core.async` present (not necessarily loaded)?"
   (compile-if
     (or
-      (io/resource "clojure/core/async.cljc")
-      (io/resource "clojure/core/async.clj"))
+      (jio/resource "clojure/core/async.cljc")
+      (jio/resource "clojure/core/async.clj"))
     true
     false))
 
@@ -3564,8 +3566,7 @@
                  (let [reqs        (reqs_)    ; {<lid> <entries>}
                        entries (get reqs rid) ; {<lid> <LimitEntry>}
                        ?hits                  ; ?LimitHits
-                       (if (nil? entries)
-                         nil
+                       (when entries
                          (reduce-kv
                            (fn [^LimitHits acc lid ^LimitEntry e]
                              (if-let [^LimitSpec s (get spec lid)]
@@ -4364,7 +4365,7 @@
 (def* ^:const have-telemere?
   "Is `taoensso.telemere` present (not necessarily loaded)?"
   {:added "Encore v3.68.0 (2023-09-25)"}
-  (compile-if (io/resource "taoensso/telemere.cljc") true false))
+  (compile-if (jio/resource "taoensso/telemere.cljc") true false))
 
 #?(:clj
    (defmacro require-telemere-if-present
@@ -4408,7 +4409,7 @@
      (have? map? opts)
      (if have-telemere?
        (do
-         (do    (require 'taoensso.telemere)) ; For macro expansion
+                (require 'taoensso.telemere) ; For macro expansion
          (keep-callsite `(taoensso.telemere/signal! ~(dissoc opts :fallback))))
 
        `(let  ~(get opts :let []) ; Currently undocumented
@@ -4890,9 +4891,9 @@
    (defn slurp-resource
      "Returns slurped named resource on classpath, or nil when resource not found."
      [rname]
-     (when-let [r (io/resource rname)]
+     (when-let [r (jio/resource rname)]
        (try
-         (slurp (io/reader r))
+         (slurp (jio/reader r))
          (catch Exception e
            (throw (ex-info "[encore/slurp-resource] Slurp failed" {:rname rname} e)))))))
 
@@ -4901,7 +4902,7 @@
      "Returns last-modified time for file backing given named resource, or nil
      if file doesn't exist."
      [rname]
-     (when-let [file (try (->> rname io/resource io/file) (catch Exception _))]
+     (when-let [file (try (->> rname jio/resource jio/file) (catch Exception _))]
        (.lastModified ^java.io.File file))))
 
 #?(:clj
@@ -4945,8 +4946,8 @@
                  (name      dep-sym))
              (name dep-sym))]
 
-       (when-let [props (io/resource path)]
-         (with-open [stream (io/input-stream props)]
+       (when-let [props (jio/resource path)]
+         (with-open [stream (jio/input-stream props)]
            (let [props (doto (java.util.Properties.) (.load stream))]
              (.getProperty props "version")))))))
 
