@@ -121,7 +121,7 @@
         if-let if-some if-not when when-not when-some when-let -cond cond
         def* defonce cond! try* catching -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
-        identical-kw? satisfies? satisfies! instance!]])))
+        identical-kw? satisfies? satisfies! instance! use-transient?]])))
 
 (def encore-version [3 87 0])
 
@@ -2352,10 +2352,17 @@
        (transient to)
        (cons from more)))))
 
+(def ^:private ^:const min-transient-card 11) ; Account for transient overhead
+#?(:clj
+   (defmacro ^:no-doc use-transient?
+     "Private, don't use. Micro-optimization."
+     ([n coll] `(if (>= ~n ~min-transient-card) (editable? ~coll) false))
+     ([  coll] `(if (editable? ~coll) (>= (count ~coll) ~min-transient-card) false))))
+
 (defn repeatedly-into
   "Like `repeatedly` but faster and `conj`s items into given collection."
   [coll ^long n f]
-  (if (and (> n 10) (editable? coll))
+  (if (use-transient? n coll)
     (persistent! (reduce-n (fn [acc _] (conj! acc (f))) (transient coll) n))
     (do          (reduce-n (fn [acc _] (conj  acc (f)))            coll  n))))
 
@@ -2389,14 +2396,48 @@
 
 (comment (into [] (xdistinct identity) [1 2 3 1 4 5 2 6 7 1]))
 
-(let [p! persistent!, tr transient]
-  (defn invert-map  "Returns given ?map with keys and vals inverted, dropping non-unique vals!"     [         m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m         v         k))    (tr {}) m))))
-  (defn map-keys    "Returns given ?map with (key-fn <key>) keys."                                  [key-fn   m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m (key-fn k)        v))    (tr {}) m))))
-  (defn map-vals    "Returns given ?map with (val-fn <val>) vals."                                  [val-fn   m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (assoc! m         k (val-fn v)))   (tr  m) m))))
-  (defn filter-keys "Returns given ?map, retaining only keys for which (key-pred <key>) is truthy." [key-pred m] (if (nil? m) m (p! (reduce-kv (fn [m k _] (if (key-pred k) m (dissoc! m k))) (tr  m) m))))
-  (defn filter-vals "Returns given ?map, retaining only keys for which (val-pred <val>) is truthy." [val-pred m] (if (nil? m) m (p! (reduce-kv (fn [m k v] (if (val-pred v) m (dissoc! m k))) (tr  m) m))))
-  (defn remove-keys "Returns given ?map, removing keys for which (key-pred <key>) is truthy."       [key-pred m] (filter-keys (complement key-pred) m))
-  (defn remove-vals "Returns given ?map, removing keys for which (val-pred <val>) is truthy."       [val-pred m] (filter-vals (complement val-pred) m)))
+(defn invert-map
+  "Returns given ?map with keys and vals inverted, dropping non-unique vals!"
+  [m]
+  (when m
+    (if (> (count m) min-transient-card)
+      (persistent! (reduce-kv (fn [m k v] (assoc! m v k)) (transient {}) m))
+      (do          (reduce-kv (fn [m k v] (assoc  m v k))            {}  m)))))
+
+(defn map-keys
+  "Returns given ?map with (key-fn <key>) keys."
+  [key-fn m]
+  (when m
+    (if (> (count m) min-transient-card)
+      (persistent! (reduce-kv (fn [m k v] (assoc! m (key-fn k) v)) (transient {}) m))
+      (do          (reduce-kv (fn [m k v] (assoc  m (key-fn k) v))            {}  m)))))
+
+(defn map-vals
+  "Returns given ?map with (val-fn <val>) vals."
+  [val-fn m]
+  (when m
+    (if (use-transient? m)
+      (persistent! (reduce-kv (fn [m k v] (assoc! m k (val-fn v))) (transient m) m))
+      (do          (reduce-kv (fn [m k v] (assoc  m k (val-fn v)))            m  m)))))
+
+(defn filter-keys
+  "Returns given ?map, retaining only keys for which (key-pred <key>) is truthy."
+  [key-pred m]
+  (when m
+    (if (use-transient? m)
+      (persistent! (reduce-kv (fn [m k _] (if (key-pred k) m (dissoc! m k))) (transient  m) m))
+      (do          (reduce-kv (fn [m k _] (if (key-pred k) m (dissoc  m k)))             m  m)))))
+
+(defn filter-vals
+  "Returns given ?map, retaining only keys for which (val-pred <val>) is truthy."
+  [val-pred m]
+  (when m
+    (if (use-transient? m)
+      (persistent! (reduce-kv (fn [m k v] (if (val-pred v) m (dissoc! m k))) (transient  m) m))
+      (do          (reduce-kv (fn [m k v] (if (val-pred v) m (dissoc  m k)))             m  m)))))
+
+(defn remove-keys "Returns given ?map, removing keys for which (key-pred <key>) is truthy." [key-pred m] (filter-keys (complement key-pred) m))
+(defn remove-vals "Returns given ?map, removing keys for which (val-pred <val>) is truthy." [val-pred m] (filter-vals (complement val-pred) m))
 
 (defn rename-keys
   "Returns a map like the one given, replacing keys using
@@ -4781,7 +4822,7 @@
   ([to n           coll] (top-into to n identity compare coll))
   ([to n keyfn     coll] (top-into to n keyfn    compare coll))
   ([to n keyfn cmp coll]
-   (if (editable? to)
+   (if (use-transient? ^long n to)
      (persistent! (reduce-top n keyfn cmp conj! (transient to) coll))
      (do          (reduce-top n keyfn cmp conj             to  coll)))))
 
