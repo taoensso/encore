@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance!]])))
 
-(def encore-version [3 86 0])
+(def encore-version [3 87 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1787,7 +1787,7 @@
    (defn reduce-iterator!
      "Reduces given `java.util.Iterator`, mutating it. Note that most colls
      providing iterators implement `java.lang.Iterable`, so support `seq` directly."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.87.0 (2024-02-29)"}
      [rf init iterator]
      (if-let [^java.util.Iterator it iterator]
        (loop [acc init]
@@ -6943,7 +6943,7 @@
 
   (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
-  (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} reassoc-some)
+  (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:clj
