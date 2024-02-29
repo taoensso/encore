@@ -179,6 +179,21 @@
 
 (comment (unexpected-arg! :arg :expected '#{string?}))
 
+#?(:clj
+   (defn ^:no-doc have-resource? "Private, don't use."
+     [res-name] (boolean (try (jio/resource res-name) (catch Throwable _)))))
+
+#?(:clj
+   (defn ^:no-doc have-class?
+     "Private, don't use."
+     [class-name]
+     (boolean
+       (try
+         (Class/forName class-name true (.getContextClassLoader (Thread/currentThread)))
+         (catch Throwable _)))))
+
+(comment (have-class? "org.slf4j.Logger"))
+
 ;;;; Core macros
 
 #?(:clj
