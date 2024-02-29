@@ -2187,65 +2187,36 @@
 
 (comment (conj-some [] :a :b nil :c :d nil false :e))
 
-(do
-  (defn assoc-some "Assocs each kv iff its value is not nil."
-    ([m k v      ] (if (nil? v) (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs]
-     (reduce-kvs
-       (fn [m k v] (if (nil? v) m (assoc m k v)))
-       (assoc-some m k v)
-       kvs))
+(defn assoc-some
+  "Assocs each kv to given ?map iff its value is not nil."
+  ([m k v      ] (if-not (nil? v) (assoc m k v) m))
+  ([m     m-kvs] (reduce-kv  assoc-some             m    m-kvs))
+  ([m k v & kvs] (reduce-kvs assoc-some (assoc-some m k v) kvs)))
 
-    ([m kvs]
-     (reduce-kv
-       (fn [m k v] (if (nil? v) m (assoc m k v)))
-       (if (nil? m) {} m)
-       kvs)))
+(defn assoc-when
+  "Assocs each kv to given ?map iff its val is truthy."
+  ([m k v      ] (if v (assoc m k v) m))
+  ([m     m-kvs] (reduce-kv  assoc-when             m    m-kvs))
+  ([m k v & kvs] (reduce-kvs assoc-when (assoc-when m k v) kvs)))
 
-  (defn assoc-when "Assocs each kv iff its val is truthy."
-    ([m k v      ] (if-not v (if (nil? m) {} m) (assoc m k v)))
-    ([m k v & kvs]
-     (reduce-kvs
-       (fn [m k v] (if-not v m (assoc m k v)))
-       (assoc-when m k v)
-       kvs))
+(defn assoc-nx
+  "Assocs each kv to given ?map iff its key doesn't already exist."
+  ([m k v      ] (if-not (contains? m k) (assoc m k v) m))
+  ([m     m-kvs] (reduce-kv  assoc-nx           m    m-kvs))
+  ([m k v & kvs] (reduce-kvs assoc-nx (assoc-nx m k v) kvs)))
 
-    ([m kvs]
-     (reduce-kv
-       (fn [acc k v] (if-not v m (assoc m k v)))
-       (if (nil? m) {} m)
-       kvs)))
-
-  (defn dis-assoc-some
-    "Assocs each kv if its value is not nil, otherwise dissocs it."
-    ([m k v      ] (if (nil? v) (if (nil? m) {} (dissoc m k)) (assoc m k v)))
-    ([m k v & kvs]
-     (reduce-kvs
-       (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v)))
-       (dis-assoc-some m k v)
-       kvs))
-
-    ([m kvs]
-     (reduce-kv
-       (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v)))
-       (if (nil? m) {} m)
-       kvs)))
-
-  ;; Handy as l>r merge
-  (defn assoc-nx "Assocs each kv iff its key doesn't already exist."
-    ([m k v      ] (if (contains? m k) m (assoc m k v)))
-    ([m k v & kvs] (reduce-kvs assoc-nx (assoc-nx m k v) kvs))
-    ([m       kvs]
-     (reduce-kvs
-       (fn [m k v] (if (contains? m k) m (assoc m k v)))
-       (if (nil? m) {} m)
-       kvs))))
+(defn reassoc-some
+  "Assocs each kv to given ?map if its value is nil, otherwise dissocs it."
+  ([m k v      ] (if-not (nil? v) (assoc m k v) (dissoc m k)))
+  ([m     m-kvs] (reduce-kv  reassoc-some               m    m-kvs))
+  ([m k v & kvs] (reduce-kvs reassoc-some (reassoc-some m k v) kvs)))
 
 (comment
-  (assoc-some {:a :A} :b nil :c :C :d nil :e :E)
-  (assoc-some {:a :A} {:b :B :c nil :d :D :e false})
-  (dis-assoc-some {:a :A :b :B} {:a :a :b nil})
-  (reduce-kv assoc-nx {:a :A} {:a :a :b :b}))
+  (assoc-some   {:a :A} {:a false :b :B}) ; => {:a false, :b :B}
+  (assoc-when   {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
+  (assoc-nx     {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
+  (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
+  )
 
 (defn get-subvec
   "Like `subvec` but never throws (snaps to valid start and end indexes)."
@@ -2400,7 +2371,7 @@
   [replacements m]
   (cond
     (nil?   m) {}
-    (empty? m) m ; Preserve metadata
+    (empty? m)            m ; Preserve metadata
     (empty? replacements) m
 
     (> (count m) (count replacements))
@@ -6952,8 +6923,9 @@
     {:deprecated "Encore v3.70.0 (2023-10-17)"}
     matching-error)
 
-  (def* ^:no-doc limiter* "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
-  (def* ^:no-doc limiter  "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
+  (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
+  (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
+  (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} reassoc-some)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:clj
