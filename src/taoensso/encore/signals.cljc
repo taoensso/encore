@@ -89,15 +89,15 @@
 (let [nf-compile  (fn [nf-spec  ] (enc/name-filter (or nf-spec :any)))
       nf-conform? (fn [nf-spec n] ((nf-compile nf-spec) n))
       nf->min-level
-      (fn [min-level nf-arg]
-        (if (vector? min-level)
+      (fn [ml-spec nf-arg]
+        (if (vector? ml-spec)
           ;; [[<nf-spec> <min-level>] ... [\"*\" <min-level>]]
           (enc/rsome
             (fn [[nf-spec min-level]]
               (when (nf-conform? nf-spec nf-arg)
-                (valid-level-int min-level)))
-            (do            min-level))
-          (valid-level-int min-level)))]
+                min-level))
+            ml-spec)
+          ml-spec))]
 
   (defn ^:no-doc valid-nf-spec
     "Returns valid `encore/name-filter` spec, or throws."
@@ -118,23 +118,28 @@
     [nf-spec nf-arg]
     (if ^boolean (nf-conform? nf-spec nf-arg) true false))
 
-  (defn ^:no-doc allow-level?
-    "Low-level level filter."
-    #?(:cljs {:tag boolean})
-    ([min-level        level] (if ^boolean (level>= level min-level) true false))
-    ([min-level nf-arg level]
-     (let [min-level (nf->min-level min-level nf-arg)]
-       (if  ^boolean (level>= level min-level) true false)))
+  (defn ^:no-doc parse-min-level
+    "Returns simple unvalidated ?min-level from {<kind> [[<nf-spec> <min-level>] ...]}, etc."
+    [ml-spec kind nf-arg]
+    (if (map? ml-spec) ; {<kind> <ml-spec*>}
+      (or
+        (when kind (when-let [ml-spec* (get ml-spec     kind)] (nf->min-level ml-spec* nf-arg)))
+        (do        (when-let [ml-spec* (get ml-spec :default)] (nf->min-level ml-spec* nf-arg))))
+      (do                                                      (nf->min-level ml-spec  nf-arg))))
 
-    ([min-level kind nf-arg level]
-     (if-let [min-level*
-              (if (map? min-level) ; {<kind> <min-level*>}
-                (or
-                  (when kind (when-let [min-level* (get min-level     kind)] (nf->min-level min-level* nf-arg)))
-                  (do        (when-let [min-level* (get min-level :default)] (nf->min-level min-level* nf-arg))))
-                (do                                                          (nf->min-level min-level  nf-arg)))]
-       (allow-level? min-level* level)
-       true))))
+  (let [parse-min-level parse-min-level]
+    (defn ^:no-doc allow-level?
+      "Low-level level filter."
+      #?(:cljs {:tag boolean})
+      ([min-level      level] (if ^boolean (level>= level min-level) true false))
+      ([ml-spec nf-arg level]
+       (let [min-level (nf->min-level ml-spec nf-arg)]
+         (if  ^boolean (level>= level min-level) true false)))
+
+      ([ml-spec kind nf-arg level]
+       (if ml-spec
+         (allow-level? (parse-min-level ml-spec kind nf-arg) level)
+         true)))))
 
 (defn ^:no-doc valid-min-level
   "Returns valid min level, or throws."
