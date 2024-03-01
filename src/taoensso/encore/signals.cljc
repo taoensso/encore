@@ -657,12 +657,26 @@
             Additional filtering can also be applied on a per-handler basis, see
             `add-handler!` for details.
 
+            Use `get-filters` to see current filter config.
+
             If anything is unclear, please ping me (@ptaoussanis) so that I can
             improve these docs!")
 
         "See docstring")))
 
 (comment (api:filtering-help "purpose"))
+
+#?(:clj
+   (defn- api:get-filters
+     [purpose *rt-sig-filter* ct-sig-filter]
+     `(defn ~'get-filters
+        ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} filter config.")
+        []
+        (enc/assoc-some nil
+          :compile-time (enc/force-ref  ~ct-sig-filter)
+          :runtime      (enc/force-ref ~*rt-sig-filter*)))))
+
+(comment (api:get-filters "purpose" 'my-ct-sig-filter '*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -866,6 +880,8 @@
        `(do
           (enc/defalias level-aliases)
           ~(api:filtering-help purpose)
+          ~(api:get-filters    purpose *rt-sig-filter* ct-sig-filter)
+
           ~(api:set-ns-filter! purpose *rt-sig-filter*)
           ~(api:with-ns-filter purpose *rt-sig-filter*)
 
