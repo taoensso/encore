@@ -33,7 +33,7 @@
     (enc/get-env {:as :edn} :taoensso.encore.signals/level-aliases<.platform><.edn>)))
 
 (let [expected (conj (set (keys level-aliases)) 'integer)]
-  (defn ^:no-doc bad-level!
+  (defn bad-level!
     "Throws an `ex-info` for given invalid level."
     [x]
     (throw
@@ -41,7 +41,7 @@
         {:level    {:value x, :type (type x)}
          :expected expected}))))
 
-(defn ^:no-doc get-level-int
+(defn get-level-int
   "Returns valid integer level, or nil."
   [x]
   (enc/cond
@@ -52,27 +52,27 @@
 
 #?(:clj
    (do
-     (defmacro ^:no-doc valid-level-int
+     (defmacro valid-level-int
        "Returns valid integer level, or throws."
        [x]
        (if (enc/const-form? x)
          (do           (or (get-level-int x)  (bad-level! x)))
          `(let [x# ~x] (or (get-level-int x#) (bad-level! x#)))))
 
-     (defmacro ^:no-doc valid-level
+     (defmacro valid-level
        "Returns valid level, or throws."
        [x]
        (if (enc/const-form? x)
          (do           (if (get-level-int x)  x  (bad-level! x)))
          `(let [x# ~x] (if (get-level-int x#) x# (bad-level! x#)))))
 
-     (defmacro ^:no-doc const-level>=
+     (defmacro const-level>=
        "Returns true, false, or nil (inconclusive)."
        [x y]
        (when (and (enc/const-form? x) (enc/const-form? y))
          (>= (long (valid-level-int x)) (long (valid-level-int y)))))
 
-     (defmacro ^:no-doc level>=
+     (defmacro level>=
        "Returns true if valid level `x` has value >= valid level `y`.
        Throws if either level is invalid."
        [x y]
@@ -99,7 +99,7 @@
             ml-spec)
           ml-spec))]
 
-  (defn ^:no-doc valid-nf-spec
+  (defn valid-nf-spec
     "Returns valid `encore/name-filter` spec, or throws."
     [x]
     (if-let [t (enc/catching (do (nf-compile x) nil) t t)]
@@ -112,13 +112,13 @@
           t))
       x))
 
-  (defn ^:no-doc allow-name?
+  (defn allow-name?
     "Low-level name filter."
     #?(:cljs {:tag boolean})
     [nf-spec nf-arg]
     (if ^boolean (nf-conform? nf-spec nf-arg) true false))
 
-  (defn ^:no-doc parse-min-level
+  (defn parse-min-level
     "Returns simple unvalidated ?min-level from {<kind> [[<nf-spec> <min-level>] ...]}, etc."
     [ml-spec kind nf-arg]
     (if (map? ml-spec) ; {<kind> <ml-spec*>}
@@ -128,7 +128,7 @@
       (do                                                      (nf->min-level ml-spec  nf-arg))))
 
   (let [parse-min-level parse-min-level]
-    (defn ^:no-doc allow-level?
+    (defn allow-level?
       "Low-level level filter."
       #?(:cljs {:tag boolean})
       ([min-level      level] (if ^boolean (level>= level min-level) true false))
@@ -141,7 +141,7 @@
          (allow-level? (parse-min-level ml-spec kind nf-arg) level)
          true)))))
 
-(defn ^:no-doc valid-min-level
+(defn valid-min-level
   "Returns valid min level, or throws."
   [x]
   (if (vector? x)
@@ -316,10 +316,10 @@
 
 ;;;; Expansion filtering
 
-#?(:clj (enc/defonce ^:no-doc callsite-counter (enc/counter)))
+#?(:clj (enc/defonce callsite-counter (enc/counter)))
 
 (let [rate-limiters_ (enc/latom {})]
-  (defn ^:no-doc callsite-limit!?
+  (defn callsite-limit!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag boolean})
     [rl-id spec req-id]
@@ -332,7 +332,7 @@
 (comment (enc/qb 1e6 (callsite-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 165.35
 
 #?(:clj
-   (defn ^:no-doc unexpected-sf-artity! [sf-arity context]
+   (defn unexpected-sf-artity! [sf-arity context]
      (enc/unexpected-arg! sf-arity
        {:context  context
         :param    'sf-arity
@@ -444,7 +444,7 @@
 
 (comment (enc/defonce ^:dynamic *sig-handlers* "?[<wrapped-handler-fn>]" nil))
 
-(defn ^:no-doc get-handlers
+(defn get-handlers
   "Returns non-empty ?{<handler-id> <handler-meta>}."
   [handlers]
   (when handlers
@@ -591,7 +591,7 @@
        :handler-fn    handler-fn
        :dispatch-opts dispatch-opts})))
 
-(defn ^:no-doc remove-handler
+(defn remove-handler
   "Returns updated, non-empty handlers vec."
   [handlers handler-id]
   (not-empty
@@ -601,7 +601,7 @@
 (comment (remove-handler [(with-meta (fn []) {:handler-id :hid1})
                           (with-meta (fn []) {:handler-id :hid2})] :hid1))
 
-(defn ^:no-doc add-handler
+(defn add-handler
   "Returns updated, non-empty handlers vec."
 
   ;; Given pre-wrapped handler-fn
@@ -840,7 +840,7 @@
      "Defines signal handler API vars in current ns (`add-handler!`,
      `remove-handler!`, `get-handlers`), and adds JVM hook to trigger handler
      shutdown on JVM shutdown."
-     [{:keys [purpose sf-arity #_ct-sig-filter *rt-sig-fiter* *sig-handlers* base-dispatch-opts]
+     [{:keys [purpose sf-arity *rt-sig-fiter* *sig-handlers* base-dispatch-opts]
        :or   {purpose "signal"}}]
 
      ;; `purpose` ∈ #{"signal" "profiling" "logging"}
@@ -849,8 +849,9 @@
            (when-not (:ns &env)
              `(enc/defonce ~'_handler-shutdown-hook {:private true}
                 (.addShutdownHook (Runtime/getRuntime)
-                  (Thread. (fn ~'shutdown-signal-handlers []
-                             (shutdown-handlers! ~*sig-handlers*))))))]
+                  (Thread.
+                    (fn ~'shutdown-signal-handlers []
+                      (shutdown-handlers! ~*sig-handlers*))))))]
 
        `(do
           (def ~'handlers-help
