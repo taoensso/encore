@@ -207,7 +207,7 @@
 
 ;;;; SigFilter
 
-(comment (enc/defonce ^:dynamic *sig-filter* "`SigFilter`, or nil." nil))
+(comment (enc/defonce ^:dynamic *rt-sig-filter* "`SigFilter`, or nil." nil))
 
 (deftype SigFilter [ns-filter kind-filter id-filter min-level filter-fn]
   #?(:clj clojure.lang.IDeref :cljs IDeref)
@@ -350,12 +350,12 @@
      forms in `opts`."
 
      {:arglists
-      '([{:keys [macro-form macro-env, sf-arity ct-sig-filter rt-sig-filter]}]
+      '([{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}]
         [{:keys
           [elide? allow? callsite-id,
            elidable? location sample-rate ns kind id level filter/when rate-limit rl-rid]}])}
 
-     [{:keys [macro-form macro-env, sf-arity ct-sig-filter rt-sig-filter]} opts]
+     [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]} opts]
 
      (const-form! 'opts           opts) ; Must be const map, though vals may be arb forms
      (enc/have? [:or nil? map?]   opts)
@@ -405,9 +405,9 @@
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form                     ~level-form) true)
-                         3 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form            ~id-form ~level-form) true)
-                         4 `(if-let [~'sf ~rt-sig-filter] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
+                         2 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form                     ~level-form) true)
+                         3 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form            ~id-form ~level-form) true)
+                         4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
                          (unexpected-sf-artity! sf-arity `callsite-filter))
 
                        filter-form
@@ -425,7 +425,7 @@
 
 (comment
   (filterable-expansion
-    {:sf-arity 2, :rt-sig-filter `*foo*}
+    {:sf-arity 2, :*rt-sig-filter* `*foo*}
     {:location    {:ns (str *ns*)}
      :line        42
      :filter      'false
@@ -632,11 +632,10 @@
    (defmacro def-filter-api
      "Defines signal filter API vars in current ns (`with-ns-filter`,
      `set-ns-filter!`, etc.)."
-     [sf-arity *sig-filter*
-      {:keys [purpose]
+     [{:keys [purpose sf-arity #_ct-sig-filter *rt-sig-filter*]
        :or   {purpose "signal"}}]
 
-     ;; `purpose` e/o #{"signal" "profiling" "logging"}
+     ;; `purpose` ∈ #{"signal" "profiling" "logging"}
 
      (let [sf-arity (int (or sf-arity -1))
            _
@@ -657,10 +656,10 @@
                       classpath resources). See library docs for details.
 
                    2. The filter API consting of the following:
-                     `set-ns-filter!`,     `with-ns-filter`      - For filtering calls by namespace
-                     `set-minimum-level!`, `with-minimum-level!` - For filtering calls by %s level
-                     `set-id-filter!`,     `with-id-filter`      - For filtering calls by %s id   (when relevant)
-                     `set-kind-filter!`,   `with-kind-filter`    - For filtering calls by %s kind (when relevant)
+                     `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
+                     `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
+                     `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
+                     `set-kind-filter!`,   `with-kind-filter`    - for filtering calls by %s kind (when relevant)
 
                      See the relevant docstrings for details.
 
@@ -684,7 +683,7 @@
                      - {:allow <spec> :deny <spec>} with specs as above.")
                 ~'[ns-filter]
                 (enc/force-ref
-                  (enc/update-var-root! ~*sig-filter*
+                  (enc/update-var-root! ~*rt-sig-filter*
                     (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))
 
               (defmacro ~'with-ns-filter
@@ -692,7 +691,7 @@
                    "Executes form with given %s call namespace filter in effect.
                    See `set-ns-filter!` for details.")
                 ~'[ns-filter form]
-                `(binding [~'~*sig-filter* (update-sig-filter ~'~*sig-filter* {:ns-filter ~~'ns-filter})]
+                `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
                    ~~'form)))
 
            kind-filter
@@ -708,7 +707,7 @@
                      - {:allow <spec> :deny <spec>} with specs as above.")
                 ~'[kind-filter]
                 (enc/force-ref
-                  (enc/update-var-root! ~*sig-filter*
+                  (enc/update-var-root! ~*rt-sig-filter*
                     (fn [old#] (update-sig-filter old# {:kind-filter ~'kind-filter})))))
 
               (defmacro ~'with-kind-filter
@@ -716,7 +715,7 @@
                    "Executes form with given %s call kind filter in effect.
                    See `set-kind-filter!` for details.")
                 ~'[kind-filter form]
-                `(binding [~'~*sig-filter* (update-sig-filter ~'~*sig-filter* {:kind-filter ~~'kind-filter})]
+                `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
                    ~~'form)))
 
            id-filter
@@ -732,7 +731,7 @@
                      - {:allow <spec> :deny <spec>} with specs as above.")
                 ~'[id-filter]
                 (enc/force-ref
-                  (enc/update-var-root! ~*sig-filter*
+                  (enc/update-var-root! ~*rt-sig-filter*
                     (fn [old#] (update-sig-filter old# {:id-filter ~'id-filter})))))
 
               (defmacro ~'with-id-filter
@@ -740,7 +739,7 @@
                    "Executes form with given %s call id filter in effect.
                    See `set-id-filter!` for details.")
                 ~'[id-filter form]
-                `(binding [~'~*sig-filter* (update-sig-filter ~'~*sig-filter* {:id-filter ~~'id-filter})]
+                `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
                    ~~'form)))
 
            min-level
@@ -761,7 +760,7 @@
                   (~'[          min-level] (~'set-min-level! nil ~'min-level))
                   (~'[ns-filter min-level]
                    (enc/force-ref
-                     (enc/update-var-root! ~*sig-filter*
+                     (enc/update-var-root! ~*rt-sig-filter*
                        (fn [old-sf#]
                          (update-sig-filter old-sf#
                            {:min-level-fn
@@ -774,8 +773,8 @@
                      See `set-min-level!` for details.")
                   (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
                   (~'[ns-filter min-level form]
-                   `(binding [~'~*sig-filter*
-                              (update-sig-filter ~'~*sig-filter*
+                   `(binding [~'~*rt-sig-filter*
+                              (update-sig-filter ~'~*rt-sig-filter*
                                 {:min-level-fn
                                  (fn [~'old-ml#]
                                    (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
@@ -797,10 +796,11 @@
 
                       If non-nil `kind` is provided, then the given minimum level
                       will apply only for that %s kind.")
+                  (~'[               min-level] (~'set-min-level! nil    nil ~'min-level))
                   (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
                   (~'[kind ns-filter min-level]
                    (enc/force-ref
-                     (enc/update-var-root! ~*sig-filter*
+                     (enc/update-var-root! ~*rt-sig-filter*
                        (fn [old-sf#]
                          (update-sig-filter old-sf#
                            {:min-level-fn
@@ -813,8 +813,8 @@
                      See `set-min-level!` for details.")
                   (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
                   (~'[kind ns-filter min-level form]
-                   `(binding [~'~*sig-filter*
-                              (update-sig-filter ~'~*sig-filter*
+                   `(binding [~'~*rt-sig-filter*
+                              (update-sig-filter ~'~*rt-sig-filter*
                                 {:min-level-fn
                                  (fn [~'old-ml#]
                                    (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
@@ -826,20 +826,19 @@
          4 `(do ~ns-filter ~kind-filter ~id-filter ~min-level ~level-aliases ~filtering-help)))))
 
 (comment
-  (def ^:dynamic                  *sig-filter* nil)
-  (macroexpand '(def-filter-api 3 *sig-filter* {}))
-  (do           (def-filter-api 3 *sig-filter* {})))
+  (def ^:dynamic                  *rt-sig-filter* nil)
+  (macroexpand '(def-filter-api 3 *rt-sig-filter* {}))
+  (do           (def-filter-api 3 *rt-sig-filter* {})))
 
 #?(:clj
    (defmacro def-handler-api
      "Defines signal handler API vars in current ns (`add-handler!`,
      `remove-handler!`, `get-handlers`), and adds JVM hook to trigger handler
      shutdown on JVM shutdown."
-     [sf-arity *sig-handlers*
-      {:keys [purpose base-dispatch-opts]
+     [{:keys [purpose sf-arity #_ct-sig-filter *rt-sig-fiter* *sig-handlers* base-dispatch-opts]
        :or   {purpose "signal"}}]
 
-     ;; `purpose` e/o #{"signal" "profiling" "logging"}
+     ;; `purpose` ∈ #{"signal" "profiling" "logging"}
 
      (let [add-shutdown-hook
            (when-not (:ns &env)
@@ -1025,10 +1024,15 @@
 
 #?(:clj
    (defmacro def-api
-     "Calls both `def-filter-api` and `def-handler-api`."
-     [sf-arity *sig-filter* *sig-handlers* opts]
+     "Calls both `def-filter-api` and `def-handler-api` with given opts."
+     [opts]
      `(do
-        (def-filter-api  ~sf-arity ~*sig-filter*   ~opts)
-        (def-handler-api ~sf-arity ~*sig-handlers* ~opts))))
+        (def-filter-api  ~opts)
+        (def-handler-api ~opts))))
 
-(comment (def-api 3 *sig-filter* *sig-handlers* {:purpose "testing"}))
+(comment
+  (def-api
+    {:purpose         "testing"
+     :sf-arity        3
+     :*sig-handlers*  *sig-handlers*
+     :*rt-sig-filter* *rt-sig-filter*}))

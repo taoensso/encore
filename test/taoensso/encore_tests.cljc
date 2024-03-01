@@ -1137,10 +1137,14 @@
 ;;;;
 
 (do
-  (def ^:dynamic *sig-filter*   nil)
-  (def ^:dynamic *sig-handlers* nil)
+  (def ^:dynamic *sig-handlers*  nil)
+  (def ^:dynamic *rt-sig-filter* nil)
 
-  (sigs/def-api 4 *sig-filter* *sig-handlers* {})
+  (sigs/def-api
+    {:sf-arity        4
+     :*sig-handlers*  *sig-handlers*
+     :*rt-sig-filter* *rt-sig-filter*})
+
   (def cnt (enc/counter 0))
 
   (deftype MySignal [level cnt]
@@ -1156,40 +1160,40 @@
      `(quote
         ~(sigs/filterable-expansion
            {:macro-form &form :macro-env &env, :sf-arity 4
-            :ct-sig-filter nil :rt-sig-filter `*sig-filter*}
+            :ct-sig-filter nil :*rt-sig-filter* `*rt-sig-filter*}
            opts))))
 
 (deftest _signal-api
   [(testing "Signal filtering"
-     [(is (nil? (enc/update-var-root! *sig-filter* (fn [_] nil))))
+     [(is (nil? (enc/update-var-root! *rt-sig-filter* (fn [_] nil))))
       (is (= (set-ns-filter!       "*") {:ns-filter "*", :kind-filter nil, :id-filter nil, :min-level nil}))
       (is (= (set-kind-filter!     "*") {:ns-filter "*", :kind-filter "*", :id-filter nil, :min-level nil}))
       (is (= (set-id-filter!       "*") {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level nil}))
       (is (= (set-min-level! nil :info) {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
-      (is (= @*sig-filter*              {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
+      (is (= @*rt-sig-filter*           {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
 
-      (is (enc/submap? (with-ns-filter   "-" @*sig-filter*) {:ns-filter   "-"}))
-      (is (enc/submap? (with-kind-filter "-" @*sig-filter*) {:kind-filter "-"}))
-      (is (enc/submap? (with-id-filter   "-" @*sig-filter*) {:id-filter   "-"}))
+      (is (enc/submap? (with-ns-filter   "-" @*rt-sig-filter*) {:ns-filter   "-"}))
+      (is (enc/submap? (with-kind-filter "-" @*rt-sig-filter*) {:kind-filter "-"}))
+      (is (enc/submap? (with-id-filter   "-" @*rt-sig-filter*) {:id-filter   "-"}))
 
-      (is (enc/submap? (with-min-level :kind1       100 @*sig-filter*) {:min-level {:default :info, :kind1         100  }}))
-      (is (enc/submap? (with-min-level :kind1 "ns1" 100 @*sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
+      (is (enc/submap? (with-min-level :kind1       100 @*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
+      (is (enc/submap? (with-min-level :kind1 "ns1" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
 
-      (is (false?  (with-ns-filter "-"          (*sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-ns-filter "ns1"        (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-ns-filter "-"          (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-ns-filter "ns1"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
 
-      (is (false?  (with-kind-filter "-"        (*sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-kind-filter "kind1"    (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-kind-filter "-"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-kind-filter "kind1"    (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
 
-      (is (false?  (with-id-filter "-"          (*sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-id-filter "id1"        (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-id-filter "-"          (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-id-filter "id1"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
 
-      (is (false?  (with-min-level :kind1 :warn (*sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-min-level :kind2 :warn (*sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-min-level :kind1 :warn (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (true?   (with-min-level :kind2 :warn (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
 
-      (is (enc/submap? (with-min-level :kind1 "ns2" 100 @*sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
-      (is (true?       (with-min-level :kind1 "ns2" 100 (*sig-filter* "ns1" :kind1 :id 50))) "Fall back to :default kind on unmatched ns")
-      (is (false?      (with-min-level :kind1 "ns2" 100 (*sig-filter* "ns2" :kind1 :id 50))))])
+      (is (enc/submap? (with-min-level :kind1 "ns2" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
+      (is (true?       (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* "ns1" :kind1 :id 50))) "Fall back to :default kind on unmatched ns")
+      (is (false?      (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* "ns2" :kind1 :id 50))))])
 
    (testing "Signal handlers"
      [(testing "Basics"
@@ -1306,7 +1310,7 @@
    (testing "Filterable expansion"
      [(is (enc/submap? (sig-exp {:level :info})
             {:callsite-id (enc/pred nat-int?)
-             :allow?      (enc/pred enc/call-form?) ; (*sig-filter* nil nil nil :info), etc.
+             :allow?      (enc/pred enc/call-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
              :elide?      :submap/nx
              :location
              {:ns     (enc/pred string?)
@@ -1328,7 +1332,7 @@
              :allow?
              '(clojure.core/and
                (clojure.core/< (Math/random) 0.5)
-               (clojure.core/if-let [sf taoensso.encore-tests/*sig-filter*] (sf "my-ns" :my-sig-kind :my-sig-id :info) true)
+               (clojure.core/if-let [sf taoensso.encore-tests/*rt-sig-filter*] (sf "my-ns" :my-sig-kind :my-sig-id :info) true)
                (clojure.core/let [this-callsite-id -1] (> 1 0))
                (if (taoensso.encore.signals/callsite-limit!? -1 [[1 1000]] nil) false true))})
         "Full `allow?` expansion")])])
