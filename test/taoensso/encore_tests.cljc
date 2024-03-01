@@ -1232,9 +1232,19 @@
          (is (nil? *sig-handlers*) "Removal yields non-empty map")
 
          (let [sv_ (atom ::nx)]
-           (sigs/with-handler *sig-handlers* :hid1 (fn [x] (reset! sv_ x)) {:async nil}
+           (with-handler :hid1 (fn [x] (reset! sv_ x)) {:async nil}
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo")))
-           (is (= @sv_ "foo") "`with-handler` macro works"))])
+           (is (= @sv_ "foo") "`with-handler` macro works"))
+
+         (let [sv1_ (atom ::nx)
+               sv2_ (atom ::nx)]
+
+           (with-handler    :hid1 (fn [x] (reset! sv1_ x)) {:async nil}
+             (with-handler+ :hid2 (fn [x] (reset! sv2_ x)) {:async nil}
+               (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
+
+           [(is (= @sv1_ "foo") "`with-handler`  macro works")
+            (is (= @sv2_ "foo") "`with-handler+` macro works")])])
 
       (testing "Handler priorities"
         (let [handler-order

@@ -611,8 +611,10 @@
 
   ;; Given unwrapped handler-fn
   ([handlers handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts]
-   (add-handler handlers handler-id
-     (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts))))
+   (if (get dispatch-opts :no-wrap?) ; Undocumented
+     (add-handler handlers handler-id unwrapped-handler-fn)
+     (add-handler handlers handler-id
+       (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts)))))
 
 ;;;; Local API
 
@@ -1094,6 +1096,32 @@
 (comment (api:add-shutdown-hook '*my-sig-handlers*))
 
 #?(:clj
+   (defn- api:with-handler
+     [purpose *sig-handlers* base-dispatch-opts]
+     `(defmacro ~'with-handler
+        ~(api-docstring 11 purpose
+           "Executes form with ONLY the given handler-fn registered.
+           Useful for tests/debugging. See also `with-handler+`.")
+        ~'[handler-id handler-fn dispatch-opts form]
+        `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+           ~~'form))))
+
+(comment (api:with-handler "purpose" '*my-sig-handlers* {:my-opt :foo}))
+
+#?(:clj
+   (defn- api:with-handler+
+     [purpose *sig-handlers* base-dispatch-opts]
+     `(defmacro ~'with-handler+
+        ~(api-docstring 11 purpose
+           "Executes form with the given handler-fn registered.
+           Useful for tests/debugging. See also `with-handler`.")
+        ~'[handler-id handler-fn dispatch-opts form]
+        `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+           ~~'form))))
+
+(comment (api:with-handler+ "purpose" '*my-sig-handlers* {:my-opt :foo}))
+
+#?(:clj
    (defmacro def-handler-api
      "Defines signal handler API vars in current ns (`add-handler!`,
      `remove-handler!`, `get-handlers`), and adds JVM hook to trigger handler
@@ -1108,39 +1136,10 @@
         ~(api:get-handlers    purpose *sig-handlers*)
         ~(api:remove-handler! purpose *sig-handlers*)
         ~(api:add-handler!    purpose *sig-handlers* base-dispatch-opts)
+        ~(api:with-handler    purpose *sig-handlers* base-dispatch-opts)
+        ~(api:with-handler+   purpose *sig-handlers* base-dispatch-opts)
         ~(when-not (:ns &env)
            (api:add-shutdown-hook *sig-handlers*)))))
-
-#?(:clj
-   (defmacro with-handler
-     "Low-level util. Executes form with ONLY the given handler-fn registered.
-     Useful for tests/debugging. See also `with-handler+`."
-
-     ;; Given pre-wrapped handler-fn
-     ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
-      `(binding [~*sig-handlers* (add-handler {} ~handler-id ~pre-wrapped-handler-fn)]
-         ~form))
-
-     ;; Given unwrapped handler-fn
-     ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
-      `(binding [~*sig-handlers* (add-handler {} ~handler-id ~unwrapped-handler-fn, nil ~dispatch-opts)]
-         ~form))))
-
-#?(:clj
-   (defmacro with-handler+
-     "Low-level util. Executes form with the given handler-fn registered.
-     Useful for tests/debugging. See also `with-handler`."
-     {:added "Encore v3.75.0 (2024-01-29)"}
-
-     ;; Given pre-wrapped handler-fn
-     ([*sig-handlers* handler-id pre-wrapped-handler-fn form]
-      `(binding [~*sig-handlers* (add-handler ~*sig-handlers* ~handler-id ~pre-wrapped-handler-fn)]
-         ~form))
-
-     ;; Given unwrapped handler-fn
-     ([*sig-handlers* handler-id unwrapped-handler-fn dispatch-opts form]
-      `(binding [~*sig-handlers* (add-handler ~*sig-handlers* ~handler-id ~unwrapped-handler-fn, nil ~dispatch-opts)]
-         ~form))))
 
 (comment
   (def ^:dynamic *sig-handlers* nil)
