@@ -657,7 +657,8 @@
             Additional filtering can also be applied on a per-handler basis, see
             `add-handler!` for details.
 
-            Use `get-filters` to see current filter config.
+            Use `get-filters`   to see current filter config.
+            Use `get-min-level` to see current minimum level.
 
             If anything is unclear, please ping me (@ptaoussanis) so that I can
             improve these docs!")
@@ -864,6 +865,31 @@
 (comment (api:with-min-level "purpose" 4 '*my-rt-sig-filter*))
 
 #?(:clj
+   (defn- api:get-min-level
+     [purpose sf-arity *rt-sig-filter* ct-sig-filter]
+     (case (int sf-arity)
+       (4)
+       `(defn ~'get-min-level
+          ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} minimum levels.")
+          (~'[       ] (~'get-min-level nil    (str *ns*)))
+          (~'[kind   ] (~'get-min-level ~'kind (str *ns*)))
+          (~'[kind ns]
+           (enc/assoc-some nil
+             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
+             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns))))
+
+       (2 3)
+       `(defn ~'get-min-level
+          ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} minimum levels.")
+          (~'[  ] (~'get-min-level nil (str *ns*)))
+          (~'[ns]
+           (enc/assoc-some nil
+             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
+             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)))))))
+
+(comment (api:get-min-level "purpose" 4 '*my-rt-sig-filter* 'my-ct-sig-filter))
+
+#?(:clj
    (defmacro def-filter-api
      "Defines signal filter API vars in current ns (`with-ns-filter`,
      `set-ns-filter!`, etc.)."
@@ -896,7 +922,8 @@
                 ~(api:with-kind-filter purpose *rt-sig-filter*)))
 
           ~(api:set-min-level! purpose sf-arity *rt-sig-filter*)
-          ~(api:with-min-level purpose sf-arity *rt-sig-filter*)))))
+          ~(api:with-min-level purpose sf-arity *rt-sig-filter*)
+          ~(api:get-min-level  purpose sf-arity *rt-sig-filter* ct-sig-filter)))))
 
 (comment
   (def ^:dynamic *my-rt-sig-filter* nil)

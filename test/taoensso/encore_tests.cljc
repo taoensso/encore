@@ -1172,6 +1172,7 @@
       (is (= (set-min-level! nil :info) {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
       (is (= @*rt-sig-filter*           {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
       (is (= (get-filters)    {:runtime {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}}))
+      (is (= (get-min-level)            {:runtime :info}))
 
       (is (enc/submap? (with-ns-filter   "-" @*rt-sig-filter*) {:ns-filter   "-"}))
       (is (enc/submap? (with-kind-filter "-" @*rt-sig-filter*) {:kind-filter "-"}))
@@ -1179,6 +1180,13 @@
 
       (is (enc/submap? (with-min-level :kind1       100 @*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
       (is (enc/submap? (with-min-level :kind1 "ns1" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
+      (is (enc/submap?
+            (with-min-level :kind1 "ns1" :warn
+              {:l1 (get-min-level)
+               :l2 (get-min-level :kind1)
+               :l3 (get-min-level :kind1 "ns1")})
+
+            {:l1 {:runtime :info}, :l2 {:runtime :info}, :l3 {:runtime :warn}}))
 
       (is (false?  (with-ns-filter "-"          (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
       (is (true?   (with-ns-filter "ns1"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
