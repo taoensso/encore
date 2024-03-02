@@ -5527,22 +5527,25 @@
 #?(:clj
    (defn runner
      "Experimental, subject to change without notice!!
-     Returns a new stateful (fn runner ([]) ([f])) such that:
-      (runner f) => Runner should execute given nullary fn according to runner opts.
-                    Returns:
-                      nil   if runner has stopped accepting new execution requests.
-                      true  if fn was accepted for execution *without* back pressure.
-                      false if runner's back-pressure mechanism was engaged.
 
-      (runner)   => Runner should stop accepting new execution requests.
-                    Returns true iff runner's status changed with this call.
+     Returns a new stateful \"runner\" such that:
 
-    Compared to agents:
-      - Runners have (configurable) back pressure.
-      - Runners may be non-linear when n-threads > 1.
-      - Runners take nullary fns rather than unary fns of state.
-      - Runners have no validators or watches.
-      - Runners auto shutdown their threads on JVM shutdown.
+      (runner f)
+        Requests runner to execute given nullary fn according to runner's opts.
+        Returns:
+          - `true`  if runner accepted fn for execution without back pressure.
+          - `false` if runner experienced back-pressure (fn may/not execute).
+          - `nil`   if runner has stopped accepting new execution requests.
+
+      (runner)
+        Instructs runner to permanently stop accepting new execution requests.
+        Returns true iff runner's status changed with this call.
+
+    Runners provide ~similar capabilities to agents, but:
+      - Take nullary fns rather than unary fns of state.
+      - Have no validators or watches.
+      - Have (configurable) back pressure.
+      - May execute fns in non-sequential order when n-threads > 1.
 
     These properties make them useful as configurable async workers, etc.
 
@@ -5559,74 +5562,76 @@
         buffer-size 1024
         n-threads   1}}]
 
-     (case mode
-       :sync
-       (let [stopped?_ (volatile! false)]
-         (fn sync-runner
-           ([ ] (when-not @stopped?_ (vreset! stopped?_ true)))
-           ([f] (if       @stopped?_ nil (do (catching (f)) true)))))
+     (let [stopped?_ (volatile! false)
+           deref-fn  (fn [] {:opts opts, :active? (not @stopped?_)})
+           stop-fn   (fn [] (when-not (.deref stopped?_) (vreset! stopped?_ true)))]
 
-       (:blocking :dropping :sliding)
-       (let [stopped?_ (volatile! false)
-             abq (java.util.concurrent.ArrayBlockingQueue.
-                   (as-pos-int buffer-size) false)
-             init_
-             (delay
-               (when-not daemon-threads?
-                 (.addShutdownHook (Runtime/getRuntime)
-                   (Thread. (fn stop-runner [] (vreset! stopped?_ true)))))
+       (if (= mode :sync)
+         (reify
+           clojure.lang.IDeref (deref [_] (deref-fn))
+           clojure.lang.IFn
+           (invoke [_  ] (stop-fn))
+           (invoke [_ f] (when-not (.deref stopped?_) (catching (f)) true)))
 
-               (dotimes [n (as-pos-int n-threads)]
-                 (let [wfn
-                       (fn worker-fn []
-                         (loop []
-                           (if-let [f (.poll abq 2000 java.util.concurrent.TimeUnit/MILLISECONDS)]
-                             ;; Recur unconditionally to drain abq even when stopped
-                             (do (catching (f))   (recur))
-                             (when-not @stopped?_ (recur)))))
+         (let [binding binding-conveyor-fn
+               abq (java.util.concurrent.ArrayBlockingQueue.
+                     (as-pos-int buffer-size) false)
 
-                       thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
-                       thread (Thread. wfn thread-name)]
+               init!
+               (fn []
+                 (when-not daemon-threads?
+                   (.addShutdownHook (Runtime/getRuntime)
+                     (Thread. (fn stop-runner [] (vreset! stopped?_ true)))))
 
-                   (when daemon-threads?
-                     (.setDaemon thread true))
+                 (dotimes [n (as-pos-int n-threads)]
+                   (let [wfn
+                         (fn worker-fn []
+                           (loop []
+                             (if-let [f (.poll abq 2000 java.util.concurrent.TimeUnit/MILLISECONDS)]
+                               ;; Recur unconditionally to drain abq even when stopped
+                               (do (catching (f))           (recur))
+                               (when-not (.deref stopped?_) (recur)))))
 
-                   ;; (println "Starting thread:" thread-name)
-                   (.start thread))))
+                         thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
+                         thread (Thread. wfn thread-name)]
 
-             run-fn
-             (case mode
-               :blocking (fn [f] (or (.offer abq f) (do (.put abq f) false)))
-               :dropping (fn [f] (or (.offer abq f)                  false))
-               :sliding
-               (fn [f]
-                 (or
-                   (.offer abq f) ; Common case
-                   (loop []
-                     (.poll abq) ; Drop
-                     (if (.offer abq f)
-                       false ; Indicate that drop/s occurred
-                       (recur))))))]
+                     (when daemon-threads? (.setDaemon thread true))
+                     ;; (println "Starting thread:" thread-name)
+                     (.start thread))))
 
-         (if-let [msecs (get opts :debug/init-after)]
-           (do
-             (future (Thread/sleep (int msecs)) @init_)
-             (fn async-runner
-               ([ ] (when-not @stopped?_ (vreset! stopped?_ true)))
-               ([f] (if       @stopped?_ nil (run-fn (binding-conveyor-fn f))))))
+               init!_
+               (if-let [msecs (get opts :debug/init-after)]
+                 (delay (future (Thread/sleep (int msecs)) (init!)))
+                 (delay                                    (init!)))
 
-           (fn async-runner
-             ([ ] (when-not @stopped?_ (vreset! stopped?_ true)))
-             ([f] (if       @stopped?_ nil (do @init_ (run-fn (binding-conveyor-fn f))))))))
+               run-fn
+               (case mode
+                 :blocking (fn blocking-run [f] (or (.offer abq f) (do (.put abq f) false)))
+                 :dropping (fn dropping-run [f] (or (.offer abq f)                  false))
+                 :sliding
+                 (fn sliding-run [f]
+                   (or
+                     (.offer abq f) ; Common case
+                     (loop []
+                       (.poll abq) ; Drop
+                       (if (.offer abq f)
+                         false ; Indicate that drop/s occurred
+                         (recur)))))
 
-       (unexpected-arg! mode
-         {:context  `runner
-          :expected #{:sync :blocking :dropping :sliding}}))))
+                 (unexpected-arg! mode
+                   {:context  `runner
+                    :expected #{:sync :blocking :dropping :sliding}}))]
+
+           (reify
+             clojure.lang.IDeref (deref [_] (deref-fn))
+             clojure.lang.IFn
+             (invoke [_  ] (stop-fn))
+             (invoke [_ f] (when-not (.deref stopped?_) (.deref init!_) (run-fn (binding f))))))))))
 
 (comment
   (let [r1 (runner {:mode :sync})
         r2 (runner {:mode :blocking})]
-    (qb 1e6 ; [47.44 225.33]
+    (qb 1e6 ; [51.02 169.76]
       (r1 (fn []))
       (r2 (fn [])))))
 
