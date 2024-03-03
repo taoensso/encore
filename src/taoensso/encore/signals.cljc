@@ -282,7 +282,7 @@
       ([        ns-filter kind-filter id-filter min-level]             (get-cached ns-filter kind-filter id-filter min-level))
       ([{:keys [ns-filter kind-filter id-filter min-level :as specs]}] (get-cached ns-filter kind-filter id-filter min-level)))))
 
-(comment ; [69.31 83.4 93.7]
+(comment ; [54.97 67.66 83.49]
   [(let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns           :info)))
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns       :id :info)))
    (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns :kind :id :info)))])
@@ -329,7 +329,7 @@
             (rate-limiters_       rl-id #(or % (enc/rate-limiter {} spec))))]
       (if (rl req-id) true false))))
 
-(comment (enc/qb 1e6 (callsite-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 165.35
+(comment (enc/qb 1e6 (callsite-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 122.12
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]

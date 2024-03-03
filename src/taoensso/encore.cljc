@@ -3198,6 +3198,9 @@
                       {args (delay (apply f args))})))
              args)))))
 
+#?(:clj (defmacro ^:private deref! [delay] `(let [~(with-meta 'd {:tag 'clojure.lang.Delay}) ~delay] (.deref ~'d))))
+(comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [53.21 24.16]
+
 (defn fmemoize
   "For Clj: fastest possible memoize. Non-racey, 0-7 arity only.
   For Cljs: same as `core/memoize`."
@@ -3211,34 +3214,28 @@
            nil-sentinel (Object.)]
 
        (fn
-         ([ ]
-          @(or
-             (.get cache0_)
-             (let [dv (delay (f))]
-               (if (.compareAndSet cache0_ nil dv)
-                 dv
-                 (.get cache0_)))))
-
+         ([ ] (deref! (or (.get cache0_) (let [dv (delay (f))] (if (.compareAndSet cache0_ nil dv) dv (.get cache0_))))))
          ([x]
           (let [x* (if (identical? x nil) nil-sentinel x)]
-            @(or
-               (.get cache1_ x*)
-               (let [dv (delay (f x))]
-                 (or (.putIfAbsent cache1_ x* dv) dv)))))
+            (deref!
+              (or
+                (.get cache1_ x*)
+                (let [dv (delay (f x))]
+                  (or (.putIfAbsent cache1_ x* dv) dv))))))
 
-         ([x1 x2               ] (let [xs [x1 x2]               ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2))               ] (or (.putIfAbsent cachen_ xs dv) dv)))))
-         ([x1 x2 x3            ] (let [xs [x1 x2 x3]            ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3))            ] (or (.putIfAbsent cachen_ xs dv) dv)))))
-         ([x1 x2 x3 x4         ] (let [xs [x1 x2 x3 x4]         ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4))         ] (or (.putIfAbsent cachen_ xs dv) dv)))))
-         ([x1 x2 x3 x4 x5      ] (let [xs [x1 x2 x3 x4 x5]      ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5))      ] (or (.putIfAbsent cachen_ xs dv) dv)))))
-         ([x1 x2 x3 x4 x5 x6   ] (let [xs [x1 x2 x3 x4 x5 x6]   ] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6))   ] (or (.putIfAbsent cachen_ xs dv) dv)))))
-         ([x1 x2 x3 x4 x5 x6 x7] (let [xs [x1 x2 x3 x4 x5 x6 x7]] @(or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6 x7))] (or (.putIfAbsent cachen_ xs dv) dv)))))))))
+         ([x1 x2               ] (let [xs [x1 x2]               ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2))               ] (or (.putIfAbsent cachen_ xs dv) dv))))))
+         ([x1 x2 x3            ] (let [xs [x1 x2 x3]            ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3))            ] (or (.putIfAbsent cachen_ xs dv) dv))))))
+         ([x1 x2 x3 x4         ] (let [xs [x1 x2 x3 x4]         ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4))         ] (or (.putIfAbsent cachen_ xs dv) dv))))))
+         ([x1 x2 x3 x4 x5      ] (let [xs [x1 x2 x3 x4 x5]      ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5))      ] (or (.putIfAbsent cachen_ xs dv) dv))))))
+         ([x1 x2 x3 x4 x5 x6   ] (let [xs [x1 x2 x3 x4 x5 x6]   ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6))   ] (or (.putIfAbsent cachen_ xs dv) dv))))))
+         ([x1 x2 x3 x4 x5 x6 x7] (let [xs [x1 x2 x3 x4 x5 x6 x7]] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6 x7))] (or (.putIfAbsent cachen_ xs dv) dv))))))))))
 
 (comment
   (let [f0 (fmemoize (fn []))
         f1 (fmemoize (fn [x1]))
         f2 (fmemoize (fn [x1 x2]))]
 
-    (qb 1e6 ; [30.14 38.72 65.09]
+    (qb 1e6 ; [23.19 30.11 48.09]
       (f0) (f1 :x1) (f2 :x1 :x2))))
 
 (defn- gc-now? [rate]
@@ -5389,7 +5386,7 @@
 
      See also `future`, `virtual-executor`, `pool-executor`."
      {:added "Encore v3.72.0 (2023-10-24)"}
-     ([                 f] (future-call* @default-executor_ f))
+     ([                 f] (future-call* (deref! default-executor_) f))
      ([executor-service f]
       (let [f   (binding-conveyor-fn f)
             fut (.submit ^java.util.concurrent.ExecutorService executor-service
