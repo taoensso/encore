@@ -829,6 +829,8 @@
 
 ;;;; Runner
 
+(def ^:dynamic *dynamic-var* nil)
+
 #?(:clj
    (deftest _runner
      [(is (= (let [a (atom nil)
@@ -858,7 +860,13 @@
                [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
                 (do (Thread/sleep 500) @a)])
 
-            [[true true true false false false] [0 1 2 3 4 5]]))]))
+            [[true true true false false false] [0 1 2 3 4 5]]))
+
+      (let [a (atom nil)
+            r (enc/runner {:mode :blocking})]
+
+        (binding [*dynamic-var* "bound"] (r (fn [] (reset! a *dynamic-var*))))
+        (is (= (do (Thread/sleep 500) @a) "bound") "Runner binding conveyance"))]))
 
 ;;;; Bytes
 
@@ -1244,7 +1252,17 @@
                (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
            [(is (= @sv1_ "foo") "`with-handler`  macro works")
-            (is (= @sv2_ "foo") "`with-handler+` macro works")])])
+            (is (= @sv2_ "foo") "`with-handler+` macro works")])
+
+         (let [a (atom nil)
+               handlers
+               [(sigs/wrap-handler :hid1 (fn [x] (reset! a *dynamic-var*))
+                  nil #?(:clj {:async {:mode :dropping}} :cljs nil))]]
+
+            (binding [*dynamic-var* "bound"]
+              (sigs/call-handlers! handlers (MySignal. :info "foo"))
+              #?(:clj (Thread/sleep 500))
+              (is (= @a "bound") "Handler binding conveyance")))])
 
       (testing "Handler priorities"
         (let [handler-order

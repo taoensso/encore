@@ -5375,6 +5375,8 @@
          ([x y z       ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x y z) )
          ([x y z & args] (clojure.lang.Var/resetThreadBindingFrame frame) (apply f x y z args))))))
 
+(comment (qb 1e6 (binding-conveyor-fn (fn [])))) ; 50.81
+
 #?(:clj
    (defn future-call*
      "Experimental, subject to change without notice!
@@ -5611,11 +5613,11 @@
              (future (Thread/sleep (int msecs)) @init_)
              (fn async-runner
                ([ ] (when-not @stopped?_ (vreset! stopped?_ true)))
-               ([f] (if       @stopped?_ nil (run-fn f)))))
+               ([f] (if       @stopped?_ nil (run-fn (binding-conveyor-fn f))))))
 
            (fn async-runner
              ([ ] (when-not @stopped?_ (vreset! stopped?_ true)))
-             ([f] (if       @stopped?_ nil (do @init_ (run-fn f)))))))
+             ([f] (if       @stopped?_ nil (do @init_ (run-fn (binding-conveyor-fn f))))))))
 
        (unexpected-arg! mode
          {:context  `runner
@@ -5624,7 +5626,7 @@
 (comment
   (let [r1 (runner {:mode :sync})
         r2 (runner {:mode :blocking})]
-    (qb 1e6 ; [40.68 158.46]
+    (qb 1e6 ; [47.44 225.33]
       (r1 (fn []))
       (r2 (fn [])))))
 
