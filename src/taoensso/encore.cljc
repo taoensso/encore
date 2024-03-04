@@ -567,8 +567,8 @@
 
 #?(:clj
    (defmacro declare-remote
-     "Declares given ns-qualified symbols, preserving metadata. Useful for
-     circular dependencies."
+     "Declares given ns-qualified symbols, preserving metadata.
+     Clj only. Useful for circular dependencies."
      [& syms]
      (let [original-ns (str *ns*)]
        `(do ~@(map (fn [s]
@@ -890,7 +890,7 @@
 
 (defn error-data
   "Returns data map iff `x` is an error of any type on platform."
-  ;; Note Clojure >= 1.7 now has `Throwable->map` (clj only)
+  ;; Note Clojure >= 1.7 now has `Throwable->map` (Clj only)
   [x]
   (when-let [data-map
              (and x
@@ -922,7 +922,7 @@
 
 #?(:clj
    (defmacro caught-error-data
-     "Handy for error-throwing unit tests."
+     "Useful for error-throwing unit tests."
      [& body] `(catching (do ~@body nil) e# (error-data e#))))
 
 (comment (caught-error-data (/ 5 0)))
@@ -6240,7 +6240,7 @@
      `unstub-<stub-name>`.
 
      Decouples a var's declaration (location) and its initialization (value).
-     Handy for defining vars in a shared ns from elsewhere (e.g. a private
+     Useful for defining vars in a shared ns from elsewhere (e.g. a private
      or cyclic ns)."
      [sym]
      (let [   stub-sym sym
