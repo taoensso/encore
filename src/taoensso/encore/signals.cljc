@@ -659,8 +659,10 @@
             Additional filtering can also be applied on a per-handler basis, see
             `add-handler!` for details.
 
-            Use `get-filters`   to see current filter config.
-            Use `get-min-level` to see current minimum level.
+            See also:
+              `get-filters`     - to see current filter config
+              `get-min-level`   - to see current minimum level
+              `without-filters` - to disable all runtime filtering
 
             If anything is unclear, please ping me (@ptaoussanis) so that I can
             improve these docs!")
@@ -680,6 +682,13 @@
           :runtime      (enc/force-ref ~*rt-sig-filter*)))))
 
 (comment (api:get-filters "purpose" 'my-ct-sig-filter '*my-rt-sig-filter*))
+
+#?(:clj
+   (defn- api:without-filters
+     [purpose *rt-sig-filter*]
+     `(defmacro ~'without-filters
+        ~(api-docstring 0 purpose "Executes form without any runtime filters.")
+        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -907,11 +916,12 @@
 
        `(do
           (enc/defalias level-aliases)
-          ~(api:filtering-help purpose)
-          ~(api:get-filters    purpose *rt-sig-filter* ct-sig-filter)
+          ~(api:filtering-help  purpose)
+          ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
 
-          ~(api:set-ns-filter! purpose *rt-sig-filter*)
-          ~(api:with-ns-filter purpose *rt-sig-filter*)
+          ~(api:without-filters purpose *rt-sig-filter*)
+          ~(api:set-ns-filter!  purpose *rt-sig-filter*)
+          ~(api:with-ns-filter  purpose *rt-sig-filter*)
 
           ~(when (>= sf-arity 3)
              `(do
