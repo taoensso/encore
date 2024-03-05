@@ -5,7 +5,7 @@ jobs:
   tests:
     strategy:
       matrix:
-        java: ['17', '18', '19']
+        java: ['17', '19', '21']
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
