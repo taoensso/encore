@@ -19,8 +19,8 @@ TODO Detailed description
 
 TODO Clojars above, or
 
-- `YYYY-MM-DD` `vX.Y.Z` (dev): [changes](../../releases/tag/vTODO)
-- `YYYY-MM-DD` `vX.Y.Z` (stable): [changes](../../releases/tag/vTODO)
+- `YYYY-MM-DD` `vX.Y.Z` (dev): [release info](../../releases/tag/vTODO)
+- `YYYY-MM-DD` `vX.Y.Z` (stable): [release info](../../releases/tag/vTODO)
 
 [![Main tests][Main tests SVG]][Main tests URL]
 [![Graal tests][Graal tests SVG]][Graal tests URL]
