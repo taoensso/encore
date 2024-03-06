@@ -1242,20 +1242,20 @@
          (is (nil? (remove-handler! :hid1)))
          (is (nil? *sig-handlers*) "Removal yields non-empty map")
 
-         (let [sv_ (atom ::nx)]
-           (with-handler :hid1 (fn [x] (reset! sv_ x)) {:async nil}
+         (let [sig_ (atom ::nx)]
+           (with-handler :hid1 (fn [x] (reset! sig_ x)) {:async nil}
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo")))
-           (is (= @sv_ "foo") "`with-handler` macro works"))
+           (is (= @sig_ "foo") "`with-handler` macro works"))
 
-         (let [sv1_ (atom ::nx)
-               sv2_ (atom ::nx)]
+         (let [sig1_ (atom ::nx)
+               sig2_ (atom ::nx)]
 
-           (with-handler    :hid1 (fn [x] (reset! sv1_ x)) {:async nil}
-             (with-handler+ :hid2 (fn [x] (reset! sv2_ x)) {:async nil}
+           (with-handler    :hid1 (fn [x] (reset! sig1_ x)) {:async nil}
+             (with-handler+ :hid2 (fn [x] (reset! sig2_ x)) {:async nil}
                (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
 
-           [(is (= @sv1_ "foo") "`with-handler`  macro works")
-            (is (= @sv2_ "foo") "`with-handler+` macro works")])
+           [(is (= @sig1_ "foo") "`with-handler`  macro works")
+            (is (= @sig2_ "foo") "`with-handler+` macro works")])
 
          (let [a (atom nil)
                handlers

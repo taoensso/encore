@@ -1109,7 +1109,7 @@
      not possible for an inner macro to access the &form metadata of an
      outer macro.
 
-     This means that inner macros lose call site information like the
+     This means that inner macros lose callsite information like the
      line number of the outer macro.
 
      This util offers a workaround for macro authors:
@@ -4423,7 +4423,7 @@
 #?(:clj
    (defmacro require-telemere-if-present
      "Experimental, subject to change without notice!
-     Requires Telemere if it's present, otherwise noops.
+     Requires Telemere if it's present, otherwise no-ops.
      For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file.
      Used in cooperation with `signal!`."
      {:added "Encore v3.68.0 (2023-09-25)"}
@@ -4434,8 +4434,8 @@
 #?(:clj
    (defmacro signal!
      "Experimental, subject to change without notice!
-     Expands to Telemere signal call if Telemere is present, otherwise expands
-     to `fallback`.
+     Expands to `taoensso.telemere/signal!` call if Telemere is present,
+     otherwise expands to `fallback`.
 
      MUST be used with `require-telemere-if-present`:
 
@@ -4444,19 +4444,20 @@
 
        (encore/signal! {<signal-opts> :fallback (println \"Prints iff Telemere not present\")})
 
-     For info on signal options, see:
-       - Telemere documentation,                 Ref. <https://tinyurl.com/za3bmeub>
-       - `taoensso.telemere/signal!` docstring,  Ref. <https://tinyurl.com/2r8ba98d>"
+     For info on signals and signal options, see:
+
+       - Telemere's `signal!` docstring, Ref. <https://tinyurl.com/telemere-signal>
+       - Telemere's documentation,       Ref. <https://tinyurl.com/telemere-docs>"
 
      {:added "Encore v3.68.0 (2023-09-25)"
-      :tag #?(:cljs 'boolean :default nil)
       :arglists
+      ;; (taoensso.telemere.impl/signal-arglists :signal!) ; + fallback
       '([{:as opts
           :keys
           [#_defaults #_elide? #_allow? #_callsite-id, fallback,
            elidable? location instant uid middleware,
            sample-rate ns kind id level filter when rate-limit,
-           ctx parent trace?, let data msg error run & user-opts]}])}
+           ctx parent trace?, do let data msg error run & user-opts]}])}
 
      [opts]
      (have? map? opts)

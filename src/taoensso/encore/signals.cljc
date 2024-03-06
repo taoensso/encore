@@ -27,7 +27,7 @@
 
 (def ^:const level-aliases
   "Map of {<level-keyword> <level-integer>} aliases."
-  (enc/nested-merge
+  (conj
     {          :trace 10 :debug 20         :info 50 :warn 60 :error 70 :fatal  80 :report  90
      :low--- 0 :low-- 10 :low-  20 :low 30 :med  50 :high 60 :high+ 70 :high++ 80 :high+++ 90}
     (enc/get-env {:as :edn} :taoensso.encore.signals/level-aliases<.platform><.edn>)))
@@ -640,7 +640,7 @@
      [purpose]
      `(def ~'filtering-help
         ~(api-docstring 11 purpose
-           "Your filter config determines which %s calls will be enabled.
+           "Your filter config determines which %s calls will be allowed.
 
             Filtering can occur at compile-time (=> elision), or runtime.
             Both compile-time and runtime config can be specified via:
@@ -649,6 +649,7 @@
                  classpath resources). See library docs for details.
 
               2. The filter API consting of the following:
+
                 `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
                 `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
                 `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
@@ -660,6 +661,7 @@
             `add-handler!` for details.
 
             See also:
+
               `get-filters`     - to see current filter config
               `get-min-level`   - to see current minimum level
               `without-filters` - to disable all runtime filtering
@@ -696,8 +698,8 @@
      `(defn ~'set-ns-filter!
         ~(api-docstring 11 purpose
            "Sets %s call namespace filter based on given `ns-filter` spec.
-
            `ns-filter` may be:
+
              - A regex pattern of namespace/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
@@ -728,8 +730,8 @@
      `(defn ~'set-kind-filter!
         ~(api-docstring 11 purpose
            "Sets %s call kind filter based on given `kind-filter` spec.
-
            `kind-filter` may be:
+
              - A regex pattern of kind/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
@@ -773,8 +775,8 @@
      `(defn ~'set-id-filter!
         ~(api-docstring 11 purpose
            "Sets %s call id filter based on given `id-filter` spec.
-
            `id-filter` may be:
+
              - A regex pattern of id/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
@@ -794,8 +796,8 @@
        `(defn ~'set-min-level!
           ~(api-docstring 13 purpose
              "Sets minimum %s call level based on given `min-level` spec.
-
              `min-level` may be:
+
                - An integer.
                - A level keyword (see `level-aliases` var for details).
 
@@ -820,8 +822,8 @@
        `(defn ~'set-min-level!
           ~(api-docstring 13 purpose
              "Sets minimum %s call level based on given `min-level` spec.
-
              `min-level` may be:
+
                - An integer.
                - A level keyword (see `level-aliases` var for details).
 
@@ -948,6 +950,7 @@
      `(def ~'handlers-help
         ~(api-docstring 11 purpose
            "The handler API consists of the following:
+
              `get-handlers`    - Returns info on currently registered handlers
              `add-handler!`    - Used to   register handlers
              `remove-handler!` - Used to unregister handlers
@@ -997,6 +1000,7 @@
            now registered.
 
            `handler-fn` should be a fn of 1-2 arities:
+
              ([handler-arg]) => Handle the given argument (e.g. write to disk/db, etc.)
              ([]) => Optional arity, called exactly once on system shutdown.
                      Provides an opportunity for handler to close/release
@@ -1005,11 +1009,13 @@
            See the relevant docstring/s for `handler-arg` details.
 
            Handler ideas:
+
              Save to a db, `tap>`, log, `put!` to an appropriate `core.async`
              channel, filter, aggregate, use for a realtime analytics dashboard,
              examine for outliers or unexpected data, etc.
 
            Dispatch options include:
+
              `async` (Clj only)
                 Options for running handler asynchronously via `taoensso.encore/runner`,
                 {:keys [mode buffer-size n-threads daemon-threads? ...]}
@@ -1060,13 +1066,13 @@
 
            Flow sequence:
 
-             1. Per call (n=1):
+             1. Per call (n=1)
                a. Sampling
                b. Filtering (namespace, kind, id, level, filter-fn)
                c. Rate limiting
                d. Middleware
 
-             2. Per handler (n>=0):
+             2. Per handler (n>=0)
                a. Sampling
                b. Filtering (namespace, kind, id, level, filter-fn)
                c. Rate limiting
