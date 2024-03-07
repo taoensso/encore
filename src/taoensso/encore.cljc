@@ -4456,7 +4456,7 @@
           :keys
           [#_defaults #_elide? #_allow? #_callsite-id, fallback,
            elidable? location instant uid middleware,
-           sample-rate ns kind id level filter when rate-limit,
+           sample-rate ns kind id level when rate-limit,
            ctx parent trace?, do let data msg error run & user-opts]}])}
 
      [opts]

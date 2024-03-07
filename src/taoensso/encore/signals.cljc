@@ -415,16 +415,16 @@
                          4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
                          (unexpected-sf-artity! sf-arity `callsite-filter))
 
-                       filter-form
-                       (when-let [filter-form (enc/get1 opts :filter :when nil)]
-                         `(let [~'this-callsite-id ~callsite-id] ~filter-form))
+                       when-form
+                       (when-let [when-form (get opts :when)]
+                         `(let [~'this-callsite-id ~callsite-id] ~when-form))
 
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form   (get opts :rate-limit)]
                          (let    [rl-rid-form (get opts :rl-rid)] ; Advanced, undocumented
                            `(if (callsite-limit!? ~callsite-id ~spec-form ~rl-rid-form) false true)))]
 
-                   `(and ~@(filter some? [sample-rate-form sf-form filter-form rl-form]))))]
+                   `(and ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
@@ -501,7 +501,7 @@
   [handler-id handler-fn, base-dispatch-opts dispatch-opts]
   (let [dispatch-opts (enc/nested-merge default-dispatch-opts base-dispatch-opts dispatch-opts)
         {:keys
-         [#?(:clj async) priority sample-rate rate-limit filter-fn middleware,
+         [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
           ns-filter kind-filter id-filter min-level,
           rl-error rl-backup error-fn backp-fn]}
         dispatch-opts
@@ -542,7 +542,7 @@
                      (and
                        (if sample-rate (< (Math/random) (double sample-rate))  true)
                        (if sig-filter* (allow-signal? signal sig-filter*)      true)
-                       (if filter-fn   (filter-fn #_signal)                    true)
+                       (if when-fn     (when-fn #_signal)                      true)
                        (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
                        )]
 
@@ -1039,7 +1039,7 @@
              `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
              `min-level`   - Minimum   level  as in `set-min-level!`
 
-             `filter-fn`
+             `when-fn`
                Optional nullary (fn allow? []) that must return truthy for handler to be
                called. When present, called *after* sampling and other filters, but before
                rate limiting.
@@ -1068,13 +1068,13 @@
 
              1. Per call (n=1)
                a. Sampling
-               b. Filtering (namespace, kind, id, level, filter-fn)
+               b. Filtering (kind, namespace, id, level, when-form)
                c. Rate limiting
                d. Middleware
 
              2. Per handler (n>=0)
                a. Sampling
-               b. Filtering (namespace, kind, id, level, filter-fn)
+               b. Filtering (kind, namespace, id, level, when-fn)
                c. Rate limiting
                d. Middleware
                e. Hander fn
@@ -1088,7 +1088,7 @@
           '([handler-id handler-fn]
             [handler-id handler-fn
              {:as   dispatch-opts
-              :keys [async priority sample-rate rate-limit filter-fn middleware,
+              :keys [async priority sample-rate rate-limit when-fn middleware,
                      ns-filter kind-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
