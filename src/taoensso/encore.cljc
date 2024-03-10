@@ -4467,8 +4467,10 @@
                 (require 'taoensso.telemere) ; For macro expansion
          (keep-callsite `(taoensso.telemere/signal! ~(dissoc opts :fallback))))
 
-       `(let  ~(get opts :let []) ; Currently undocumented
-          (do ~(get opts :fallback))))))
+       `(do
+                ~(get opts :do)     ; Currently undocumented
+          (let  ~(get opts :let []) ; ''
+            (do ~(get opts :fallback)))))))
 
 (comment
   (macroexpand
