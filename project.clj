@@ -10,16 +10,16 @@
   :test-paths ["test" #_"src"]
 
   :dependencies
-  [[org.clojure/tools.reader "1.4.0"]
+  [[org.clojure/tools.reader "1.4.1"]
    [com.taoensso/truss       "1.11.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
               :dependencies [[org.clojure/clojurescript "1.11.132"]
-                             [org.clojure/clojure       "1.11.1"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0-alpha8"]]}
-   :c1.11    {:dependencies [[org.clojure/clojure       "1.11.1"]]}
+                             [org.clojure/clojure       "1.11.2"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0-alpha9"]]}
+   :c1.11    {:dependencies [[org.clojure/clojure       "1.11.2"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
 
@@ -30,7 +30,7 @@
     :aot [taoensso.graal-tests]
     :uberjar-name "graal-tests.jar"
     :dependencies
-    [[org.clojure/clojure                  "1.11.1"]
+    [[org.clojure/clojure                  "1.11.2"]
      [com.github.clj-easy/graal-build-time "1.0.5"]]}
 
    :dev
