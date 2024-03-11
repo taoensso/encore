@@ -316,10 +316,10 @@
 
 ;;;; Expansion filtering
 
-#?(:clj (enc/defonce callsite-counter (enc/counter)))
+#?(:clj (enc/defonce expansion-counter (enc/counter)))
 
 (let [rate-limiters_ (enc/latom {})]
-  (defn callsite-limit!?
+  (defn expansion-limit!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag boolean})
     [rl-id spec req-id]
@@ -329,7 +329,7 @@
             (rate-limiters_       rl-id #(or % (enc/rate-limiter {} spec))))]
       (if (rl req-id) true false))))
 
-(comment (enc/qb 1e6 (callsite-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 122.12
+(comment (enc/qb 1e6 (expansion-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 122.12
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
@@ -349,7 +349,7 @@
 #?(:clj
    (defn filterable-expansion
      "Low-level util for writing macros with compile-time and runtime filtering.
-     Returns {:keys [callsite-id location elide? allow?]}.
+     Returns {:keys [expansion-id location elide? allow?]}.
 
      Caller is responsible for protecting against possible multiple eval of
      forms in `opts`."
@@ -357,7 +357,7 @@
      {:arglists
       '([{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}]
         [{:keys
-          [elide? allow? callsite-id,
+          [elide? allow? expansion-id,
            elidable? location sample-rate ns kind id level filter/when rate-limit rl-rid]}])}
 
      [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]} opts]
@@ -393,10 +393,10 @@
                            :id    (enc/const-form    id-form)
                            :level (enc/const-form level-form)})))))
 
-           ;; Unique id for this callsite expansion, changes on every eval.
-           ;; Means rate limiter will get reset on eval during REPL work, etc.
-           callsite-id (get opts :callsite-id (callsite-counter))
-           base-rv {:callsite-id callsite-id, :location location}]
+           ;; Unique id for this expansion, changes on every eval.
+           ;; So rate limiter will get reset on eval during REPL work, etc.
+           expansion-id (get opts :expansion-id (expansion-counter))
+           base-rv {:expansion-id  expansion-id, :location location}]
 
        (if elide?
          (assoc base-rv :elide? true)
@@ -413,16 +413,16 @@
                          2 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form                     ~level-form) true)
                          3 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form            ~id-form ~level-form) true)
                          4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
-                         (unexpected-sf-artity! sf-arity `callsite-filter))
+                         (unexpected-sf-artity! sf-arity `expansion-filter))
 
                        when-form
                        (when-let [when-form (get opts :when)]
-                         `(let [~'this-callsite-id ~callsite-id] ~when-form))
+                         `(let [~'this-expansion-id ~expansion-id] ~when-form))
 
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form   (get opts :rate-limit)]
                          (let    [rl-rid-form (get opts :rl-rid)] ; Advanced, undocumented
-                           `(if (callsite-limit!? ~callsite-id ~spec-form ~rl-rid-form) false true)))]
+                           `(if (expansion-limit!? ~expansion-id ~spec-form ~rl-rid-form) false true)))]
 
                    `(and ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 

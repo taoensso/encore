@@ -4454,7 +4454,7 @@
       ;; (taoensso.telemere.impl/signal-arglists :signal!) ; + fallback
       '([{:as opts
           :keys
-          [#_defaults #_elide? #_allow? #_callsite-id, fallback,
+          [#_defaults #_elide? #_allow? #_expansion-id, fallback,
            elidable? location instant uid middleware,
            sample-rate ns kind id level when rate-limit,
            ctx parent trace?, do let data msg error run & user-opts]}])}

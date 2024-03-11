@@ -1349,9 +1349,9 @@
 
    (testing "Filterable expansion"
      [(is (enc/submap? (sig-exp {:level :info})
-            {:callsite-id (enc/pred nat-int?)
-             :allow?      (enc/pred enc/call-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
-             :elide?      :submap/nx
+            {:expansion-id (enc/pred nat-int?)
+             :allow?       (enc/pred enc/call-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
+             :elide?       :submap/nx
              :location
              {:ns     (enc/pred string?)
               :line   (enc/pred nat-int?)
@@ -1366,15 +1366,15 @@
          (is (enc/submap? (sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
       (is (enc/submap? (sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
-      (is (enc/submap? (sig-exp {:level :info, :ns "my-ns", :kind :my-sig-kind, :id :my-sig-id, :callsite-id -1
+      (is (enc/submap? (sig-exp {:level :info, :ns "my-ns", :kind :my-sig-kind, :id :my-sig-id, :expansion-id -1
                                  :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
-            {:callsite-id -1
+            {:expansion-id -1
              :allow?
              '(clojure.core/and
                (clojure.core/< (Math/random) 0.5)
                (clojure.core/if-let [sf taoensso.encore-tests/*rt-sig-filter*] (sf "my-ns" :my-sig-kind :my-sig-id :info) true)
-               (clojure.core/let [this-callsite-id -1] (> 1 0))
-               (if (taoensso.encore.signals/callsite-limit!? -1 [[1 1000]] nil) false true))})
+               (clojure.core/let [this-expansion-id -1] (> 1 0))
+               (if (taoensso.encore.signals/expansion-limit!? -1 [[1 1000]] nil) false true))})
         "Full `allow?` expansion")])])
 
 ;;;;
