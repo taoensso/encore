@@ -636,9 +636,9 @@
     nil))
 
 #?(:clj
-   (defn- api:filtering-help
+   (defn- api:help:filters
      [purpose]
-     `(def ~'filtering-help
+     `(def ~'help:filters
         ~(api-docstring 11 purpose
            "Your filter config determines which %s calls will be allowed.
 
@@ -671,7 +671,7 @@
 
         "See docstring")))
 
-(comment (api:filtering-help "purpose"))
+(comment (api:help:filters "purpose"))
 
 #?(:clj
    (defn- api:get-filters
@@ -918,7 +918,7 @@
 
        `(do
           (enc/defalias level-aliases)
-          ~(api:filtering-help  purpose)
+          ~(api:help:filters    purpose)
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
 
           ~(api:without-filters purpose *rt-sig-filter*)
@@ -945,9 +945,9 @@
   (do           (def-filter-api {:sf-arity 3 :*rt-sig-filter* *my-rt-sig-filter*})))
 
 #?(:clj
-   (defn- api:handlers-help
+   (defn- api:help:handlers
      [purpose]
-     `(def ~'handlers-help
+     `(def ~'help:handlers
         ~(api-docstring 11 purpose
            "The handler API consists of the following:
 
@@ -962,7 +962,7 @@
 
         "See docstring")))
 
-(comment (api:handlers-help "purpose"))
+(comment (api:help:handlers "purpose"))
 
 #?(:clj
    (defn- api:get-handlers
@@ -1148,7 +1148,7 @@
      ;; `purpose` ∈ #{"signal" "profiling" "logging"}
 
      `(do
-        ~(api:handlers-help   purpose)
+        ~(api:help:handlers   purpose)
         ~(api:get-handlers    purpose *sig-handlers*)
         ~(api:remove-handler! purpose *sig-handlers*)
         ~(api:add-handler!    purpose *sig-handlers* base-dispatch-opts)
