@@ -4444,17 +4444,18 @@
 
        (encore/signal! {<signal-opts> :fallback (println \"Prints iff Telemere not present\")})
 
-     For info on signals and signal options, see:
+     For more info, see:
 
-       - Telemere's `signal!` docstring, Ref. <https://tinyurl.com/telemere-signal>
-       - Telemere's documentation,       Ref. <https://tinyurl.com/telemere-docs>"
+       - Telemere `signal!` docstring, Ref. <https://tinyurl.com/telemere-signal>
+       - Telemere documentation,       Ref. <https://tinyurl.com/telemere-docs>"
 
      {:added "Encore v3.68.0 (2023-09-25)"
       :arglists
       ;; (taoensso.telemere.impl/signal-arglists :signal!) ; + fallback
       '([{:as opts
           :keys
-          [#_defaults #_elide? #_allow? #_expansion-id, fallback,
+          [#_defaults #_elide? #_allow? #_expansion-id, ; Undocumented
+           fallback, ; Unique to `encore/signal!`
            elidable? location instant uid middleware,
            sample-rate ns kind id level when rate-limit,
            ctx parent trace?, do let data msg error run & user-opts]}])}
