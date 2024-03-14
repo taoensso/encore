@@ -699,24 +699,6 @@
   (defaliases {:alias myfn2 :src myfn :body (fmemoize myfn)})
   (myfn2 1 1))
 
-#?(:clj
-   (defmacro ^:no-doc deftype-print-methods
-     "Private, don't use."
-     {:added "Encore v3.57.0 (2023-03-29)"}
-     [& types]
-     `(do
-        ~@(map
-            (fn [type]
-              `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
-                 (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
-
-(comment
-  (do
-    (deftype   Foo [] Object (toString [x] "Foo[]"))
-    (defrecord Bar [] Object (toString [x] "Bar{}"))
-    (deftype-print-methods Foo Bar)
-    [(str (Foo.) " " (Bar.)) (Foo.) (Bar.)]))
-
 ;;;; Truss aliases (for back compatibility, convenience)
 
 #?(:clj
@@ -728,69 +710,6 @@
      (defalias with-truss-data taoensso.truss/with-data)))
 
 (defalias get-truss-data taoensso.truss/get-data)
-
-;;;; Edn
-
-(declare map-keys)
-
-(defn read-edn
-  "Attempts to pave over differences in:
-    `clojure.edn/read-string`, `clojure.tools.edn/read-string`,
-    `cljs.reader/read-string`, `cljs.tools.reader/read-string`.
-   `cljs.reader` in particular can be a pain."
-
-  ([     s] (read-edn nil s))
-  ([opts s]
-   ;; First normalize behaviour for unexpected inputs:
-   (if (or (nil? s) (identical? s ""))
-     nil
-     (if-not (string? s)
-       (throw
-         (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
-           {:arg {:value s, :type (type s)}}))
-
-       (let [readers (get opts :readers ::dynamic)
-             default (get opts :default ::dynamic)
-
-             ;; Nb we ignore as implementation[1] detail:
-             ;;  *.tools.reader/*data-readers*,
-             ;;  *.tools.reader/default-data-reader-fn*
-             ;;
-             ;; [1] Lib consumer doesn't care that we've standardized to
-             ;;     using tools.reader under the covers
-
-             readers
-             (if-not (identical-kw? readers ::dynamic)
-               readers
-               #?(:clj  clojure.core/*data-readers*
-
-                  ;; Unfortunate (slow), but faster than gc'd memoization in most cases:
-                  :cljs (map-keys symbol @cljs.reader/*tag-table*)))
-
-             default
-             (if-not (identical-kw? default ::dynamic)
-               default
-               #?(:clj  clojure.core/*default-data-reader-fn*
-                  :cljs @cljs.reader/*default-data-reader-fn*))
-
-             opts (assoc opts :readers readers :default default)]
-
-         #?(:clj  (clojure.tools.reader.edn/read-string opts s)
-            :cljs    (cljs.tools.reader.edn/read-string opts s)))))))
-
-(defn pr-edn
-  "Prints arg to an edn string readable with `read-edn`."
-  ([      x] (pr-edn nil x))
-  ([_opts x]
-   #?(:cljs (binding [*print-level* nil, *print-length* nil] (pr-str x))
-      :clj
-      (let [sw (java.io.StringWriter.)]
-        (binding [*print-level* nil, *print-length* nil,
-                  ;; *out* sw, *print-dup* false
-                  ]
-          ;; (pr x)
-          (print-method x sw) ; Bypass *out*, *print-dup*
-          (.toString sw))))))
 
 ;;;; Forms
 ;; Useful for macros, etc.
@@ -3953,35 +3872,6 @@
 
 ;;;; Strings
 
-(def* ^:const newline  "Single system newline" {:added "Encore v3.68.0 (2023-09-25)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
-(def* ^:const newlines "Double system newline" {:added "Encore v3.68.0 (2023-09-25)"} (str newline newline))
-
-(defn print1
-  "Prints given argument as string, and flushes output stream."
-  {:added "Encore v3.68.0 (2023-09-25)"}
-  [x]
-  #?(:cljs (print (str x))
-     :clj
-     (let [out *out*]
-       (.append out (str x))
-       (.flush  out)
-       nil)))
-
-(defn println-atomic
-  "Like `core/println` but won't interleave content from different threads."
-  {:added "Encore v3.68.0 (2023-09-25)"}
-  [x]
-  #?(:cljs (println x)
-     :clj
-     (let [sw  (java.io.StringWriter.)
-           out *out*]
-       (binding [*print-readably* nil]
-         (print-method x sw))
-       (.append out (str sw newline))
-       (when *flush-on-newline*
-         (.flush out))
-       nil)))
-
 (defn str-builder?
   #?(:cljs {:tag 'boolean})
   [x]
@@ -4438,6 +4328,205 @@
              (keyword? x) (keyword s)
              (symbol?  x) (symbol  s)
              :else                 s)))))))
+
+;;;; Printing
+;; - `str`   ; For human consumption        ; *print-readably?* ignored        ; =>   "my-str"
+;; - `pr`    ; For `read-string`/`read-edn` ; *print-readably?* default (true) ; => "\"my-str\""
+;; - `print` ; For human consumption        ; *print-readably?* -> false       ; =>   "my-str"
+;; - `pr/int`: (if *print-dup* print-method print-dup)
+
+(def* ^:const newline  "Single system newline" {:added "Encore v3.68.0 (2023-09-25)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
+(def* ^:const newlines "Double system newline" {:added "Encore v3.68.0 (2023-09-25)"} (str newline newline))
+
+(defn ^:no-doc x->edn
+  "Private, don't use."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :tag #?(:clj 'String :cljs 'string)}
+  [add-newline? x]
+  #?(:cljs
+     (binding [*print-level* nil, *print-length* nil]
+       (if add-newline?
+         (prn-str [x])
+         (pr-str  [x])))
+
+     :clj
+     (if (and (nil? *print-level*) (nil? *print-length*))
+       ;; Optimization, don't pay for unnecessary binding
+       (let [w (java.io.StringWriter.)]
+         (print-method x w) ; Bypass *print-dup*
+         (when add-newline? (.write w newline))
+         (.toString w))
+
+       (binding* [*print-level* nil, *print-length* nil]
+         (let [w (java.io.StringWriter.)]
+           (print-method x w) ; Bypass *print-dup*
+           (when add-newline? (.write w newline))
+           (.toString w))))))
+
+(defn ^:no-doc x->str
+  "Private, don't use."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :tag #?(:clj 'String :cljs 'string)}
+  [readably? add-newline? x]
+  #?(:cljs
+     (if readably?
+       (if add-newline? (prn-str     x) (pr-str    x))
+       (if add-newline? (println-str x) (print-str x)))
+
+     :clj
+     (if readably?
+       (if (string? x)
+         (str "\"" x "\"" (when add-newline? newline))
+         (let [w (java.io.StringWriter.)]
+           (if *print-dup*
+             (print-dup    x w)
+             (print-method x w))
+           (when add-newline? (.write w newline))
+           (.toString w)))
+
+       (if (string? x)
+         (if add-newline? (str x newline) x)
+         (let [w (java.io.StringWriter.)]
+           (binding* [*print-readably* nil] (print-method x w))
+           (when add-newline? (.write w newline))
+           (.toString w))))))
+
+(defn ^:no-doc xs->str
+  "Private, don't use."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :tag #?(:clj 'String :cljs 'string)}
+  [readably? add-newline? xs]
+  #?(:cljs
+     (if readably?
+       (if add-newline? (apply prn-str     xs) (apply pr-str    xs))
+       (if add-newline? (apply println-str xs) (apply print-str xs)))
+
+     :clj
+     (let [w (java.io.StringWriter.)
+           started?_ (volatile! false)]
+
+       (if readably?
+         (let [dup? *print-dup*]
+           (doseq [x xs]
+             (if (.deref started?_) (.write w " ") (vreset! started?_ true))
+             (if dup?
+               (print-dup    x w)
+               (print-method x w)))
+
+           (doseq [x xs]
+             (if (.deref started?_) (.write w " ") (vreset! started?_ true))
+             (print-method x w))))
+
+       (when add-newline? (.write w newline))
+       (.toString w))))
+
+(defn pr-edn
+  "Prints given arg to an edn string readable with `read-edn`."
+  {:tag #?(:clj 'String :cljs 'string)}
+  [x] (x->edn false x))
+
+(comment (let [x {:foo "hello world"}] (qb 1e5 (pr-edn x) (pr-str x)))) ; [86.09 107.85]
+
+#?(:cljs (def* print*   "Identical to `core/print`."   {:added "Encore vX.Y.Z (YYYY-MM-DD)" :tag 'string} print))
+#?(:cljs (def* println* "Identical to `core/println`." {:added "Encore vX.Y.Z (YYYY-MM-DD)" :tag 'string} println))
+
+#?(:clj
+   (defn print*
+     "Like `core/print` but faster and atomic (avoids interleaved content from
+     different threads). Produces output for human consumption. See also `println*`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ^String [& args] (.write *out* (xs->str false false args))))
+
+#?(:clj
+   (defn println*
+     "Like `core/println` but faster and atomic (avoids interleaved content from
+     different threads). Produces output for human consumption. See also `print*`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ^String [& args]
+     (let [w *out*]
+       (.write w (xs->str false true args))
+       (when *flush-on-newline* (.flush w)))))
+
+(comment
+  (qb 1e6 ; [733.26 324.08]
+    (with-out-str (println  :a :b))
+    (with-out-str (println* :a :b))))
+
+(defn read-edn
+  "Reads given edn string to return a Clj/s object."
+  {:arglists
+   '([s] [{:keys [readers default] :as opts
+           :or   {readers #?(:clj  clojure.core/*data-readers*
+                             :cljs @cljs.reader/*tag-table*)
+                  default #?(:clj  clojure.core/*default-data-reader-fn*
+                             :cljs @cljs.reader/*default-data-reader-fn*)}}])}
+
+  ([     s] (read-edn nil s))
+  ([opts s]
+   (cond
+     ;; First normalize behaviour for unexpected inputs:
+     (or (nil? s) (= s "")) nil
+     (not (string? s))
+     (throw
+       (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
+         {:arg {:value s, :type (type s)}}))
+
+     :else
+     (let [readers (get opts :readers ::dynamic)
+           readers
+           (if-not (identical-kw? readers ::dynamic)
+             readers
+             #?(:clj  clojure.core/*data-readers*
+                :cljs @cljs.reader/*tag-table*))
+
+           default (get opts :default ::dynamic)
+           default
+           (if-not (identical-kw? default ::dynamic)
+             default
+             #?(:clj  clojure.core/*default-data-reader-fn*
+                :cljs @cljs.reader/*default-data-reader-fn*))
+
+           opts (assoc opts :readers readers :default default)]
+
+       #?(:clj (clojure.tools.reader.edn/read-string opts s)
+          :cljs   (cljs.tools.reader.edn/read-string opts s))))))
+
+(comment
+  (binding [*data-readers* {'my.tag/foo (fn [x] x)}]
+    (read-edn "#my.tag/foo \"text\"")))
+
+#?(:clj
+   (defmacro ^:no-doc def-print-impl
+     "Private, don't use."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [[sym type] form]
+     (if (:ns &env)
+       `(extend-protocol IPrintWithWriter ~type (-pr-writer [~'sym w _] (-write w ~form)))
+       `(defmethod print-method ~type
+          [~sym ~(with-meta 'w {:tag 'java.io.Writer})]
+          (.write ~'w ~form)))))
+
+#?(:clj
+   (defmacro ^:no-doc def-print-dup
+     "Private, don't use."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [[sym type] form]
+     `(defmethod print-dup ~type
+        [~sym ~(with-meta 'w {:tag 'java.io.Writer})]
+        (.write ~'w ~form))))
+
+(comment
+  (do
+    (deftype MyType [] Object (toString [x] "MyType[]"))
+    (remove-method print-method MyType)
+    (remove-method print-dup    MyType))
+
+  {:str          (str    (MyType.))
+   :print-method (pr-str (MyType.))
+   :print-dup    (binding [*print-dup* true] (pr-str (MyType.)))}
+
+  (def-print-impl [x MyType] (str x))
+  (def-print-dup  [x MyType] (str x)))
 
 ;;;; Signals (opt-in Telemere integration)
 
@@ -7035,13 +7124,24 @@
   (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
   (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
+  (def* ^:no-doc println-atomic "Prefer `println*`."      {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} println*)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
        (defmacro ^:no-doc ^:deprecated do-false [& body] `(do ~@body false))
-       (defmacro ^:no-doc ^:deprecated do-true  [& body] `(do ~@body true)))))
+       (defmacro ^:no-doc ^:deprecated do-true  [& body] `(do ~@body true))))
+
+  #?(:clj
+     (defmacro ^:no-doc deftype-print-methods "Prefer `def-print`."
+       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [& types]
+       `(do
+          ~@(map
+              (fn [type]
+                `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
+                   (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types)))))
 
 (deprecated
   #?(:clj
