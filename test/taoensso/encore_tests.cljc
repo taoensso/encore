@@ -1029,6 +1029,27 @@
            (let [sf (assoc sf :el3 3)
                  st (assoc st :thaw/skip-unknown? true)]   (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))]))]))
 
+;;;; Printing
+
+(deftest _printing
+  (vec
+    (for [args
+          [[nil] ["s"] [:kw] ['sym] [8]
+           [[nil "s" :kw 'sym 8]] {:k1 nil, :k2 "s", :k3 :kw, :k4 'sym, :k5 8}
+           [nil "s"] ["s" nil] ["s" nil nil "s" nil "s"]
+           [nil "s" #{{:k1 ["s" "s" :kw 'sym #{8 "s" :kw} {:k1 {:k2 {:k3a "s" :k3b nil}}}] :k2 nil}} nil "s" nil]]
+
+          [fenc fref]
+          [[enc/pr      pr]
+           [enc/prn     prn]
+           [enc/print   print]
+           [enc/println println]]]
+
+      (is (=
+            (with-out-str (apply fenc args))
+            (with-out-str (apply fref args)))
+        "Print output matches under default print options"))))
+
 ;;;; Signal filtering
 
 (defn- sf-allow?
