@@ -505,8 +505,8 @@
 #?(:clj
    (defmacro def*
      "Like `core/def` but supports attrs map."
-     {:style/indent 1
-      :added "Encore v3.67.0 (2023-09-08)"}
+     {:added "Encore v3.67.0 (2023-09-08)"
+      :style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
@@ -4458,7 +4458,7 @@
            fallback, ; Unique to `encore/signal!`
            elidable? location instant uid middleware,
            sample-rate ns kind id level when rate-limit,
-           ctx parent trace?, do let data msg error run & user-opts]}])}
+           ctx parent trace?, do let data msg error run & extra-kvs]}])}
 
      [opts]
      (have? map? opts)
