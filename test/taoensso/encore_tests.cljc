@@ -380,7 +380,7 @@
    (is (= (enc/get-substr-by-idx "123456789"  0   1) "1"        ))
    (is (= (enc/get-substr-by-idx "123456789"  0  -1) "12345678" ))
    (is (= (enc/get-substr-by-idx "123456789"  0  -5) "1234"     ))
-   (is (= (enc/get-substr-by-idx "123456789" -5  -3)      "56"  ))
+   (is (= (enc/get-substr-by-idx "123456789" -5  -3)     "56"   ))
    (is (= (enc/get-substr-by-idx "123456789"  4   3)         nil))])
 
 (deftest  _get-substr-by-len
@@ -393,7 +393,7 @@
    (is (= (enc/get-substr-by-len "123456789"  0   0)         nil))
    (is (= (enc/get-substr-by-len "123456789"  0   1) "1"        ))
    (is (= (enc/get-substr-by-len "123456789"  0  -5)         nil))
-   (is (= (enc/get-substr-by-len "123456789" -5   2)      "56"  ))])
+   (is (= (enc/get-substr-by-len "123456789" -5   2)     "56"   ))])
 
 #?(:clj
    (deftest _hex-strings
@@ -1347,7 +1347,7 @@
          (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
            (let [fn-arg_ (atom nil)]
              (enc/update-var-root! *sig-handlers* (fn [_] nil))
-             (add-handler! :hid1 (fn [_] (Thread/sleep 1000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
+             (add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
              (Thread/sleep 4000) ; Wait for second signal to enqueue
