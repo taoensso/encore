@@ -78,8 +78,6 @@
       [clojure.string  :as str]
       [clojure.set     :as set]
       [clojure.java.io :as jio]
-      [clojure.walk    :as walk :refer [macroexpand-all]]
-      ;; [clojure.core.async    :as async]
       [clojure.tools.reader.edn :as edn]
       [taoensso.truss :as truss])
 
@@ -87,10 +85,8 @@
      (:require
       [clojure.string      :as str]
       [clojure.set         :as set]
-      ;; [cljs.core.async  :as async]
       [cljs.reader]
       [cljs.tools.reader.edn :as edn]
-      ;;[goog.crypt.base64 :as base64]
       [goog.object         :as gobj]
       [goog.array          :as garray]
       [goog.string         :as gstr]
@@ -110,9 +106,7 @@
       [java.text SimpleDateFormat]
       [java.util.concurrent CountDownLatch]
       [java.util.concurrent.atomic AtomicReference]
-      [java.util.function UnaryOperator]
-      ;; [org.apache.commons.codec.binary Base64]
-      )
+      [java.util.function UnaryOperator])
 
      :cljs
      (:require-macros
@@ -345,8 +339,8 @@
 
 ;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
 ;; different code depending on target (Clj/s), something reader conditionals cannot do.
-#?(:clj (defmacro if-clj  {:style/indent 1} [then & [else]] (if (:ns &env) else then)))
-#?(:clj (defmacro if-cljs {:style/indent 1} [then & [else]] (if (:ns &env) then else)))
+#?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
+#?(:clj (defmacro if-cljs [then & [else]] (if (:ns &env) then else)))
 #?(:clj
    (defn compiling-cljs?
      "Return truthy iff currently generating Cljs code.
@@ -505,8 +499,8 @@
 #?(:clj
    (defmacro def*
      "Like `core/def` but supports attrs map."
-     {:style/indent 1
-      :added "Encore v3.67.0 (2023-09-08)"}
+     {:added "Encore v3.67.0 (2023-09-08)"
+      :style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
@@ -865,7 +859,7 @@
                          (:any    :all)     (if cljs? :default  `Throwable)
                          (:common :default) (if cljs? 'js/Error `Exception)
                          (throw
-                           (ex-info "Unexpected `taoensso.encore/try*` catch clause keyword"
+                           (ex-info "[encore/try*] Unexpected catch clause keyword"
                              {:given    {:value s2, :type (type s2)}
                               :expected '#{:any :common}})))]
                    (list* 'catch s2 more))))
@@ -2863,6 +2857,18 @@
    :cas   [102.42        67.85]} ; ~35% faster
   )
 
+#?(:clj
+   (let [cache_ (latom {})]
+     (defn ^:no-doc caching-satisfies?
+       "Private, don't use."
+       [protocol x]
+       (let [t (if (fn? x) ::fn (type x))]
+         (or
+           (get (cache_) t)
+           (if-let [uncachable-type? (re-find #"\d" (str t))]
+             (do               (clojure.core/satisfies? protocol x))
+             (cache_ t (fn [_] (clojure.core/satisfies? protocol x)))))))))
+
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)
 ;; - reset-val!  ; Keys:    1    (optimized)
@@ -3107,20 +3113,6 @@
      (fn [v0] (swapped :swap/dissoc v0)))))
 
 (comment (pull-val! (atom {:a :A}) :b :nx))
-
-;;;;
-
-#?(:clj
-   (let [cache_ (latom {})]
-     (defn ^:no-doc caching-satisfies?
-       "Private, don't use."
-       [protocol x]
-       (let [t (if (fn? x) ::fn (type x))]
-         (or
-           (get (cache_) t)
-           (if-let [uncachable-type? (re-find #"\d" (str t))]
-             (do               (clojure.core/satisfies? protocol x))
-             (cache_ t (fn [_] (clojure.core/satisfies? protocol x)))))))))
 
 ;;;; Instants
 
@@ -4458,7 +4450,7 @@
            fallback, ; Unique to `encore/signal!`
            elidable? location instant uid middleware,
            sample-rate ns kind id level when rate-limit,
-           ctx parent trace?, do let data msg error run & user-opts]}])}
+           ctx parent trace?, do let data msg error run & extra-kvs]}])}
 
      [opts]
      (have? map? opts)
@@ -4516,10 +4508,10 @@
   (def      thread-local-simple-date-format_ (thread-local (SimpleDateFormat. "yyyy-MM-dd")))
   (.format @thread-local-simple-date-format_ (Date.))
 
-  ;; thread-local-proxy is a little faster ; [46.54 77.19]
-  (let [tlp (thread-local-proxy "init-val")
-        tl_ (thread-local       "init-val")]
-    (qb 1e6 (.get ^ThreadLocal tlp) @tl_)))
+  (let [tl_ (thread-local       "init-val")
+        tlp (thread-local-proxy "init-val")]
+    (qb 1e6 ; [30.54 54.03]
+      (.get ^ThreadLocal tlp) @tl_)))
 
 ;;;; (S)RNG, etc.
 
@@ -4721,7 +4713,7 @@
          (if (even? (count s))
            (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
            (throw
-             (ex-info "Invalid hex string (length must be even)"
+             (ex-info "[encore/hex-str->ba] Invalid hex string (length must be even)"
                {:given {:value s, :type (type s)}})))))
 
      ;; TODO Any way to auto select fastest implementation?
@@ -5027,7 +5019,7 @@
                   (let [idx (.indexOf    s "-")] (when (pos? idx) (.substring s 0 idx))) ; "16-ea",    etc.
                   (do                                                         s)))))
           (throw
-            (ex-info "Failed to parse Java version string (unexpected form)"
+            (ex-info "[encore/java-version] Failed to parse Java version string (unexpected form)"
               {:version-string version-string})))))))
 
 #?(:clj
@@ -6596,6 +6588,9 @@
      (let [elide? (get-env {:as :bool} :taoensso.elide-deprecated<.platform>)]
        (when-not elide? `(do ~@body)))))
 
+(do ; Not currently eliding
+  #?(:cljs (def ^:no-doc ^:deprecated js-?win js-?window)))
+
 (deprecated
   (defn ^:no-doc -swap-val!
     "Prefer `latom`."
@@ -7085,6 +7080,3 @@
                (throw
                  (ex-info "[encore/load-edn-config] Error loading edn config"
                    (assoc error-data :opts opts) t)))))))))
-
-(do ; Not currently eliding
-  #?(:cljs (def ^:no-doc ^:deprecated js-?win js-?window)))

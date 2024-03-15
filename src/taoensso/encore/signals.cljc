@@ -114,7 +114,7 @@
 
   (defn allow-name?
     "Low-level name filter."
-    #?(:cljs {:tag boolean})
+    #?(:cljs {:tag 'boolean})
     [nf-spec nf-arg]
     (if ^boolean (nf-conform? nf-spec nf-arg) true false))
 
@@ -130,7 +130,7 @@
   (let [parse-min-level parse-min-level]
     (defn allow-level?
       "Low-level level filter."
-      #?(:cljs {:tag boolean})
+      #?(:cljs {:tag 'boolean})
       ([min-level      level] (if ^boolean (level>= level min-level) true false))
       ([ml-spec nf-arg level]
        (let [min-level (nf->min-level ml-spec nf-arg)]
@@ -321,7 +321,7 @@
 (let [rate-limiters_ (enc/latom {})]
   (defn expansion-limit!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
-    #?(:cljs {:tag boolean})
+    #?(:cljs {:tag 'boolean})
     [rl-id spec req-id]
     (let [rl
           (or
