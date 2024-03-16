@@ -345,8 +345,8 @@
 
 ;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
 ;; different code depending on target (Clj/s), something reader conditionals cannot do.
-#?(:clj (defmacro if-clj  {:style/indent 1} [then & [else]] (if (:ns &env) else then)))
-#?(:clj (defmacro if-cljs {:style/indent 1} [then & [else]] (if (:ns &env) then else)))
+#?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
+#?(:clj (defmacro if-cljs [then & [else]] (if (:ns &env) then else)))
 #?(:clj
    (defn compiling-cljs?
      "Return truthy iff currently generating Cljs code.
