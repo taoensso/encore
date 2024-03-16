@@ -63,7 +63,7 @@
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
-   [if-let if-some if-not when when-not when-some when-let cond defonce
+   [if-let if-some if-not when when-not when-some when-let cond defonce binding
     run! some? ident? float? boolean? uri? indexed? bytes?
     int? pos-int? neg-int? nat-int? inst?
     simple-ident?   qualified-ident?
@@ -119,7 +119,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        def* defonce try* catching binding* -cas!? now-udt* now-nano* min* max*
+        def* defonce try* catching binding -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?]])))
 
@@ -1856,13 +1856,14 @@
 ;;;;
 
 #?(:clj
-   (defmacro binding*
+   (defmacro binding
      "For Clj: faster version of `core/binding`.
      For Cljs: identical to `core/binding`."
-     {:added "Encore v3.92.0 (2024-03-16)"}
+     {:added "Encore v3.92.0 (2024-03-16)"
+      :style/indent 1}
      [bindings & body]
      (if (:ns &env)
-       `(binding ~bindings ~@body)
+       `(cljs.core/binding ~bindings ~@body)
        (let [;; Avoids unnecessary runtime map construction
              bindings-map ; #{<var-form> <val-form>}
              (reduce-kvs (fn [m k v] (assoc m `(var ~k) v))
@@ -1876,8 +1877,8 @@
     (def ^:dynamic *d1* nil)
     (def ^:dynamic *d2* nil)
     (qb 1e6 ; [414.12 312.96]
-      (binding  [*d1* :d1, *d2* :d2])
-      (binding* [*d1* :d1, *d2* :d2]))))
+      (clojure.core/binding [*d1* :d1, *d2* :d2])
+      (binding              [*d1* :d1, *d2* :d2]))))
 
 ;;;; Math
 
@@ -4357,7 +4358,7 @@
          (when add-newline? (.write w newline))
          (.toString w))
 
-       (binding* [*print-level* nil, *print-length* nil]
+       (binding [*print-level* nil, *print-length* nil]
          (let [w (java.io.StringWriter.)]
            (print-method x w) ; Bypass *print-dup*
            (when add-newline? (.write w newline))
@@ -4387,7 +4388,7 @@
        (if (string? x)
          (if add-newline? (str x newline) x)
          (let [w (java.io.StringWriter.)]
-           (binding* [*print-readably* nil] (print-method x w))
+           (binding [*print-readably* nil] (print-method x w))
            (when add-newline? (.write w newline))
            (.toString w))))))
 
