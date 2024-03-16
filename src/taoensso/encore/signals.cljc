@@ -10,9 +10,11 @@
     - May have a kind (type/taxonomy/etc.)"
 
   {:added "Encore v3.68.0 (2023-09-25)"}
+
+  (:refer-clojure :exclude [binding])
   (:require
    [clojure.string  :as str]
-   [taoensso.encore :as enc :refer [have have?]])
+   [taoensso.encore :as enc :refer [binding have have?]])
 
   #?(:cljs
      (:require-macros
