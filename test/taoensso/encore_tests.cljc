@@ -773,9 +773,24 @@
   [(is      (enc/can-meta? []))
    (is (not (enc/can-meta? "foo")))])
 
-(deftest _timestamps
+(deftest _instants
   [(is (true?  (enc/inst? (enc/now-inst))))
-   (is (false? (enc/inst? (enc/now-udt))))])
+   (is (false? (enc/inst? (enc/now-udt))))
+
+   (testing "Conversions"
+     (let [ref-str  "2024-06-09T21:15:20.17Z"
+           ref-udt  1717967720170 #_(.toEpochMilli (java.time.Instant/parse ref-str))
+           ref-inst #?(:clj (java.time.Instant/ofEpochMilli ref-udt) :cljs (js/Date. ref-udt))
+           ref-dt   #?(:clj (java.util.Date. ref-udt) :cljs nil)]
+
+       (vec
+         (for [src [ref-str ref-udt ref-inst #?(:clj ref-dt)]
+               [ref xf]
+               [        [ref-udt  enc/as-udt]
+                        [ref-inst enc/as-inst]
+                #?(:clj [ref-dt   enc/as-dt])]]
+
+           (is (= (xf src) ref) (str "Instant conversion: " src " -> "ref))))))])
 
 ;;;; Futures
 
