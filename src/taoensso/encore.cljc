@@ -123,7 +123,7 @@
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?]])))
 
-(def encore-version [3 91 0])
+(def encore-version [3 92 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1859,7 +1859,7 @@
    (defmacro binding*
      "For Clj: faster version of `core/binding`.
      For Cljs: identical to `core/binding`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.92.0 (2024-03-16)"}
      [bindings & body]
      (if (:ns &env)
        `(binding ~bindings ~@body)
@@ -4340,7 +4340,7 @@
 
 (defn ^:no-doc x->edn
   "Private, don't use."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.92.0 (2024-03-16)"
    :tag #?(:clj 'String :cljs 'string)}
   [add-newline? x]
   #?(:cljs
@@ -4365,7 +4365,7 @@
 
 (defn ^:no-doc x->str
   "Private, don't use."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.92.0 (2024-03-16)"
    :tag #?(:clj 'String :cljs 'string)}
   [readably? add-newline? x]
   #?(:cljs
@@ -4393,7 +4393,7 @@
 
 (defn ^:no-doc xs->str
   "Private, don't use."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.92.0 (2024-03-16)"
    :tag #?(:clj 'String :cljs 'string)}
   [readably? add-newline? xs]
   #?(:cljs
@@ -4427,21 +4427,21 @@
 
 (comment (let [x {:foo "hello world"}] (qb 1e5 (pr-edn x) (pr-str x)))) ; [86.09 107.85]
 
-#?(:cljs (def* print*   "Identical to `core/print`."   {:added "Encore vX.Y.Z (YYYY-MM-DD)" :tag 'string} print))
-#?(:cljs (def* println* "Identical to `core/println`." {:added "Encore vX.Y.Z (YYYY-MM-DD)" :tag 'string} println))
+#?(:cljs (def* print*   "Identical to `core/print`."   {:added "Encore v3.92.0 (2024-03-16)" :tag 'string} print))
+#?(:cljs (def* println* "Identical to `core/println`." {:added "Encore v3.92.0 (2024-03-16)" :tag 'string} println))
 
 #?(:clj
    (defn print*
      "Like `core/print` but faster and atomic (avoids interleaved content from
      different threads). Produces output for human consumption. See also `println*`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.92.0 (2024-03-16)"}
      ^String [& args] (.write *out* (xs->str false false args))))
 
 #?(:clj
    (defn println*
      "Like `core/println` but faster and atomic (avoids interleaved content from
      different threads). Produces output for human consumption. See also `print*`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.92.0 (2024-03-16)"}
      ^String [& args]
      (let [w *out*]
        (.write w (xs->str false true args))
@@ -4498,7 +4498,7 @@
 #?(:clj
    (defmacro ^:no-doc def-print-impl
      "Private, don't use."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.92.0 (2024-03-16)"}
      [[sym type] form]
      (if (:ns &env)
        `(extend-protocol IPrintWithWriter ~type (-pr-writer [~'sym w _] (-write w ~form)))
@@ -4509,7 +4509,7 @@
 #?(:clj
    (defmacro ^:no-doc def-print-dup
      "Private, don't use."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.92.0 (2024-03-16)"}
      [[sym type] form]
      `(defmethod print-dup ~type
         [~sym ~(with-meta 'w {:tag 'java.io.Writer})]
@@ -7124,7 +7124,7 @@
   (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
   (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
-  (def* ^:no-doc println-atomic "Prefer `println*`."      {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} println*)
+  (def* ^:no-doc println-atomic "Prefer `println*`."      {:deprecated "Encore v3.92.0 (2024-03-16)"} println*)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:clj
@@ -7135,7 +7135,7 @@
 
   #?(:clj
      (defmacro ^:no-doc deftype-print-methods "Prefer `def-print`."
-       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "Encore v3.92.0 (2024-03-16)"}
        [& types]
        `(do
           ~@(map
