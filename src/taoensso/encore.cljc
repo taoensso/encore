@@ -1286,9 +1286,7 @@
 
      (defn nat-float? [x] (and (float? x) (not (neg? x))))
      (defn pos-float? [x] (and (float? x)      (pos? x)))
-     (defn neg-float? [x] (and (float? x)      (neg? x)))
-
-     (defn udt?       [x] (and (int? x) (not (neg? x)))))
+     (defn neg-float? [x] (and (float? x)      (neg? x))))
 
    :cljs
    (do
@@ -1306,9 +1304,7 @@
 
      (defn ^boolean nat-float? [x] (and (float? x) (not (neg? x))))
      (defn ^boolean pos-float? [x] (and (float? x)      (pos? x)))
-     (defn ^boolean neg-float? [x] (and (float? x)      (neg? x)))
-
-     (defn ^boolean udt?       [x] (and (int? x) (not (neg? x))))))
+     (defn ^boolean neg-float? [x] (and (float? x)      (neg? x)))))
 
 (defn pnum?
   "Returns true iff given number in unsigned unit proportion interval ∈ℝ[0,1]."
@@ -1382,7 +1378,6 @@
              :clj  (try (Double/parseDouble x)
                         (catch NumberFormatException _ nil)))))
 
-  (defn as-?udt       [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
   (defn as-?nat-int   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
   (defn as-?pos-int   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
   (defn as-?nat-float [x] (when-let [n (as-?float x)] (when-not (neg? ^double n) n)))
@@ -1467,7 +1462,6 @@
     ([  x] (or (as-?nemail   x) (-as-throw :nemail x)))
     ([n x] (or (as-?nemail n x) (-as-throw :nemail x))))
 
-  (defn as-udt         ^long [x] (or (as-?udt         x) (-as-throw :udt         x)))
   (defn as-int         ^long [x] (or (as-?int         x) (-as-throw :int         x)))
   (defn as-nat-int     ^long [x] (or (as-?nat-int     x) (-as-throw :nat-int     x)))
   (defn as-pos-int     ^long [x] (or (as-?pos-int     x) (-as-throw :pos-int     x)))
@@ -3069,64 +3063,205 @@
 (comment (pull-val! (atom {:a :A}) :b :nx))
 
 ;;;; Instants
+;; `inst` - Platform instant (`java.time.Instant` or `js/Date`)
+;; `dt`   - `java.util.Date` (Clj only)
+;; `udt`  - Milliseconds since Unix epoch (pos/neg)
 
 #?(:clj
-   (defn now-udt
-     "Returns current system instant as milliseconds since Unix epoch."
-     {:inline (fn [] `(System/currentTimeMillis))}
-     ^long        []  (System/currentTimeMillis))
+   (do
+     (defn now-inst
+       "Returns current system instant as `java.time.Instant`."
+       {:added "Encore v3.66.0 (2023-08-23)"
+        :inline       (fn [] `(java.time.Instant/now))}
+       ^java.time.Instant []  (java.time.Instant/now))
+
+     (defn now-dt
+       "Returns current system instant as `java.util.Date`."
+       {:inline   (fn  [] `(java.util.Date.))}
+       ^java.util.Date []  (java.util.Date.))
+
+     (defn now-udt
+       "Returns current system instant as milliseconds since Unix epoch."
+       {:inline (fn [] `(System/currentTimeMillis))}
+       ^long        []  (System/currentTimeMillis))
+
+     (defn now-nano
+       "Returns current value of best-resolution time source as nanoseconds."
+       {:inline (fn [] `(System/nanoTime))}
+       ^long        []  (System/nanoTime))
+
+     (defn inst->udt
+       "Returns given `java.time.Instant` as milliseconds since Unix epoch."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+        :inline             (fn [inst] `(.toEpochMilli ~(with-meta inst {:tag 'java.time.Instant})))}
+       ^long [^java.time.Instant inst]  (.toEpochMilli             inst))
+
+     (defn udt->inst
+       "Returns given milliseconds since Unix epoch as `java.time.Instant`."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+        :inline       (fn [msecs-since-epoch] `(java.time.Instant/ofEpochMilli ~msecs-since-epoch))}
+       ^java.time.Instant [msecs-since-epoch]  (java.time.Instant/ofEpochMilli  msecs-since-epoch)))
 
    :cljs
-   (defn now-udt
-     "Returns current system insant as milliseconds since Unix epoch."
-     [] (js/Date.now)))
+   (do
+     (defn now-inst
+       "Returns current system instant as `js/Date`."
+       {:added "Encore v3.66.0 (2023-08-23)"}
+       [] (js/Date.))
+
+     (defn now-udt
+       "Returns current system insant as milliseconds since Unix epoch."
+       [] (js/Date.now))
+
+     (def now-nano
+       "Returns current value of best-resolution time source as nanoseconds."
+       (if-let [perf (oget js-?window "performance")
+                pf   (or
+                       (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
+                       (oget perf "msNow") (oget perf "oNow"))]
+
+         (fn [] (Math/floor (* 1e6 (.call pf perf))))
+         (fn []             (* 1e6 (js/Date.now)))))
+
+     (defn inst->udt
+       "Returns given `js/Date` as milliseconds since Unix epoch."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [inst] (.getTime inst))
+
+     (defn udt->inst
+       "Returns given milliseconds since Unix epoch as `js/Date`."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [msecs-since-epoch] (js/Date. msecs-since-epoch))))
+
+(defn udt? #?(:cljs {:tag 'boolean}) [x] (int? x))
+
+(defn as-?inst
+  "Returns given ?arg as platform instant (`java.time.Instant` or `js/Date`), or nil."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  #?(:clj
+     (cond
+       (instance? java.time.Instant x) x
+       (instance? java.util.Date    x) (.toInstant ^java.util.Date x)
+       (int?                        x) (java.time.Instant/ofEpochMilli x)
+       (string?                     x) (catching (java.time.Instant/parse ^String x)))
+
+     :cljs
+     (cond
+       (instance? js/Date x) x
+       (number?           x) (js/Date. x)
+       (string?           x)
+       (let [x (js/Date. x)]
+         (when-not (js/isNaN x)
+           x)))))
 
 #?(:clj
-   (defn now-dt
-     "Returns current system instant as `java.util.Date`."
-     {:inline   (fn  [] `(java.util.Date.))}
-     ^java.util.Date []  (java.util.Date.))
+   (defn as-?dt
+     "Returns given ?arg as `java.util.Date`, or nil."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [x]
+     (cond
+       (instance? java.time.Instant x) (java.util.Date/from ^java.time.Instant x)
+       (instance? java.util.Date    x) x
+       (int?                        x) (java.util.Date. ^long x)
+       (string?                     x)
+       (catching
+         (java.util.Date/from
+           (java.time.Instant/parse ^String x))))))
 
-   :cljs
-   (defn now-dt
-     "Returns current system instant as `js/Date`."
-     [] (js/Date.)))
+(defn as-?udt
+  "Returns given ?arg as (pos/neg) milliseconds since Unix epoch, or nil."
+  [x]
+  #?(:clj
+     (cond
+       (int?                        x) (long x)
+       (instance? java.time.Instant x) (.toEpochMilli ^java.time.Instant x)
+       (instance? java.util.Date    x) (.getTime      ^java.util.Date    x)
+       (string?                     x)
+       (or
+         (catching (Long/parseLong x))
+         (catching
+           (.toEpochMilli
+             (java.time.Instant/parse ^String x)))))
 
-#?(:clj
-   (defn now-inst
-     "Returns current system instant as `java.time.Instant`."
-     {:added "Encore v3.66.0 (2023-08-23)"
-      :inline       (fn [] `(java.time.Instant/now))}
-     ^java.time.Instant []  (java.time.Instant/now))
+     :cljs
+     (cond
+       (instance? js/Date x) (.getTime x)
+       (number?           x) x
+       (string?           x)
+       (or
+         (let [x (js/Number     x)] (when-not (js/isNaN x) x))
+         (let [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
 
-   :cljs
-   (defn now-inst
-     "Returns current system instant as `js/Date`."
-     {:added "Encore v3.66.0 (2023-08-23)"}
-     [] (js/Date.)))
-
-#?(:clj
-   (defn now-nano
-     "Returns current value of best-resolution time source as nanoseconds."
-     {:inline (fn [] `(System/nanoTime))}
-     ^long        []  (System/nanoTime))
-
-   :cljs
-   (def now-nano
-     "Returns current value of best-resolution time source as nanoseconds."
-     (if-let [perf (oget js-?window "performance")
-              pf   (or
-                     (oget perf "now")   (oget perf "mozNow") (oget perf "webkitNow")
-                     (oget perf "msNow") (oget perf "oNow"))]
-
-       (fn [] (Math/floor (* 1e6 (.call pf perf))))
-       (fn []             (* 1e6 (js/Date.now))))))
+(do     (defn as-inst #?(:cljs [x] :clj ^java.time.Instant [x]) (or (as-?inst x) (-as-throw :inst x))))
+#?(:clj (defn as-dt                        ^java.util.Date [x]  (or (as-?dt   x) (-as-throw :dt   x))))
+(do     (defn as-udt  #?(:cljs [x] :clj              ^long [x]) (or (as-?udt  x) (-as-throw :udt  x))))
 
 ;; Specialist macros to force expanded form (useful for Cljs, other macros, etc.).
-#?(:clj (defmacro ^:no-doc now-udt*    "When possible prefer `now-udt`."   [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
-#?(:clj (defmacro ^:no-doc now-dt*     "When possible prefer `now-dt`."    [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
-#?(:clj (defmacro ^:no-doc now-inst*   "When possible prefer `now-inst` ." [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
-#?(:clj (defmacro ^:no-doc now-nano*   "When possible prefer `now-nano`."  [] (if (:ns &env) `(now-nano)    `(System/nanoTime))))
+#?(:clj (defmacro ^:no-doc now-inst* "Prefer `now-inst` when possible." [] (if (:ns &env) `(js/Date.)    `(java.time.Instant/now))))
+#?(:clj (defmacro ^:no-doc now-dt*   "Prefer `now-dt` when possible."   [] (if (:ns &env) `(js/Date.)    `(java.util.Date.))))
+#?(:clj (defmacro ^:no-doc now-udt*  "Prefer `now-udt` when possible."  [] (if (:ns &env) `(js/Date.now) `(System/currentTimeMillis))))
+#?(:clj (defmacro ^:no-doc now-nano* "Prefer `now-nano` when possible." [] (if (:ns &env) `(now-nano)    `(System/nanoTime))))
+
+(defn format-inst-fn
+  "Experimental, subject to change without notice.
+
+  Returns a (fn format [instant]) that:
+    - Takes a platform instant (`java.time.Instant` or `js/Date`).
+    - Returns a formatted human-readable string.
+
+  Options:
+    `:zone` (Clj only) `java.time.ZoneOffset` (defaults to UTC).
+    `:formatter`
+      `java.time.format.DateTimeFormatter` (Clj) or
+      `goog.i18n.DateTimeFormat` (Cljs),
+
+      Defaults to `ISO8601` formatter (`YYYY-MM-DDTHH:mm:ss.sssZ`),
+      e.g.: \"2011-12-03T10:15:130Z\"."
+
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  ([] (format-inst-fn nil))
+  #?(:cljs
+     ([{:keys [formatter]}]
+      ;; (instance! goog.i18n.DateTimeFormat formatter) ; Not required here
+      (if formatter  ; `goog.i18n.DateTimeFormat`
+        (fn format-instant [instant] (.format formatter instant))
+        (fn format-instant [instant] (.toISOString      instant))))
+
+     :clj
+     ([{:keys [formatter zone]
+        :or
+        {formatter java.time.format.DateTimeFormatter/ISO_INSTANT
+         zone      java.time.ZoneOffset/UTC}}]
+
+      (instance! java.time.format.DateTimeFormatter formatter
+        {:context `format-inst-fn, :param :formatter})
+
+      (when zone
+        (instance! java.time.ZoneOffset zone
+          {:context `format-inst-fn, :param :zone}))
+
+      (let [^java.time.format.DateTimeFormatter ; Thread safe
+            formatter
+            (if-not zone
+              formatter
+              (.withZone
+                ^java.time.format.DateTimeFormatter formatter
+                ^java.time.ZoneOffset               zone))]
+
+        (fn format-instant [^java.time.Instant instant]
+          (.format formatter instant))))))
+
+(let [default-fn (format-inst-fn)]
+  (defn format-inst
+    "Takes a platform instant (`java.time.Instant` or `js/Date`) and
+    returns a formatted human-readable string in `ISO8601` format
+    (`YYYY-MM-DDTHH:mm:ss.sssZ`), e.g. \"2011-12-03T10:15:130Z\"."
+    {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+     :tag #?(:clj 'String :cljs 'string)}
+    [inst] (default-fn inst)))
+
+(comment (format-inst (now-inst)))
 
 ;;;; Memoization
 
@@ -7154,6 +7289,7 @@
   (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} println)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
+  #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} now-inst))
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
