@@ -118,8 +118,8 @@
      (:require-macros
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval
-        if-let if-some if-not when when-not when-some when-let -cond cond
-        def* defonce cond! try* catching -cas!? now-udt* now-nano* min* max*
+        if-let if-some if-not when when-not when-some when-let -cond cond cond!
+        def* defonce try* catching binding* -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?]])))
 
@@ -1933,6 +1933,32 @@
         (if next-colls
           (recur acc next-colls)
           (do    acc))))))
+
+;;;;
+
+#?(:clj
+   (defmacro binding*
+     "For Clj: faster version of `core/binding`.
+     For Cljs: identical to `core/binding`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [bindings & body]
+     (if (:ns &env)
+       `(binding ~bindings ~@body)
+       (let [;; Avoids unnecessary runtime map construction
+             bindings-map ; #{<var-form> <val-form>}
+             (reduce-kvs (fn [m k v] (assoc m `(var ~k) v))
+               {} bindings)]
+         `(do
+            (push-thread-bindings ~bindings-map)
+            (try ~@body (finally (pop-thread-bindings))))))))
+
+(comment
+  (do
+    (def ^:dynamic *d1* nil)
+    (def ^:dynamic *d2* nil)
+    (qb 1e6 ; [414.12 312.96]
+      (binding  [*d1* :d1, *d2* :d2])
+      (binding* [*d1* :d1, *d2* :d2]))))
 
 ;;;; Math
 
