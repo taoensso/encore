@@ -586,7 +586,7 @@
 
 (comment (quote-arglists {:a :A :arglists '([x])}))
 
-#?(:clj (def ^:private alias-src-attrs [:doc :arglists :private :macro :added :deprecated :inline]))
+#?(:clj (def ^:private alias-src-attrs [:doc :arglists :private :macro :added :deprecated :inline :tag]))
 #?(:clj
    (defn ^:no-doc -alias-link-var [dst-var src-var dst-attrs]
      (add-watch src-var dst-var
