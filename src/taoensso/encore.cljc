@@ -4499,22 +4499,26 @@
 #?(:clj
    (defmacro ^:no-doc def-print-impl
      "Private, don't use."
-     {:added "Encore v3.92.0 (2024-03-16)"}
+     {:added "Encore v3.92.0 (2024-03-16)"
+      :style/indent 1}
      [[sym type] form]
      (if (:ns &env)
-       `(extend-protocol IPrintWithWriter ~type (-pr-writer [~'sym w _] (-write w ~form)))
+       `(extend-protocol IPrintWithWriter ~type (-pr-writer [~sym ~'__w ~'_] (-write ~'__w ~form)))
        `(defmethod print-method ~type
-          [~sym ~(with-meta 'w {:tag 'java.io.Writer})]
-          (.write ~'w ~form)))))
+          [~(with-meta sym  {:tag type})
+           ~(with-meta '__w {:tag 'java.io.Writer})]
+          (.write ~'__w ~form)))))
 
 #?(:clj
    (defmacro ^:no-doc def-print-dup
      "Private, don't use."
-     {:added "Encore v3.92.0 (2024-03-16)"}
+     {:added "Encore v3.92.0 (2024-03-16)"
+      :style/indent 1}
      [[sym type] form]
      `(defmethod print-dup ~type
-        [~sym ~(with-meta 'w {:tag 'java.io.Writer})]
-        (.write ~'w ~form))))
+        [~(with-meta sym  {:tag type})
+         ~(with-meta '__w {:tag 'java.io.Writer})]
+        (.write ~'__w ~form))))
 
 (comment
   (do
