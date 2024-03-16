@@ -63,7 +63,7 @@
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
-   [if-let if-some if-not when when-not when-some when-let cond defonce
+   [if-let if-some if-not when when-not when-some when-let cond defonce binding
     run! some? ident? float? boolean? uri? indexed? bytes?
     int? pos-int? neg-int? nat-int? inst?
     simple-ident?   qualified-ident?
@@ -118,8 +118,8 @@
      (:require-macros
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval
-        if-let if-some if-not when when-not when-some when-let -cond cond
-        def* defonce cond! try* catching -cas!? now-udt* now-nano* min* max*
+        if-let if-some if-not when when-not when-some when-let -cond cond cond!
+        def* defonce try* catching binding -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?]])))
 
@@ -357,6 +357,31 @@
          (boolean @v)))))
 
 (comment (compiling-cljs?))
+
+#?(:clj
+   (defmacro binding
+     "For Clj: faster version of `core/binding`.
+     For Cljs: identical to `core/binding`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+      :style/indent 1}
+     [bindings & body]
+     (if (:ns &env)
+       `(cljs.core/binding ~bindings ~@body)
+       (let [;; Avoids unnecessary runtime map construction
+             bindings-map ; #{<var-form> <val-form>}
+             (reduce-kv (fn [m k v] (assoc m `(var ~k) v))
+               {} (apply hash-map bindings))]
+         `(do
+            (push-thread-bindings ~bindings-map)
+            (try ~@body (finally (pop-thread-bindings))))))))
+
+(comment
+  (do
+    (def ^:dynamic *d1* nil)
+    (def ^:dynamic *d2* nil)
+    (qb 1e6 ; [414.12 312.96]
+      (clojure.core/binding [*d1* :d1, *d2* :d2])
+      (binding              [*d1* :d1, *d2* :d2]))))
 
 #?(:clj
    (defmacro ^:no-doc -cond [throw? & clauses]
