@@ -723,6 +723,11 @@
   (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
   (enc/get-env {:as :edn :return :debug} [:p1]))
 
+(def ^:dynamic *dynamic-var* nil)
+
+(deftest _binding
+  (is (= :foo (enc/binding [*dynamic-var* :foo] *dynamic-var*))))
+
 ;;;; Misc
 
 #?(:clj
@@ -828,8 +833,6 @@
    (is (true?  ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobaz)))])
 
 ;;;; Runner
-
-(def ^:dynamic *dynamic-var* nil)
 
 #?(:clj
    (deftest _runner

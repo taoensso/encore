@@ -690,7 +690,7 @@
      [purpose *rt-sig-filter*]
      `(defmacro ~'without-filters
         ~(api-docstring 0 purpose "Executes form without any runtime filters.")
-        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
+        ~'[form] `(enc/binding [~'~*rt-sig-filter* nil] ~~'form))))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -719,7 +719,8 @@
            "Executes form with given %s call namespace filter in effect.
            See `set-ns-filter!` for details.")
         ~'[ns-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
+        `(enc/binding
+           [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
            ~~'form))))
 
 (comment (api:with-ns-filter "purpose" '*my-rt-sig-filter*))
@@ -751,7 +752,8 @@
            "Executes form with given %s call kind filter in effect.
            See `set-kind-filter!` for details.")
         ~'[kind-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
+        `(enc/binding
+           [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
            ~~'form))))
 
 (comment (api:with-kind-filter "purpose" '*my-rt-sig-filter*))
@@ -764,7 +766,8 @@
            "Executes form with given %s call id filter in effect.
            See `set-id-filter!` for details.")
         ~'[id-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
+        `(enc/binding
+           [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
            ~~'form))))
 
 (comment (api:with-id-filter "purpose" '*my-rt-sig-filter*))
@@ -854,11 +857,12 @@
           (~'[               min-level form] (list '~'with-min-level nil    nil ~'min-level ~'form))
           (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
           (~'[kind ns-filter min-level form]
-           `(binding [~'~*rt-sig-filter*
-                      (update-sig-filter ~'~*rt-sig-filter*
-                        {:min-level-fn
-                         (fn [~'old-ml#]
-                           (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
+           `(enc/binding
+              [~'~*rt-sig-filter*
+               (update-sig-filter ~'~*rt-sig-filter*
+                 {:min-level-fn
+                  (fn [~'old-ml#]
+                    (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
               ~~'form)))
 
        (2 3)
@@ -868,11 +872,12 @@
              See `set-min-level!` for details.")
           (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
           (~'[ns-filter min-level form]
-           `(binding [~'~*rt-sig-filter*
-                      (update-sig-filter ~'~*rt-sig-filter*
-                        {:min-level-fn
-                         (fn [~'old-ml#]
-                           (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
+           `(enc/binding
+              [~'~*rt-sig-filter*
+               (update-sig-filter ~'~*rt-sig-filter*
+                 {:min-level-fn
+                  (fn [~'old-ml#]
+                    (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
               ~~'form))))))
 
 (comment (api:with-min-level "purpose" 4 '*my-rt-sig-filter*))
@@ -1119,7 +1124,8 @@
            "Executes form with ONLY the given handler-fn registered.
            Useful for tests/debugging. See also `with-handler+`.")
         ~'[handler-id handler-fn dispatch-opts form]
-        `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+        `(enc/binding
+           [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
            ~~'form))))
 
 (comment (api:with-handler "purpose" '*my-sig-handlers* {:my-opt :foo}))
@@ -1132,7 +1138,8 @@
            "Executes form with the given handler-fn registered.
            Useful for tests/debugging. See also `with-handler`.")
         ~'[handler-id handler-fn dispatch-opts form]
-        `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+        `(enc/binding
+           [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
            ~~'form))))
 
 (comment (api:with-handler+ "purpose" '*my-sig-handlers* {:my-opt :foo}))
