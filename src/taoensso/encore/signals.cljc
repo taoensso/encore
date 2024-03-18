@@ -618,6 +618,18 @@
 
 ;;;; Local API
 
+;; #?(:clj
+;;    (defmacro api:debug [outer]
+;;      (let [code `(defmacro ~'api-debug ~'[inner] `(vector ~~outer ~~'inner))]
+;;        ;; (spit "debug.txt" (str code "\n") :append true)
+;;        code)))
+
+;; (comment
+;;   (macroexpand '(api:debug "o1"))
+;;   (macroexpand '(api-debug "i1"))
+;;   (api:debug "o1")
+;;   (api-debug "i1"))
+
 #?(:clj
    (defn- api-docstring [column purpose doc-template]
      (let [doc (apply format doc-template (repeat 10 purpose))
@@ -691,6 +703,8 @@
      `(defmacro ~'without-filters
         ~(api-docstring 0 purpose "Executes form without any runtime filters.")
         ~'[form] `(enc/binding [~'~*rt-sig-filter* nil] ~~'form))))
+
+(comment (api:without-filters "purpose" '*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -909,12 +923,12 @@
 
 #?(:clj
    (defmacro def-filter-api
-     "Defines signal filter API vars in current ns (`with-ns-filter`,
-     `set-ns-filter!`, etc.)."
+     "Defines signal filter API vars in current ns.
+     NB: Cljs ns will need appropriate `:require-macros`."
      [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter*]
        :or   {purpose "signal"}}]
 
-     ;; `purpose` ∈ #{"signal" "profiling" "logging"}
+     ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
 
      (let [sf-arity (int (or sf-arity -1))]
 
@@ -1146,13 +1160,14 @@
 
 #?(:clj
    (defmacro def-handler-api
-     "Defines signal handler API vars in current ns (`add-handler!`,
-     `remove-handler!`, `get-handlers`), and adds JVM hook to trigger handler
-     shutdown on JVM shutdown."
+     "Defines signal handler API vars in current ns, and adds JVM hook to trigger
+     handler shutdown on JVM shutdown.
+
+     NB: Cljs ns will need appropriate `:require-macros`."
      [{:keys [purpose sf-arity *rt-sig-fiter* *sig-handlers* base-dispatch-opts]
        :or   {purpose "signal"}}]
 
-     ;; `purpose` ∈ #{"signal" "profiling" "logging"}
+     ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
 
      `(do
         ~(api:help:handlers   purpose)
@@ -1175,7 +1190,8 @@
 
 #?(:clj
    (defmacro def-api
-     "Calls both `def-filter-api` and `def-handler-api` with given opts."
+     "Calls both `def-filter-api` and `def-handler-api` with given opts.
+     NB: Cljs ns will need appropriate `:require-macros`."
      [opts]
      `(do
         (def-filter-api  ~opts)
