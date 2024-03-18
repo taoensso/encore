@@ -85,5 +85,5 @@
    "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
 
    "test-clj"   ["with-profile" "+c1.12:+c1.11:+c1.10:+c1.9" "test"]
-   "test-cljs"  ["with-profile" "+test" "cljsbuild"          "test"]
+   "test-cljs"  ["with-profile" "+c1.12" "cljsbuild"         "test"]
    "test-all"   ["do" ["clean"] ["test-clj"] ["test-cljs"]]})
