@@ -14,8 +14,11 @@
       [taoensso.encore-tests
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer1 callsite-outer2
-        with-ns-filter with-kind-filter with-id-filter with-min-level sig-exp]])))
+        callsite-inner callsite-outer1 callsite-outer2 sig-exp
+
+        ;; For `sigs/def-api`
+        #_api-debug without-filters with-kind-filter with-ns-filter with-id-filter
+        with-min-level with-handler with-handler+]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -1161,6 +1164,9 @@
       (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:default 20} 10])))])])
 
 ;;;;
+
+;; (sigs/api:debug :o1)
+;; (is (= (api-debug :i1) [:o1 :i1]))
 
 (do
   (def ^:dynamic *sig-handlers*  nil)
