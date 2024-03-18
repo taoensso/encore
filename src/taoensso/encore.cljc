@@ -125,7 +125,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-limits]])))
 
-(def encore-version [3 91 0])
+(def encore-version [3 95 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -1855,7 +1855,7 @@
    (defmacro binding
      "For Clj: faster version of `core/binding`.
      For Cljs: identical to `core/binding`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+     {:added "Encore v3.95.0 (2024-03-19)"
       :style/indent 1}
      [bindings & body]
      (if (:ns &env)
@@ -3094,13 +3094,13 @@
 
      (defn inst->udt
        "Returns given `java.time.Instant` as milliseconds since Unix epoch."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+       {:added "Encore v3.95.0 (2024-03-19)"
         :inline             (fn [inst] `(.toEpochMilli ~(with-meta inst {:tag 'java.time.Instant})))}
        ^long [^java.time.Instant inst]  (.toEpochMilli             inst))
 
      (defn udt->inst
        "Returns given milliseconds since Unix epoch as `java.time.Instant`."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+       {:added "Encore v3.95.0 (2024-03-19)"
         :inline       (fn [msecs-since-epoch] `(java.time.Instant/ofEpochMilli ~msecs-since-epoch))}
        ^java.time.Instant [msecs-since-epoch]  (java.time.Instant/ofEpochMilli  msecs-since-epoch)))
 
@@ -3127,19 +3127,19 @@
 
      (defn inst->udt
        "Returns given `js/Date` as milliseconds since Unix epoch."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [inst] (.getTime inst))
 
      (defn udt->inst
        "Returns given milliseconds since Unix epoch as `js/Date`."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [msecs-since-epoch] (js/Date. msecs-since-epoch))))
 
 (defn udt? #?(:cljs {:tag 'boolean}) [x] (int? x))
 
 (defn as-?inst
   "Returns given ?arg as platform instant (`java.time.Instant` or `js/Date`), or nil."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.95.0 (2024-03-19)"}
   [x]
   #?(:clj
      (cond
@@ -3160,7 +3160,7 @@
 #?(:clj
    (defn as-?dt
      "Returns given ?arg as `java.util.Date`, or nil."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.95.0 (2024-03-19)"}
      [x]
      (cond
        (instance? java.time.Instant x) (java.util.Date/from ^java.time.Instant x)
@@ -4425,7 +4425,7 @@
 
 (defn ^:no-doc x->str
   "Private, don't use."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.95.0 (2024-03-19)"
    :tag #?(:clj 'String :cljs 'string)}
   [readably? allow-dup? add-newline? x]
   #?(:cljs
@@ -4453,7 +4453,7 @@
 
 (defn ^:no-doc xs->str
   "Private, don't use."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.95.0 (2024-03-19)"
    :tag #?(:clj 'String :cljs 'string)}
   [readably? allow-dup? add-newline? xs]
   #?(:cljs
@@ -4482,21 +4482,21 @@
 
 #?(:cljs
    (do
-     (def* pr      "Identical to `core/pr`."      {:added "Encore vX.Y.Z (YYYY-MM-DD)"} cljs.core/pr)
-     (def* prn     "Identical to `core/prn`."     {:added "Encore vX.Y.Z (YYYY-MM-DD)"} cljs.core/prn)
-     (def* print   "Identical to `core/print`."   {:added "Encore vX.Y.Z (YYYY-MM-DD)"} cljs.core/print)
-     (def* println "Identical to `core/println`." {:added "Encore vX.Y.Z (YYYY-MM-DD)"} cljs.core/println))
+     (def* pr      "Identical to `core/pr`."      {:added "Encore v3.95.0 (2024-03-19)"} cljs.core/pr)
+     (def* prn     "Identical to `core/prn`."     {:added "Encore v3.95.0 (2024-03-19)"} cljs.core/prn)
+     (def* print   "Identical to `core/print`."   {:added "Encore v3.95.0 (2024-03-19)"} cljs.core/print)
+     (def* println "Identical to `core/println`." {:added "Encore v3.95.0 (2024-03-19)"} cljs.core/println))
 
    :clj
    (do
      (defn pr
        "Like `core/pr` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [& args] (.write *out* (xs->str true true false args)))
 
      (defn prn
        "Like `core/prn` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [& args]
        (let [w *out*]
          (.write w (xs->str true true true args))
@@ -4504,12 +4504,12 @@
 
      (defn print
        "Like `core/print` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [& args] (.write *out* (xs->str false false false args)))
 
      (defn println
        "Like `core/println` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.95.0 (2024-03-19)"}
        [& args]
        (let [w *out*]
          (.write w (xs->str false false true args))
@@ -4573,7 +4573,7 @@
 #?(:clj
    (defmacro ^:no-doc def-print-impl
      "Private, don't use."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+     {:added "Encore v3.95.0 (2024-03-19)"
       :style/indent 1}
      [[sym type] form]
      (if (:ns &env)
@@ -4586,7 +4586,7 @@
 #?(:clj
    (defmacro ^:no-doc def-print-dup
      "Private, don't use."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+     {:added "Encore v3.95.0 (2024-03-19)"
       :style/indent 1}
      [[sym type] form]
      `(defmethod print-dup ~type
@@ -7203,10 +7203,10 @@
   (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
   (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
-  (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} println)
+  (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore v3.95.0 (2024-03-19)"} println)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
-  #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} now-inst))
+  #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore v3.95.0 (2024-03-19)"} now-inst))
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
@@ -7215,7 +7215,7 @@
 
   #?(:clj
      (defmacro ^:no-doc deftype-print-methods "Prefer `def-print`."
-       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "Encore v3.95.0 (2024-03-19)"}
        [& types]
        `(do
           ~@(map
