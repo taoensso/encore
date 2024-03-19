@@ -1343,6 +1343,14 @@
 
 ;;;; Type coercions
 
+#?(:cljs
+   (defn- parse-js-int [s]
+     (when (re-matches #"[+-]?\d+" s)
+       (let [i (js/parseInt s 10)]
+         (when (and (<= i js/Number.MAX_SAFE_INTEGER)
+                    (>= i js/Number.MIN_SAFE_INTEGER))
+           i)))))
+
 (do
   ;; (defn not-blank     [s] (if (str/blank? s) nil s))
   ;; (defn not-empty-str [s] (if #?(:clj (.isEmpty ^String s) :cljs (= s "")) nil s))
@@ -1368,21 +1376,22 @@
   (comment (as-?nblank-trim " foo  "))
 
   (defn as-?int #_as-?long [x]
-    (cond (number? x) (long x)
-          (string? x)
-          #?(:cljs (let [x (js/parseInt x 10)] (when-not (js/isNaN x) x))
-             :clj
-             (try (Long/parseLong x)
-                  (catch NumberFormatException _
-                    (try (long (Float/parseFloat x))
-                         (catch NumberFormatException _ nil)))))))
+    (cond
+      (number? x) (long x)
+      (string? x)
+      #?(:cljs (parse-js-int x)
+         :clj
+         (try
+           (Long/parseLong x)
+           (catch NumberFormatException _
+             (catching (long (Float/parseFloat x))))))))
 
   (defn as-?float #_as-?double [x]
-    (cond (number? x) (double x)
-          (string? x)
-          #?(:cljs (let [x (js/parseFloat x)] (when-not (js/isNaN x) x))
-             :clj  (try (Double/parseDouble x)
-                        (catch NumberFormatException _ nil)))))
+    (cond
+      (number? x) (double x)
+      (string? x)
+      #?(:cljs (let [x (js/parseFloat x)] (when-not (js/isNaN x) x))
+         :clj  (catching (Double/parseDouble x)))))
 
   (defn as-?nat-int   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
   (defn as-?pos-int   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
@@ -3190,8 +3199,9 @@
        (number?           x) x
        (string?           x)
        (or
-         (let [x (js/Number     x)] (when-not (js/isNaN x) x))
-         (let [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
+         (parse-js-int x)
+         #_(let [x (js/Number     x)] (when-not (js/isNaN x) x))
+         (let   [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
 
 (do     (defn as-inst #?(:cljs [x] :clj ^java.time.Instant [x]) (or (as-?inst x) (-as-throw :inst x))))
 #?(:clj (defn as-dt                        ^java.util.Date [x]  (or (as-?dt   x) (-as-throw :dt   x))))
