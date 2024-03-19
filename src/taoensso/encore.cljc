@@ -1140,89 +1140,84 @@
 
 (comment (test-fixtures {:before (fn [])}))
 
-;;;; Type preds, etc.
-;; - Could really do with a portable ^boolean hint
+;;;; Misc type preds
+;; - Could really do with a portable ^boolean hint!
 ;; - Some of these have slowly been getting added to Clojure core,
-;;   make sure to :exclude any official preds using the same name
+;;   make sure to :exclude any official preds using the same name.
 
-#?(:clj
-   (do
-     (defn stringy?    [x] (or (keyword? x) (string? x)))
-     (defn ident?      [x] (or (keyword? x) (symbol? x)))
-     (defn boolean?    [x] (instance? Boolean                           x))
-     (defn uri?        [x] (instance? java.net.URI                      x))
-     (defn indexed?    [x] (instance? clojure.lang.Indexed              x))
-     (defn named?      [x] (instance? clojure.lang.Named                x))
-     (defn nameable?   [x] (or (named? x) (string? x)))
-     (defn editable?   [x] (instance? clojure.lang.IEditableCollection  x))
-     (defn derefable?  [x] (instance? clojure.lang.IDeref               x))
-     (defn throwable?  [x] (instance? Throwable                         x))
-     (defn exception?  [x] (instance? Exception                         x))
-     (defn error?      [x] (instance? Throwable                         x))
-     (defn atom?       [x] (instance? clojure.lang.Atom                 x))
-     (defn transient?  [x] (instance? clojure.lang.ITransientCollection x))
-     (defn lazy-seq?   [x] (instance? clojure.lang.LazySeq              x))
-     (defn re-pattern? [x] (instance? java.util.regex.Pattern           x))
-     (defn can-meta?   [x] (instance? clojure.lang.IObj                 x)) ; Not IMeta
-     (defn inst?       [x] (instance? java.time.Instant                 x))
+(do
+  #?(:clj  (defn          nempty-str? [x] (and (string? x) (not (.isEmpty ^String x))))
+     :cljs (defn ^boolean nempty-str? [x] (and (string? x) (not (= x "")))))
+  #?(:clj  (defn          boolean?    [x] (instance? Boolean x))
+     :cljs (defn ^boolean boolean?    [x] (or (true? x) (false? x))))
+  #?(:clj  (defn          indexed?    [x] (instance? clojure.lang.Indexed x))
+     :cljs (defn ^boolean indexed?    [x] (implements?           IIndexed x)))
+  #?(:clj  (defn          named?      [x] (instance? clojure.lang.Named x))
+     :cljs (defn ^boolean named?      [x] (implements?           INamed x)))
+  #?(:clj  (defn          editable?   [x] (instance? clojure.lang.IEditableCollection x))
+     :cljs (defn ^boolean editable?   [x] (implements?            IEditableCollection x)))
+  #?(:clj  (defn          derefable?  [x] (instance? clojure.lang.IDeref x))
+     :cljs (defn ^boolean derefable?  [x] (implements?            IDeref x)))
+  #?(:clj  (defn          error?      [x] (instance? Throwable x))
+     :cljs (defn ^boolean error?      [x] (instance? js/Error  x)))
+  #?(:clj  (defn          atom?       [x] (instance? clojure.lang.Atom x))
+     :cljs (defn ^boolean atom?       [x] (instance?              Atom x)))
+  #?(:clj  (defn          transient?  [x] (instance? clojure.lang.ITransientCollection x))
+     :cljs (defn ^boolean transient?  [x] (implements?            ITransientCollection x)))
+  #?(:clj  (defn          lazy-seq?   [x] (instance? clojure.lang.LazySeq x))
+     :cljs (defn ^boolean lazy-seq?   [x] (instance?              LazySeq x)))
+  #?(:clj  (defn          re-pattern? [x] (instance? java.util.regex.Pattern x))
+     :cljs (defn ^boolean re-pattern? [x] (instance? js/RegExp               x)))
+  #?(:clj  (defn          can-meta?   [x] (instance? clojure.lang.IObj x)) ; Not IMeta
+     :cljs (defn ^boolean can-meta?   [x] (implements? IWithMeta       x)))
 
-     (defn simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
-     (defn qualified-ident?   [x] (and (ident?   x)       (namespace x) true))
-     (defn simple-symbol?     [x] (and (symbol?  x) (nil? (namespace x))))
-     (defn qualified-symbol?  [x] (and (symbol?  x)       (namespace x) true))
-     (defn simple-keyword?    [x] (and (keyword? x) (nil? (namespace x))))
-     (defn qualified-keyword? [x] (and (keyword? x)       (namespace x) true))
+  #?(:clj (defn uri?       [x] (instance? java.net.URI x)))
+  #?(:clj (defn throwable? [x] (instance? Throwable    x)))
+  #?(:clj (defn exception? [x] (instance? Exception    x)))
 
-     (defn nempty-str? [x] (and (string? x) (not (.isEmpty ^String x))))
-     (defn nblank-str? [x] (and (string? x) (not (str/blank? x))))
-     (defn nblank?     [x]                  (not (str/blank? x)))
-     (defn vec2?       [x] (and (vector? x) (= (count x) 2)))
-     (defn vec3?       [x] (and (vector? x) (= (count x) 3))))
+  (defn stringy?           #?(:cljs {:tag 'boolean}) [x] (or  (keyword? x) (string? x)))
+  (defn ident?             #?(:cljs {:tag 'boolean}) [x] (or  (keyword? x) (symbol? x)))
+  (defn nameable?          #?(:cljs {:tag 'boolean}) [x] (or  (named?   x) (string? x)))
+  (defn simple-ident?      #?(:cljs {:tag 'boolean}) [x] (and (ident?   x) (nil? (namespace x))))
+  (defn qualified-ident?   #?(:cljs {:tag 'boolean}) [x] (and (ident?   x)       (namespace x) true))
+  (defn simple-symbol?     #?(:cljs {:tag 'boolean}) [x] (and (symbol?  x) (nil? (namespace x))))
+  (defn qualified-symbol?  #?(:cljs {:tag 'boolean}) [x] (and (symbol?  x)       (namespace x) true))
+  (defn simple-keyword?    #?(:cljs {:tag 'boolean}) [x] (and (keyword? x) (nil? (namespace x))))
+  (defn qualified-keyword? #?(:cljs {:tag 'boolean}) [x] (and (keyword? x)       (namespace x) true))
+  (defn vec2?              #?(:cljs {:tag 'boolean}) [x] (and (vector? x) (= (count x) 2)))
+  (defn vec3?              #?(:cljs {:tag 'boolean}) [x] (and (vector? x) (= (count x) 3)))
+  (defn nblank-str?        #?(:cljs {:tag 'boolean}) [x] (and (string? x) (not (str/blank? x))))
+  (defn nblank?            #?(:cljs {:tag 'boolean}) [x]                  (not (str/blank? x))))
 
-   :cljs
-   (do
-     (defn ^boolean stringy?    [x] (or (keyword? x) (string? x)))
-     (defn ^boolean ident?      [x] (or (keyword? x) (symbol? x)))
-     (defn ^boolean boolean?    [x] (or (true?    x) (false?  x)))
-     ;; (defn uri?              [x])
-     (defn ^boolean indexed?    [x] (implements? IIndexed            x))
-     (defn ^boolean named?      [x] (implements? INamed              x))
-     (defn ^boolean nameable?   [x] (or (named? x) (string? x)))
-     (defn ^boolean editable?   [x] (implements? IEditableCollection x))
-     (defn ^boolean derefable?  [x] (implements? IDeref              x))
-     ;; (defn throwable?        [x])
-     ;; (defn exception?        [x])
-     (defn ^boolean error?      [x] (instance?   js/Error             x))
-     (defn ^boolean atom?       [x] (instance?   Atom                 x))
-     (defn ^boolean transient?  [x] (instance?   ITransientCollection x))
-     (defn ^boolean lazy-seq?   [x] (instance?   LazySeq              x))
-     (defn ^boolean re-pattern? [x] (instance?   js/RegExp            x))
-     (defn ^boolean can-meta?   [x] (implements? IWithMeta            x)) ; Not IMeta
-     (defn ^boolean inst?       [x] (instance?   js/Date              x))
+(def ^:const have-core-async?
+  "Is `clojure.core.async` present (not necessarily loaded)?"
+  (compile-if
+    (or
+      (jio/resource "clojure/core/async.cljc")
+      (jio/resource "clojure/core/async.clj"))
+    true
+    false))
 
-     (defn ^boolean simple-ident?      [x] (and (ident?   x) (nil? (namespace x))))
-     (defn ^boolean qualified-ident?   [x] (and (ident?   x)       (namespace x) true))
-     (defn ^boolean simple-symbol?     [x] (and (symbol?  x) (nil? (namespace x))))
-     (defn ^boolean qualified-symbol?  [x] (and (symbol?  x)       (namespace x) true))
-     (defn ^boolean simple-keyword?    [x] (and (keyword? x) (nil? (namespace x))))
-     (defn ^boolean qualified-keyword? [x] (and (keyword? x)       (namespace x) true))
+(defn chan?
+  "Returns true iff given a `clojure.core.async` channel."
+  #?(:cljs {:tag 'boolean})
+  [x]
+  ;; Avoid actually loading `core.async`
+  #?(:clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (.getName (class x)))
+     :cljs (instance? cljs.core.async.impl.channels.ManyToManyChannel                   x)))
 
-     (defn ^boolean nempty-str? [x] (and (string? x) (not (= x ""))))
-     (defn ^boolean nblank-str? [x] (and (string? x) (not (str/blank? x))))
-     (defn ^boolean nblank?     [x]                  (not (str/blank? x)))
-     (defn ^boolean vec2?       [x] (and (vector? x) (= (count x) 2)))
-     (defn ^boolean vec3?       [x] (and (vector? x) (= (count x) 3)))))
+(comment (chan? (clojure.core.async/chan)))
 
-;;; Number type naming conventions
+;;; Number types
 ;; Since Clojure usu. defaults to larger types (long>integer, double>long),
 ;; I'm appropriating the rarely-used smaller type names (int, float) to
 ;; refer to types of generic size.
 ;;
 ;; All fixed-precision:
-;;   - int    - Generic  size: long   or integer, etc.
-;;   - float  - Generic  size: double or float,   etc.
-;;   - long   - Specific size: long   ; Only used when emphasizing specific size
-;;   - double - Specific size: double ; Only used when emphasizing specific size
+;; `int`    - Generic  size: long   or integer, etc.
+;; `float`  - Generic  size: double or float,   etc.
+;; `long`   - Specific size: long   ; Only used when emphasizing specific size
+;; `double` - Specific size: double ; Only used when emphasizing specific size
 
 (defn finite-num?
   "Returns true iff given a number (of standard type) that is:
@@ -1270,41 +1265,22 @@
 
 (comment (float? Double/NaN))
 
-#?(:clj
-   (do
-     (defn      nneg? [x] (not (neg?    x)))
-     (defn  zero-num? [x] (and (number? x)      (zero? x)))
-     (defn nzero-num? [x] (and (number? x) (not (zero? x))))
+(do
+  (defn      nneg? #?(:cljs {:tag 'boolean}) [x] (not (neg?    x)))
+  (defn  zero-num? #?(:cljs {:tag 'boolean}) [x] (and (number? x)      (zero? x)))
+  (defn nzero-num? #?(:cljs {:tag 'boolean}) [x] (and (number? x) (not (zero? x))))
 
-     (defn nat-num?   [x] (and (number? x) (not (neg? x))))
-     (defn pos-num?   [x] (and (number? x)      (pos? x)))
-     (defn neg-num?   [x] (and (number? x)      (neg? x)))
+  (defn nat-num?   #?(:cljs {:tag 'boolean}) [x] (and (number? x) (not (neg? x))))
+  (defn pos-num?   #?(:cljs {:tag 'boolean}) [x] (and (number? x)      (pos? x)))
+  (defn neg-num?   #?(:cljs {:tag 'boolean}) [x] (and (number? x)      (neg? x)))
 
-     (defn nat-int?   [x] (and (int? x) (not (neg? x))))
-     (defn pos-int?   [x] (and (int? x)      (pos? x)))
-     (defn neg-int?   [x] (and (int? x)      (neg? x)))
+  (defn nat-int?   #?(:cljs {:tag 'boolean}) [x] (and (int? x) (not (neg? x))))
+  (defn pos-int?   #?(:cljs {:tag 'boolean}) [x] (and (int? x)      (pos? x)))
+  (defn neg-int?   #?(:cljs {:tag 'boolean}) [x] (and (int? x)      (neg? x)))
 
-     (defn nat-float? [x] (and (float? x) (not (neg? x))))
-     (defn pos-float? [x] (and (float? x)      (pos? x)))
-     (defn neg-float? [x] (and (float? x)      (neg? x))))
-
-   :cljs
-   (do
-     (defn ^boolean      nneg? [x] (not (neg? x)))
-     (defn ^boolean  zero-num? [x]           (zero? x))
-     (defn ^boolean nzero-num? [x] (and (not (zero? x))))
-
-     (defn ^boolean nat-num?   [x] (not (neg? x)))
-     (defn ^boolean pos-num?   [x]      (pos? x))
-     (defn ^boolean neg-num?   [x]      (neg? x))
-
-     (defn ^boolean nat-int?   [x] (and (int? x) (not (neg? x))))
-     (defn ^boolean pos-int?   [x] (and (int? x)      (pos? x)))
-     (defn ^boolean neg-int?   [x] (and (int? x)      (neg? x)))
-
-     (defn ^boolean nat-float? [x] (and (float? x) (not (neg? x))))
-     (defn ^boolean pos-float? [x] (and (float? x)      (pos? x)))
-     (defn ^boolean neg-float? [x] (and (float? x)      (neg? x)))))
+  (defn nat-float? #?(:cljs {:tag 'boolean}) [x] (and (float? x) (not (neg? x))))
+  (defn pos-float? #?(:cljs {:tag 'boolean}) [x] (and (float? x)      (pos? x)))
+  (defn neg-float? #?(:cljs {:tag 'boolean}) [x] (and (float? x)      (neg? x))))
 
 (defn pnum?
   "Returns true iff given number in unsigned unit proportion interval ∈ℝ[0,1]."
@@ -1316,32 +1292,27 @@
   #?(:cljs {:tag 'boolean})
   [x] (and (number? x) (let [n (double x)] (and (>= n -1.0) (<= n +1.0)))))
 
-(def ^:const have-core-async?
-  "Is `clojure.core.async` present (not necessarily loaded)?"
-  (compile-if
-    (or
-      (jio/resource "clojure/core/async.cljc")
-      (jio/resource "clojure/core/async.clj"))
-    true
-    false))
+;;;; Misc type coercions
+;; Note that there may be parsing edge-case inconsistencies between platforms.
+;; It's NOT currently an objective to try pave over all differences!
 
-(defn chan?
-  "Returns true iff given a `clojure.core.async` channel."
-  #?(:cljs {:tag 'boolean})
-  [x]
-  ;; Avoid actually loading `core.async`
-  #?(:clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (.getName (class x)))
-     :cljs (instance? cljs.core.async.impl.channels.ManyToManyChannel                   x)))
+(def ^:const max-long #?(:clj Long/MAX_VALUE :cljs js/Number.MAX_SAFE_INTEGER))
+(def ^:const min-long #?(:clj Long/MIN_VALUE :cljs js/Number.MIN_SAFE_INTEGER))
 
-(comment (chan? (clojure.core.async/chan)))
-
-;;;; Type coercions
+(defn- int-str? [s] (re-matches #"[+-]?\d+" s)) ; Restrictive
+#?(:cljs (defn- parse-js-float [s] (let [x (js/parseFloat s)] (when-not (js/isNaN x) x)))) ; Unrestrictive
+#?(:cljs
+   (defn parse-js-int [s]
+     (when (int-str? s)
+       (let [x (js/parseInt s 10)]
+         (when (and
+                 (not (js/isNaN x)) ; Redundant?
+                 (<= x max-long)
+                 (>= x min-long))
+           x)))))
 
 (do
-  ;; (defn not-blank     [s] (if (str/blank? s) nil s))
-  ;; (defn not-empty-str [s] (if #?(:clj (.isEmpty ^String s) :cljs (= s "")) nil s))
-
-  (defn as-?nzero  [x] (when (number?  x) (if (zero? x)      nil x)))
+  (defn as-?nzero  [x] (when (number?  x) (if (zero?      x) nil x)))
   (defn as-?nblank [x] (when (string?  x) (if (str/blank? x) nil x)))
   (defn as-?kw     [x] (cond (keyword? x)       x  (string? x) (keyword x)))
   (defn as-?name   [x] (cond (named?   x) (name x) (string? x)          x))
@@ -1350,33 +1321,28 @@
       (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n))
       (string? x) x))
 
-  (defn as-?nempty-str [x]
-    (when (string? x)
-      (if #?(:clj (.isEmpty ^String x) :cljs (= x "")) nil x)))
-
-  (defn as-?nblank-trim [x]
-    (when (string? x)
-      (let [s (str/trim x)]
-        (if #?(:clj (.isEmpty ^String s) :cljs (= s "")) nil s))))
+  (defn as-?nempty-str  [x] (when (string? x)                       (if #?(:clj (.isEmpty ^String x) :cljs (= x "")) nil x)))
+  (defn as-?nblank-trim [x] (when (string? x) (let [s (str/trim x)] (if #?(:clj (.isEmpty ^String s) :cljs (= s "")) nil s))))
 
   (comment (as-?nblank-trim " foo  "))
 
-  (defn as-?int #_as-?long [x]
-    (cond (number? x) (long x)
-          (string? x)
-          #?(:cljs (let [x (js/parseInt x 10)] (when-not (js/isNaN x) x))
-             :clj
-             (try (Long/parseLong x)
-                  (catch NumberFormatException _
-                    (try (long (Float/parseFloat x))
-                         (catch NumberFormatException _ nil)))))))
+  (defn as-?int [x]
+    (cond
+      (number? x) (long x)
+      (string? x)
+      #?(:cljs (parse-js-int x)
+         :clj
+         (try
+           (Long/parseLong x)
+           (catch NumberFormatException _
+             (catching (long (Float/parseFloat x))))))))
 
-  (defn as-?float #_as-?double [x]
-    (cond (number? x) (double x)
-          (string? x)
-          #?(:cljs (let [x (js/parseFloat x)] (when-not (js/isNaN x) x))
-             :clj  (try (Double/parseDouble x)
-                        (catch NumberFormatException _ nil)))))
+  (defn as-?float [x]
+    (cond
+      (number? x) (double x)
+      (string? x)
+      #?(:cljs (parse-js-float x)
+         :clj  (catching (Double/parseDouble x)))))
 
   (defn as-?nat-int   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
   (defn as-?pos-int   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
@@ -1388,18 +1354,18 @@
 
   (defn as-?bool [x]
     (cond
-      (nil? x) nil
-      (or (true? x) (false? x)) x
+      (or (true? x) (false? x) (nil? x)) x
       (or (= x 0) (= x "false") (= x "FALSE") (= x "0")) false
       (or (= x 1) (= x "true")  (= x "TRUE")  (= x "1")) true))
 
-  ;; Uses simple regex to test for basic "x@y.z" form:
-  (let [regex #"^[^\s@]+@[^\s@]+\.\S*[^\.]$"]
+  (let [;; Simple regex to test for basic "x@y.z" form:
+        regex #"^[^\s@]+@[^\s@]+\.\S*[^\.]$"]
     (defn as-?email
       ([        ?s] (as-?email 320 ?s))
-      ([max-len ?s] (when-let [s (and ?s (str/trim ?s))]
-                      (when (<= (count s) ^long max-len)
-                        (re-find regex s))))))
+      ([max-len ?s]
+       (when-let [s (and ?s (str/trim ?s))]
+         (when (<= (count s) ^long max-len)
+           (re-find regex s))))))
 
   (defn as-?nemail
     ([        ?s] (when-let [email (as-?email         ?s)] (str/lower-case email)))
@@ -1410,6 +1376,58 @@
     (mapv as-?nemail
       ["foo" "foo@" "foo@bar" "Foo@BAR.com"
        "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"])))
+
+(defn ^:no-doc -as-throw [kind x]
+  (throw
+    (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
+      {:pred-kind kind
+       :arg {:value x, :type (type x)}})))
+
+(let [-as-throw -as-throw]
+  (defn as-nzero       [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
+  (defn as-nblank      [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
+  (defn as-nblank-trim [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
+  (defn as-nempty-str  [x] (or (as-?nempty-str  x) (-as-throw :nempty-str  x)))
+  (defn as-kw          [x] (or (as-?kw          x) (-as-throw :kw          x)))
+  (defn as-name        [x] (or (as-?name        x) (-as-throw :name        x)))
+  (defn as-qname       [x] (or (as-?qname       x) (-as-throw :qname       x)))
+
+  (defn as-email
+    ([  x] (or (as-?email   x) (-as-throw :email x)))
+    ([n x] (or (as-?email n x) (-as-throw :email x))))
+
+  (defn as-nemail
+    ([  x] (or (as-?nemail   x) (-as-throw :nemail x)))
+    ([n x] (or (as-?nemail n x) (-as-throw :nemail x))))
+
+  #?(:clj  (defn         as-int     ^long [x] (or (as-?int     x) (-as-throw :int     x)))
+     :cljs (defn ^number as-int           [x] (or (as-?int     x) (-as-throw :int     x))))
+  #?(:clj  (defn         as-nat-int ^long [x] (or (as-?nat-int x) (-as-throw :nat-int x)))
+     :cljs (defn ^number as-nat-int       [x] (or (as-?nat-int x) (-as-throw :nat-int x))))
+  #?(:clj  (defn         as-pos-int ^long [x] (or (as-?pos-int x) (-as-throw :pos-int x)))
+     :cljs (defn ^number as-pos-int       [x] (or (as-?pos-int x) (-as-throw :pos-int x))))
+
+  #?(:clj  (defn         as-float     ^double [x] (or (as-?float     x) (-as-throw :float     x)))
+     :cljs (defn ^number as-float             [x] (or (as-?float     x) (-as-throw :float     x))))
+  #?(:clj  (defn         as-nat-float ^double [x] (or (as-?nat-float x) (-as-throw :nat-float x)))
+     :cljs (defn ^number as-nat-float         [x] (or (as-?nat-float x) (-as-throw :nat-float x))))
+  #?(:clj  (defn         as-pos-float ^double [x] (or (as-?pos-float x) (-as-throw :pos-float x)))
+     :cljs (defn ^number as-pos-float         [x] (or (as-?pos-float x) (-as-throw :pos-float x))))
+
+  #?(:clj  (defn         as-pnum ^double [x] (or (as-?pnum x) (-as-throw :pnum x)))  ; With auto coerce+clamp
+     :cljs (defn ^number as-pnum         [x] (or (as-?pnum x) (-as-throw :pnum x)))) ; ''
+  #?(:clj  (defn         as-rnum ^double [x] (or (as-?rnum x) (-as-throw :rnum x)))  ; ''
+     :cljs (defn ^number as-rnum         [x] (or (as-?rnum x) (-as-throw :rnum x)))) ; ''
+
+  #?(:clj  (defn         as-pnum! ^double [x] (if (pnum? x) (double x) (-as-throw :pnum! x)))  ; Without auto coerce+clamp
+     :cljs (defn ^number as-pnum!         [x] (if (pnum? x) (double x) (-as-throw :pnum! x)))) ; ''
+  #?(:clj  (defn         as-rnum! ^double [x] (if (rnum? x) (double x) (-as-throw :rnum! x)))  ; ''
+     :cljs (defn ^number as-rnum!         [x] (if (rnum? x) (double x) (-as-throw :rnum! x)))) ; ''
+
+  (defn #?(:clj as-bool :cljs ^boolean as-bool) [x]
+    (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
+
+;;;; Validation
 
 (declare assoc-some)
 
@@ -1438,46 +1456,6 @@
            :data data))))))
 
 (comment [(is! false) (is! nil) (is! string? 5) (is string? "foo")])
-
-(defn ^:no-doc -as-throw [kind x]
-  (throw
-    (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
-      {:pred-kind kind
-       :arg {:value x, :type (type x)}})))
-
-(let [-as-throw -as-throw]
-  (defn as-nzero             [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
-  (defn as-nblank            [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
-  (defn as-nblank-trim       [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
-  (defn as-nempty-str        [x] (or (as-?nempty-str  x) (-as-throw :nempty-str  x)))
-  (defn as-kw                [x] (or (as-?kw          x) (-as-throw :kw          x)))
-  (defn as-name              [x] (or (as-?name        x) (-as-throw :name        x)))
-  (defn as-qname             [x] (or (as-?qname       x) (-as-throw :qname       x)))
-
-  (defn as-email
-    ([  x] (or (as-?email   x) (-as-throw :email x)))
-    ([n x] (or (as-?email n x) (-as-throw :email x))))
-
-  (defn as-nemail
-    ([  x] (or (as-?nemail   x) (-as-throw :nemail x)))
-    ([n x] (or (as-?nemail n x) (-as-throw :nemail x))))
-
-  (defn as-int         ^long [x] (or (as-?int         x) (-as-throw :int         x)))
-  (defn as-nat-int     ^long [x] (or (as-?nat-int     x) (-as-throw :nat-int     x)))
-  (defn as-pos-int     ^long [x] (or (as-?pos-int     x) (-as-throw :pos-int     x)))
-  (defn as-float     ^double [x] (or (as-?float       x) (-as-throw :float       x)))
-  (defn as-nat-float ^double [x] (or (as-?nat-float   x) (-as-throw :nat-float   x)))
-  (defn as-pos-float ^double [x] (or (as-?pos-float   x) (-as-throw :pos-float   x)))
-
-  (defn as-pnum      ^double [x] (or (as-?pnum        x)         (-as-throw :pnum  x))) ; With auto coerce+clamp
-  (defn as-rnum      ^double [x] (or (as-?rnum        x)         (-as-throw :rnum  x))) ; ''
-
-  (defn as-pnum!     ^double [x] (if (pnum? x) (double x) (-as-throw :pnum! x))) ; Without auto coerce+clamp
-  (defn as-rnum!     ^double [x] (if (rnum? x) (double x) (-as-throw :rnum! x))) ; ''
-
-  (defn as-bool              [x] (let [?b (as-?bool   x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
-
-;;;; Validation
 
 #?(:clj
    (defmacro check-some
@@ -1876,9 +1854,6 @@
           (do    acc))))))
 
 ;;;; Math
-
-(def ^:const max-long #?(:clj Long/MAX_VALUE :cljs  9007199254740991))
-(def ^:const min-long #?(:clj Long/MIN_VALUE :cljs -9007199254740991))
 
 (defn approx==
   #?(:cljs {:tag 'boolean})
@@ -3067,6 +3042,13 @@
 ;; `dt`   - `java.util.Date` (Clj only)
 ;; `udt`  - Milliseconds since Unix epoch (pos/neg)
 
+(defn inst?
+  "Returns true iff given platform instant (`java.time.Instant` or `js/Date`)."
+  #?(:cljs {:tag 'boolean})
+  [x]
+  #?(:clj  (instance? java.time.Instant x)
+     :cljs (instance? js/Date           x)))
+
 #?(:clj
    (do
      (defn now-inst
@@ -3190,8 +3172,9 @@
        (number?           x) x
        (string?           x)
        (or
-         (let [x (js/Number     x)] (when-not (js/isNaN x) x))
-         (let [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
+         (parse-js-int x)
+         #_(let [x (js/Number     x)] (when-not (js/isNaN x) x))
+         (let   [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
 
 (do     (defn as-inst #?(:cljs [x] :clj ^java.time.Instant [x]) (or (as-?inst x) (-as-throw :inst x))))
 #?(:clj (defn as-dt                        ^java.util.Date [x]  (or (as-?dt   x) (-as-throw :dt   x))))
