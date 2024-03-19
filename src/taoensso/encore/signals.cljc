@@ -10,9 +10,11 @@
     - Has a level (priority/significance/etc.)"
 
   {:added "Encore v3.68.0 (2023-09-25)"}
+
+  (:refer-clojure :exclude [binding])
   (:require
    [clojure.string  :as str]
-   [taoensso.encore :as enc :refer [have have?]])
+   [taoensso.encore :as enc :refer [binding have have?]])
 
   #?(:cljs
      (:require-macros
@@ -704,7 +706,7 @@
      [purpose *rt-sig-filter*]
      `(defmacro ~'without-filters
         ~(api-docstring 0 purpose "Executes form without any runtime filters.")
-        ~'[form] `(enc/binding [~'~*rt-sig-filter* nil] ~~'form))))
+        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
 
 (comment (api:without-filters "purpose" '*my-rt-sig-filter*))
 
@@ -735,7 +737,7 @@
            "Executes form with given %s call kind filter in effect.
            See `set-kind-filter!` for details.")
         ~'[kind-filter form]
-        `(enc/binding
+        `(binding
            [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
            ~~'form))))
 
@@ -768,7 +770,7 @@
            "Executes form with given %s call namespace filter in effect.
            See `set-ns-filter!` for details.")
         ~'[ns-filter form]
-        `(enc/binding
+        `(binding
            [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
            ~~'form))))
 
@@ -782,7 +784,7 @@
            "Executes form with given %s call id filter in effect.
            See `set-id-filter!` for details.")
         ~'[id-filter form]
-        `(enc/binding
+        `(binding
            [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
            ~~'form))))
 
@@ -873,7 +875,7 @@
           (~'[               min-level form] (list '~'with-min-level nil    nil ~'min-level ~'form))
           (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
           (~'[kind ns-filter min-level form]
-           `(enc/binding
+           `(binding
               [~'~*rt-sig-filter*
                (update-sig-filter ~'~*rt-sig-filter*
                  {:min-level-fn
@@ -888,7 +890,7 @@
              See `set-min-level!` for details.")
           (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
           (~'[ns-filter min-level form]
-           `(enc/binding
+           `(binding
               [~'~*rt-sig-filter*
                (update-sig-filter ~'~*rt-sig-filter*
                  {:min-level-fn
@@ -1141,7 +1143,7 @@
            "Executes form with ONLY the given handler-fn registered.
            Useful for tests/debugging. See also `with-handler+`.")
         ~'[handler-id handler-fn dispatch-opts form]
-        `(enc/binding
+        `(binding
            [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
            ~~'form))))
 
@@ -1155,7 +1157,7 @@
            "Executes form with the given handler-fn registered.
            Useful for tests/debugging. See also `with-handler`.")
         ~'[handler-id handler-fn dispatch-opts form]
-        `(enc/binding
+        `(binding
            [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
            ~~'form))))
 

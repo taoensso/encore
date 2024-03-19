@@ -361,6 +361,31 @@
 (comment (compiling-cljs?))
 
 #?(:clj
+   (defmacro binding
+     "For Clj: faster version of `core/binding`.
+     For Cljs: identical to `core/binding`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+      :style/indent 1}
+     [bindings & body]
+     (if (:ns &env)
+       `(cljs.core/binding ~bindings ~@body)
+       (let [;; Avoids unnecessary runtime map construction
+             bindings-map ; #{<var-form> <val-form>}
+             (reduce-kv (fn [m k v] (assoc m `(var ~k) v))
+               {} (apply hash-map bindings))]
+         `(do
+            (push-thread-bindings ~bindings-map)
+            (try ~@body (finally (pop-thread-bindings))))))))
+
+(comment
+  (do
+    (def ^:dynamic *d1* nil)
+    (def ^:dynamic *d2* nil)
+    (qb 1e6 ; [414.12 312.96]
+      (clojure.core/binding [*d1* :d1, *d2* :d2])
+      (binding              [*d1* :d1, *d2* :d2]))))
+
+#?(:clj
    (defmacro ^:no-doc -cond [throw? & clauses]
      (if-let [[test expr & more] (seq clauses)]
        (if-not (next clauses)
@@ -1848,33 +1873,6 @@
         (if next-colls
           (recur acc next-colls)
           (do    acc))))))
-
-;;;;
-
-#?(:clj
-   (defmacro binding
-     "For Clj: faster version of `core/binding`.
-     For Cljs: identical to `core/binding`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"
-      :style/indent 1}
-     [bindings & body]
-     (if (:ns &env)
-       `(cljs.core/binding ~bindings ~@body)
-       (let [;; Avoids unnecessary runtime map construction
-             bindings-map ; #{<var-form> <val-form>}
-             (reduce-kvs (fn [m k v] (assoc m `(var ~k) v))
-               {} bindings)]
-         `(do
-            (push-thread-bindings ~bindings-map)
-            (try ~@body (finally (pop-thread-bindings))))))))
-
-(comment
-  (do
-    (def ^:dynamic *d1* nil)
-    (def ^:dynamic *d2* nil)
-    (qb 1e6 ; [414.12 312.96]
-      (clojure.core/binding [*d1* :d1, *d2* :d2])
-      (binding              [*d1* :d1, *d2* :d2]))))
 
 ;;;; Math
 
