@@ -4577,7 +4577,7 @@
       :style/indent 1}
      [[sym type] form]
      (if (:ns &env)
-       `(extend-protocol IPrintWithWriter ~type (-pr-writer [~sym ~'__w ~'_] (-write ~'__w ~form)))
+       `(extend-protocol ~'IPrintWithWriter ~type (~'-pr-writer [~sym ~'__w ~'_] (~'-write ~'__w ~form)))
        `(defmethod print-method ~type
           [~(with-meta sym  {:tag type})
            ~(with-meta '__w {:tag 'java.io.Writer})]
