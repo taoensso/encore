@@ -3190,7 +3190,7 @@
        (number?           x) x
        (string?           x)
        (or
-         (let [x (js/Number.    x)] (when-not (js/isNaN x) x))
+         (let [x (js/Number     x)] (when-not (js/isNaN x) x))
          (let [x (js/Date.parse x)] (when-not (js/isNaN x) x))))))
 
 (do     (defn as-inst #?(:cljs [x] :clj ^java.time.Instant [x]) (or (as-?inst x) (-as-throw :inst x))))
