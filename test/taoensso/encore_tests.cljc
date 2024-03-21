@@ -1181,9 +1181,9 @@
 ;;;; Signal filtering
 
 (defn- sf-allow?
-  ([[ns-spec ns] [kind-spec kind] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec kind-spec id-spec min-level-spec)] (sf ns kind id level) true))
-  ([[ns-spec ns]                  [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec nil       id-spec min-level-spec)] (sf ns      id level) true))
-  ([[ns-spec ns]                               [min-level-spec level]] (if-let [sf (sigs/sig-filter ns-spec nil       nil     min-level-spec)] (sf ns         level) true)))
+  ([[kind-spec kind] [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter kind-spec ns-spec id-spec min-level-spec)] (sf kind ns id level) true))
+  ([                 [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter nil       ns-spec id-spec min-level-spec)] (sf      ns id level) true))
+  ([                 [ns-spec ns]              [min-level-spec level]] (if-let [sf (sigs/sig-filter nil       ns-spec nil     min-level-spec)] (sf      ns    level) true)))
 
 (deftest _sig-filter
   [(testing "Levels"
@@ -1232,7 +1232,7 @@
       (is (=   (sigs/update-min-level nil              :my-kind "ns1" :info) {:my-kind [["ns1" :info]]}))
       (is (=   (sigs/update-min-level {:default :info} nil      "ns1" :info) [["ns1" :info] ["*" :info]]))])
 
-   (testing "Filter basics [ns level]"
+   (testing "[ns level] filter basics"
      [(is (true?  (sf-allow? [nil   nil] [nil     nil])))
       (is (true?  (sf-allow? [nil "ns1"] [nil   :info])))
       (is (true?  (sf-allow? [nil "ns1"] [:info :info])))
@@ -1268,7 +1268,7 @@
       (is (false? (sf-allow? ["ns1" nil] [nil :info]))                                          "ns spec without ns")
       (is (->>    (sf-allow? [nil   nil] [:info nil]) (enc/throws? :common "Invalid level")) "level spec without level")])
 
-   (testing "Filter with ns-specific min-levels"
+   (testing "[ns level] filter with ns-specific min-levels"
      [(is (true?  (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :info])))
       (is (false? (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :debug])))
       (is (true?  (sf-allow? [nil "ns1"] [[["ns1" :info] ["ns1" :warn] ["*" :warn]]  :info])) "Match sequentially")
@@ -1280,22 +1280,22 @@
       (is (->>    (sf-allow? [nil "ns1"] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))
       (is (->>    (sf-allow? [nil   nil] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))])
 
-   (testing "Filter basics [ns kind id level]"
-     [(is (true?  (sf-allow? [nil   nil] [nil nil] [nil   nil] [nil nil])))
-      (is (true?  (sf-allow? [nil   nil] [:k1 :k1] [nil   nil] [nil nil])))
-      (is (false? (sf-allow? [nil   nil] [:k1 :k2] [nil   nil] [nil nil])))
+   (testing "[kind ns id level] filter basics"
+     [(is (true?  (sf-allow? [nil nil] [nil   nil] [nil   nil] [nil nil])))
+      (is (true?  (sf-allow? [:k1 :k1] [nil   nil] [nil   nil] [nil nil])))
+      (is (false? (sf-allow? [:k1 :k2] [nil   nil] [nil   nil] [nil nil])))
 
-      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [nil   nil] [nil nil])))
-      (is (false? (sf-allow? [:ns1 :ns2] [:k1 :k1] [nil   nil] [nil nil])))
+      (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [nil   nil] [nil nil])))
+      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns2] [nil   nil] [nil nil])))
 
-      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [nil nil])))
-      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id2] [nil nil])))
+      (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [nil nil])))
+      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id2] [nil nil])))
 
-      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:k1 10} 10])))
-      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:k1 20} 10])))
+      (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:k1 10} 10])))
+      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:k1 20} 10])))
 
-      (is (true?  (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:default 10} 10])))
-      (is (false? (sf-allow? [:ns1 :ns1] [:k1 :k1] [:id1 :id1] [{:default 20} 10])))])])
+      (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 10} 10])))
+      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])])
 
 ;;;;
 
@@ -1332,19 +1332,19 @@
 (deftest _signal-api
   [(testing "Signal filtering"
      [(is (nil? (enc/update-var-root! *rt-sig-filter* (fn [_] nil))))
-      (is (= (set-ns-filter!       "*") {:ns-filter "*", :kind-filter nil, :id-filter nil, :min-level nil}))
-      (is (= (set-kind-filter!     "*") {:ns-filter "*", :kind-filter "*", :id-filter nil, :min-level nil}))
-      (is (= (set-id-filter!       "*") {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level nil}))
-      (is (= (set-min-level! nil :info) {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
-      (is (= @*rt-sig-filter*           {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}))
-      (is (= (get-filters)    {:runtime {:ns-filter "*", :kind-filter "*", :id-filter "*", :min-level :info}}))
+      (is (= (set-kind-filter!     "*") {:kind-filter "*", :ns-filter nil, :id-filter nil, :min-level nil}))
+      (is (= (set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter nil, :min-level nil}))
+      (is (= (set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level nil}))
+      (is (= (set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
+      (is (= @*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
+      (is (= (get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))
       (is (= (get-min-level)  {:runtime                                                               :info}))
 
       (is (= (without-filters (get-filters))   nil))
       (is (= (without-filters (get-min-level)) nil))
 
-      (is (enc/submap? (with-ns-filter   "-" @*rt-sig-filter*) {:ns-filter   "-"}))
       (is (enc/submap? (with-kind-filter "-" @*rt-sig-filter*) {:kind-filter "-"}))
+      (is (enc/submap? (with-ns-filter   "-" @*rt-sig-filter*) {:ns-filter   "-"}))
       (is (enc/submap? (with-id-filter   "-" @*rt-sig-filter*) {:id-filter   "-"}))
 
       (is (enc/submap? (with-min-level :kind1       100 @*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
@@ -1357,21 +1357,21 @@
 
             {:l1 {:runtime :info}, :l2 {:runtime :info}, :l3 {:runtime :warn}}))
 
-      (is (false?  (with-ns-filter "-"          (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-ns-filter "ns1"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-ns-filter "-"          (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (with-ns-filter "ns1"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-kind-filter "-"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-kind-filter "kind1"    (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-kind-filter "-"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (with-kind-filter "kind1"    (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-id-filter "-"          (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-id-filter "id1"        (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-id-filter "-"          (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (with-id-filter "id1"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-min-level :kind1 :warn (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
-      (is (true?   (with-min-level :kind2 :warn (*rt-sig-filter* "ns1" :kind1 :id1 :info))))
+      (is (false?  (with-min-level :kind1 :warn (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (with-min-level :kind2 :warn (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
       (is (enc/submap? (with-min-level :kind1 "ns2" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
-      (is (true?       (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* "ns1" :kind1 :id 50))) "Fall back to :default kind on unmatched ns")
-      (is (false?      (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* "ns2" :kind1 :id 50))))])
+      (is (true?       (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* :kind1 "ns1" :id 50))) "Fall back to :default kind on unmatched ns")
+      (is (false?      (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* :kind1 "ns2" :id 50))))])
 
    (testing "Signal handlers"
      [(testing "Basics"
@@ -1524,13 +1524,13 @@
          (is (enc/submap? (sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
       (is (enc/submap? (sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
-      (is (enc/submap? (sig-exp {:level :info, :ns "my-ns", :kind :my-sig-kind, :id :my-sig-id, :expansion-id -1
+      (is (enc/submap? (sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id -1
                                  :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
             {:expansion-id -1
              :allow?
              '(clojure.core/and
                (clojure.core/< (Math/random) 0.5)
-               (clojure.core/if-let [sf taoensso.encore-tests/*rt-sig-filter*] (sf "my-ns" :my-sig-kind :my-sig-id :info) true)
+               (clojure.core/if-let [sf taoensso.encore-tests/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
                (clojure.core/let [this-expansion-id -1] (> 1 0))
                (if (taoensso.encore.signals/expansion-limit!? -1 [[1 1000]] nil) false true))})
         "Full `allow?` expansion")])])

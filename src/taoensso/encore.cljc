@@ -4852,8 +4852,8 @@
           :keys
           [#_defaults #_elide? #_allow? #_expansion-id, ; Undocumented
            fallback, ; Unique to `encore/signal!`
-           elidable? location instant uid middleware,
-           sample-rate ns kind id level when rate-limit,
+           elidable? location inst uid middleware,
+           sample-rate kind ns id level when rate-limit,
            ctx parent trace?, do let data msg error run & extra-kvs]}])}
 
      [opts]
