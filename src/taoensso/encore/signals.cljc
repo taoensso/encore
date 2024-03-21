@@ -4,10 +4,10 @@
 
   \"Signal\" is used here as an internal name for any
   abstract event/object/data that:
+    - May have a kind (type/taxonomy/etc.)
     - Originates in an ns (generated or received there, etc.)
-    - Has a level (priority/significance/etc.)
     - May have an identifier
-    - May have a kind (type/taxonomy/etc.)"
+    - Has a level (priority/significance/etc.)"
 
   {:added "Encore v3.68.0 (2023-09-25)"}
 
@@ -216,31 +216,31 @@
 
 (comment (enc/defonce ^:dynamic *rt-sig-filter* "`SigFilter`, or nil." nil))
 
-(deftype SigFilter [ns-filter kind-filter id-filter min-level filter-fn]
+(deftype SigFilter [kind-filter ns-filter id-filter min-level filter-fn]
   #?(:clj clojure.lang.IDeref :cljs IDeref)
   (#?(:clj deref :cljs -deref) [_]
-    {:ns-filter ns-filter :kind-filter kind-filter
-     :id-filter id-filter :min-level   min-level})
+    {:kind-filter kind-filter :ns-filter ns-filter 
+     :id-filter     id-filter :min-level min-level})
 
   #?(:clj clojure.lang.IFn :cljs IFn)
-  (#?(:clj invoke :cljs -invoke) [_ ns kind id level] (filter-fn ns kind id level))
-  (#?(:clj invoke :cljs -invoke) [_ ns      id level] (filter-fn ns      id level))
-  (#?(:clj invoke :cljs -invoke) [_ ns         level] (filter-fn ns         level)))
+  (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns id level))
+  (#?(:clj invoke :cljs -invoke) [_      ns id level] (filter-fn      ns id level))
+  (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level)))
 
 (enc/def* sig-filter
   "Returns nil, or a stateful (caching) `SigFilter` with the given specs."
   {:arglists
-   '([{:keys [ns-filter kind-filter id-filter min-level]}]
-             [ns-filter kind-filter id-filter min-level])}
+   '([{:keys [kind-filter ns-filter id-filter min-level]}]
+             [kind-filter ns-filter id-filter min-level])}
 
   (let [get-cached
         (enc/fmemoize ; Same specs -> share cache (ref. transparent)
           (fn sig-filter
-            [         ns-filter kind-filter id-filter min-level]
-            (when (or ns-filter kind-filter id-filter min-level)
+            [         kind-filter ns-filter id-filter min-level]
+            (when (or kind-filter ns-filter id-filter min-level)
               (do ; Validation
-                (when   ns-filter (valid-nf-spec   ns-filter))
                 (when kind-filter (valid-nf-spec kind-filter))
+                (when   ns-filter (valid-nf-spec   ns-filter))
                 (when   id-filter (valid-nf-spec   id-filter))
                 (when   min-level
                   (if (map? min-level)
@@ -250,22 +250,22 @@
 
                     (valid-min-level min-level))))
 
-              (SigFilter. ns-filter kind-filter id-filter min-level
+              (SigFilter. kind-filter ns-filter id-filter min-level
                 (enc/fmemoize
                   (fn allow-signal?
 
                     ;; Used for compile-time filtering (not perf sensitive, ignore nils)
-                    ([{:keys [ns kind id level]}]
+                    ([{:keys [kind ns id level]}]
                      (and
-                       (if (and   ns-filter ns)    (allow-name?   ns-filter   ns)         true)
                        (if (and kind-filter kind)  (allow-name? kind-filter kind)         true)
+                       (if (and   ns-filter ns)    (allow-name?   ns-filter   ns)         true)
                        (if (and   id-filter id)    (allow-name? kind-filter   id)         true)
                        (if (and   min-level level) (allow-level? min-level kind ns level) true)))
 
-                    ([ns kind id level]
+                    ([kind ns id level]
                      (and
-                       (if   ns-filter (allow-name?   ns-filter   ns)         true)
                        (if kind-filter (allow-name? kind-filter kind)         true)
+                       (if   ns-filter (allow-name?   ns-filter   ns)         true)
                        (if   id-filter (allow-name?   id-filter   id)         true)
                        (if   min-level (allow-level? min-level kind ns level) true)))
 
@@ -281,13 +281,15 @@
                        (if min-level (allow-level? min-level ns level) true)))))))))]
 
     (fn sig-filter
-      ([        ns-filter kind-filter id-filter min-level]             (get-cached ns-filter kind-filter id-filter min-level))
-      ([{:keys [ns-filter kind-filter id-filter min-level :as specs]}] (get-cached ns-filter kind-filter id-filter min-level)))))
+      ([        kind-filter ns-filter id-filter min-level]             (get-cached kind-filter ns-filter id-filter min-level))
+      ([{:keys [kind-filter ns-filter id-filter min-level :as specs]}] (get-cached kind-filter ns-filter id-filter min-level)))))
 
-(comment ; [54.97 67.66 83.49]
-  [(let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns           :info)))
-   (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns       :id :info)))
-   (let [sf (sig-filter "*" nil nil nil)] (enc/qb 1e6 (sf :ns :kind :id :info)))])
+(comment ; [62.11 61.44 65.25]
+  (let [sf (sig-filter nil "*" nil nil)]
+    (enc/qb 1e6
+      (sf :kind :ns     :info)
+      (sf       :ns :id :info)
+      (sf       :ns :id :info))))
 
 (deftype HandlerContext [sample-rate]) ; Using an object for future extensibility (extra fields, etc.)
 
@@ -299,14 +301,14 @@
 (let [nil-sf (SigFilter. nil nil nil nil nil)]
   (defn update-sig-filter
     "Returns nil, or updated stateful (caching) `SigFilter`."
-    {:arglists '([old-sig-filter {:keys [ns-filter kind-filter id-filter min-level min-level-fn]}])}
+    {:arglists '([old-sig-filter {:keys [kind-filter ns-filter id-filter min-level min-level-fn]}])}
     [old specs]
     (let [^SigFilter base (or old nil-sf)]
       (if (empty? specs)
         old
         (sig-filter
-          (get specs   :ns-filter   (.-ns-filter base))
           (get specs :kind-filter (.-kind-filter base))
+          (get specs   :ns-filter   (.-ns-filter base))
           (get specs   :id-filter   (.-id-filter base))
           (let [old-min-level       (.-min-level base)]
             (enc/cond
@@ -360,7 +362,7 @@
       '([{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}]
         [{:keys
           [elide? allow? expansion-id,
-           elidable? location sample-rate ns kind id level filter/when rate-limit rl-rid]}])}
+           elidable? location sample-rate kind ns id level filter/when rate-limit rl-rid]}])}
 
      [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]} opts]
 
@@ -377,8 +379,8 @@
              :column (get opts :column (get location :column)) ; ''
              :file   (get opts :file   (get location :file)))  ; ''
 
-           ns-form    (get location :ns)
            kind-form  (get opts     :kind)
+           ns-form    (get location :ns)
            id-form    (get opts     :id)
            level-form (get opts     :level)
            _
@@ -390,8 +392,8 @@
              (get opts :elidable? true)
              (get opts :elide?
                (when-let [sf ct-sig-filter]
-                 (not (sf {:ns    (enc/const-form    ns-form)
-                           :kind  (enc/const-form  kind-form)
+                 (not (sf {:kind  (enc/const-form  kind-form)
+                           :ns    (enc/const-form    ns-form)
                            :id    (enc/const-form    id-form)
                            :level (enc/const-form level-form)})))))
 
@@ -412,9 +414,9 @@
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form                     ~level-form) true)
-                         3 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form            ~id-form ~level-form) true)
-                         4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~ns-form ~kind-form ~id-form ~level-form) true)
+                         2 `(if-let [~'sf ~*rt-sig-filter*] (~'sf            ~ns-form          ~level-form) true)
+                         3 `(if-let [~'sf ~*rt-sig-filter*] (~'sf            ~ns-form ~id-form ~level-form) true)
+                         4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~kind-form ~ns-form ~id-form ~level-form) true)
                          (unexpected-sf-artity! sf-arity `expansion-filter))
 
                        when-form
@@ -504,7 +506,7 @@
   (let [dispatch-opts (enc/nested-merge default-dispatch-opts base-dispatch-opts dispatch-opts)
         {:keys
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
-          ns-filter kind-filter id-filter min-level,
+          kind-filter ns-filter id-filter min-level,
           rl-error rl-backup error-fn backp-fn]}
         dispatch-opts
 
@@ -516,7 +518,7 @@
             ))
 
         rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
-        sig-filter*  (sig-filter ns-filter kind-filter id-filter min-level)
+        sig-filter*  (sig-filter kind-filter ns-filter id-filter min-level)
         stopped?_    (enc/latom false)
 
         rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
@@ -664,10 +666,10 @@
 
               2. The filter API consting of the following:
 
-                `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
-                `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
-                `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
                 `set-kind-filter!`,   `with-kind-filter`    - for filtering calls by %s kind (when relevant)
+                `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
+                `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
+                `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
 
                 See the relevant docstrings for details.
 
@@ -709,38 +711,6 @@
 (comment (api:without-filters "purpose" '*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:set-ns-filter!
-     [purpose *rt-sig-filter*]
-     `(defn ~'set-ns-filter!
-        ~(api-docstring 11 purpose
-           "Sets %s call namespace filter based on given `ns-filter` spec.
-           `ns-filter` may be:
-
-             - A regex pattern of namespace/s to allow.
-             - A str/kw/sym, in which \"*\"s act as wildcards.
-             - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.")
-        ~'[ns-filter]
-        (enc/force-ref
-          (enc/update-var-root! ~*rt-sig-filter*
-            (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))))
-
-(comment (api:set-ns-filter! "purpose" '*my-rt-sig-filter*))
-
-#?(:clj
-   (defn- api:with-ns-filter
-     [purpose *rt-sig-filter*]
-     `(defmacro ~'with-ns-filter
-        ~(api-docstring 11 purpose
-           "Executes form with given %s call namespace filter in effect.
-           See `set-ns-filter!` for details.")
-        ~'[ns-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
-           ~~'form))))
-
-(comment (api:with-ns-filter "purpose" '*my-rt-sig-filter*))
-
-#?(:clj
    (defn- api:set-kind-filter!
      [purpose *rt-sig-filter*]
      `(defn ~'set-kind-filter!
@@ -771,6 +741,38 @@
            ~~'form))))
 
 (comment (api:with-kind-filter "purpose" '*my-rt-sig-filter*))
+
+#?(:clj
+   (defn- api:set-ns-filter!
+     [purpose *rt-sig-filter*]
+     `(defn ~'set-ns-filter!
+        ~(api-docstring 11 purpose
+           "Sets %s call namespace filter based on given `ns-filter` spec.
+           `ns-filter` may be:
+
+             - A regex pattern of namespace/s to allow.
+             - A str/kw/sym, in which \"*\"s act as wildcards.
+             - A vector or set of regex patterns or strs/kws/syms.
+             - {:allow <spec> :deny <spec>} with specs as above.")
+        ~'[ns-filter]
+        (enc/force-ref
+          (enc/update-var-root! ~*rt-sig-filter*
+            (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))))
+
+(comment (api:set-ns-filter! "purpose" '*my-rt-sig-filter*))
+
+#?(:clj
+   (defn- api:with-ns-filter
+     [purpose *rt-sig-filter*]
+     `(defmacro ~'with-ns-filter
+        ~(api-docstring 11 purpose
+           "Executes form with given %s call namespace filter in effect.
+           See `set-ns-filter!` for details.")
+        ~'[ns-filter form]
+        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
+           ~~'form))))
+
+(comment (api:with-ns-filter "purpose" '*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:with-id-filter
@@ -938,6 +940,12 @@
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
 
           ~(api:without-filters purpose *rt-sig-filter*)
+
+          ~(when (>= sf-arity 4)
+             `(do
+                ~(api:set-kind-filter! purpose *rt-sig-filter*)
+                ~(api:with-kind-filter purpose *rt-sig-filter*)))
+
           ~(api:set-ns-filter!  purpose *rt-sig-filter*)
           ~(api:with-ns-filter  purpose *rt-sig-filter*)
 
@@ -945,11 +953,6 @@
              `(do
                 ~(api:set-id-filter! purpose *rt-sig-filter*)
                 ~(api:with-id-filter purpose *rt-sig-filter*)))
-
-          ~(when (>= sf-arity 4)
-             `(do
-                ~(api:set-kind-filter! purpose *rt-sig-filter*)
-                ~(api:with-kind-filter purpose *rt-sig-filter*)))
 
           ~(api:set-min-level! purpose sf-arity *rt-sig-filter*)
           ~(api:with-min-level purpose sf-arity *rt-sig-filter*)
@@ -1050,8 +1053,8 @@
                  0.0 => noop   every arg
                  0.5 => handle random 50%% of args
 
-             `ns-filter`   - Namespace filter as in `set-ns-filter!`
              `kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
+             `ns-filter`   - Namespace filter as in `set-ns-filter!`
              `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
              `min-level`   - Minimum   level  as in `set-min-level!`
 
@@ -1105,7 +1108,7 @@
             [handler-id handler-fn
              {:as   dispatch-opts
               :keys [async priority sample-rate rate-limit when-fn middleware,
-                     ns-filter kind-filter id-filter min-level,
+                     kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
          (get-handlers
