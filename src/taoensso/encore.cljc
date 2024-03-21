@@ -4004,55 +4004,116 @@
     - `goog.string.StringBuffer` for Cljs
 
   See also `sb-append`."
-  #?(:clj  (^StringBuilder [                ] (StringBuilder.)))
-  #?(:cljs (               [                ] (goog.string.StringBuffer.)))
-  #?(:clj  (^StringBuilder [^String init-str] (StringBuilder.            init-str)))
-  #?(:cljs (               [^String init-str] (goog.string.StringBuffer. init-str))))
+  #?(:clj  (^StringBuilder [    ]            (StringBuilder.)))
+  #?(:cljs (               [    ] (goog.string.StringBuffer.)))
+  #?(:clj  (^StringBuilder [init] (if (instance?            StringBuilder init) init            (StringBuilder. (str init)))))
+  #?(:cljs (               [init] (if (instance? goog.string.StringBuffer init) init (goog.string.StringBuffer. (str init))))))
 
 (defn sb-append
-  "Appends given string to given string builder. See also `str-builder.`"
-  #?(:clj  (^StringBuilder [^StringBuilder str-builder s] (.append str-builder s))
-     :cljs (               [               str-builder s] (.append str-builder s)))
-  ([str-builder s & more]
-   (reduce (fn [acc in] (sb-append acc in))
-     (sb-append str-builder s)
-     more)))
+  "Appends given string/s to given string builder. See also `str-builder.`"
+  (#?(:clj ^StringBuilder [^StringBuilder str-builder x]
+      :cljs               [               str-builder x])
+    (if (nil? x)
+      (do      str-builder)
+      (.append str-builder
+        #?(:clj  (.toString ^Object x)
+           :cljs (.toString         x)))))
+
+  (#?(:clj  ^StringBuilder [^StringBuilder str-builder x & more]
+      :cljs                [               str-builder x & more])
+    (reduce
+      (fn [acc in] (sb-append acc in))
+      (sb-append str-builder x) more)))
 
 (comment (str (sb-append (str-builder "a") "b" "c" \d)))
+
+(defn ^:no-doc sb-appender
+  "Private, don't use.
+  Returns a stateful string-building (fn [x & more]) that appends
+  non-nil xs to string builder, starting with a separator IFF string
+  building has started and at least one x is non-nil.
+
+  The fn returns the underlying string builder."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  ([            ] (sb-appender (str-builder) " "))
+  ([   separator] (sb-appender (str-builder) separator))
+  ([sb separator]
+   (let [#?@(:clj [^StringBuilder sb sb])
+         sep!
+         (let [sep       (str separator)
+               started?_ (volatile! false)]
+           (fn []
+             (if @started?_
+               (do (.append sb sep)   true)
+               (do (vreset! started?_ true) false))))]
+
+     (fn a-sb-appender
+       ([        ] sb) ; Undocumented
+       ([x       ] (if (nil? x) sb (do (sep!) (sb-append sb x))))
+       ([x & more]
+        (if (and (nil? x) (revery? nil? more))
+          nil
+          (do
+            (sep!)
+            (reduce
+              (fn [acc in] (sb-append acc in))
+              (sb-append sb x) more))))))))
+
+(comment (str (let [s+ (sb-appender)] (s+ "x1a" "x1b" "x1c") (s+ "x2a" "x2c") (sb-append (s+) "\n"))))
 
 (defn str-rf
   "String builder reducing fn."
   ([      ] (str-builder))
-  ([acc   ]            (if (str-builder? acc) acc (str-builder (str acc)))) ; cf
-  ([acc in] (sb-append (if (str-builder? acc) acc (str-builder (str acc))) (str in))))
+  ([acc   ] (str acc)) ; cf
+  ([acc in]
+   (if (nil? in)
+     acc
+     (.append (str-builder acc)
+       #?(:clj  (.toString ^Object in)
+          :cljs (.toString         in))))))
+
+(defn- sb-rf
+  "Like `str-rf` but presumes string builder init value."
+  ([     ] (str-builder))
+  ([sb   ] (str sb)) ; cf
+  ([sb in]
+   (if (nil? in)
+     sb
+     #?(:clj  (.append ^StringBuilder sb (.toString ^Object in))
+        :cljs (.append                sb (.toString         in))))))
 
 (comment
-  (qb 1e3 ; [358.45 34.6]
-         (reduce str    (range 512))
-    (str (reduce str-rf (range 512)))))
+  (qb 5e3 ; [264.84 37.73 40.51]
+    (do      (reduce str                  (range 512)))
+    (do (str (reduce str-rf               (range 512))))
+    (do (str (reduce sb-rf  (str-builder) (range 512))))))
 
 (defn str-join
-  "Faster, transducer-based generalization of `clojure.string/join` with `xform` support."
+  "Faster generalization of `clojure.string/join` with transducer support."
   {:tag #?(:clj 'String :cljs 'string)}
-  ([                coll] (str-join nil       nil coll))
-  ([separator       coll] (str-join separator nil coll))
-  ([separator xform coll]
+  ([                xs] (str-join nil       nil xs))
+  ([separator       xs] (str-join separator nil xs))
+  ([separator xform xs]
    (if (and separator (not= separator ""))
-     (let [sep-xform (interpose separator)
-           str-rf*   (completing str-rf str)]
+     (let [separator  (str  separator)]
        (if xform
-         (transduce (comp xform sep-xform) str-rf* coll)
-         (transduce             sep-xform  str-rf* coll)))
+         (transduce (comp xform (interpose separator)) sb-rf (str-builder) xs)
+         (transduce             (interpose separator)  sb-rf (str-builder) xs)))
+
      (if xform
-       (transduce xform (completing str-rf str) coll)
-       (str (reduce str-rf coll))))))
+       (do  (transduce xform sb-rf (str-builder) xs))
+       (str (reduce          sb-rf (str-builder) xs))))))
 
 (comment
-  (qb 1e5
-    (str/join "," ["a" "b" "c" "d"])
-    (str-join "," ["a" "b" "c" "d"])
-    (str-join ""  ["a" "b" "c" "d"])) ; [29.37 23.63 13.34]
-  (str-join "," (comp (filter #{"a" "c"}) (map str/upper-case)) ["a" "b" "c"]))
+  (str-join "x" (comp (filter #{"a" "c"}) (map str/upper-case)) ["a" "b" "c"]) ; "AxC"
+  (str-join "," (filter some?) ["a" "b" "c" nil "" "d"]) ; "a,b,c,,d"
+
+  (let [xf-some (filter some?)]
+    (qb 1e6 ; [224.03 134.57 191.69 100.76]
+      (str/join ","         ["a" "b" "c" nil "" "d"])
+      (str-join ","         ["a" "b" "c" nil "" "d"])
+      (str-join "," xf-some ["a" "b" "c" nil "" "d"])
+      (str-join ""          ["a" "b" "c" nil "" "d"]))))
 
 (defn str-contains?
   #?(:cljs {:tag 'boolean})

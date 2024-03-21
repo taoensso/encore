@@ -588,6 +588,12 @@
          (is (= (enc/swap-in! a [:a :b2] (fn [v] (enc/swapped :swap/dissoc v))) :x2))
          (is (= @a {:a {}}))])])])
 
+;;;; Strings
+
+(deftest _sb-appender
+  [(is (= (str (let [s+ (enc/sb-appender)] (s+ "x1a" "x1b" nil "x1c") (s+ nil "x2a" "x2c") (enc/sb-append (s+) "\n"))) "x1ax1bx1c x2ax2c\n"))
+   (is (= (str (let [s+ (enc/sb-appender)] (s+ "x1a" "x1b" nil "x1c") (s+ nil nil nil)     (enc/sb-append (s+) "\n"))) "x1ax1bx1c\n"))])
+
 ;;;; Callsites, etc.
 
 (defmacro ^:private callsite-inner  [] (meta &form))
