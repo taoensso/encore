@@ -2776,8 +2776,8 @@
 
 #?(:cljs
    (deftype LightAtom [^:mutable state]
-     IDeref (-deref  [_    ] state)
-     IReset (-reset! [_ new] (set! state new) new)
+     IDeref (-deref  [_        ]       state)
+     IReset (-reset! [_     new] (set! state new) new)
      ISwap  (-swap!  [t swap-fn] (t swap-fn))
      IFn
      (-invoke [_          ] state)
@@ -2796,6 +2796,13 @@
      (compareAndSet [_ old new] (.compareAndSet aref old new))
      (reset         [_     new] (.set aref new) new)
      (swap          [t swap-fn] (t swap-fn))
+
+     clojure.lang.IAtom2
+     (resetVals [t     new] (.swapVals t (fn [_] new)))
+     (swapVals  [_ swap-fn]
+       (let [old_ (clojure.lang.Volatile. nil)
+             new  (.updateAndGet aref (reify UnaryOperator (apply [_ old] (.reset old_ old) (swap-fn old))))]
+         [(.deref old_) new]))
 
      clojure.lang.IFn
      (invoke [_          ] (.get          aref))
