@@ -452,6 +452,22 @@
       (is (false? (enc/const-form? 'foo)))
       (is (true?  (enc/const-form? :foo)))]))
 
+;;;; LightAtoms
+
+(deftest _latoms
+  (let [la_ (enc/latom 0)]
+    [(is (= @la_ (la_) 0))
+     (is (= (compare-and-set! la_ 0 1) true))  (is (= @la_ (la_) 1))
+     (is (= (compare-and-set! la_ 0 2) false)) (is (= @la_ (la_) 1))
+     (is (= (reset! la_ 2)   2))               (is (= @la_ (la_) 2))
+     (is (= (swap!  la_ inc) 3))               (is (= @la_ (la_) 3))
+
+     (is (= (reset! la_ {:a 0, :b 0}) {:a 0, :b 0}))
+     (is (= (la_ :a inc) 1)) (is (= @la_ (la_) {:a 1, :b 0}))
+
+     (is (= (reset-vals! la_ 4)   [{:a 1, :b 0} 4]))
+     (is (= (swap-vals!  la_ inc) [4 5]))]))
+
 ;;;; Cache API
 
 (do
