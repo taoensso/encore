@@ -6148,6 +6148,55 @@
 
 (comment (qb 1e6 (get-hostname (msecs :mins 1) 5000 "UnknownHost"))) ; 60.36
 
+;;;;
+
+(defn- format-nsecs-num-fn [n-min-fd n-max-fd]
+  #?(:clj
+     (let [^ThreadLocal nf-proxy
+           (thread-local-proxy
+             (let [nf (java.text.NumberFormat/getInstance java.util.Locale/US)]
+               (when (instance? java.text.DecimalFormat nf)
+                 (doto ^java.text.DecimalFormat nf
+                   (.setGroupingSize          3)
+                   (.setMinimumFractionDigits n-min-fd)
+                   (.setMaximumFractionDigits n-max-fd)
+                   (.setDecimalFormatSymbols ; Redundant?
+                     (doto (java.text.DecimalFormatSymbols.)
+                       (.setDecimalSeparator  \.)
+                       (.setGroupingSeparator \,)))))))]
+
+       (fn [n] (.format ^java.text.NumberFormat (.get nf-proxy) n)))
+
+     :cljs
+     (let [nf
+           (js/Intl.NumberFormat. "en-US"
+             #js{:minimumFractionDigits n-min-fd
+                 :maximumFractionDigits n-max-fd
+                 :useGrouping           true})]
+
+       (fn [n] (.format nf n)))))
+
+(comment ((format-nsecs-num-fn 2 2) 123123123)) ; "123,123,123.00"
+
+(let [fmt0 (format-nsecs-num-fn 0 0)
+      fmt2 (format-nsecs-num-fn 2 2)]
+
+  (defn format-nsecs
+    "Returns given nanoseconds (long) as formatted human-readable string.
+    Example outputs: \"1.00m\", \"4.20s\", \"340ms\", \"822μs\", etc."
+    {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+     :tag #?(:clj 'String :cljs 'string)}
+    [nanosecs]
+    (let [ns (double nanosecs)]
+      (cond
+        (>= ns 6e10) (str (fmt2 (/ ns 6e10)) "m")
+        (>= ns 1e9)  (str (fmt2 (/ ns 1e9))  "s")
+        (>= ns 1e6)  (str (fmt0 (/ ns 1e6))  "ms")
+        (>= ns 1e3)  (str (fmt0 (/ ns 1e3))  "μs")
+        :else        (str (fmt0    ns)       "ns")))))
+
+(comment (qb 1e5 (format-nsecs 1.8e9))) ; 22.68
+
 ;;;; Benchmarking
 
 #?(:clj
