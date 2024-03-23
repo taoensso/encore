@@ -1,0 +1,26 @@
+{;;:lein true
+ :source-paths ["src" "test"]
+ :dependencies
+ [[org.clojure/tools.reader  "1.4.1"]
+  [com.taoensso/truss       "1.11.0"]
+  [cider/cider-nrepl        "0.47.0"]
+  #_[binaryage/devtools      "1.0.7"]]
+
+ :nrepl
+ {:port 7887
+  :middleware
+  [cider.nrepl/cider-middleware]}
+
+ :dev-http {8090 {:root "public"}}
+ :builds
+ {:main
+  {:target :browser
+   :output-dir "public/js"
+   :modules  {:main {:entries [taoensso.encore]}}
+   :preloads [#_devtools.preload]}
+
+  :tests
+  {:target :node-test
+   :output-to "target/tests.js"
+   :ns-regexp "-tests$"
+   :autorun true}}}
