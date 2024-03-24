@@ -6405,9 +6405,9 @@
 
      (have? [:or nil? nat-int?] timeout-ms)
 
-     (let [xhr-pool (force xhr-pool)
+     (let [^goog.net.XhrIoPool xhr-pool (force xhr-pool)
            with-xhr
-           (fn [xhr]
+           (fn [^goog.net.XhrIo xhr]
              (catching
                (let [timeout-ms (or (get opts :timeout) timeout-ms) ; Deprecated opt
                      xhr-method
