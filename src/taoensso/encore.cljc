@@ -2948,15 +2948,33 @@
 (comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
 
 (do
-  (deftype       Swapped [newv    returnv])
-  (defn swapped ^Swapped [new-val return-val] (Swapped. new-val return-val))
-  (defn swapped-vec [x]
+  (deftype Swapped [newv returnv])
+  (defn    swapped
+    "For use within the swap functions of `swap-in!` and `swap-val!`.
+
+    Allows the easy decoupling of new and returned values. Compare:
+      (let [a (atom 0)] [(core/swap! a (fn [old]          (inc old)     )) @a]) [1 1] ; new=1, return=1
+      (let [a (atom 0)] [(swap-in!   a (fn [old] (swapped (inc old) old))) @a]) [0 1] ; new=1, return=0
+
+    Faster and much more flexible than `core/swap-vals!`, etc.
+    Especially useful when combined with the `update-in` semantics of `swap-in!`, etc."
+    #?(:clj {:inline (fn [new-val return-val] `(taoensso.encore.Swapped. ~new-val ~return-val))})
+    ^Swapped             [new-val return-val]  (taoensso.encore.Swapped.  new-val  return-val))
+
+  (defn ^:no-doc swapped-vec
+    "Private, don't use."
+    [x]
     (if (instance? Swapped x)
       [(.-newv ^Swapped x) (.-returnv ^Swapped x)]
       [x x]))
 
-  (defn swapped? #?(:cljs {:tag 'boolean}) [x] (instance? Swapped x))
-  (comment (qb 1e6 (.-newv (swapped "new" "return")))))
+  (defn swapped?
+    "Returns true iff given `Swapped` argument."
+    #?(:cljs {:tag 'boolean}
+       :clj  {:inline (fn [x] `(instance? taoensso.encore.Swapped ~x))})
+                          [x]  (instance? taoensso.encore.Swapped  x))
+
+  (comment (qb 1e6 (.-newv (swapped "new" "return"))))) ; 31.69
 
 (defn- return-swapped [^Swapped sw m0 m1]
   (let [rv (.-returnv sw)]
@@ -3062,38 +3080,27 @@
 
 (let [return (fn [m0 v0 m1 v1] v1)]
   (defn swap-in! ; Keys: 0, 1, n (general)
-    "Like `swap!` but supports `update-in` semantics,
-    returns <new-key-val> or <swapped-return-val>."
+    "Like `swap!` but supports `update-in` semantics and `swapped`.
+    Returns <new-key-val> or <swapped-return-val>:
+      (swap-in! (atom {:k1 {:k2 5}}) [:k1 :k2] inc) => 6
+      (swap-in! (atom {:k1 {:k2 5}}) [:k1 :k2]
+        (fn [old] (swapped (inc old) old))) => 5"
     ([atom_              f] (-swap-k0! return atom_              f))
     ([atom_ ks           f] (-swap-kn! return atom_ ks nil       f))
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
 
   (defn swap-val! ; Keys: 1 (optimized)
-    "Like `swap-in!` but optimized for single-key case."
+    "Like `swap-in!` but optimized for single-key case:
+      (swap-val! (atom {:k 5}) :k inc) => 6
+      (swap-val! (atom {:k 5}) :k
+        (fn [old] (swapped (inc old) old))) => 5"
     ([atom_ k           f] (-swap-k1! return atom_ k nil       f))
     ([atom_ k not-found f] (-swap-k1! return atom_ k not-found f))))
 
-(comment
-  [(let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a :A :b :B})] [(swap-in! a_ [  ] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (assoc m :c :C))) @a_])
-   (let [a_ (atom {:a {:b :B}})]  [(swap-in! a_ [:a] (fn [m] (swapped (assoc m :c :C) m))) @a_])
-   (let [a_ (atom {:a {:b 100}})]  (swap-in! a_ [:a :b] inc)) ; => 101
-   (let [a_ (atom {:a {:b :b1 :c :c1} :d :d1})] (swap-in! a_ [:a :c] #_:nx :swap/dissoc) @a_)
-   (swap-in! (atom {:a {:b :b1}}) [:a :b] (fn [m] (swapped :swap/abort m)))
-   (swap-in! (atom {:a {:b :b1}}) (fn [m] (swapped (assoc m :c :C) :swap/old)))]
-
-  [[{:a :A, :b :B, :c :C} {:a :A, :b :B, :c :C}]
-   [{:a :A, :b :B} {:a :A, :b :B, :c :C}]
-   [{:b :B, :c :C} {:a {:b :B, :c :C}}]
-   [{:b :B} {:a {:b :B, :c :C}}]
-   101
-   {:a {:b :b1}, :d :d1}
-   :b1
-   {:a {:b :b1}}])
-
 (defn pull-val! ; Keys: 1 (optimized, common transform)
-  "Removes and returns value mapped to key."
+  "Removes and returns value mapped to key:
+    (let [a (atom {:k :v})]
+      [(pull-val! a :k) @a]) => [:v {}]"
   ([atom_ k          ] (pull-val! atom_ k nil))
   ([atom_ k not-found]
    (swap-val! atom_ k not-found

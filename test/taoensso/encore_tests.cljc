@@ -853,6 +853,67 @@
    (is (true?  (compare-and-set! (enc/latom 0) 0 1)))
    (is (false? (compare-and-set! (enc/latom 1) 0 1)))])
 
+;;;; Swap API
+
+(deftest _swap-api
+  [(testing "Reset variants"
+     [(testing "0, n keys"
+        [(is (= (let [a (atom             :old)] [(enc/reset-in! a               :new) @a]) [:old :new]))
+         (is (= (let [a (atom              nil)] [(enc/reset-in! a [:k1 :k2]     :v2b) @a]) [nil  {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom              nil)] [(enc/reset-in! a [:k1 :k2] :nf :v2b) @a]) [:nf  {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/reset-in! a [:k1 :k2]     :v2b) @a]) [:v2a {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/reset-in! a [:k1 :k3]     :v3a) @a]) [nil  {:k1 {:k2 :v2a, :k3 :v3a}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/reset-in! a [:k1 :k3] :nf :v3a) @a]) [:nf  {:k1 {:k2 :v2a, :k3 :v3a}}]))])
+
+      (testing "1 key"
+        [(is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/reset-val! a :k1     :v1b) @a]) [:v1a {:k1 :v1b, :k2 :v2a}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/reset-val! a :k2     :v2b) @a]) [:v2a {:k1 :v1a, :k2 :v2b}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/reset-val! a :k2 :nf :v2b) @a]) [:v2a {:k1 :v1a, :k2 :v2b}]))])
+
+      (testing "!?"
+        [(is (= (let [a (atom              nil)] [(enc/reset-in!? a           :new) @a]) [true  :new]))
+         (is (= (let [a (atom              nil)] [(enc/reset-in!? a            nil) @a]) [false nil]))
+         (is (= (let [a (atom              nil)] [(enc/reset-in!? a [:k1 :k2] :v2b) @a]) [true {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/reset-in!? a [:k1 :k2] :v2b) @a]) [true {:k1 {:k2 :v2b}}]))])])
+
+   (testing "Swap variants"
+     [(testing "0 keys"
+        [(is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old]              :new                )) @a]) [:new :new]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :new            old))) @a]) [:old :new]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :new      :swap/old))) @a]) [:old :new]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :new :swap/changed?))) @a]) [true :new]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :swap/abort     old))) @a]) [:old :old]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old]              :swap/abort         )) @a]) [:old :old]))])
+
+      (testing "n keys"
+        [(is (= (let [a (atom nil)] [(enc/swap-in! a [:k1 :k2]     (fn [old]              :v2b     )) @a]) [:v2b {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom nil)] [(enc/swap-in! a [:k1 :k2]     (fn [old] (enc/swapped :v2b old))) @a]) [nil  {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom nil)] [(enc/swap-in! a [:k1 :k2] :nf (fn [old] (enc/swapped :v2b old))) @a]) [:nf  {:k1 {:k2 :v2b}}]))
+
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :v2b             )) @a]) [:v2b {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old] (enc/swapped :v2b         old))) @a]) [:v2a {:k1 {:k2 :v2b}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old] (enc/swapped :swap/abort  old))) @a]) [:v2a {:k1 {:k2 :v2a}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old] (enc/swapped :swap/dissoc old))) @a]) [:v2a {:k1 {}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :swap/abort      )) @a]) [:v2a {:k1 {:k2 :v2a}}]))
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :swap/dissoc     )) @a]) [:swap/dissoc {:k1 {}}]))])
+
+      (testing "n keys"
+        [(is (= (let [a (atom nil)] [(enc/swap-val! a :k2     (fn [old]              :v2b     )) @a]) [:v2b {:k2 :v2b}]))
+         (is (= (let [a (atom nil)] [(enc/swap-val! a :k2     (fn [old] (enc/swapped :v2b old))) @a]) [nil {:k2 :v2b}]))
+         (is (= (let [a (atom nil)] [(enc/swap-val! a :k2 :nf (fn [old] (enc/swapped :v2b old))) @a]) [:nf {:k2 :v2b}]))
+
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :v2b             )) @a]) [:v2b {:k1 :v1a, :k2 :v2b}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old] (enc/swapped :v2b         old))) @a]) [:v2a {:k1 :v1a, :k2 :v2b}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old] (enc/swapped :swap/abort  old))) @a]) [:v2a {:k1 :v1a, :k2 :v2a}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old] (enc/swapped :swap/dissoc old))) @a]) [:v2a {:k1 :v1a}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :swap/abort      )) @a]) [:v2a {:k1 :v1a, :k2 :v2a}]))
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :swap/dissoc     )) @a]) [:swap/dissoc {:k1 :v1a}]))])
+
+      (testing "Pull"
+        [(is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/pull-val! a :k2    ) @a]) [:v2a {:k1 :v1a}]))
+         (is (= (let [a (atom {:k1 :v1a          })] [(enc/pull-val! a :k2    ) @a]) [nil  {:k1 :v1a}]))
+         (is (= (let [a (atom {:k1 :v1a          })] [(enc/pull-val! a :k2 :nf) @a]) [:nf  {:k1 :v1a}]))])])])
+
 ;;;; Name filter
 
 (deftest _name-filter
