@@ -70,7 +70,7 @@
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
     format update-in merge merge-with
-    memoize abs ex-message ex-cause
+    memoize abs ex-message ex-data ex-cause
     newline satisfies? uuid
     pr prn print println])
 
@@ -764,24 +764,128 @@
 
 ;;;; Errors
 
+(defn error?
+  "Returns true iff given platform error (`Throwable` or `js/Error`)."
+  #?(:cljs {:tag 'boolean})
+  [x]
+  #?(:clj  (instance? Throwable x)
+     :cljs (instance? js/Error  x)))
+
 (defn ex-message
   "Same as `core/ex-message` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
-  [ex]
-  #?(:clj  (when (instance? Throwable ex) (.getMessage ^Throwable ex))
-     :cljs (when (instance? js/Error  ex) (.-message              ex))))
+  [x]
+  #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
+     :cljs (when (instance? js/Error  x) (.-message              x))))
+
+(defn ex-data
+  "Same as `core/ex-data` (added in Clojure v1.4)."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  #?(:clj  (when (instance? clojure.lang.IExceptionInfo x) (.getData ^clojure.lang.IExceptionInfo x))
+     :cljs (when (instance?               ExceptionInfo x) (.-data                                x))))
 
 (defn ex-cause
   "Same as `core/ex-cause` (added in Clojure v1.10)."
   {:added "Encore v3.41.0 (2022-12-03)"}
-  [ex]
-  #?(:clj  (when (instance? Throwable     ex) (.getCause ^Throwable ex))
-     :cljs (when (instance? ExceptionInfo ex) (.-cause              ex))))
+  [x]
+  #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
+     :cljs (when (instance? ExceptionInfo x) (.-cause              x))))
+
+(defn ex-root
+  "Returns root cause of given platform error."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  (when (error? x)
+    (loop [error x]
+      (if-let [cause (ex-cause error)]
+        (recur cause)
+        error))))
+
+(comment (ex-root (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
+
+(defn ^:no-doc ex-type
+  "Private, don't use.
+   Returns class symbol of given platform error."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  #?(:clj (symbol (.getName (class x)))
+     :cljs
+     (cond
+       (instance? ExceptionInfo x) `ExceptionInfo ; Note namespaced
+       (instance? js/Error      x) (symbol "js" (.-name x)))))
+
+(defn ^:no-doc ex-map*
+  "Private, don't use.
+   Returns ?{:keys [type msg data]} for given platform error."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  (when-let [msg             (ex-message x)]
+    (if-let [data (not-empty (ex-data    x))]
+      {:type (ex-type x), :msg msg, :data data}
+      {:type (ex-type x), :msg msg})))
+
+(comment (ex-map* (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
+
+(defn ^:no-doc ex-chain
+  "Private, don't use.
+  Returns vector cause chain of given platform error."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  ([         x] (ex-chain false x))
+  ([as-maps? x]
+   (when (error? x)
+     (let [xf (if as-maps? ex-map* identity)]
+       (loop [acc [(xf x)], error x]
+         (if-let [cause (ex-cause error)]
+           (recur (conj acc (xf cause)) cause)
+           (do          acc)))))))
+
+(comment (ex-chain :as-maps (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
+
+#?(:clj
+   (defn- st-element->map [^StackTraceElement ste]
+     {:class  (symbol (.getClassName  ste))
+      :method (symbol (.getMethodName ste))
+      :file           (.getFileName   ste)
+      :line           (.getLineNumber ste)}))
+
+;; #?(:clj
+;;    (defn- st-element->str ^String [^StackTraceElement ste]
+;;      (str
+;;        "`" (.getClassName ste) "/" (.getMethodName ste) "`"
+;;        " at " (.getFileName ste) ":" (.getLineNumber ste))))
+
+(declare assoc-some as-?nempty-str)
+(defn ^:no-doc ex-map
+  "Private, don't use.
+  Returns ?{:keys [type msg data chain trace]} for given platform error."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [x]
+  (when-let [chain (ex-chain x)]
+    (let [maps     (mapv ex-map* chain)
+          root     (peek chain)
+          root-map (peek maps)]
+
+      (assoc-some root-map
+        :chain maps
+        :trace
+        #?(:cljs (as-?nempty-str (.-stack root))
+           :clj
+           (when-let [st (not-empty (.getStackTrace ^Throwable root))] ; Don't delay
+             (delay (mapv st-element->map st))))))))
+
+(comment
+  (ex-map  (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"})))
+  (ex-map  (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"})))
+  (let [ex (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))]
+    (qb 1e5 ; [34.01 435.45]
+      (ex-map         ex)
+      (Throwable->map ex))))
 
 #?(:clj
    (defmacro try*
-     "Like `try`, but `catch` clause classnames can be the special keywords
-       `:any` or `:common` for cross-platform catching. Addresses CLJ-1293."
+     "Like `try`, but `catch` clause class can be the special keywords
+     `:any` or `:common` for cross-platform catching. Addresses CLJ-1293."
 
      {:added "Encore v3.67.0 (2023-09-08)"
       :arglists '([expr* catch-clauses* ?finally-clause])}
@@ -828,57 +932,18 @@
   (macroexpand '(catching (do "foo") e e (println "finally")))
   (catching (zero? "9")))
 
-(defn error-data
-  "Returns data map iff `x` is an error of any type on platform."
-  ;; Note Clojure >= 1.7 now has `Throwable->map` (Clj only)
-  [x]
-  (when-let [data-map
-             (and x
-               (or
-                 (ex-data x) ; ExceptionInfo
-                 #?(:clj  (when (instance? Throwable x) {})
-                    :cljs                               {})))]
-
-    (let [base-map
-          #?(:clj
-             (let [^Throwable t x] ; (catch Throwable t <...>)
-               {:err-type   (type                 t)
-                :err-msg    (.getLocalizedMessage t)
-                :err-cause  (.getCause            t)})
-
-             :cljs
-             (let [err x] ; (catch :default t <...)
-               {:err-type  (type      err)
-                :err-msg   (.-message err)
-                :err-cause (.-cause   err)}))]
-
-      #_(assoc base-map :err-data data-map)
-      (conj    base-map           data-map))))
-
-(comment
-  (error-data (Throwable. "foo"))
-  (error-data (Exception. "foo"))
-  (error-data (ex-info    "foo" {:bar :baz})))
-
-#?(:clj
-   (defmacro caught-error-data
-     "Useful for error-throwing unit tests."
-     [& body] `(catching (do ~@body nil) e# (error-data e#))))
-
-(comment (caught-error-data (/ 5 0)))
-
 (declare submap? str-contains? re-pattern?)
 
 (defn matching-error
-  "Given an error (e.g. Throwable) and matching criteria.
-  Returns the error if it matches all criteria, otherwise returns nil.
+  "Given a platform error and criteria, returns the error if it matches
+  all criteria. Otherwise returns nil.
 
   `kind` may be:
     - A predicate function, (fn match? [x]) -> bool
     - A class (e.g. `ArithmeticException`, `AssertionError`, etc.)
     - `:all`     => any    platform error (Throwable or js/Error, etc.)
     - `:common`  => common platform error (Exception or js/Error)
-    - `:ex-info` => a `ExceptionInfo` as created by `ex-info`
+    - `:ex-info` => an `IExceptionInfo` as created by `ex-info`
     - A set of `kind`s as above, at least one of which must match
 
   `pattern` may be:
@@ -895,14 +960,15 @@
   ([kind err]
    (when-let [match?
               (cond
-                (fn?  kind) (kind err)                           ; pred kind
-                (set? kind) (rsome #(matching-error % err) kind) ; set  kind
+                (error? kind) (= kind err) ; Exact match
+                (fn?    kind)   (kind err)                         ; pred kind
+                (set?   kind) (rsome #(matching-error % err) kind) ; set  kind
                 :else
                 (case kind
-                  (:all    :any)     #?(:clj (instance? Throwable                  err) :cljs (some?                   err))
-                  (:common :default) #?(:clj (instance? Exception                  err) :cljs (instance? js/Error      err))
-                  :ex-info           #?(:clj (instance? clojure.lang.ExceptionInfo err) :cljs (instance? ExceptionInfo err))
-                  (do                        (instance? kind                       err))))]
+                  (:all    :any)     #?(:clj (instance? Throwable                   err) :cljs (some?                   err))
+                  (:common :default) #?(:clj (instance? Exception                   err) :cljs (instance? js/Error      err))
+                  :ex-info           #?(:clj (instance? clojure.lang.IExceptionInfo err) :cljs (instance? ExceptionInfo err))
+                  (do                        (instance? kind                        err))))]
      err))
 
   ([kind pattern err]
@@ -1158,8 +1224,6 @@
      :cljs (defn ^boolean editable?   [x] (implements?            IEditableCollection x)))
   #?(:clj  (defn          derefable?  [x] (instance? clojure.lang.IDeref x))
      :cljs (defn ^boolean derefable?  [x] (implements?            IDeref x)))
-  #?(:clj  (defn          error?      [x] (instance? Throwable x))
-     :cljs (defn ^boolean error?      [x] (instance? js/Error  x)))
   #?(:clj  (defn          atom?       [x] (instance? clojure.lang.Atom x))
      :cljs (defn ^boolean atom?       [x] (instance?              Atom x)))
   #?(:clj  (defn          transient?  [x] (instance? clojure.lang.ITransientCollection x))
@@ -7418,3 +7482,37 @@
                (throw
                  (ex-info "[encore/load-edn-config] Error loading edn config"
                    (assoc error-data :opts opts) t)))))))))
+
+(deprecated
+  (defn ^:no-doc error-data
+    "Prefer `ex-map`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    [x]
+    (when-let [data-map
+               (and x
+                 (or
+                   (ex-data x) ; ExceptionInfo
+                   #?(:clj  (when (instance? Throwable x) {})
+                      :cljs                               {})))]
+
+      (let [base-map
+            #?(:clj
+               (let [^Throwable t x] ; (catch Throwable t <...>)
+                 {:err-type   (type                 t)
+                  :err-msg    (.getLocalizedMessage t)
+                  :err-cause  (.getCause            t)})
+
+               :cljs
+               (let [err x] ; (catch :default t <...)
+                 {:err-type  (type      err)
+                  :err-msg   (.-message err)
+                  :err-cause (.-cause   err)}))]
+
+        #_(assoc base-map :err-data data-map)
+        (conj    base-map           data-map))))
+
+  #?(:clj
+     (defmacro ^:no-doc caught-error-data
+       "Prefer `throws?`."
+       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       [& body] `(catching (do ~@body nil) e# (error-data e#)))))
