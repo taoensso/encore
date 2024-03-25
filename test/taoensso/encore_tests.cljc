@@ -92,6 +92,24 @@
 
 ;;;; Errors
 
+(deftest _error-basics
+  (let [ex1 (ex-info "Ex1" {:k1 "v1"})
+        ex2 (ex-info "Ex2" {:k2 "v2"} ex1)
+        ex-type
+        #?(:clj  'clojure.lang.ExceptionInfo
+           :cljs    'cljs.core/ExceptionInfo)
+
+        ex1-map {:type ex-type :msg "Ex1" :data {:k1 "v1"}}
+        ex2-map {:type ex-type :msg "Ex2" :data {:k2 "v2"}}]
+
+    [(is (= (enc/ex-root          ex2)          ex1))
+     (is (= (enc/ex-chain         ex2) [ex2     ex1]))
+     (is (= (enc/ex-chain :as-map ex2) [ex2-map ex1-map]))
+     (is (enc/submap? (enc/ex-map ex2)
+           (assoc ex1-map
+             :chain [ex2-map ex1-map]
+             :trace (enc/pred #?(:clj #(vector? (force %)) :cljs string?)))))]))
+
 (deftest _matching-error
   [(is (enc/error? (enc/matching-error                     (enc/catching ("") t t))))
    (is (enc/error? (enc/matching-error            :common  (enc/catching ("") t t))))
