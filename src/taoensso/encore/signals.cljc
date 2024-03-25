@@ -703,12 +703,13 @@
 
 #?(:clj
    (defn- api:without-filters
-     [purpose *rt-sig-filter*]
-     `(defmacro ~'without-filters
-        ~(api-docstring 0 purpose "Executes form without any runtime filters.")
-        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
+     [purpose *rt-sig-filter* clj?]
+     (when clj?
+       `(defmacro ~'without-filters
+          ~(api-docstring 0 purpose "Executes form without any runtime filters.")
+          ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form)))))
 
-(comment (api:without-filters "purpose" '*my-rt-sig-filter*))
+(comment (api:without-filters "purpose" '*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-kind-filter!
@@ -731,16 +732,17 @@
 
 #?(:clj
    (defn- api:with-kind-filter
-     [purpose *rt-sig-filter*]
-     `(defmacro ~'with-kind-filter
-        ~(api-docstring 11 purpose
-           "Executes form with given %s call kind filter in effect.
-           See `set-kind-filter!` for details.")
-        ~'[kind-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
-           ~~'form))))
+     [purpose *rt-sig-filter* clj?]
+     (when clj?
+       `(defmacro ~'with-kind-filter
+          ~(api-docstring 13 purpose
+             "Executes form with given %s call kind filter in effect.
+             See `set-kind-filter!` for details.")
+          ~'[kind-filter form]
+          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
+             ~~'form)))))
 
-(comment (api:with-kind-filter "purpose" '*my-rt-sig-filter*))
+(comment (api:with-kind-filter "purpose" '*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -763,29 +765,31 @@
 
 #?(:clj
    (defn- api:with-ns-filter
-     [purpose *rt-sig-filter*]
-     `(defmacro ~'with-ns-filter
-        ~(api-docstring 11 purpose
-           "Executes form with given %s call namespace filter in effect.
-           See `set-ns-filter!` for details.")
-        ~'[ns-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
-           ~~'form))))
+     [purpose *rt-sig-filter* clj?]
+     (when clj?
+       `(defmacro ~'with-ns-filter
+          ~(api-docstring 13 purpose
+             "Executes form with given %s call namespace filter in effect.
+             See `set-ns-filter!` for details.")
+          ~'[ns-filter form]
+          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
+             ~~'form)))))
 
-(comment (api:with-ns-filter "purpose" '*my-rt-sig-filter*))
+(comment (api:with-ns-filter "purpose" '*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:with-id-filter
-     [purpose *rt-sig-filter*]
-     `(defmacro ~'with-id-filter
-        ~(api-docstring 11 purpose
-           "Executes form with given %s call id filter in effect.
-           See `set-id-filter!` for details.")
-        ~'[id-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
-           ~~'form))))
+     [purpose *rt-sig-filter* clj?]
+     (when clj?
+       `(defmacro ~'with-id-filter
+          ~(api-docstring 13 purpose
+             "Executes form with given %s call id filter in effect.
+             See `set-id-filter!` for details.")
+          ~'[id-filter form]
+          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
+             ~~'form)))))
 
-(comment (api:with-id-filter "purpose" '*my-rt-sig-filter*))
+(comment (api:with-id-filter "purpose" '*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-id-filter!
@@ -862,38 +866,39 @@
 
 #?(:clj
    (defn- api:with-min-level
-     [purpose sf-arity *rt-sig-filter*]
-     (case (int sf-arity)
-       (4)
-       `(defmacro ~'with-min-level
-          ~(api-docstring 13 purpose
-             "Executes form with given minimum %s call level in effect.
-             See `set-min-level!` for details.")
-          (~'[               min-level form] (list '~'with-min-level nil    nil ~'min-level ~'form))
-          (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
-          (~'[kind ns-filter min-level form]
-           `(binding [~'~*rt-sig-filter*
-                      (update-sig-filter ~'~*rt-sig-filter*
-                        {:min-level-fn
-                         (fn [~'old-ml#]
-                           (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
-              ~~'form)))
+     [purpose sf-arity *rt-sig-filter* clj?]
+     (when clj?
+       (case (int sf-arity)
+         (4)
+         `(defmacro ~'with-min-level
+            ~(api-docstring 15 purpose
+               "Executes form with given minimum %s call level in effect.
+               See `set-min-level!` for details.")
+            (~'[               min-level form] (list '~'with-min-level nil    nil ~'min-level ~'form))
+            (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
+            (~'[kind ns-filter min-level form]
+             `(binding [~'~*rt-sig-filter*
+                        (update-sig-filter ~'~*rt-sig-filter*
+                          {:min-level-fn
+                           (fn [~'old-ml#]
+                             (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
+                ~~'form)))
 
-       (2 3)
-       `(defmacro ~'with-min-level
-          ~(api-docstring 13 purpose
-             "Executes form with given minimum %s call level in effect.
-             See `set-min-level!` for details.")
-          (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
-          (~'[ns-filter min-level form]
-           `(binding [~'~*rt-sig-filter*
-                      (update-sig-filter ~'~*rt-sig-filter*
-                        {:min-level-fn
-                         (fn [~'old-ml#]
-                           (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
-              ~~'form))))))
+         (2 3)
+         `(defmacro ~'with-min-level
+            ~(api-docstring 15 purpose
+               "Executes form with given minimum %s call level in effect.
+               See `set-min-level!` for details.")
+            (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
+            (~'[ns-filter min-level form]
+             `(binding [~'~*rt-sig-filter*
+                        (update-sig-filter ~'~*rt-sig-filter*
+                          {:min-level-fn
+                           (fn [~'old-ml#]
+                             (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
+                ~~'form)))))))
 
-(comment (api:with-min-level "purpose" 4 '*my-rt-sig-filter*))
+(comment (api:with-min-level "purpose" 4 '*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:get-min-level
@@ -929,7 +934,8 @@
 
      ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
 
-     (let [sf-arity (int (or sf-arity -1))]
+     (let [sf-arity (int (or sf-arity -1))
+           clj? (not (:ns &env))]
 
        (when-not (contains? #{1 2 3 4} sf-arity)
          (unexpected-sf-artity! sf-arity `def-filter-api))
@@ -938,24 +944,23 @@
           (enc/defalias level-aliases)
           ~(api:help:filters    purpose)
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
-
-          ~(api:without-filters purpose *rt-sig-filter*)
+          ~(api:without-filters purpose *rt-sig-filter* clj?)
 
           ~(when (>= sf-arity 4)
              `(do
                 ~(api:set-kind-filter! purpose *rt-sig-filter*)
-                ~(api:with-kind-filter purpose *rt-sig-filter*)))
+                ~(api:with-kind-filter purpose *rt-sig-filter* clj?)))
 
-          ~(api:set-ns-filter!  purpose *rt-sig-filter*)
-          ~(api:with-ns-filter  purpose *rt-sig-filter*)
+          ~(api:set-ns-filter! purpose *rt-sig-filter*)
+          ~(api:with-ns-filter purpose *rt-sig-filter* clj?)
 
           ~(when (>= sf-arity 3)
              `(do
                 ~(api:set-id-filter! purpose *rt-sig-filter*)
-                ~(api:with-id-filter purpose *rt-sig-filter*)))
+                ~(api:with-id-filter purpose *rt-sig-filter* clj?)))
 
           ~(api:set-min-level! purpose sf-arity *rt-sig-filter*)
-          ~(api:with-min-level purpose sf-arity *rt-sig-filter*)
+          ~(api:with-min-level purpose sf-arity *rt-sig-filter* clj?)
           ~(api:get-min-level  purpose sf-arity *rt-sig-filter* ct-sig-filter)))))
 
 (comment
@@ -1132,29 +1137,31 @@
 
 #?(:clj
    (defn- api:with-handler
-     [purpose *sig-handlers* base-dispatch-opts]
-     `(defmacro ~'with-handler
-        ~(api-docstring 11 purpose
-           "Executes form with ONLY the given handler-fn registered.
-           Useful for tests/debugging. See also `with-handler+`.")
-        ~'[handler-id handler-fn dispatch-opts form]
-        `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
-           ~~'form))))
+     [purpose *sig-handlers* base-dispatch-opts clj?]
+     (when clj?
+       `(defmacro ~'with-handler
+          ~(api-docstring 11 purpose
+             "Executes form with ONLY the given handler-fn registered.
+             Useful for tests/debugging. See also `with-handler+`.")
+          ~'[handler-id handler-fn dispatch-opts form]
+          `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+             ~~'form)))))
 
-(comment (api:with-handler "purpose" '*my-sig-handlers* {:my-opt :foo}))
+(comment (api:with-handler "purpose" '*my-sig-handlers* {:my-opt :foo} :clj))
 
 #?(:clj
    (defn- api:with-handler+
-     [purpose *sig-handlers* base-dispatch-opts]
-     `(defmacro ~'with-handler+
-        ~(api-docstring 11 purpose
-           "Executes form with the given handler-fn registered.
-           Useful for tests/debugging. See also `with-handler`.")
-        ~'[handler-id handler-fn dispatch-opts form]
-        `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
-           ~~'form))))
+     [purpose *sig-handlers* base-dispatch-opts clj?]
+     (when clj?
+       `(defmacro ~'with-handler+
+          ~(api-docstring 11 purpose
+             "Executes form with the given handler-fn registered.
+             Useful for tests/debugging. See also `with-handler`.")
+          ~'[handler-id handler-fn dispatch-opts form]
+          `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+             ~~'form)))))
 
-(comment (api:with-handler+ "purpose" '*my-sig-handlers* {:my-opt :foo}))
+(comment (api:with-handler+ "purpose" '*my-sig-handlers* {:my-opt :foo} :clj))
 
 #?(:clj
    (defmacro def-handler-api
@@ -1167,15 +1174,16 @@
 
      ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
 
-     `(do
-        ~(api:help:handlers   purpose)
-        ~(api:get-handlers    purpose *sig-handlers*)
-        ~(api:remove-handler! purpose *sig-handlers*)
-        ~(api:add-handler!    purpose *sig-handlers* base-dispatch-opts)
-        ~(api:with-handler    purpose *sig-handlers* base-dispatch-opts)
-        ~(api:with-handler+   purpose *sig-handlers* base-dispatch-opts)
-        ~(when-not (:ns &env)
-           (api:add-shutdown-hook *sig-handlers*)))))
+     (let [clj? (not (:ns &env))]
+      `(do
+         ~(api:help:handlers   purpose)
+         ~(api:get-handlers    purpose *sig-handlers*)
+         ~(api:remove-handler! purpose *sig-handlers*)
+         ~(api:add-handler!    purpose *sig-handlers* base-dispatch-opts)
+         ~(api:with-handler    purpose *sig-handlers* base-dispatch-opts clj?)
+         ~(api:with-handler+   purpose *sig-handlers* base-dispatch-opts clj?)
+         ~(when-not (:ns &env)
+            (api:add-shutdown-hook *sig-handlers*))))))
 
 (comment
   (def ^:dynamic *sig-handlers* nil)
