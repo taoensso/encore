@@ -112,7 +112,7 @@
      :cljs
      (:require-macros
       [taoensso.encore :as enc-macros :refer
-       [have have! have? compile-if try-eval
+       [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
         def* defonce try* catching binding -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
