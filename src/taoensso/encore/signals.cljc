@@ -610,15 +610,19 @@
 
   ;; Given pre-wrapped handler-fn
   ([handlers handler-id pre-wrapped-handler-fn]
-   (enc/sortv #(get-in (meta %) [:dispatch-opts :priority] default-handler-priority) enc/rcompare
-     (conj (or (remove-handler handlers handler-id) []) pre-wrapped-handler-fn)))
+   (if-not pre-wrapped-handler-fn
+     handlers
+     (enc/sortv #(get-in (meta %) [:dispatch-opts :priority] default-handler-priority) enc/rcompare
+       (conj (or (remove-handler handlers handler-id) []) pre-wrapped-handler-fn))))
 
   ;; Given unwrapped handler-fn
   ([handlers handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts]
-   (if (get dispatch-opts :no-wrap?) ; Undocumented
-     (add-handler handlers handler-id unwrapped-handler-fn)
-     (add-handler handlers handler-id
-       (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts)))))
+   (if-not unwrapped-handler-fn
+     handlers
+     (if (get dispatch-opts :no-wrap?) ; Undocumented
+       (add-handler handlers handler-id unwrapped-handler-fn)
+       (add-handler handlers handler-id
+         (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts))))))
 
 ;;;; Local API
 
