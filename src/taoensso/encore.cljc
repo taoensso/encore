@@ -732,6 +732,14 @@
 
 (defalias get-truss-data taoensso.truss/get-data)
 
+;;;;
+
+#?(:clj
+   (defn class-sym
+     "Returns class name symbol of given argument."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [x] (when x (symbol (.getName (class x))))))
+
 ;;;; Forms
 ;; Useful for macros, etc.
 
