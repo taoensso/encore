@@ -882,11 +882,27 @@
       (ex-map         ex)
       (Throwable->map ex))))
 
+#?(:clj (defn-     critical-throwable? [x] (and (instance? Error     x) (not (instance? AssertionError x)))))
+#?(:clj (defn- non-critical-throwable? [x] (and (instance? Throwable x) (not (critical-throwable?      x)))))
+#?(:clj
+   (defn ^:no-doc throw-critical
+     "Private, don't use.
+     If given any `Error` besides `AssertionError`, (re)throw it.
+     Useful as a hack to allow easily catching both `Exception` and `AssertionError`:
+       (try <body> (catch Throwable t (throw-critical t) <body>)), etc."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [x] (when (critical-throwable? x) (throw x))))
+
 #?(:clj
    (defmacro try*
-     "Like `try`, but `catch` clause class can be the special keywords
-     `:any` or `:common` for cross-platform catching. Addresses CLJ-1293."
+     "Like `try`, but `catch` clause class may be:
+       `:ex-info`          - Catches only `ExceptionInfo`
+       `:common`           - Catches `js/Error` (Cljs), `Exception` (Clj)
+       `:all`              - Catches `:default` (Cljs), `Throwable` (Clj)
+       `:all-but-critical` - Catches `:default` (Cljs), `Exception` and `AssertionError` (Clj)
 
+     Addresses CLJ-1293 and the fact that `AssertionError`s are typically NON-critical
+     (so desirable to catch, in contrast to other `Error` classes)."
      {:added "Encore v3.67.0 (2023-09-08)"
       :arglists '([expr* catch-clauses* ?finally-clause])}
 
@@ -896,36 +912,48 @@
            (mapv
              (fn [in]
                (cond
-                 (not (call-form? in)) in
-                 :let [[s1 s2 & more]  in]
+                 (not (call-form? in))   in
+                 :let [[s1 s2 s3 & more] in]
 
                  (not= s1 'catch)    in
                  (not (keyword? s2)) in
 
                  :else
-                 (let [s2
+                 (let [[rethrow-critical? s2]
                        (case s2
                          ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
-                         (:any    :all)     (if cljs? :default  `Throwable)
-                         (:common :default) (if cljs? 'js/Error `Exception)
+                         (:common  :default) (if cljs? [false 'js/Error] [false `Exception])
+                         (:all     :any    ) (if cljs? [false  :default] [false `Throwable])
+                         (:all-but-critical) (if cljs? [false  :default] [true  `Throwable])
+                         (:ex-info)
+                         (if cljs?
+                           [false    'cljs.core.ExceptionInfo]
+                           [false 'clojure.lang.ExceptionInfo])
+
                          (throw
                            (ex-info "[encore/try*] Unexpected catch clause keyword"
                              {:given    {:value s2, :type (type s2)}
-                              :expected '#{:any :common}})))]
-                   (list* 'catch s2 more))))
+                              :expected '#{:common :all :all-but-critical :ex-info}})))]
+
+                   (if rethrow-critical?
+                     `(catch ~s2 ~s3 (throw-critical ~s3) ~@more)
+                     `(catch ~s2 ~s3                      ~@more)))))
              clauses)]
 
        `(try ~expr ~@clauses))))
 
-(comment (macroexpand '(try* (/ 1 0) (catch :any t t 1 2 3) (finally 1 2 3))))
+(comment
+  (macroexpand '(try* (/ 1 0) (catch :all              t t 1 2 3) (finally 1 2 3)))
+  (macroexpand '(try* (/ 1 0) (catch :all-but-critical t t 1 2 3) (finally 1 2 3))))
 
 #?(:clj
    (defmacro catching
      "Terse, cross-platform `try/catch/finally`.
      See also `try*` for more flexibility."
-     ([try-expr                                             ] `(try* ~try-expr (catch :any        ~'_        nil)))
-     ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :any        ~error-sym ~catch-expr)))
-     ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :any        ~error-sym ~catch-expr) (finally ~finally-expr)))
+     ;; Default to `:all-but-critical`?
+     ([try-expr                                             ] `(try* ~try-expr (catch :all        ~'_        nil)))
+     ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
+     ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
      ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
 (comment
@@ -965,10 +993,11 @@
                 (set?   kind) (rsome #(matching-error % err) kind) ; set  kind
                 :else
                 (case kind
-                  (:all    :any)     #?(:clj (instance? Throwable                   err) :cljs (some?                   err))
-                  (:common :default) #?(:clj (instance? Exception                   err) :cljs (instance? js/Error      err))
-                  :ex-info           #?(:clj (instance? clojure.lang.IExceptionInfo err) :cljs (instance? ExceptionInfo err))
-                  (do                        (instance? kind                        err))))]
+                  (:common :default)  #?(:clj (instance? Exception                   err) :cljs (instance? js/Error      err))
+                  (:all    :any)      #?(:clj (instance? Throwable                   err) :cljs (some?                   err))
+                  (:all-but-critical) #?(:clj (non-critical-throwable?               err) :cljs (some?                   err))
+                  :ex-info            #?(:clj (instance? clojure.lang.IExceptionInfo err) :cljs (instance? ExceptionInfo err))
+                  (do                         (instance? kind                        err))))]
      err))
 
   ([kind pattern err]
