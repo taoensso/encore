@@ -77,7 +77,7 @@
    (is (= (enc/have? string? "foo")  true))
    (is (= (enc/have?         "foo")  true))
    (is (enc/throws? (enc/have string? 5)))
-   (is (enc/throws? :any
+   (is (enc/throws? :all
          {:data {:dynamic :dynamic-data
                  :arg     :arg-data}}
          (enc/with-truss-data :dynamic-data
@@ -130,10 +130,10 @@
 
     [(is      (enc/throws?                            (throw-common)))
      (is      (enc/throws? :common                    (throw-common)))
-     (is      (enc/throws? :any                       (throw-common)))
+     (is      (enc/throws? :all                       (throw-common)))
      (is (not (enc/throws? :common                    (throw-uncommon))))
-     (is      (enc/throws? :any                       (throw-uncommon)))
-     (is      (enc/throws? #{:common :any}            (throw-uncommon)))
+     (is      (enc/throws? :all                       (throw-uncommon)))
+     (is      (enc/throws? #{:common :all}            (throw-uncommon)))
 
      (is      (enc/throws? :default #"Shenanigans"    (throw-common)))
      (is (not (enc/throws? :default #"Brouhaha"       (throw-common))))
