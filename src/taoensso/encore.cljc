@@ -4063,6 +4063,10 @@
 
 ;;;; Strings
 
+(def ^:const a-utf8-str
+  "Example UTF8 string for tests, etc."
+  "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10")
+
 (defn str-builder?
   #?(:cljs {:tag 'boolean})
   [x]

@@ -214,7 +214,7 @@
 ;;;; To/from strings
 ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
 
-(def ^:const utf8-str "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ world")
+(enc/deprecated (enc/defalias utf8-str enc/a-utf8-str))
 (defn ?utf8-ba->?str [?ba] (when-let [ba ?ba] (enc/utf8-ba->str ba)))
 (defn ?str->?utf8-ba [?s]  (when-let [s  ?s]  (enc/str->utf8-ba  s)))
 (declare ca->utf8-ba chars?)

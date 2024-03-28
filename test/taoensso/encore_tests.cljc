@@ -384,8 +384,8 @@
 
 #?(:clj
    (deftest _utf8-byte-strings
-     (let [s "hello ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ"]
-       (is (= (-> s enc/str->utf8-ba enc/utf8-ba->str) s)))))
+     (let [s enc/a-utf8-str]
+       (is (= (-> enc/a-utf8-str enc/str->utf8-ba enc/utf8-ba->str) s)))))
 
 (deftest  _get-substr-by-idx
   [(is (= (enc/get-substr-by-idx nil            nil)         nil))
@@ -1031,16 +1031,16 @@
          (enc/reduce-n (fn [acc unum] (if (= unum (-> unum bytes/from-uint   bytes/to-uint))   acc (reduced false))) true 0 1e6)])
 
       (testing "strings"
-        [(let [s bytes/utf8-str] (is (= (-> s bytes/str->utf8-ba   bytes/utf8-ba->str)   s)))
-         (let [s bytes/utf8-str] (is (= (-> s bytes/?str->?utf8-ba bytes/?utf8-ba->?str) s)))
-         (let [s bytes/utf8-str] (is (=
+        [(let [s enc/a-utf8-str] (is (= (-> s bytes/str->utf8-ba   bytes/utf8-ba->str)   s)))
+         (let [s enc/a-utf8-str] (is (= (-> s bytes/?str->?utf8-ba bytes/?utf8-ba->?str) s)))
+         (let [s enc/a-utf8-str] (is (=
                                        (vec (bytes/as-ba  s))
                                        (vec (bytes/as-?ba s))
-                                       [104 101 108 108 111 32 -32 -78 -84 -32 -78 -66 32 -32 -78 -121 -32 -78 -78
-                                        -32 -77 -115 -32 -78 -78 -32 -78 -65 32 -32 -78 -72 -32 -78 -126 -32 -78
-                                        -83 -32 -78 -75 -32 -78 -65 -32 -78 -72 32 119 111 114 108 100])))])
+                                       [72 105 32 -32 -78 -84 -32 -78 -66 32 -32 -78 -121 -32 -78 -78 -32 -77
+                                        -115 -32 -78 -78 -32 -78 -65 32 -32 -78 -72 -32 -78 -126 -32 -78 -83
+                                        -32 -78 -75 -32 -78 -65 -32 -78 -72 32 49 48])))])
 
-      (testing "chars" (let [s @#'bytes/utf8-str] (is (= (String. (bytes/as-ca s)) s))))
+      (testing "chars" (let [s enc/a-utf8-str] (is (= (String. (bytes/as-ca s)) s))))
       (testing "parse-buffer-len" (is (= (bytes/parse-buffer-len [1 (bytes/as-ba 3)]) 4)))
 
       (testing "with-io"
@@ -1110,7 +1110,7 @@
                 (bytes/write-dynamic-str dos nil)
                 (bytes/write-dynamic-str dos "")
                 (bytes/write-dynamic-str dos "")
-                (bytes/write-dynamic-str dos bytes/utf8-str))]
+                (bytes/write-dynamic-str dos enc/a-utf8-str))]
 
           (bytes/with-in [din] dba
             (let [x1 (bytes/read-dynamic-?str din)
@@ -1118,7 +1118,7 @@
                   x3 (bytes/read-dynamic-?str din)
                   x4 (bytes/read-dynamic-str  din)
                   x5 (bytes/read-dynamic-?str din)]
-              (is (= [x1 x2 x3 x4 x5] [nil "" nil "" bytes/utf8-str]))))))
+              (is (= [x1 x2 x3 x4 x5] [nil "" nil "" enc/a-utf8-str]))))))
 
       (testing "bitsets"
         (let [sf {:el0 0, :el1 1, :el2 2}
