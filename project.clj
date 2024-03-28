@@ -51,7 +51,8 @@
 
     :dependencies
     [[org.clojure/test.check "1.1.1"]
-     [org.clojure/core.async "1.6.681"]]
+     [org.clojure/core.async "1.6.681"]
+     [metosin/jsonista       "0.3.8"]]
 
     :plugins
     [[lein-pprint    "1.3.2"]
