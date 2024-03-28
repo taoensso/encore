@@ -38,10 +38,11 @@
 
 (do
   (defn var-fn [n] (* (long n) (long n)))
-  #?(:clj  (def ^:dummy-meta var-clj  "doc:var-clj"           "val:var-clj"))
-  #?(:cljs (def ^:dummy-meta var-cljs "doc:var-cljs"          "val:var-cljs"))
-  (do      (def ^:dummy-meta var-cljc "doc:var-cljc" #?(:clj  "val:var-cljc/clj"
-                                                        :cljs "val:var-cljc/cljs"))))
+  #?(:clj  (def ^{:doc "doc:var-clj"}  var-clj  "val:var-clj"))
+  #?(:cljs (def ^{:doc "doc:var-cljs"} var-cljs "val:var-cljs"))
+  (do      (def ^{:doc "doc:var-cljc"} var-cljc
+             #?(:clj  "val:var-cljc/clj"
+                :cljs "val:var-cljc/cljs"))))
 
 (do
   (defn- test-fn "doc a" [x] x)
@@ -53,23 +54,21 @@
 
   #?(:clj  (defmacro ^:private test-macro [x] `~x))
   #?(:clj  (enc/defalias test-macro-alias test-macro))
-  #?(:cljs (enc/defalias var-cljs-alias   var-cljs)))
+  #?(:cljs (enc/defalias var-cljs-alias var-cljs)))
 
 (deftest _defalias
-  ;; [1] v3.47.0+: Cljs aliases no longer copy metadata
-  [(do     (is (=    (test-fn-alias-1 :x) :x)))
-   #?(:clj (is (= (-> test-fn-alias-1 var meta :doc) "doc a"))) ; [1]
-   (do     (is (= (-> test-fn-alias-2 var meta :doc) "doc b")))
-   (do     (is (= (-> test-fn-alias-3 var meta :doc) "doc c")))
-   (do     (is (= (-> test-fn-alias-4 var meta :doc) "doc d")))
-   (do     (is (= (-> test-fn-alias-5 var meta :doc) "doc e")))
-
+  [(is (= (test-fn-alias-1  :x) :x))
    (is (= (test-macro-alias :x) :x))
 
-      #?(:cljs (is (=     var-cljs-alias                "val:var-cljs")))
-      #?(:cljs (is (= (-> var-cljs       var meta :doc) "doc:var-cljs")))
-   ;; #?(:cljs (is (= (-> var-cljs-alias var meta :doc) "doc:var-cljs"))) ; [1]
-   ])
+   (is (= (:doc (meta #'test-fn-alias-1)) "doc a"))
+   (is (= (:doc (meta #'test-fn-alias-2)) "doc b"))
+   (is (= (:doc (meta #'test-fn-alias-3)) "doc c"))
+   (is (= (:doc (meta #'test-fn-alias-4)) "doc d"))
+   (is (= (:doc (meta #'test-fn-alias-5)) "doc e"))
+
+   #?(:cljs (is (= var-cljs-alias                 "val:var-cljs")))
+   #?(:cljs (is (= (:doc (meta #'var-cljs))       "doc:var-cljs")))
+   #?(:cljs (is (= (:doc (meta #'var-cljs-alias)) "doc:var-cljs")))])
 
 (deftest _truss-invariants
   ;; Tested properly in Truss, just confirm successful imports here

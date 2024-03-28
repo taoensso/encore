@@ -600,14 +600,6 @@
                             (declare ~(with-meta (symbol v) m))))) syms)
             (in-ns '~(symbol original-ns))))))
 
-(defn- quote-arglists [m]
-  (if-let [x (get m :arglists)]
-    (assoc m :arglists `'~x)
-    (do    m)))
-
-(comment (quote-arglists {:a :A :arglists '([x])}))
-
-#?(:clj (def ^:private alias-src-attrs [:doc :arglists :private :macro :added :deprecated :inline :tag]))
 #?(:clj
    (defn ^:no-doc -alias-link-var [dst-var src-var dst-attrs]
      (add-watch src-var dst-var
@@ -622,24 +614,46 @@
              (reset-meta! dst-var
                (core-merge (meta src-var) dst-attrs))))))))
 
+#?(:clj (defn- alias-attrs [meta] (select-keys meta )))
+#?(:clj
+   (let [resolve-clj resolve ; Returns var
+         resolve-cljs ; Returns analysis map, {:keys [meta ...]}
+         (when-let [ns (find-ns 'cljs.analyzer.api)
+                    v  (ns-resolve ns 'resolve)]
+           @v)]
+
+     (defn- var-info
+       "Returns {:keys [var meta]} for given symbol."
+       [macro-env sym]
+       (when (symbol? sym)
+         (if (:ns macro-env)
+           {:var nil, :meta (:meta (resolve-cljs macro-env sym))}
+           (let [v (resolve macro-env sym)]
+             {:var v
+              :meta
+              (let [m (meta v)]
+                (if-let [x (get m :arglists)]
+                  (assoc m :arglists `'~x) ; Quote
+                  (do    m)))}))))))
+
 #?(:clj
    (defmacro defalias
      "Defines a local alias for the var identified by given qualified
      source symbol: (defalias my-map clojure.core/map), etc.
 
-     For Clj:
-       - Source var's metadata will be preserved (docstring, arglists, etc.).
-       - Changes to source var's value will also be applied to alias.
-
+     Source var's metadata will be preserved (docstring, arglists, etc.).
+     Changes to Clj source var's value will also be applied to alias.
      See also `defaliases`."
-
      ([      src                       ] `(defalias nil    ~src nil          nil))
      ([alias src                       ] `(defalias ~alias ~src nil          nil))
      ([alias src alias-attrs           ] `(defalias ~alias ~src ~alias-attrs nil))
      ([alias src alias-attrs alias-body]
-      (let [src-sym   (-have symbol? src)
+      (let [cljs?     (some? (:ns &env))
+            src-sym   (-have symbol? src)
             alias-sym (-have symbol? (or alias (symbol (name src-sym))))
-            compiling-cljs? (boolean (:ns &env))
+
+            {src-var, :var src-attrs :meta} (var-info &env src-sym)
+
             alias-attrs
             (if (string? alias-attrs) ; Back compatibility
               {:doc      alias-attrs}
@@ -647,37 +661,23 @@
 
             link?       (get    alias-attrs :link? true)
             alias-attrs (dissoc alias-attrs :link?)
-            alias-attrs (core-merge (meta alias-sym) alias-attrs)]
 
-        (if compiling-cljs?
-          (let [alias-sym (with-meta alias-sym alias-attrs)]
-            `(def ~alias-sym ~(or alias-body src-sym)))
+            final-attrs
+            (select-keys (core-merge src-attrs (meta alias-sym) alias-attrs)
+              [:doc :arglists :private :macro :added :deprecated :inline :tag])
 
-          (let [src-var (resolve src-sym)
-                _
-                (when-not src-var
-                  (throw
-                    (ex-info
-                      (str "[encore/defalias] Failed to resolve source var for sym: " src-sym)
-                      {:alias-sym       alias-sym
-                       :src-sym         src-sym
-                       :alias-attrs     alias-attrs
-                       :compiling-cljs? compiling-cljs?
-                       :reader-mode     #?(:clj :clj, :cljs :cljs, :default :other)})))
+            alias-sym   (with-meta alias-sym final-attrs)
+            alias-body  (or alias-body (if cljs? src-sym `@~src-var))]
 
-                src-attrs
-                (let [src-meta (quote-arglists (meta src-var))]
-                  (select-keys src-meta alias-src-attrs))
+        #_(spit "debug.txt" (str (if cljs? "cljs: " "clj:  ") src-sym ": " (meta alias-sym) "\n") :append true)
 
-                final-attrs (core-merge src-attrs alias-attrs)
-                alias-sym   (with-meta  alias-sym final-attrs)
-                alias-body  (or alias-body `@~src-var)]
-
-            `(do
-               ;; Need `alter-meta!` to reliably retain ?macro status, Ref. Timbre #364
-               (alter-meta!                  (def ~alias-sym ~alias-body) conj ~final-attrs)
-               (when ~link? (-alias-link-var (var ~alias-sym) ~src-var         ~alias-attrs))
-               (do                           (var ~alias-sym)))))))))
+        (if cljs?
+          `(def ~alias-sym ~alias-body)
+          `(do
+             ;; Need `alter-meta!` to reliably retain macro status!
+             (alter-meta!                  (def ~alias-sym ~alias-body) conj ~final-attrs)
+             (when ~link? (-alias-link-var (var ~alias-sym) ~src-var         ~alias-attrs))
+             (do                           (var ~alias-sym))))))))
 
 #?(:clj
    (defmacro defaliases
