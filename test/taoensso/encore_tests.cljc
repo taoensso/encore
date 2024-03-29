@@ -1525,6 +1525,14 @@
          (is (enc/submap? (sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
       (is (enc/submap? (sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
+      (is (enc/submap? (sig-exp {:level :info, :location a-sym, :file "my-file"})
+            '{:location
+              {:ns     (clojure.core/get a-sym :ns)
+               :line   (clojure.core/get a-sym :line)
+               :column (clojure.core/get a-sym :column)
+               :file   "my-file"}})
+        "Support runtime `:location`")
+
       (is (enc/submap? (sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id -1
                                  :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
             {:expansion-id -1

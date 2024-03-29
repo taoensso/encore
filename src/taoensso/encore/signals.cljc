@@ -371,13 +371,16 @@
      (const-form! 'elide?    (get opts :elide?))
      (const-form! 'elidable? (get opts :elidable?))
 
-     (let [location (get opts :location (enc/get-source macro-form macro-env))
-           location
-           (enc/assoc-some nil
-             :ns     (get opts :ns     (get location :ns))     ;   Documented override
-             :line   (get opts :line   (get location :line))   ; Undocumented override
-             :column (get opts :column (get location :column)) ; ''
-             :file   (get opts :file   (get location :file)))  ; ''
+     (let [location ; {:keys [ns line column file]} forms
+           (let [location-form (get opts :location (enc/get-source macro-form macro-env))
+                 location-map  (when (map?    location-form) location-form) ; At least keys const
+                 location-sym  (when (symbol? location-form) location-form)]
+
+             (enc/assoc-some nil
+               :ns     (get opts :ns     (get location-map :ns     (when location-sym `(get ~location-sym :ns))))      ;   Documented override
+               :line   (get opts :line   (get location-map :line   (when location-sym `(get ~location-sym :line))))    ; Undocumented override
+               :column (get opts :column (get location-map :column (when location-sym `(get ~location-sym :column))))  ; ''
+               :file   (get opts :file   (get location-map :file   (when location-sym `(get ~location-sym :file))))))  ; ''
 
            kind-form  (get opts     :kind)
            ns-form    (get location :ns)
