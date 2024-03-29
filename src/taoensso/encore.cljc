@@ -6000,7 +6000,7 @@
            clojure.lang.IDeref (deref [_] (deref-fn))
            clojure.lang.IFn
            (invoke [_  ] (stop-fn))
-           (invoke [_ f] (when-not (.deref stopped?_) (catching (f)) true)))
+           (invoke [_ f] (when-not (.deref stopped?_) (try* (f) (catch :all-but-critical _)) true)))
 
          (let [binding binding-conveyor-fn
                abq (java.util.concurrent.ArrayBlockingQueue.
@@ -6018,8 +6018,8 @@
                            (loop []
                              (if-let [f (.poll abq 2000 java.util.concurrent.TimeUnit/MILLISECONDS)]
                                ;; Recur unconditionally to drain abq even when stopped
-                               (do (catching (f))           (recur))
-                               (when-not (.deref stopped?_) (recur)))))
+                               (do (try* (f) (catch :all-but-critical _)) (recur))
+                               (when-not (.deref stopped?_)               (recur)))))
 
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
