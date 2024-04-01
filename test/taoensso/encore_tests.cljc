@@ -972,6 +972,23 @@
    (is (false? ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobar)))
    (is (true?  ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobaz)))])
 
+;;;;
+
+(deftest _rate-limiters
+  (let [c1  (enc/counter)
+        c2  (enc/counter)
+        rl1 (enc/rate-limiter {"1/100" [1 100]})
+        rl2 (enc/rate-limiter-once-per    100)]
+
+    (dotimes [_ 4]
+      (dotimes [_ 10]
+        (when-not (rl1) (c1))
+        (when-not (rl2) (c2)))
+      (enc/hot-sleep 250))
+
+    [(is (= @c1 4))
+     (is (= @c2 4))]))
+
 ;;;; Runner
 
 #?(:clj

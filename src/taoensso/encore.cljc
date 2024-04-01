@@ -3923,6 +3923,27 @@
   (dotimes [n 1e6] (rl1 (str (rand)))) ; Test GC
   (count @s_))
 
+(defn ^:no-doc rate-limiter-once-per
+  "Private, don't use.
+  Returns a basic rate limiter (fn []) that will return falsey at most once
+  every given number of milliseconds.
+
+  Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [msecs]
+  (let [last_ (volatile! 0) ; No specific atomicity needs
+        msecs (long msecs)]
+
+    (fn a-rate-limiter-once-per []
+      (let [t1 (now-udt*)]
+        #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
+           :cljs (if (> (- t1              @last_)  msecs) (do (vreset! last_ t1) nil) true))))))
+
+(comment
+  (let [rl1 (rate-limiter {"1/250" [1 250]})
+        rl2 (rate-limiter-once-per    250)]
+    (qb 1e6 (rl1) (rl2)))) ; [104.11 28.85]
+
 ;;;; Counters
 
 #?(:clj
