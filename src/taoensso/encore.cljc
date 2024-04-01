@@ -6094,6 +6094,19 @@
       (r1 (fn []))
       (r2 (fn [])))))
 
+(defn ^:no-doc hot-sleep
+  "Private, don't use.
+  For Clj:  same as `Thread/sleep`.
+  For Cljs: hot loops until given number of msecs have elapsed.
+
+  Useful for certain synchronous unit tests, etc."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [msecs]
+  #?(:clj  (Thread/sleep (int msecs))
+     :cljs (let [t0 (now-udt*)] (loop [] (when (< (- (now-udt*) t0) msecs) (recur))))))
+
+(comment (hot-sleep 500))
+
 ;;;; Host info
 
 #?(:clj
