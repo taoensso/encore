@@ -549,6 +549,18 @@
       (is (= (cached-fn "infrequent-recent") 2) "Cache retained (recent)")
       (is (= (cached-fn "infrequent-old")    4) "Cache dropped")])])
 
+(deftest _memoize-last
+  [(let [c     (enc/counter)
+         f     (enc/memoize-last (fn [& args] (c) (vec args)))
+         test1 (fn [args] (dotimes [_ 100] (apply f args)) [@c (apply f args)])]
+
+     [(is (= (test1 [:x1    ]) [1 [:x1    ]]))
+      (is (= (test1 [       ]) [2 [       ]]))
+      (is (= (test1 [:x1    ]) [3 [:x1    ]]))
+      (is (= (test1 [:x1 :x2]) [4 [:x1 :x2]]))
+      (is (= (test1 [:x1    ]) [5 [:x1    ]]))
+      (is (= (test1 [       ]) [6 [       ]]))])])
+
 ;;;; Swap API
 
 (deftest _swap-in

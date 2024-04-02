@@ -3381,22 +3381,50 @@
 
 ;;;; Memoization
 
-(defn memoize-last
-  "Like `core/memoize` but only caches the fn's most recent call.
-  Great for Reactjs render op caching on mobile devices, etc."
-  [f]
-  (let [cache_ (latom {})]
-    (fn [& args]
-      @(or (get (cache_) args)
-           (get (cache_
-                  (fn swap-fn [cache]
-                    (if (get cache args)
-                      cache
-                      {args (delay (apply f args))})))
-             args)))))
-
 #?(:clj (defmacro ^:private deref! [delay] `(let [~(with-meta 'd {:tag 'clojure.lang.Delay}) ~delay] (.deref ~'d))))
 (comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [53.21 24.16]
+
+(defn memoize-last
+  "Like `core/memoize` but only caches the given fn's last input.
+  Great for ReactJS render fn caching, etc."
+  [f]
+  #?(:cljs
+     (let [sentinel        (new-object)
+           in_  (volatile! (new-object))
+           out_ (volatile! nil)
+           call
+           (fn [in* f0]
+             (loop []
+               (if (= in* @in_)
+                 @out_
+                 (let [out (f0)]
+                   (vreset! in_  in*)
+                   (vreset! out_ out)
+                   out))))]
+
+       (fn memoized-fn
+         ([        ] (call sentinel          (fn [] (f))))
+         ([x       ] (call x                 (fn [] (f x))))
+         ([x & more] (call [x more sentinel] (fn [] (apply f x more))))))
+
+     :clj
+     (let [sentinel (new-object)
+           cache_   (java.util.concurrent.atomic.AtomicReference. nil) ; [in out_]
+           call
+           (fn [in* f0]
+             (deref!
+               (loop []
+                 (let [current (.get cache_)]
+                   (or
+                     (when-let [[in out_] current] (when (= in in*) out_))
+                     (let [dv (delay (f0))] (if (.compareAndSet cache_ current [in* dv]) dv (recur))))))))]
+
+       (fn memoized-fn
+         ([        ] (call sentinel          (fn [] (f))))
+         ([x       ] (call x                 (fn [] (f x))))
+         ([x & more] (call [x more sentinel] (fn [] (apply f x more))))))))
+
+(comment (let [f1 (memoize-last (fn [& args] (println [:last args])))] (qb 1e6 (f1 :x)))) ; 36.23
 
 (defn fmemoize
   "For Clj: fastest possible memoize. Non-racey, 0-7 arity only.
