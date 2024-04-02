@@ -5645,7 +5645,7 @@
    (let [cache_ (latom nil) ; ?[promise udt]
          cache-update-pending?_ (latom false)]
 
-     (defn ^String get-hostname
+     (defn get-hostname
        "Returns local hostname string, or `fallback` (default nil).
        Can be slow, prefer 3-arity caching variant when possible."
        {:added "Encore v3.82.0 (2024-02-23) (arities: 1, 2, 3)"}
