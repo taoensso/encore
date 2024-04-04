@@ -1838,28 +1838,42 @@
 
   Useful, among other things, as a more flexible version of `zipmap`."
   {:added "Encore v3.33.0 (2022-11-15)"}
-  [rf init xs ys]
-  (if (and
-        (vector? xs)
-        (vector? ys))
+  ([rf init xs ys          ] (reduce-zip rf init xs ys ::skip))
+  ([rf init xs ys not-found] ; Experimental, undocumented
+   (if (and
+         (vector? xs)
+         (vector? ys))
 
-    (let [n (min (count xs) (count ys))]
-      (reduce-n
-        (fn [acc idx] (rf acc (get xs idx) (get ys idx)))
-        init n))
+     (let [n
+           (if (identical-kw? not-found ::skip)
+             (min (count xs) (count ys))
+             (max (count xs) (count ys)))]
 
-    (loop [acc init
-           xs (seq xs)
-           ys (seq ys)]
+       (reduce-n
+         (fn [acc idx]
+           (rf acc
+             (get xs idx not-found)
+             (get ys idx not-found)))
+         init n))
 
-      (if (and xs ys)
-        (let [result (rf acc (first xs) (first ys))]
-          (if (reduced? result)
-            (deref result)
-            (recur result
-              (next xs)
-              (next ys))))
-        acc))))
+     (let [not-found? (not (identical-kw? not-found ::skip))]
+       (loop [acc init
+              xs (seq xs)
+              ys (seq ys)]
+
+         (if (if not-found? (or xs ys) (and xs ys))
+
+           (let [result
+                 (rf acc
+                   (first (or xs [not-found]))
+                   (first (or ys [not-found])))]
+
+             (if (reduced? result)
+               (deref result)
+               (recur result
+                 (next xs)
+                 (next ys))))
+           acc))))))
 
 (do
   (deftype ^:no-doc Tup2 [x y  ])
@@ -2779,6 +2793,17 @@
             (reduced false)))))
     true
     sub))
+
+(defn submaps?
+  "Experimental, subject to change without notice.
+  Returns true iff `sub_i` is a (possibly nested) submap of `m_i`.
+  Uses `submap?`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [maps subs]
+  (if (> (count subs) (count maps))
+    false
+    (reduce-zip (fn [acc m sub] (or (submap? m sub) (reduced false)))
+      true maps subs nil)))
 
 (defn select-nested-keys
   "Like `select-keys` but supports nested key spec:

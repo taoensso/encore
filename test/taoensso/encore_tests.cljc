@@ -90,6 +90,38 @@
   [(is (true?  (enc/satisfies? IMyProtocol (MyType.))))
    (is (false? (enc/satisfies? IMyProtocol "String")))])
 
+;;;; Submap/s
+
+(deftest _submap?
+  [(is      (enc/submap? nil nil))
+   (is      (enc/submap? nil {}))
+   (is      (enc/submap? {}  {}))
+   (is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
+   (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
+   (is (not (enc/submap? {:a {:b :B1 :c nil}} {:a {:c :submap/nx}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
+   (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
+   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
+   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))
+   (is      (enc/submap? {:a 1 :b 2}          {:a (enc/pred odd?)
+                                               :b (enc/pred even?)}))
+   (is (not (enc/submap? {:a 1 :b 2}          {:a (enc/pred neg?)
+                                               :b (enc/pred even?)})))])
+
+(deftest _submaps?
+  [(is      (enc/submaps? nil  nil))
+   (is      (enc/submaps? nil  [  ]))
+   (is      (enc/submaps? [  ] nil))
+   (is      (enc/submaps? [{}] [{}]))
+   (is      (enc/submaps? [{}] [  ]))
+   (is (not (enc/submaps? [  ] [{}])))
+
+   (is      (enc/submaps? [{:a :A :b :B} {:a :A}] [{:a :A}]))
+   (is (not (enc/submaps? [{:a :A :b :B}        ] [{:a :A} {:a :A}])))
+   (is      (enc/submaps? [{} {:a {:b :B1}}] []))
+   (is      (enc/submaps? [{} {:a {:b :B1}}] [{} {:a {:b :submap/ex}}]))
+   (is (not (enc/submaps? [{} {:a {:b :B1}}] [{} {:a {:b :submap/nx}}])))])
+
 ;;;; Errors
 
 (deftest _error-basics
@@ -206,7 +238,21 @@
    (is (= (enc/reduce-zip assoc {}  []             [1])       {})                 "Vec,  empty")
    (is (= (enc/reduce-zip assoc {} '()            '(1))       {})                 "List, empty")
    (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c]  [1 2 3]) ::reduced!))
-   (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c] '(1 2 3)) ::reduced!))])
+   (is (= (enc/reduce-zip (fn [acc k v] (reduced ::reduced!)) {} [:a :b :c] '(1 2 3)) ::reduced!))
+
+   (is (= (enc/reduce-zip conj [] [:x1    ] [:y1 :y2])     [:x1 :y1]))
+   (is (= (enc/reduce-zip conj [] [:x1 :x2] [:y1    ])     [:x1 :y1]))
+   (is (= (enc/reduce-zip conj [] [:x1    ] [:y1 :y2] nil) [:x1 :y1 nil :y2]))
+   (is (= (enc/reduce-zip conj [] [:x1 :x2] [:y1    ] nil) [:x1 :y1 :x2 nil]))
+   (is (= (enc/reduce-zip conj [] [:x1    ] [:y1 :y2] :nx) [:x1 :y1 :nx :y2]))
+   (is (= (enc/reduce-zip conj [] [:x1 :x2] [:y1    ] :nx) [:x1 :y1 :x2 :nx]))
+
+   (is (= (enc/reduce-zip conj [] '(:x1    ) '(:y1 :y2))     [:x1 :y1]))
+   (is (= (enc/reduce-zip conj [] '(:x1 :x2) '(:y1    ))     [:x1 :y1]))
+   (is (= (enc/reduce-zip conj [] '(:x1    ) '(:y1 :y2) nil) [:x1 :y1 nil :y2]))
+   (is (= (enc/reduce-zip conj [] '(:x1 :x2) '(:y1    ) nil) [:x1 :y1 :x2 nil]))
+   (is (= (enc/reduce-zip conj [] '(:x1    ) '(:y1 :y2) :nx) [:x1 :y1 :nx :y2]))
+   (is (= (enc/reduce-zip conj [] '(:x1 :x2) '(:y1    ) :nx) [:x1 :y1 :x2 :nx]))])
 
 (deftest _reduce-multi
   [(is (= (enc/reduce-multi + 0 []) 0))
@@ -278,19 +324,6 @@
    (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 3)) "fallback"))
    (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 3)) "falsey k3"))
    (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 4)) "fallback"))])
-
-(deftest _submap?
-  [(is      (enc/submap? {:a {:b :B1 :c :C1}} {:a {:b :B1}}))
-   (is      (enc/submap? {:a {:b :B1       }} {:a {:c :submap/nx}}))
-   (is (not (enc/submap? {:a {:b :B1 :c nil}} {:a {:c :submap/nx}})))
-   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/ex}}))
-   (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
-   (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
-   (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))
-   (is      (enc/submap? {:a 1 :b 2}          {:a (enc/pred odd?)
-                                               :b (enc/pred even?)}))
-   (is (not (enc/submap? {:a 1 :b 2}          {:a (enc/pred neg?)
-                                               :b (enc/pred even?)})))])
 
 (deftest _select-nested-keys
   [(is (= (enc/select-nested-keys nil    nil)) {})
