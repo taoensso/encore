@@ -3003,9 +3003,11 @@
   [atom_ val]
   (loop []
     (let [old @atom_]
-      (if (-cas!? atom_ old val)
-        (not= old val)
-        (recur)))))
+      (if (= old val)
+        false ; Micro-optimization
+        (if (-cas!? atom_ old val)
+          true
+          (recur))))))
 
 (comment (let [a (atom nil)] [(reset!? a "foo") (reset!? a "foo") (reset!? a "bar")]))
 
