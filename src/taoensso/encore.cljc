@@ -1954,6 +1954,28 @@
           (recur acc next-colls)
           (do    acc))))))
 
+(let [map-like? #(or (map? %) (record? %))]
+  (defn ^:no-doc postwalk
+    "Private, don't use.
+    Simpler, faster `clojure.walk/postwalk`."
+    {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([               x f] (postwalk false x f))
+    ([preserve-seqs? x f]
+     (let [ps (if preserve-seqs? seq identity)
+           pw #(postwalk preserve-seqs? %1 %2)]
+       (cond
+         (map-like? x) (f     (reduce-kv (fn [acc k v] (assoc acc (pw k  f) (pw v f))) {} x))
+         (seq?      x) (f (ps (reduce    (fn [acc  in] (conj  acc (pw in f)))          [] x)))
+         (coll?     x) (f     (reduce    (fn [acc  in] (conj  acc (pw in f)))   (empty x) x))
+         :else         (f x))))))
+
+(comment
+  (def in  {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}})
+  (def pwf #(if (int? %) (inc %) %))
+  (qb 1e5 ; [141.88 390.17]
+    (postwalk in pwf)
+    (clojure.walk/postwalk pwf in)))
+
 ;;;; Math
 
 (defn approx==

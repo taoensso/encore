@@ -244,6 +244,20 @@
             [] [[:a1 :a2] [:b1 :b2 :b3]])
          ::reduced!))])
 
+(deftest _postwalk
+  (let [pwf #(if (int? %) (inc ^long %) %)
+        pw  (fn [preserve-seqs? x] (enc/postwalk preserve-seqs? x pwf))]
+
+    [(is (= (pw nil  1)  2))
+     (is (= (pw nil 's) 's))
+
+     (is (= (pw nil    [1 2 3]) [2 3 4]))
+     (is (= (pw nil   '(1 2 3)) [2 3 4]))
+     (is (= (pw :seqs '(1 2 3)) '(2 3 4)))
+
+     (is (= (pw nil   {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a  [2 3 4]}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))
+     (is (= (pw :seqs {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a '(2 3 4)}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))]))
+
 ;;;; Collections
 
 (deftest _map-entry
