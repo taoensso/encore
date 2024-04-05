@@ -1179,6 +1179,13 @@
             [(enc/pr-edn "s")
              (enc/pr-edn ["s" "s" {:k1 "s" :k2 ["s" 8 8 nil]}])])))])
 
+#?(:cljs
+   (deftest _json
+     (let [x {:k [:k "s" 1 1.2 {"s" :a/b} enc/a-utf8-str (enc/as-inst 1711619032283)]}]
+       [(is (= (enc/pr-json x) "{\"k\":[\"k\",\"s\",1,1.2,{\"s\":\"a/b\"},\"Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10\",\"2024-03-28T09:43:52.283Z\"]}"))
+        (is (= (enc/read-json      (enc/pr-json x)) {"k" ["k" "s" 1 1.2 {"s" "a/b"} "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10" "2024-03-28T09:43:52.283Z"]}))
+        (is (= (enc/read-json true (enc/pr-json x)) {:k  ["k" "s" 1 1.2 {:s  "a/b"} "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10" "2024-03-28T09:43:52.283Z"]}))])))
+
 ;;;; Stats
 
 (deftest sorted-nums

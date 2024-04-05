@@ -6707,6 +6707,30 @@
   (merge-url-with-query-string "/?foo=bar" {:foo  nil})
   (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
 
+#?(:cljs
+   (defn ^string pr-json
+     "Returns given Cljs argument as JSON string."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [x] (.stringify js/JSON (clj->js x :keyword-fn as-qname))))
+
+#?(:cljs
+   (defn read-json
+     "Reads given JSON string to return a Cljs value."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ([         s] (read-json false s))
+     ([kw-keys? s]
+      (cond
+        (or (nil? s) (= s "")) nil
+        (not (string? s))
+        (throw
+          (ex-info "[encore/read-json] Unexpected arg type (expected string or nil)"
+            {:arg {:value s, :type (type s)}}))
+
+        :else
+        (if kw-keys?
+          (js->clj (js/JSON.parse s) :keywordize-keys true)
+          (js->clj (js/JSON.parse s)))))))
+
 ;;;; Stubs (experimental)
 ;; Could do with a refactor
 
