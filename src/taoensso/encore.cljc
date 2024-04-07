@@ -956,17 +956,12 @@
 
 #?(:clj
    (defmacro catching
-     "Terse, cross-platform `try/catch/finally`.
+     "Terse, cross-platform (try* expr (catch :all _)).
      See also `try*` for more flexibility."
-     ;; Default to `:all-but-critical`?
-     ([try-expr                                             ] `(try* ~try-expr (catch :all        ~'_        nil)))
-     ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
-     ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
-     ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
+     ([           expr] `(try* ~expr (catch :all        ~'_)))
+     ([error-type expr] `(try* ~expr (catch ~error-type ~'_)))))
 
-(comment
-  (macroexpand '(catching (do "foo") e e (println "finally")))
-  (catching (zero? "9")))
+(comment (catching (zero? "9")))
 
 (declare submap? str-contains? re-pattern?)
 
@@ -1077,20 +1072,21 @@
              (do                   error-fn))]
 
        (fn catching-rf
-         ([       ] (catching (rf)        t (error-fn {:rf rf :call '(rf)} t)))
-         ([acc    ] (catching (rf acc)    t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc, :type (type acc)}}} t)))
-         ([acc in ] (catching (rf acc in) t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc, :type (type acc)}
-                                                                                        :in  {:value in,  :type (type in)}}} t)))
+         ([       ] (try* (rf)        (catch :all t (error-fn {:rf rf :call '(rf)} t))))
+         ([acc    ] (try* (rf acc)    (catch :all t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc, :type (type acc)}}} t))))
+         ([acc in ] (try* (rf acc in) (catch :all t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc, :type (type acc)}
+                                                                                                :in  {:value in,  :type (type in)}}} t))))
          ([acc k v]
-          (catching (rf acc k v) t
-            (error-fn
-              {:rf     rf
-               :call '(rf acc k v)
-               :args
-               {:acc {:value acc, :type (type acc)}
-                :k   {:value k,   :type (type k)}
-                :v   {:value v,   :type (type v)}}}
-              t))))))))
+          (try* (rf acc k v)
+            (catch :all t
+              (error-fn
+                {:rf     rf
+                 :call '(rf acc k v)
+                 :args
+                 {:acc {:value acc, :type (type acc)}
+                  :k   {:value k,   :type (type k)}
+                  :v   {:value v,   :type (type v)}}}
+                t)))))))))
 
 (defn catching-xform
   "Like `catching-rf`, but applies to a transducer (`xform`).
@@ -1564,7 +1560,7 @@
      ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
      ([test       ]
       (let [[error-id test] (if (vector? test) test [nil test])]
-        `(let [[test# err#] (catching [~test nil] err# [nil err#])]
+        `(let [[test# err#] (try* [~test nil] (catch :all err# [nil err#]))]
            (when-not test# (or ~error-id '~test :check/falsey)))))))
 
 #?(:clj
@@ -6408,7 +6404,7 @@
      (let [^goog.net.XhrIoPool xhr-pool (force xhr-pool)
            with-xhr
            (fn [^goog.net.XhrIo xhr]
-             (catching
+             (try*
                (let [timeout-ms (or (get opts :timeout) timeout-ms) ; Deprecated opt
                      xhr-method
                      (case method
@@ -6475,7 +6471,7 @@
                                                  ;; (match? "/html") :text
                                                  :else               :text)))]
 
-                                       (catching
+                                       (try*
                                          (case resp-type
                                            :edn  (read-edn (.getResponseText xhr))
                                            :json           (.getResponseJson xhr)
@@ -6486,9 +6482,10 @@
                                               :param    'resp-type
                                               :expected #{:auto :edn :json :xml :text}}))
 
-                                         _e ; Undocumented, subject to change:
-                                         {:ajax/bad-response-type resp-type
-                                          :ajax/resp-as-text (.getResponseText xhr)}))]
+                                         (catch :all _
+                                           ;; Undocumented, subject to change:
+                                           {:ajax/bad-response-type resp-type
+                                            :ajax/resp-as-text (.getResponseText xhr)})))]
 
                                  [-status ?content-type ?content]))]
 
@@ -6525,8 +6522,7 @@
                  (when-let [cb xhr-cb-fn] (catching (cb xhr)))
                  xhr)
 
-               e
-               (do
+               (catch :all e
                  (.releaseObject xhr-pool xhr)
                  (callback-fn {:?error e})
                  nil)))]
@@ -7298,7 +7294,7 @@
        (defmacro ^:no-doc ^:deprecated use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
        (defmacro ^:no-doc ^:deprecated nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
        (defmacro ^:no-doc ^:deprecated qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
-       (defmacro ^:no-doc ^:deprecated catch-errors  [& body]  `(catching [(do ~@body) nil] e# [nil e#]))
+       (defmacro ^:no-doc ^:deprecated catch-errors  [& body]  `(try* [(do ~@body) nil] (catch :all e# [nil e#])))
 
        (defmacro ^:no-doc ^:deprecated -vol!       [val]           `(volatile!     ~val))
        (defmacro ^:no-doc ^:deprecated -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
@@ -7580,7 +7576,19 @@
           ~@(map
               (fn [type]
                 `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
-                   (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types)))))
+                   (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
+
+  #?(:clj
+     (defmacro catching
+       "Terse, cross-platform (try* expr (catch :all _)).
+       Arities besides #{1 2} are deprecated, prefer `try*` in these cases."
+       ([           expr] `(try* ~expr (catch :all        ~'_)))
+       ([error-type expr] `(try* ~expr (catch ~error-type ~'_)))
+
+       ;;; Deprecated arities:
+       ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
+       ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
+       ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))))))
 
 (deprecated
   #?(:clj
@@ -7683,4 +7691,4 @@
      (defmacro ^:no-doc caught-error-data
        "Prefer `throws?`."
        {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
-       [& body] `(catching (do ~@body nil) e# (error-data e#)))))
+       [& body] `(try* (do ~@body nil) (catch :all e# (error-data e#))))))

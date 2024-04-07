@@ -104,7 +104,7 @@
   (defn valid-nf-spec
     "Returns valid `encore/name-filter` spec, or throws."
     [x]
-    (if-let [t (enc/catching (do (nf-compile x) nil) t t)]
+    (if-let [t (enc/try* (do (nf-compile x) nil) (catch :all t t))]
       (throw
         (ex-info
           (if (fn? x)

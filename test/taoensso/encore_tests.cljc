@@ -112,18 +112,18 @@
              :trace (enc/pred #?(:clj #(vector? (force %)) :cljs string?)))))]))
 
 (deftest _matching-error
-  [(is (enc/error? (enc/matching-error                     (enc/catching ("") t t))))
-   (is (enc/error? (enc/matching-error            :common  (enc/catching ("") t t))))
-   (is (nil?       (enc/matching-error   :ex-info          (enc/catching ("") t t))))
-   (is (enc/error? (enc/matching-error #{:ex-info :common} (enc/catching ("") t t))))
+  [(is (enc/error? (enc/matching-error                     (enc/try* ("") (catch :all t t)))))
+   (is (enc/error? (enc/matching-error            :common  (enc/try* ("") (catch :all t t)))))
+   (is (nil?       (enc/matching-error   :ex-info          (enc/try* ("") (catch :all t t)))))
+   (is (enc/error? (enc/matching-error #{:ex-info :common} (enc/try* ("") (catch :all t t)))))
 
-   (is (enc/error? (enc/matching-error :common  "Foo"   (enc/catching (throw (ex-info "Foo"   {})) t t))))
-   (is (nil?       (enc/matching-error :common  "Foo"   (enc/catching (throw (ex-info "Bar"   {})) t t))))
-   (is (enc/error? (enc/matching-error :common  {:a :b}                      (ex-info "Test"  {:a :b :c :d}))))
-   (is (enc/error? (enc/matching-error :ex-info {:a :b}                      (ex-info "Dummy" {} (ex-info "Test" {:a :b})))))
+   (is (enc/error? (enc/matching-error :common  "Foo"   (enc/try* (throw (ex-info "Foo"   {})) (catch :all t t)))))
+   (is (nil?       (enc/matching-error :common  "Foo"   (enc/try* (throw (ex-info "Bar"   {})) (catch :all t t)))))
+   (is (enc/error? (enc/matching-error :common  {:a :b}                  (ex-info "Test"  {:a :b :c :d}))))
+   (is (enc/error? (enc/matching-error :ex-info {:a :b}                  (ex-info "Dummy" {} (ex-info "Test" {:a :b})))))
 
    (is (enc/error? (enc/matching-error #{:ex-info :common} #{"foobar" "not a function" "cannot be cast"}
-                     (enc/catching ("") t t))))])
+                     (enc/try* ("") (catch :all t t)))))])
 
 (deftest _throws?
   (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
