@@ -30,9 +30,9 @@
 ;; (deftest pass (is (= 1 1)))
 ;; (deftest fail (is (= 1 0)))
 
-(defn- throw!
-  ([ ] (throw (ex-info "TestEx" {})))
-  ([x] (throw (ex-info "TestEx" {:arg {:value x :type (type x)}}))))
+(def  ex1 (ex-info "Ex1" {}))
+(defn ex1!   [   ] (throw ex1))
+(defn throw! [arg] (throw (ex-info "TestEx" {:arg {:value arg :type (type arg)}})))
 
 ;;;; Core
 
@@ -206,7 +206,7 @@
 
 (deftest _catching-xform
   [(is (=   (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc in))) [] [:a :b]) [:a :b]))
-   (is (->> (transduce (enc/catching-xform (map throw!))   (completing (fn [acc in] (conj acc in))) [] [:a :b])
+   (is (->> (transduce (enc/catching-xform (map ex1!))     (completing (fn [acc in] (conj acc in))) [] [:a :b])
          (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
      "Error in xform")
 
@@ -1735,7 +1735,7 @@
       (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
         (let [fn-arg_ (atom nil)]
           (enc/update-var-root! *sig-handlers* (fn [_] nil))
-          (add-handler! :hid1 (fn [_] (throw!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
+          (add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
           (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))
           (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error (enc/pred enc/error?)}))))
 
@@ -1747,7 +1747,27 @@
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
              (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
              (Thread/sleep 4000) ; Wait for second signal to enqueue
-             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))])
+             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
+
+      (testing "Handler shutdown"
+        [(is (= (sigs/shut-down-handlers! []) nil))
+         (is (= (let [handlers
+                      (-> []
+                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 100) "done") {} {})
+                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100) "done") {} {})
+                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 800) "done") {} {})
+                        (sigs/add-handler :hid4 (fn [] (enc/hot-sleep 100) (ex1!)) {} {}))]
+
+                  ((nth handlers 1)) ; Manual shutdown
+                  #?(:clj  (sigs/shut-down-handlers! handlers 500)
+                     :cljs (sigs/shut-down-handlers! handlers)))
+
+               {:hid1 {:okay  :shut-down}
+                :hid2 {:okay  :previously-shut-down}
+                :hid4 {:error ex1}
+                :hid3
+                #?(:clj  {:error :timeout}
+                   :cljs {:okay  :shut-down})}))])])
 
    (testing "Filterable expansion"
      [(is (enc/submap? (sig-exp {:level :info})

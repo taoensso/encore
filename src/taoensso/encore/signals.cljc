@@ -456,8 +456,8 @@
   [handlers]
   (when handlers
     (reduce
-      (fn [m handler-fn]
-        (let [handler-meta (meta handler-fn)]
+      (fn [m wrapped-handler-fn]
+        (let [handler-meta (meta wrapped-handler-fn)]
           (assoc m
             (get    handler-meta :handler-id)
             (dissoc handler-meta :handler-id))))
@@ -468,12 +468,51 @@
   "Calls given handlers with the given signal.
   Signal's type must implement `IFilterableSignal`."
   [handlers signal]
-  (run! (fn [handler-fn] (handler-fn signal)) handlers))
+  (run! (fn [wrapped-handler-fn] (wrapped-handler-fn signal)) handlers))
 
-(defn shutdown-handlers!
-  "Shuts down given handlers by calling them with no args."
-  [handlers]
-  (run! (fn [handler-fn] (enc/catching (handler-fn))) handlers))
+(defn shut-down-handlers!
+  "Shuts down given handlers by calling them with no args.
+  Returns {<handler-id> {:keys [okay error]}}."
+  ([handlers]
+   #?(:clj (shut-down-handlers! handlers 5000)
+      :cljs
+      (reduce ; ?{<handler-id> <result>}
+        (fn [acc wrapped-handler-fn]
+          (let [handler-meta (meta wrapped-handler-fn)
+                handler-id   (get handler-meta :handler-id)]
+            (assoc acc handler-id (wrapped-handler-fn))))
+        nil handlers)))
+
+  #?(:clj
+     ([handlers timeout-msecs]
+      (when-let [async-results
+                 (reduce ; ?{<handler-id> [<result_> <thread>]}
+                   (fn [acc wrapped-handler-fn]
+                     (let [handler-meta (meta wrapped-handler-fn)
+                           handler-id   (get handler-meta :handler-id)
+                           result_      (volatile! {:error :timeout})
+                           thread
+                           (enc/threaded :daemon
+                             (vreset! result_ (wrapped-handler-fn)))]
+                       (assoc acc handler-id [result_ thread])))
+                   nil handlers)]
+
+        (let [joining-thread
+              (enc/threaded :daemon
+                (enc/run-kv!
+                  (fn [_handler-id [result_ thread]] (.join ^Thread thread))
+                  async-results))]
+
+          ;; Wait for all handlers to complete shutdown
+          (if timeout-msecs
+            (.join ^Thread joining-thread (int timeout-msecs))
+            (.join ^Thread joining-thread))
+
+          (reduce-kv
+            (fn [acc handler-id [result_ thread]]
+              (assoc acc handler-id @result_))
+            async-results
+            async-results))))))
 
 (defn get-middleware-fn
   "Takes ?[<unary-fn> ... <unary-fn>] and returns nil, or a single unary fn
@@ -532,14 +571,16 @@
         middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
         wrapped-handler-fn
         (fn wrapped-handler-fn
-          ([] ; Shutdown
-           (when (enc/-cas!? stopped?_ false true)
+          ([] ; Shut down => {:keys [okay error]}
+           (if-not (enc/-cas!? stopped?_ false true)
+             {:okay :previously-shut-down}
              (enc/try*
-               (handler-fn) ; Notify handler-fn to shutdown
+               (handler-fn) ; Notify handler-fn to shut down
+               {:okay :shut-down}
                (catch :all t
                  (when (and error-fn (not (enc/identical-kw? error-fn ::default)))
-                   (enc/catching (error-fn {:handler-id handler-id, :error t}))))) ; No :raw-signal
-             true))
+                   (enc/catching (error-fn {:handler-id handler-id, :error t}))) ; No :raw-signal
+                 {:error t}))))
 
           ([signal] ; Raw signal
            (when-not (stopped?_)
@@ -582,20 +623,22 @@
            (if-not async
              wrapped-handler-fn
              (let [runner (enc/runner (have map? async))]
-               (fn wrapped-handler-fn* [signal]
-                 (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
-                   (when backp-fn
-                     (enc/catching
-                       (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
-                         (let [backp-fn
-                               (if (enc/identical-kw? backp-fn ::default)
-                                 *default-handler-backp-fn*
-                                 backp-fn)]
-                           (backp-fn {:handler-id handler-id}))))))))))]
+               (fn wrapped-handler-fn*
+                 ([      ] (wrapped-handler-fn)) ; Shut down
+                 ([signal]
+                  (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
+                    (when backp-fn
+                      (enc/catching
+                        (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
+                          (let [backp-fn
+                                (if (enc/identical-kw? backp-fn ::default)
+                                  *default-handler-backp-fn*
+                                  backp-fn)]
+                            (backp-fn {:handler-id handler-id})))))))))))]
 
     (with-meta wrapped-handler-fn*
       {:handler-id    handler-id
-       :handler-fn    handler-fn
+       :handler-fn    handler-fn ; Unwrapped
        :dispatch-opts dispatch-opts})))
 
 (defn remove-handler
@@ -982,9 +1025,10 @@
         ~(api-docstring 11 purpose
            "The handler API consists of the following:
 
-             `get-handlers`    - Returns info on currently registered handlers
-             `add-handler!`    - Used to   register handlers
-             `remove-handler!` - Used to unregister handlers
+             `get-handlers`        - Returns info on currently registered handlers
+             `add-handler!`        - Used to   register handlers
+             `remove-handler!`     - Used to unregister handlers
+             `shut-down-handlers!` - Used to shut down  handlers
 
            See the relevant docstrings for details.
 
@@ -1132,15 +1176,34 @@
 (comment (api:add-handler! "purpose" '*my-sig-handlers* 'base-dispatch-opts))
 
 #?(:clj
-   (defn- api:add-shutdown-hook
+   (defn- api:shut-down-handlers!
+     [purpose *sig-handlers* clj?]
+     (let [docstring
+           (api-docstring 13 purpose
+             "Shuts down all registered %s handlers and returns
+             ?{<handler-id> {:keys [okay error]}}.
+
+             Future calls to handlers will no-op.
+             Clj only: `shut-down-handlers!` is called automatically on JVM shutdown.")]
+
+       (if-not clj?
+         `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*))
+         `(defn ~'shut-down-handlers! ~docstring
+            ([              ] (shut-down-handlers! ~*sig-handlers*))
+            ([timeout-msecs#] (shut-down-handlers! ~*sig-handlers* timeout-msecs#)))))))
+
+(comment (api:shut-down-handlers! "purpose" '*my-sig-handlers* :clj))
+
+#?(:clj
+   (defn- api:add-shutdown-hook!
      [*sig-handlers*]
      `(enc/defonce ~'_handler-shutdown-hook {:private true}
         (.addShutdownHook (Runtime/getRuntime)
           (Thread.
-            (fn ~'shutdown-signal-handlers []
-              (shutdown-handlers! ~*sig-handlers*)))))))
+            (fn ~'shut-down-signal-handlers []
+              (shut-down-handlers! ~*sig-handlers*)))))))
 
-(comment (api:add-shutdown-hook '*my-sig-handlers*))
+(comment (api:add-shutdown-hook! '*my-sig-handlers*))
 
 #?(:clj
    (defn- api:with-handler
@@ -1183,14 +1246,15 @@
 
      (let [clj? (not (:ns &env))]
       `(do
-         ~(api:help:handlers   purpose)
-         ~(api:get-handlers    purpose *sig-handlers*)
-         ~(api:remove-handler! purpose *sig-handlers*)
-         ~(api:add-handler!    purpose *sig-handlers* base-dispatch-opts)
-         ~(api:with-handler    purpose *sig-handlers* base-dispatch-opts clj?)
-         ~(api:with-handler+   purpose *sig-handlers* base-dispatch-opts clj?)
-         ~(when-not (:ns &env)
-            (api:add-shutdown-hook *sig-handlers*))))))
+         ~(api:help:handlers       purpose)
+         ~(api:get-handlers        purpose *sig-handlers*)
+         ~(api:remove-handler!     purpose *sig-handlers*)
+         ~(api:add-handler!        purpose *sig-handlers* base-dispatch-opts)
+         ~(api:with-handler        purpose *sig-handlers* base-dispatch-opts clj?)
+         ~(api:with-handler+       purpose *sig-handlers* base-dispatch-opts clj?)
+         ~(api:shut-down-handlers! purpose *sig-handlers* clj?)
+         ~(when clj?
+            (api:add-shutdown-hook! *sig-handlers*))))))
 
 (comment
   (def ^:dynamic *sig-handlers* nil)
