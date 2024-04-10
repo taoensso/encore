@@ -6206,9 +6206,9 @@
                     ;; Ensure exactly 1 async thread is updating cache
                     (when (compare-and-set! cache-update-pending?_ false true)
                       (threaded true
-                        (if-let [new-hostname (f1 nil)] ; Take as long as needed
-                          (reset! cache_ [((promise) new-hostname) t1]) ; Update p and t
-                          (reset! cache_ [p                        t1]) ; Update only  t
+                        (if-let [new-val (f1 nil)] ; Take as long as needed
+                          (reset! cache_ [((promise) new-val) t1]) ; Update p and t
+                          (reset! cache_ [p                   t1]) ; Update only  t
                           )
                         (reset! cache-update-pending?_ false)))
                     (recur true)))
