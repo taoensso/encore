@@ -844,6 +844,17 @@
       (is (= 21 (enc/java-version "21")))]))
 
 #?(:clj
+   (deftest _refreshing-caching
+     (let [v_ (volatile! nil)
+           rc (#'enc/refreshing-cache (fn [_] (Thread/sleep 1000) "done"))
+           t  (enc/threaded :daemon (vreset! v_ (rc 0 100 "timeout")))]
+       (.interrupt t)
+       (.join      t)
+       (is (= @v_ "timeout")
+         "`get-hostname`, `get-host-ip` will return `timeout-val` when their calling thread is
+         interrupted while blocking on initializing a cold cache."))))
+
+#?(:clj
    (deftest _secure-rng-mock
      [(is (=
             (let [msrng (enc/secure-rng-mock!!! 5)] [(.nextLong msrng) (.nextDouble msrng)])

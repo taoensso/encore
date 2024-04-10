@@ -6186,6 +6186,15 @@
 ;;;; Host info
 
 #?(:clj
+   (defmacro ^:private deref-safely
+     "Like normal blocking deref, but returns `timeout-val` when calling
+     thread is interrupted while blocking."
+     [p timeout-msecs timeout-val]
+     `(try
+        (deref ~p ~timeout-msecs ~timeout-val)
+        (catch InterruptedException _# ~timeout-val))))
+
+#?(:clj
    (defn- refreshing-cache [f1]
      (let [cache_ (latom nil) ; ?[promise udt]
            cache-update-pending?_ (latom false)]
@@ -6197,11 +6206,11 @@
          (loop [force-use-cache? false]
 
            (if (or force-use-cache? (cache-update-pending?_))
-            (let [[p] (cache_)] (deref p timeout-msecs timeout-val))
+            (let [[p] (cache_)] (deref-safely p timeout-msecs timeout-val))
             (let [t1 (System/currentTimeMillis)]
               (if-let [[p ^long t0] (cache_)]
                 (if (< (- t1 t0) (long cache-msecs)) ; Have fresh cache
-                  (deref p timeout-msecs timeout-val)
+                  (deref-safely p timeout-msecs timeout-val)
                   (do
                     ;; Ensure exactly 1 async thread is updating cache
                     (when (compare-and-set! cache-update-pending?_ false true)
@@ -6232,8 +6241,8 @@
        ([cache-msecs timeout-msecs timeout-val] (f3 cache-msecs timeout-msecs timeout-val))
        ([            timeout-msecs timeout-val]
         (let [p (promise)]
-          (future* (p (f1           timeout-val)))
-          (deref    p timeout-msecs timeout-val))))))
+          (future*     (p (f1           timeout-val)))
+          (deref-safely p timeout-msecs timeout-val))))))
 
 (comment (qb 1e6 (get-host-ip (msecs :mins 1) 5000 "UnknownHost"))) ; 60.6
 
@@ -6250,8 +6259,8 @@
        ([cache-msecs timeout-msecs timeout-val] (f3 cache-msecs timeout-msecs timeout-val))
        ([            timeout-msecs timeout-val]
         (let [p (promise)]
-          (future* (p (f1           timeout-val)))
-          (deref    p timeout-msecs timeout-val))))))
+          (future*     (p (f1           timeout-val)))
+          (deref-safely p timeout-msecs timeout-val))))))
 
 (comment (qb 1e6 (get-hostname (msecs :mins 1) 5000 "UnknownHost"))) ; 60.36
 
