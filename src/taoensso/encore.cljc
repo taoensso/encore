@@ -4972,9 +4972,9 @@
        (encore/signal! {<signal-opts> :fallback (println \"Prints iff Telemere not present\")})
 
      For more info, see:
-
-       - Telemere `signal!` docstring, Ref. <https://tinyurl.com/telemere-signal>
-       - Telemere documentation,       Ref. <https://tinyurl.com/telemere-docs>"
+       - Telemere `signal!`, Ref. <https://www.taoensso.com/telemere/signal!>
+       - Telemere API,       Ref. <https://www.taoensso.com/telemere/api>
+       - Telemere Wiki docs, Ref. <https://www.taoensso.com/telemere/wiki>"
 
      {:added "Encore v3.68.0 (2023-09-25)"
       :arglists
@@ -4985,7 +4985,7 @@
            fallback, ; Unique to `encore/signal!`
            elidable? location inst uid middleware,
            sample-rate kind ns id level when rate-limit,
-           ctx parent trace?, do let data msg error run & extra-kvs]}])}
+           ctx parent trace?, do let data msg error run & kvs]}])}
 
      [opts]
      (have? map? opts)

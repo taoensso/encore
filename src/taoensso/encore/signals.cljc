@@ -772,7 +772,10 @@
              - A regex pattern of kind/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.")
+             - {:allow <spec> :deny <spec>} with specs as above.
+               If present, `:allow` spec MUST     match, AND
+               If present, `:deny`  spec MUST NOT match.")
+
         ~'[kind-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
@@ -805,7 +808,10 @@
              - A regex pattern of namespace/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.")
+             - {:allow <spec> :deny <spec>} with specs as above.
+               If present, `:allow` spec MUST     match, AND
+               If present, `:deny`  spec MUST NOT match.")
+
         ~'[ns-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
@@ -852,7 +858,10 @@
              - A regex pattern of id/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.")
+             - {:allow <spec> :deny <spec>} with specs as above.
+               If present, `:allow` spec MUST     match, AND
+               If present, `:deny`  spec MUST NOT match.")
+
         ~'[id-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
