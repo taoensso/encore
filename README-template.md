@@ -44,7 +44,7 @@ See for  intro and usage:
 ## Documentation
 
 - [Wiki][GitHub wiki] (getting started, usage, etc.)
-- API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
+- API reference: [cljdoc][cljdoc docs], [Codox][Codox docs]
 
 ## Funding
 
@@ -67,7 +67,7 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 <!-- Project -->
 
 [Codox docs]:   https://taoensso.github.io/TODO/
-[clj-doc docs]: https://cljdoc.org/d/com.taoensso/TODO/
+[cljdoc docs]: https://cljdoc.org/d/com.taoensso/TODO/
 
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/TODO.svg
 [Clojars URL]: https://clojars.org/com.taoensso/TODO

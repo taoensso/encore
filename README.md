@@ -21,7 +21,7 @@ Always use the **latest stable version** of Encore when possible.
 ## Documentation
 
 - [Wiki][GitHub wiki] (getting started, usage, etc.)
-- API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
+- API reference: [cljdoc][cljdoc docs], [Codox][Codox docs]
 
 ## Funding
 
@@ -44,7 +44,7 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 <!-- Project -->
 
 [Codox docs]:   https://taoensso.github.io/encore/
-[clj-doc docs]: https://cljdoc.org/d/com.taoensso/encore/
+[cljdoc docs]: https://cljdoc.org/d/com.taoensso/encore/
 
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/encore.svg
 [Clojars URL]: https://clojars.org/com.taoensso/encore
