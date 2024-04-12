@@ -227,6 +227,11 @@
   (#?(:clj invoke :cljs -invoke) [_      ns id level] (filter-fn      ns id level))
   (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level)))
 
+(defn sig-filter?
+  "Returns true iff given a `SigFilter`."
+  #?(:cljs {:tag 'boolean})
+  [x] (instance? SigFilter x))
+
 (enc/def* sig-filter
   "Returns nil, or a stateful (caching) `SigFilter` with the given specs."
   {:arglists
@@ -364,14 +369,19 @@
           [elide? allow? expansion-id,
            elidable? location sample-rate kind ns id level filter/when rate-limit rl-rid]}])}
 
-     [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]} opts]
+     [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*] :as core-opts} call-opts]
 
-     (const-form! 'opts           opts) ; Must be const map, though vals may be arb forms
-     (enc/have? [:or nil? map?]   opts)
-     (const-form! 'elide?    (get opts :elide?))
-     (const-form! 'elidable? (get opts :elidable?))
+     (const-form! 'call-opts      call-opts) ; Must be const map, though vals may be arb forms
+     (enc/have? [:or nil? map?]   call-opts)
+     (const-form! 'elide?    (get call-opts :elide?))
+     (const-form! 'elidable? (get call-opts :elidable?))
 
-     (let [location ; {:keys [ns line column file]} forms
+     (enc/have? #(contains? core-opts %) :macro-form :macro-env :ct-sig-filter :*rt-sig-filter*)
+     (enc/have? [:or nil? sig-filter?] ct-sig-filter)
+     (enc/have? qualified-symbol?     *rt-sig-filter*)
+
+     (let [opts call-opts
+           location ; {:keys [ns line column file]} forms
            (let [location-form (get opts :location (enc/get-source macro-form macro-env))
                  location-map  (when (map?    location-form) location-form) ; At least keys const
                  location-sym  (when (symbol? location-form) location-form)]
@@ -749,7 +759,7 @@
           :compile-time (enc/force-ref  ~ct-sig-filter)
           :runtime      (enc/force-ref ~*rt-sig-filter*)))))
 
-(comment (api:get-filters "purpose" 'my-ct-sig-filter '*my-rt-sig-filter*))
+(comment (api:get-filters "purpose" `my-ct-sig-filter `*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:without-filters
@@ -759,7 +769,7 @@
           ~(api-docstring 0 purpose "Executes form without any runtime filters.")
           ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form)))))
 
-(comment (api:without-filters "purpose" '*my-rt-sig-filter* :clj))
+(comment (api:without-filters "purpose" `*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-kind-filter!
@@ -781,7 +791,7 @@
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:kind-filter ~'kind-filter})))))))
 
-(comment (api:set-ns-filter! "purpose" '*my-rt-sig-filter*))
+(comment (api:set-ns-filter! "purpose" `*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:with-kind-filter
@@ -795,7 +805,7 @@
           `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
              ~~'form)))))
 
-(comment (api:with-kind-filter "purpose" '*my-rt-sig-filter* :clj))
+(comment (api:with-kind-filter "purpose" `*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-ns-filter!
@@ -817,7 +827,7 @@
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))))
 
-(comment (api:set-ns-filter! "purpose" '*my-rt-sig-filter*))
+(comment (api:set-ns-filter! "purpose" `*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:with-ns-filter
@@ -831,7 +841,7 @@
           `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
              ~~'form)))))
 
-(comment (api:with-ns-filter "purpose" '*my-rt-sig-filter* :clj))
+(comment (api:with-ns-filter "purpose" `*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:with-id-filter
@@ -845,7 +855,7 @@
           `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
              ~~'form)))))
 
-(comment (api:with-id-filter "purpose" '*my-rt-sig-filter* :clj))
+(comment (api:with-id-filter "purpose" `*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:set-id-filter!
@@ -867,7 +877,7 @@
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:id-filter ~'id-filter})))))))
 
-(comment (api:set-id-filter! "purpose" '*my-rt-sig-filter*))
+(comment (api:set-id-filter! "purpose" `*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:set-min-level!
@@ -921,43 +931,44 @@
                     (fn [old-ml#]
                       (update-min-level old-ml# nil ~'ns-filter ~'min-level))})))))))))
 
-(comment (api:set-min-level! "purpose" 4 '*my-rt-sig-filter*))
+(comment (api:set-min-level! "purpose" 4 `*my-rt-sig-filter*))
 
 #?(:clj
    (defn- api:with-min-level
      [purpose sf-arity *rt-sig-filter* clj?]
-     (when clj?
-       (case (int sf-arity)
-         (4)
-         `(defmacro ~'with-min-level
-            ~(api-docstring 15 purpose
-               "Executes form with given minimum %s call level in effect.
-               See `set-min-level!` for details.")
-            (~'[               min-level form] (list '~'with-min-level nil    nil ~'min-level ~'form))
-            (~'[kind           min-level form] (list '~'with-min-level ~'kind nil ~'min-level ~'form))
-            (~'[kind ns-filter min-level form]
-             `(binding [~'~*rt-sig-filter*
-                        (update-sig-filter ~'~*rt-sig-filter*
-                          {:min-level-fn
-                           (fn [~'old-ml#]
-                             (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
-                ~~'form)))
+     (let [self (symbol (str *ns*) "with-min-level")]
+       (when clj?
+         (case (int sf-arity)
+           (4)
+           `(defmacro ~'with-min-level
+              ~(api-docstring 17 purpose
+                 "Executes form with given minimum %s call level in effect.
+                 See `set-min-level!` for details.")
+              (~'[               min-level form] (list '~self nil    nil ~'min-level ~'form))
+              (~'[kind           min-level form] (list '~self ~'kind nil ~'min-level ~'form))
+              (~'[kind ns-filter min-level form]
+               `(binding [~'~*rt-sig-filter*
+                          (update-sig-filter ~'~*rt-sig-filter*
+                            {:min-level-fn
+                             (fn [~'old-ml#]
+                               (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
+                  ~~'form)))
 
-         (2 3)
-         `(defmacro ~'with-min-level
-            ~(api-docstring 15 purpose
-               "Executes form with given minimum %s call level in effect.
-               See `set-min-level!` for details.")
-            (~'[          min-level form] (list '~'with-min-level nil ~'min-level ~'form))
-            (~'[ns-filter min-level form]
-             `(binding [~'~*rt-sig-filter*
-                        (update-sig-filter ~'~*rt-sig-filter*
-                          {:min-level-fn
-                           (fn [~'old-ml#]
-                             (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
-                ~~'form)))))))
+           (2 3)
+           `(defmacro ~'with-min-level
+              ~(api-docstring 17 purpose
+                 "Executes form with given minimum %s call level in effect.
+                 See `set-min-level!` for details.")
+              (~'[          min-level form] (list '~self nil ~'min-level ~'form))
+              (~'[ns-filter min-level form]
+               `(binding [~'~*rt-sig-filter*
+                          (update-sig-filter ~'~*rt-sig-filter*
+                            {:min-level-fn
+                             (fn [~'old-ml#]
+                               (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
+                  ~~'form))))))))
 
-(comment (api:with-min-level "purpose" 4 '*my-rt-sig-filter* :clj))
+(comment (api:with-min-level "purpose" 4 `*my-rt-sig-filter* :clj))
 
 #?(:clj
    (defn- api:get-min-level
@@ -982,19 +993,24 @@
              :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
              :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)))))))
 
-(comment (api:get-min-level "purpose" 4 '*my-rt-sig-filter* 'my-ct-sig-filter))
+(comment (api:get-min-level "purpose" 4 `*my-rt-sig-filter* `my-ct-sig-filter))
 
 #?(:clj
    (defmacro def-filter-api
      "Defines signal filter API vars in current ns.
      NB: Cljs ns will need appropriate `:require-macros`."
      [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter*]
-       :or   {purpose "signal"}}]
+       :or   {purpose "signal"}
+       :as   opts}]
 
      ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
+     (enc/have? #(contains? opts %) :purpose :sf-arity :ct-sig-filter :*rt-sig-filter* #_:*sig-handlers*)
+     (enc/have? [:or nil? symbol?] ct-sig-filter *rt-sig-filter* #_*sig-handlers*)
 
-     (let [sf-arity (int (or sf-arity -1))
-           clj? (not (:ns &env))]
+     (let [sf-arity        (int (or sf-arity -1))
+           clj?            (not (:ns &env))
+           ct-sig-filter   (enc/resolve-sym &env  ct-sig-filter)
+           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)]
 
        (when-not (contains? #{1 2 3 4} sf-arity)
          (unexpected-sf-artity! sf-arity `def-filter-api))
@@ -1023,9 +1039,8 @@
           ~(api:get-min-level  purpose sf-arity *rt-sig-filter* ct-sig-filter)))))
 
 (comment
-  (def ^:dynamic *my-rt-sig-filter* nil)
-  (macroexpand '(def-filter-api {:sf-arity 3 :*rt-sig-filter* *my-rt-sig-filter*}))
-  (do           (def-filter-api {:sf-arity 3 :*rt-sig-filter* *my-rt-sig-filter*})))
+  (macroexpand '(def-filter-api {:purpose nil, :sf-arity 3, :ct-sig-filter my-ct-sig-filter, :*rt-sig-filter* *my-rt-sig-filter*}))
+  (do           (def-filter-api {:purpose nil, :sf-arity 3, :ct-sig-filter my-ct-sig-filter, :*rt-sig-filter* *my-rt-sig-filter*})))
 
 #?(:clj
    (defn- api:help:handlers
@@ -1057,7 +1072,7 @@
            registered %s handlers.")
         [] (get-handlers ~*sig-handlers*))))
 
-(comment (api:get-handlers "purpose" '*my-sig-handlers*))
+(comment (api:get-handlers "purpose" `*my-sig-handlers*))
 
 #?(:clj
    (defn- api:remove-handler!
@@ -1072,7 +1087,7 @@
           (enc/update-var-root! ~*sig-handlers*
             (fn [m#] (remove-handler m# ~'handler-id)))))))
 
-(comment (api:remove-handler! "purpose" '*my-sig-handlers*))
+(comment (api:remove-handler! "purpose" `*my-sig-handlers*))
 
 #?(:clj
    (defn- api:add-handler!
@@ -1182,7 +1197,7 @@
                (add-handler m# ~'handler-id ~'handler-fn,
                  ~base-dispatch-opts ~'dispatch-opts))))))))
 
-(comment (api:add-handler! "purpose" '*my-sig-handlers* 'base-dispatch-opts))
+(comment (api:add-handler! "purpose" `*my-sig-handlers* 'base-dispatch-opts))
 
 #?(:clj
    (defn- api:shut-down-handlers!
@@ -1201,7 +1216,7 @@
             ([              ] (shut-down-handlers! ~*sig-handlers*))
             ([timeout-msecs#] (shut-down-handlers! ~*sig-handlers* timeout-msecs#)))))))
 
-(comment (api:shut-down-handlers! "purpose" '*my-sig-handlers* :clj))
+(comment (api:shut-down-handlers! "purpose" `*my-sig-handlers* :clj))
 
 #?(:clj
    (defn- api:add-shutdown-hook!
@@ -1212,7 +1227,7 @@
             (fn ~'shut-down-signal-handlers []
               (shut-down-handlers! ~*sig-handlers*)))))))
 
-(comment (api:add-shutdown-hook! '*my-sig-handlers*))
+(comment (api:add-shutdown-hook! `*my-sig-handlers*))
 
 #?(:clj
    (defn- api:with-handler
@@ -1226,7 +1241,7 @@
           `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
 
-(comment (api:with-handler "purpose" '*my-sig-handlers* {:my-opt :foo} :clj))
+(comment (api:with-handler "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
 
 #?(:clj
    (defn- api:with-handler+
@@ -1240,7 +1255,7 @@
           `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
 
-(comment (api:with-handler+ "purpose" '*my-sig-handlers* {:my-opt :foo} :clj))
+(comment (api:with-handler+ "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
 
 #?(:clj
    (defmacro def-handler-api
@@ -1248,12 +1263,17 @@
      handler shutdown on JVM shutdown.
 
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity *rt-sig-fiter* *sig-handlers* base-dispatch-opts]
-       :or   {purpose "signal"}}]
+     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts]
+       :or   {purpose "signal"}
+       :as   opts}]
 
      ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
+     (enc/have? #(contains? opts %) :purpose :sf-arity #_:ct-sig-filter :*rt-sig-filter* :*sig-handlers*)
+     (enc/have? [:or nil? symbol?] #_ct-sig-filter *rt-sig-filter* *sig-handlers*)
 
-     (let [clj? (not (:ns &env))]
+     (let [clj?            (not (:ns &env))
+           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)
+           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)]
       `(do
          ~(api:help:handlers       purpose)
          ~(api:get-handlers        purpose *sig-handlers*)
@@ -1266,9 +1286,8 @@
             (api:add-shutdown-hook! *sig-handlers*))))))
 
 (comment
-  (def ^:dynamic *sig-handlers* nil)
-  (macroexpand '(def-handler-api {:sf-arity 3 :*sig-handlers* *sig-handlers*}))
-  (do           (def-handler-api {:sf-arity 3 :*sig-handlers* *sig-handlers*}))
+  (macroexpand '(def-handler-api {:purpose nil, :sf-arity 3, :*rt-sig-filter* *my-rt-sig-filter*, :*sig-handlers* *my-sig-handlers*}))
+  (do           (def-handler-api {:purpose nil, :sf-arity 3, :*rt-sig-filter* *my-rt-sig-filter*, :*sig-handlers* *my-sig-handlers*}))
 
   (add-handler!    :hid1 (fn [x]) {})
   (remove-handler! :hid1)
@@ -1284,8 +1303,14 @@
         (def-handler-api ~opts))))
 
 (comment
-  (def-api
+  (do
+    (def            my-ct-sig-filter  nil)
+    (def ^:dynamic *my-rt-sig-filter* nil)
+    (def ^:dynamic *my-sig-handlers*  nil))
+
+  (def-filter-api
     {:purpose         "testing"
      :sf-arity        3
-     :*sig-handlers*  *sig-handlers*
-     :*rt-sig-filter* *rt-sig-filter*}))
+     :ct-sig-filter    my-ct-sig-filter
+     :*rt-sig-filter* *my-rt-sig-filter*
+     :*sig-handlers*  *my-sig-handlers*}))
