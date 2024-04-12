@@ -6,20 +6,17 @@
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
    [taoensso.encore :as enc]
-   #?(:clj [taoensso.encore.bytes :as bytes])
-   [taoensso.encore.stats         :as stats]
-   [taoensso.encore.signals       :as sigs])
+   #?(:clj [taoensso.encore.bytes     :as bytes])
+   [taoensso.encore.stats             :as stats]
+   [taoensso.encore.signals           :as sigs]
+   [taoensso.encore-tests.signals-api :as sapi])
 
   #?(:cljs
      (:require-macros
       [taoensso.encore-tests
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer1 callsite-outer2 sig-exp
-
-        ;; For `sigs/def-api`
-        #_api-debug without-filters with-kind-filter with-ns-filter with-id-filter
-        with-min-level with-handler with-handler+]])))
+        callsite-inner callsite-outer1 callsite-outer2]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -1556,116 +1553,96 @@
 ;; (sigs/api:debug :o1)
 ;; (is (= (api-debug :i1) [:o1 :i1]))
 
-(do
-  (def ^:dynamic *sig-handlers*  nil)
-  (def ^:dynamic *rt-sig-filter* nil)
+(def cnt (enc/counter 0))
 
-  (sigs/def-api
-    {:sf-arity        4
-     :*sig-handlers*  *sig-handlers*
-     :*rt-sig-filter* *rt-sig-filter*})
-
-  (def cnt (enc/counter 0))
-
-  (deftype MySignal [level cnt]
-    sigs/IFilterableSignal
-    (signal-value  [_ _] cnt)
-    (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))))
-
-#?(:clj
-   (defmacro sig-exp
-     "Macro wrapper around `sigs/filterable-expansion`."
-     {:arglists (:arglists (meta #'sigs/filterable-expansion))}
-     [opts]
-     `(quote
-        ~(sigs/filterable-expansion
-           {:macro-form &form :macro-env &env, :sf-arity 4
-            :ct-sig-filter nil :*rt-sig-filter* `*rt-sig-filter*}
-           opts))))
+(deftype MySignal [level cnt]
+  sigs/IFilterableSignal
+  (signal-value  [_ _] cnt)
+  (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level)))
 
 (deftest _signal-api
   [(testing "Signal filtering"
-     [(is (nil? (enc/update-var-root! *rt-sig-filter* (fn [_] nil))))
-      (is (= (set-kind-filter!     "*") {:kind-filter "*", :ns-filter nil, :id-filter nil, :min-level nil}))
-      (is (= (set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter nil, :min-level nil}))
-      (is (= (set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level nil}))
-      (is (= (set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
-      (is (= @*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
-      (is (= (get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))
-      (is (= (get-min-level)  {:runtime                                                               :info}))
+     [(is (nil? (enc/update-var-root! sapi/*rt-sig-filter* (fn [_] nil))))
+      (is (= (sapi/set-kind-filter!     "*") {:kind-filter "*", :ns-filter nil, :id-filter nil, :min-level nil}))
+      (is (= (sapi/set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter nil, :min-level nil}))
+      (is (= (sapi/set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level nil}))
+      (is (= (sapi/set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
+      (is (= @sapi/*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
+      (is (= (sapi/get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))
+      (is (= (sapi/get-min-level)  {:runtime                                                               :info}))
 
-      (is (= (without-filters (get-filters))   nil))
-      (is (= (without-filters (get-min-level)) nil))
+      (is (= (sapi/without-filters (sapi/get-filters))   nil))
+      (is (= (sapi/without-filters (sapi/get-min-level)) nil))
 
-      (is (enc/submap? (with-kind-filter "-" @*rt-sig-filter*) {:kind-filter "-"}))
-      (is (enc/submap? (with-ns-filter   "-" @*rt-sig-filter*) {:ns-filter   "-"}))
-      (is (enc/submap? (with-id-filter   "-" @*rt-sig-filter*) {:id-filter   "-"}))
+      (is (enc/submap? (sapi/with-kind-filter "-" @sapi/*rt-sig-filter*) {:kind-filter "-"}))
+      (is (enc/submap? (sapi/with-ns-filter   "-" @sapi/*rt-sig-filter*) {:ns-filter   "-"}))
+      (is (enc/submap? (sapi/with-id-filter   "-" @sapi/*rt-sig-filter*) {:id-filter   "-"}))
 
-      (is (enc/submap? (with-min-level :kind1       100 @*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
-      (is (enc/submap? (with-min-level :kind1 "ns1" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
+      (is (enc/submap? (sapi/with-min-level :kind1       100 @sapi/*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
+      (is (enc/submap? (sapi/with-min-level :kind1 "ns1" 100 @sapi/*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
       (is (enc/submap?
-            (with-min-level :kind1 "ns1" :warn
-              {:l1 (get-min-level)
-               :l2 (get-min-level :kind1)
-               :l3 (get-min-level :kind1 "ns1")})
+            (sapi/with-min-level :kind1 "ns1" :warn
+              {:l1 (sapi/get-min-level)
+               :l2 (sapi/get-min-level :kind1)
+               :l3 (sapi/get-min-level :kind1 "ns1")})
 
             {:l1 {:runtime :info}, :l2 {:runtime :info}, :l3 {:runtime :warn}}))
 
-      (is (false?  (with-ns-filter "-"          (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (with-ns-filter "ns1"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false?  (sapi/with-ns-filter "-"          (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (sapi/with-ns-filter "ns1"        (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-kind-filter "-"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (with-kind-filter "kind1"    (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false?  (sapi/with-kind-filter "-"        (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (sapi/with-kind-filter "kind1"    (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-id-filter "-"          (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (with-id-filter "id1"        (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false?  (sapi/with-id-filter "-"          (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (sapi/with-id-filter "id1"        (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (with-min-level :kind1 :warn (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (with-min-level :kind2 :warn (*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false?  (sapi/with-min-level :kind1 :warn (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?   (sapi/with-min-level :kind2 :warn (sapi/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (enc/submap? (with-min-level :kind1 "ns2" 100 @*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
-      (is (true?       (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* :kind1 "ns1" :id 50))) "Fall back to :default kind on unmatched ns")
-      (is (false?      (with-min-level :kind1 "ns2" 100 (*rt-sig-filter* :kind1 "ns2" :id 50))))])
+      (is (enc/submap? (sapi/with-min-level :kind1 "ns2" 100 @sapi/*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
+      (is (true?       (sapi/with-min-level :kind1 "ns2" 100 (sapi/*rt-sig-filter* :kind1 "ns1" :id 50))) "Fall back to :default kind on unmatched ns")
+      (is (false?      (sapi/with-min-level :kind1 "ns2" 100 (sapi/*rt-sig-filter* :kind1 "ns2" :id 50))))])
 
    (testing "Signal handlers"
      [(testing "Basics"
-        [(is (nil? (enc/update-var-root! *sig-handlers* (fn [_] nil))))
+        [(is (nil? (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))))
          (is (nil? (cnt :set 0)))
 
-         (is (=           (get-handlers) nil))
-         (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (add-handler! :hid2 nil            {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (=           (sapi/get-handlers) nil))
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid2 nil            {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
 
-         (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
+         (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
          (is (= @cnt 0))
 
-         (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
 
-         (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
-         (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))))
+         (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))))
+         (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))))
          (is (= @cnt 2))
 
-         (is (enc/submap? (add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
-         (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
-         (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
+         (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
+         (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
          (is (= @cnt 3))
 
-         (is (nil? (remove-handler! :hid1)))
-         (is (nil? *sig-handlers*) "Removal yields non-empty map")
+         (is (nil? (sapi/remove-handler! :hid1)))
+         (is (nil? sapi/*sig-handlers*) "Removal yields non-empty map")
 
          (let [sig_ (atom ::nx)]
-           (with-handler :hid1 (fn [x] (reset! sig_ x)) {:async nil}
-             (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo")))
+           (sapi/with-handler :hid1 (fn [x] (reset! sig_ x)) {:async nil}
+             (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
            (is (= @sig_ "foo") "`with-handler` macro works"))
 
          (let [sig1_ (atom ::nx)
                sig2_ (atom ::nx)]
 
-           (with-handler    :hid1 (fn [x] (reset! sig1_ x)) {:async nil}
-             (with-handler+ :hid2 (fn [x] (reset! sig2_ x)) {:async nil}
-               (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
+           (sapi/with-handler    :hid1 (fn [x] (reset! sig1_ x)) {:async nil}
+             (sapi/with-handler+ :hid2 (fn [x] (reset! sig2_ x)) {:async nil}
+               (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
 
            [(is (= @sig1_ "foo") "`with-handler`  macro works")
             (is (= @sig2_ "foo") "`with-handler+` macro works")])
@@ -1727,10 +1704,10 @@
               v3 (atom ::nx)]
 
           [(is (nil? (cnt :set 0)))
-           (is (enc/submap? (add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                               }) {:hid1 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
-           (is (enc/submap? (add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
-           (is (nil? (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))))
+           (is (enc/submap? (sapi/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                               }) {:hid1 :submap/ex}))
+           (is (enc/submap? (sapi/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
+           (is (enc/submap? (sapi/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
+           (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
 
            #?(:clj (do (Thread/sleep 4000) :sleep))
 
@@ -1739,24 +1716,24 @@
            (is (= @v3 ::nx))
            (is (= @cnt 2) "hf3 never called")
 
-           (is (map? (remove-handler! :hid1)))
-           (is (map? (remove-handler! :hid2)))
-           (is (nil? (remove-handler! :hid3)))]))
+           (is (map? (sapi/remove-handler! :hid1)))
+           (is (map? (sapi/remove-handler! :hid2)))
+           (is (nil? (sapi/remove-handler! :hid3)))]))
 
       (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
         (let [fn-arg_ (atom nil)]
-          (enc/update-var-root! *sig-handlers* (fn [_] nil))
-          (add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
-          (sigs/call-handlers! *sig-handlers* (MySignal. :info "foo"))
+          (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))
+          (sapi/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
+          (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))
           (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error (enc/pred enc/error?)}))))
 
       #?(:clj
          (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
            (let [fn-arg_ (atom nil)]
-             (enc/update-var-root! *sig-handlers* (fn [_] nil))
-             (add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
-             (sigs/call-handlers! *sig-handlers* (MySignal. :info "1"))
-             (sigs/call-handlers! *sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
+             (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))
+             (sapi/add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
+             (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "1"))
+             (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
              (Thread/sleep 4000) ; Wait for second signal to enqueue
              (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
 
@@ -1781,7 +1758,7 @@
                    :cljs {:okay  :shut-down})}))])])
 
    (testing "Filterable expansion"
-     [(is (enc/submap? (sig-exp {:level :info})
+     [(is (enc/submap? (sapi/sig-exp {:level :info})
             {:expansion-id (enc/pred nat-int?)
              :allow?       (enc/pred enc/call-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
              :elide?       :submap/nx
@@ -1791,15 +1768,15 @@
               :column (enc/pred nat-int?)
               :file   (enc/pred string?)}}) "Basic expansion")
 
-      (is (enc/submap? (sig-exp {:level :info, :ns "my-ns"}) {:location {:ns "my-ns"}}) "opts/ns can override location/ns")
+      (is (enc/submap? (sapi/sig-exp {:level :info, :ns "my-ns"}) {:location {:ns "my-ns"}}) "opts/ns can override location/ns")
 
       (testing "Can override `allow?`"
-        [(is (enc/submap? (sig-exp {:level :info, :allow?             true}) {:allow? true}))
-         (is (enc/submap? (sig-exp {:level :info, :allow?            false}) {:allow? false}))
-         (is (enc/submap? (sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
+        [(is (enc/submap? (sapi/sig-exp {:level :info, :allow?             true}) {:allow? true}))
+         (is (enc/submap? (sapi/sig-exp {:level :info, :allow?            false}) {:allow? false}))
+         (is (enc/submap? (sapi/sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
-      (is (enc/submap? (sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
-      (is (enc/submap? (sig-exp {:level :info, :location a-sym, :file "my-file"})
+      (is (enc/submap? (sapi/sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
+      (is (enc/submap? (sapi/sig-exp {:level :info, :location a-sym, :file "my-file"})
             '{:location
               {:ns     (clojure.core/get a-sym :ns)
                :line   (clojure.core/get a-sym :line)
@@ -1807,13 +1784,14 @@
                :file   "my-file"}})
         "Support runtime `:location`")
 
-      (is (enc/submap? (sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id -1
-                                 :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
+      (is (enc/submap? (sapi/sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id -1
+                                      :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
             {:expansion-id -1
+             :location {:ns "my-ns"}
              :allow?
              '(clojure.core/and
                (clojure.core/< (Math/random) 0.5)
-               (clojure.core/if-let [sf taoensso.encore-tests/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
+               (clojure.core/if-let [sf taoensso.encore-tests.signals-api/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
                (clojure.core/let [this-expansion-id -1] (> 1 0))
                (if (taoensso.encore.signals/expansion-limit!? -1 [[1 1000]] nil) false true))})
         "Full `allow?` expansion")])])
