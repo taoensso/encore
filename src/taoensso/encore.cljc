@@ -626,8 +626,8 @@
        "Returns {:keys [var meta]} for given symbol."
        [macro-env sym]
        (when (symbol? sym)
-         (if (and (:ns macro-env) resolve-cljs)
-           {:var nil, :meta (:meta (resolve-cljs macro-env sym))}
+         (if (:ns macro-env)
+           {:var nil, :meta (when resolve-cljs (:meta (resolve-cljs macro-env sym)))}
            (let [v (resolve macro-env sym)]
              {:var v
               :meta
