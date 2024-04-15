@@ -713,41 +713,43 @@
 
 #?(:clj
    (defn- api:help:filters
-     [purpose]
+     [purpose system-vals-info]
      `(def ~'help:filters
-        ~(api-docstring 11 purpose
-           "Your filter config determines which %s calls will be allowed.
+        ~(str
+           (api-docstring 13 purpose
+             "Your filter config determines which %s calls will be allowed.
 
-            Filtering can occur at compile-time (=> elision), or runtime.
-            Both compile-time and runtime config can be specified via:
+             Filtering can occur at compile-time (=> elision), or runtime.
+             Both compile-time and runtime config can be specified with:
 
-              1. System values (JVM properties, environment variables, or
-                 classpath resources). See library docs for details.
+               System values (JVM properties, environment variables, or
+               classpath resources) [1].
 
-              2. The filter API consting of the following:
+             Runtime config can also be specified with:
 
-                `set-kind-filter!`,   `with-kind-filter`    - for filtering calls by %s kind (when relevant)
-                `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
-                `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
-                `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
+               `set-kind-filter!`,   `with-kind-filter`    - for filtering calls by %s kind (when relevant)
+               `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
+               `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
+               `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
 
-                See the relevant docstrings for details.
+               See the relevant docstrings for details.
 
-            Additional filtering can also be applied on a per-handler basis, see
-            `add-handler!` for details.
+             Filtering can also be applied per handler, see `add-handler!` for details.
 
-            See also:
+             See also:
 
-              `get-filters`     - to see current filter config
-              `get-min-level`   - to see current minimum level
-              `without-filters` - to disable all runtime filtering
+               `get-filters`     - to see current filter config
+               `get-min-level`   - to see current minimum level
+               `without-filters` - to disable all runtime filtering
 
-            If anything is unclear, please ping me (@ptaoussanis) so that I can
-            improve these docs!")
+             If anything is unclear, please ping me (@ptaoussanis) so that I can
+             improve these docs!
 
+             [1] ")
+           (or system-vals-info "See library docs for details."))
         "See docstring")))
 
-(comment (api:help:filters "purpose"))
+(comment (api:help:filters "purpose" nil))
 
 #?(:clj
    (defn- api:get-filters
@@ -999,7 +1001,7 @@
    (defmacro def-filter-api
      "Defines signal filter API vars in current ns.
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter*]
+     [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter* sig-filter-system-vals-info]
        :or   {purpose "signal"}
        :as   opts}]
 
@@ -1017,7 +1019,7 @@
 
        `(do
           (enc/defalias level-aliases)
-          ~(api:help:filters    purpose)
+          ~(api:help:filters    purpose sig-filter-system-vals-info)
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
           ~(api:without-filters purpose *rt-sig-filter* clj?)
 
@@ -1047,14 +1049,16 @@
      [purpose]
      `(def ~'help:handlers
         ~(api-docstring 11 purpose
-           "The handler API consists of the following:
+           "Manage handlers with:
 
-             `get-handlers`        - Returns info on currently registered handlers
-             `add-handler!`        - Used to   register handlers
-             `remove-handler!`     - Used to unregister handlers
-             `shut-down-handlers!` - Used to shut down  handlers
+             `get-handlers`        - Returns info on registered handlers
+             `shut-down-handlers!` - Shuts down      registered handlers
+
+             `add-handler!`        - Registers   given handler
+             `remove-handler!`     - Unregisters given handler
 
            See the relevant docstrings for details.
+           Clj only: `shut-down-handlers!` is called automatically on JVM shutdown.
 
            If anything is unclear, please ping me (@ptaoussanis) so that I can
            improve these docs!")
@@ -1119,8 +1123,17 @@
                 Options for running handler asynchronously via `taoensso.encore/runner`,
                 {:keys [mode buffer-size n-threads daemon-threads? ...]}
 
-                Supports `:blocking`, `:dropping`, and `:sliding` back pressure modes.
+                Supports `:blocking`, `:dropping`, and `:sliding` back-pressure modes.
                 NB handling order may be non-sequential when `n-threads` > 1.
+
+                Default:
+                  {:mode :dropping, :buffer-size 4096, :n-threads 1, :daemon-threads? false}
+
+                Options:
+                  `mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.
+                  `buffer-size` - Size of buffer before back-pressure mechanism is engaged.
+                  `n-threads`   - Number of threads for asynchronously executing fns.
+                                  NB execution order may be non-sequential when n > 1.
 
              `priority`
                Optional handler priority ∈ℤ (default 100). Handlers will be called in
@@ -1161,7 +1174,7 @@
                Useful for transforming `handler-arg` before handling.
 
              `error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
-             `backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back pressure.
+             `backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back-pressure.
 
            Flow sequence:
 
@@ -1263,7 +1276,7 @@
      handler shutdown on JVM shutdown.
 
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts]
+     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts sig-filter-system-vals-info]
        :or   {purpose "signal"}
        :as   opts}]
 

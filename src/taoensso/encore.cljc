@@ -6068,7 +6068,7 @@
       (runner f)
         Requests runner to execute given nullary fn according to runner's opts.
         Returns:
-          - `true`  if runner accepted fn for execution without back pressure.
+          - `true`  if runner accepted fn for execution without back-pressure.
           - `false` if runner experienced back-pressure (fn may/not execute).
           - `nil`   if runner has stopped accepting new execution requests.
 
@@ -6079,7 +6079,7 @@
     Runners provide ~similar capabilities to agents, but:
       - Take nullary fns rather than unary fns of state.
       - Have no validators or watches.
-      - Have (configurable) back pressure.
+      - Have (configurable) back-pressure.
       - May execute fns in non-sequential order when n-threads > 1.
 
     These properties make them useful as configurable async workers, etc.
