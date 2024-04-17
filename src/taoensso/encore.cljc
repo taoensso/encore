@@ -627,7 +627,7 @@
        [macro-env sym]
        (when (symbol? sym)
          (if (:ns macro-env)
-           {:var nil, :meta (when resolve-cljs (:meta (resolve-cljs macro-env sym)))}
+           (when resolve-cljs {:meta (:meta (resolve-cljs macro-env sym))})
            (let [v (resolve macro-env sym)]
              {:var v
               :meta
