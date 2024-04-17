@@ -1,5 +1,5 @@
 <a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com"><img src="https://www.taoensso.com/open-source.png" alt="Taoensso open source" width="340"/></a>  
-[**Documentation**](#documentation) | [Latest releases](#latest-releases) | [Get support][GitHub issues]
+[**Documentation**](#documentation) | [Latest releases](#latest-releases) | [Slack channel][] or [Get support][GitHub issues]
 
 <!-- ../../ from README to get to base of GitHub project -->
 <!-- ../ from wiki to get to base of GitHub project -->
@@ -7,6 +7,8 @@
 <!-- ../../blob/master/<path> to get file in repo -->
 <!-- ../../tree/master/<path> to get dir in repo -->
 
+# <img src="https://raw.githubusercontent.com/taoensso/TODO/master/imgs/logo.svg" alt="TODO logo" width="360"/>
+or
 # TODO Library name
 
 ### TODO Library blurb
@@ -44,7 +46,8 @@ See for  intro and usage:
 ## Documentation
 
 - [Wiki][GitHub wiki] (getting started, usage, etc.)
-- API reference: [cljdoc][cljdoc docs], [Codox][Codox docs]
+- API reference: [cljdoc][cljdoc docs] or [Codox][Codox docs]
+- Support: [Slack channel][] or [GitHub issues][]
 
 ## Funding
 
@@ -60,6 +63,7 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 [GitHub releases]: ../../releases
 [GitHub issues]:   ../../issues
 [GitHub wiki]:     ../../wiki
+[Slack channel]: https://www.taoensso.com/TODO/slack
 
 [Peter Taoussanis]: https://www.taoensso.com
 [sponsor]:          https://www.taoensso.com/sponsor

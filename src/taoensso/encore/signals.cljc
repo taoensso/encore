@@ -727,10 +727,10 @@
 
              Runtime config can also be specified with:
 
-               `set-kind-filter!`,   `with-kind-filter`    - for filtering calls by %s kind (when relevant)
-               `set-ns-filter!`,     `with-ns-filter`      - for filtering calls by namespace
-               `set-id-filter!`,     `with-id-filter`      - for filtering calls by %s id   (when relevant)
-               `set-minimum-level!`, `with-minimum-level!` - for filtering calls by %s level
+               `set-kind-filter!`, `with-kind-filter` - for filtering calls by %s kind (when relevant)
+               `set-ns-filter!`,   `with-ns-filter`   - for filtering calls by namespace
+               `set-id-filter!`,   `with-id-filter`   - for filtering calls by %s id   (when relevant)
+               `set-min-level!`,   `with-min-level!`  - for filtering calls by %s level
 
                See the relevant docstrings for details.
 
@@ -781,8 +781,8 @@
            "Sets %s call kind filter based on given `kind-filter` spec.
            `kind-filter` may be:
 
-             - A regex pattern of kind/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
+             - A regex pattern of kind/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
              - {:allow <spec> :deny <spec>} with specs as above.
                If present, `:allow` spec MUST     match, AND
@@ -817,8 +817,8 @@
            "Sets %s call namespace filter based on given `ns-filter` spec.
            `ns-filter` may be:
 
-             - A regex pattern of namespace/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
+             - A regex pattern of namespace/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
              - {:allow <spec> :deny <spec>} with specs as above.
                If present, `:allow` spec MUST     match, AND
@@ -867,8 +867,8 @@
            "Sets %s call id filter based on given `id-filter` spec.
            `id-filter` may be:
 
-             - A regex pattern of id/s to allow.
              - A str/kw/sym, in which \"*\"s act as wildcards.
+             - A regex pattern of id/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
              - {:allow <spec> :deny <spec>} with specs as above.
                If present, `:allow` spec MUST     match, AND
@@ -891,15 +891,27 @@
              "Sets minimum %s call level based on given `min-level` spec.
              `min-level` may be:
 
-               - An integer.
+               - `nil` (=> no minimum level).
                - A level keyword (see `level-aliases` var for details).
+               - An integer.
 
              If `ns-filter` is provided, then the given minimum level
-             will apply only for namespaces that match `ns-filter`.
+             will apply only for the namespace/s that match `ns-filter`.
              See `set-ns-filter!` for details.
 
              If non-nil `kind` is provided, then the given minimum level
-             will apply only for that %s kind.")
+             will apply only for that %s kind.
+
+             Examples:
+
+               (set-min-level! nil)   ; Disable        minimum level
+               (set-min-level! :info) ; Set `:info` as minimum level
+               (set-min-level! 100)   ; Set 100     as minimum level
+
+               ;; Set `:debug` as minimum level for current namespace
+               ;; (nil `kind` => apply to all kinds)
+               (set-min-level! nil (str *ns*) :debug)")
+
           (~'[               min-level] (~'set-min-level! nil    nil ~'min-level))
           (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
           (~'[kind ns-filter min-level]
@@ -917,12 +929,23 @@
              "Sets minimum %s call level based on given `min-level` spec.
              `min-level` may be:
 
-               - An integer.
+               - `nil` (=> no minimum level).
                - A level keyword (see `level-aliases` var for details).
+               - An integer.
 
              If `ns-filter` is provided, then the given minimum level
-             will apply only for namespaces that match `ns-filter`.
-             See `set-ns-filter!` for details.")
+             will apply only for the namespace/s that match `ns-filter`.
+             See `set-ns-filter!` for details.
+
+             Examples:
+
+               (set-min-level! nil)   ; Disable        minimum level
+               (set-min-level! :info) ; Set `:info` as minimum level
+               (set-min-level! 100)   ; Set 100     as minimum level
+
+               ;; Set `:debug` as minimum level for current namespace
+               (set-min-level! (str *ns*) :debug)")
+
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]
            (enc/force-ref

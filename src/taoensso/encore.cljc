@@ -664,7 +664,7 @@
 
             final-attrs
             (select-keys (core-merge src-attrs (meta alias-sym) alias-attrs)
-              [:doc :arglists :private :macro :added :deprecated :inline :tag])
+              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag])
 
             alias-sym   (with-meta alias-sym final-attrs)
             alias-body  (or alias-body (if cljs? src-sym `@~src-var))]
@@ -3802,10 +3802,12 @@
     (cond
       (map?    x) (reduce-kv (fn [acc lid [n ms]] (assoc acc lid (limit-spec n ms))) {} x)
       (vector? x)
-      (let [i (counter)]
-        (reduce
-          (fn [acc [n ms ?id]] ; ?id for back compatibility
-            (assoc acc (or ?id (i)) (limit-spec n ms))) {} x))
+      (reduce
+        (fn [acc [n ms ?id]] ; ?id for back compatibility
+          (assoc acc
+            (or ?id (str n " per " ms " msecs"))
+            (limit-spec n ms)))
+        {} x)
 
       (unexpected-arg! x
         {:context  `rate-limiter
@@ -4660,12 +4662,7 @@
   Useful to prevent timing attacks, etc."
   [s1 s2]
   (when (and s1 s2)
-
-    #?(:clj
-       (const-ba=
-         (.getBytes ^String s1 "UTF-8")
-         (.getBytes ^String s2 "UTF-8"))
-
+    #?(:clj (const-ba= (str->utf8-ba s1) (str->utf8-ba s2))
        :cljs
        (let [vx ["0" "1"]
              v1 (vec   s1)
@@ -4962,7 +4959,7 @@
    (defmacro signal!
      "Experimental, subject to change without notice!
      Expands to `taoensso.telemere/signal!` call if Telemere is present,
-     otherwise expands to `fallback`.
+     otherwise expands to `fallback` form.
 
      MUST be used with `require-telemere-if-present`:
 
@@ -6937,18 +6934,17 @@
 
 ;;;; Name filter
 
-(let [always (fn always [_in] true)
+(let [as-?qname as-?qname
+      always (fn always [_in] true)
       never  (fn never  [_in] false)
 
-      name? (fn [x] (or (string? x) (named? x)))
-      qname (fn [x] (if (named?  x) (let [n (name x)] (if-let [ns (namespace x)] (str ns "/" n) n)) x))
-      qname!
+      input-str!
       (fn [x]
-        (cond
-          (string? x) x
-          (nil?    x) ""
-          (or
-            (qname x)
+        (or
+          (as-?qname x)
+          (cond
+            (nil? x) ""
+            :else
             (unexpected-arg! x
               {:context  `name-filter
                :param    'filter-input-arg
@@ -6968,23 +6964,23 @@
         (cond
           (#{:any "*"}     spec) always
           (#{:none #{} []} spec) never
-          (re-pattern?     spec) (fn match? [in] (re-find spec (qname! in)))
-          (name?           spec)
-          (cond
-            :let    [spec       (qname spec)]
-            :if-let [re-pattern (wild-str->?re-pattern spec)] (recur re-pattern cache?)
-            :else   (fn match? [in] (= spec (qname! in))))
+          (re-pattern?     spec) (fn match? [in] (re-find spec (input-str! in)))
+
+          :if-let [str-spec (as-?qname spec)]
+          (if-let [re-pattern (wild-str->?re-pattern str-spec)]
+            (recur re-pattern cache?)
+            (fn match? [in] (= str-spec (input-str! in))))
 
           (or (vector? spec) (set? spec))
           (cond
-            ;; (empty? spec)   never
-            ((set spec) "*")   always
+            ;; (empty? spec) never
+            ((set spec) "*") always
             (= (count spec) 1) (recur (first spec) cache?)
             :else
             (let [[fixed-strs re-patterns]
                   (reduce
                     (fn [[fixed-strs re-patterns] spec]
-                      (let [spec (qname spec)]
+                      (let [spec (as-qname spec)]
                         (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
                           [      fixed-strs       (conj re-patterns re-pattern)]
                           [(conj fixed-strs spec)       re-patterns            ])))
@@ -7000,19 +6996,19 @@
               (cond!
                 (and fx-match re-match)
                 (fn match? [in]
-                  (let [in-str (qname! in)]
+                  (let [in-str (input-str! in)]
                     (or
                       (fx-match in-str)
                       (re-match in-str))))
 
-                fx-match (fn [in] (fx-match (qname! in)))
-                re-match (fn [in] (re-match (qname! in))))))
+                fx-match (fn match? [in] (fx-match (input-str! in)))
+                re-match (fn match? [in] (re-match (input-str! in))))))
 
           :else
           (unexpected-arg! spec
             {:context  `name-filter
              :param    'filter-spec
-             :expected '#{string keyword set regex {:allow <spec>, :deny <spec>}}})))]
+             :expected '#{string keyword symbol set regex {:allow <spec>, :deny <spec>}}})))]
 
   (defn name-filter
     "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
