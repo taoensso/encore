@@ -817,6 +817,7 @@
            "Sets %s call namespace filter based on given `ns-filter` spec.
            `ns-filter` may be:
 
+             - A namespace.
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A regex pattern of namespace/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
@@ -910,7 +911,7 @@
 
                ;; Set `:debug` as minimum level for current namespace
                ;; (nil `kind` => apply to all kinds)
-               (set-min-level! nil (str *ns*) :debug)")
+               (set-min-level! nil *ns* :debug)")
 
           (~'[               min-level] (~'set-min-level! nil    nil ~'min-level))
           (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
@@ -944,7 +945,7 @@
                (set-min-level! 100)   ; Set 100     as minimum level
 
                ;; Set `:debug` as minimum level for current namespace
-               (set-min-level! (str *ns*) :debug)")
+               (set-min-level! *ns* :debug)")
 
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]

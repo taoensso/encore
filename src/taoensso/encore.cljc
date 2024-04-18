@@ -6937,6 +6937,7 @@
 (let [as-?qname as-?qname
       always (fn always [_in] true)
       never  (fn never  [_in] false)
+      ns?    (fn [x] (instance? #?(:clj clojure.lang.Namespace :cljs Namespace) x))
 
       input-str!
       (fn [x]
@@ -6944,11 +6945,12 @@
           (as-?qname x)
           (cond
             (nil? x) ""
+            (ns?  x) (str x)
             :else
             (unexpected-arg! x
               {:context  `name-filter
                :param    'filter-input-arg
-               :expected '#{string keyword symbol nil}}))))
+               :expected '#{string keyword symbol namespace nil}}))))
 
       wild-str->?re-pattern
       (fn [s]
@@ -6965,6 +6967,7 @@
           (#{:any "*"}     spec) always
           (#{:none #{} []} spec) never
           (re-pattern?     spec) (fn match? [in] (re-find spec (input-str! in)))
+          (ns?             spec) (recur (str spec) cache?)
 
           :if-let [str-spec (as-?qname spec)]
           (if-let [re-pattern (wild-str->?re-pattern str-spec)]
@@ -6980,7 +6983,7 @@
             (let [[fixed-strs re-patterns]
                   (reduce
                     (fn [[fixed-strs re-patterns] spec]
-                      (let [spec (as-qname spec)]
+                      (let [spec (if (ns? spec) (str spec) (as-qname spec))]
                         (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
                           [      fixed-strs       (conj re-patterns re-pattern)]
                           [(conj fixed-strs spec)       re-patterns            ])))
@@ -7008,15 +7011,17 @@
           (unexpected-arg! spec
             {:context  `name-filter
              :param    'filter-spec
-             :expected '#{string keyword symbol set regex {:allow <spec>, :deny <spec>}}})))]
+             :expected '#{string keyword symbol set regex namespace
+                          {:allow <spec>, :deny <spec>}}})))]
 
   (defn name-filter
     "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
-    any nameable type (string, keyword, symbol).
+    a namespace or any nameable type (string, keyword, symbol).
 
     Spec may be:
-      - A regex pattern. Will conform on match.
+      - A namespace. Will conform on exact match.
       - A str/kw/sym, in which \"*\"s act as wildcards. Will conform on match.
+      - A regex pattern. Will conform on match.
 
       - A vector or set of regex patterns or strs/kws/syms.
         Will conform on ANY match.
@@ -7029,7 +7034,7 @@
     Example inputs: namespace strings, class names, ids, etc.
 
     Spec examples:
-      #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
+      *ns*, #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
       {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}},
       #\"(foo1|foo2)\\.bar\"."
 
