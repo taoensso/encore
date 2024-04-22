@@ -573,12 +573,24 @@
         sig-filter*  (sig-filter kind-filter ns-filter id-filter min-level)
         stopped?_    (enc/latom false)
 
+        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
+
         rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
         rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :backp-fn  ::default)
 
-        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
+        signal-error-fn
+        (when  error-fn
+          (fn [signal error]
+            (enc/catching
+              (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
+                (when-let [error-fn
+                           (if (enc/identical-kw? error-fn ::default)
+                             *default-handler-error-fn*
+                             error-fn)]
+                  (error-fn {:handler-id handler-id, :signal signal, :error error}))))))
+
         wrapped-handler-fn
         (fn wrapped-handler-fn
           ([] ; Shut down => {:keys [okay error]}
@@ -589,43 +601,41 @@
                {:okay :shut-down}
                (catch :all t
                  (when (and error-fn (not (enc/identical-kw? error-fn ::default)))
-                   (enc/catching (error-fn {:handler-id handler-id, :error t}))) ; No :raw-signal
+                   (enc/catching (error-fn {:handler-id handler-id, :error t}))) ; No :signal key
                  {:error t}))))
 
-          ([signal] ; Raw signal
-           (when-not (stopped?_)
-             (enc/try* ; Non-specific (global) trap for perf
-               (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
-                     allow?
-                     (and
-                       (if sample-rate (< (Math/random) (double sample-rate))  true)
-                       (if sig-filter* (allow-signal? signal sig-filter*)      true)
-                       (if when-fn     (when-fn #_signal)                      true)
-                       (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
-                       )]
+          ([sig-raw]
+           (if (stopped?_)
+             nil
+             (or
+               (enc/try* ; Non-specific (global) trap
+                 (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
+                       allow?
+                       (and
+                         (if sample-rate (< (Math/random) (double sample-rate))  true)
+                         (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
+                         (if when-fn     (when-fn #_sig-raw)                     true)
+                         (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
+                         )]
 
-                 (or
                    (when allow?
                      (when-let [sig-val ; Raw signal -> library-level handler-arg
-                                (signal-value signal
+                                (signal-value sig-raw
                                   (when              sample-rate
                                     (HandlerContext. sample-rate)))]
 
-                       (if middleware-fn ; Library-level handler-arg -> arb user-level value
-                         (when-let [sig-val (middleware-fn sig-val)] (handler-fn sig-val) true)
-                         (do                                         (handler-fn sig-val) true))))
-                   false))
+                       (enc/try*
+                         (when-let [sig-val* ; Library-level handler-arg -> arb user-level value
+                                    (if middleware-fn
+                                      (middleware-fn sig-val)
+                                      (do            sig-val))]
 
-               (catch :all t
-                 (when error-fn
-                   (enc/catching
-                     (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
-                       (when-let [error-fn
-                                  (if (enc/identical-kw? error-fn ::default)
-                                    *default-handler-error-fn*
-                                    error-fn)]
-                         (error-fn {:handler-id handler-id, :raw-signal signal, :error t})))))
-                 false)))))
+                           (enc/try*
+                             (handler-fn sig-val*) true
+                             (catch :all t (when signal-error-fn (signal-error-fn sig-val* t)))))
+                         (catch     :all t (when signal-error-fn (signal-error-fn sig-val  t)))))))
+                 (catch             :all t (when signal-error-fn (signal-error-fn sig-raw  t))))
+               false))))
 
         wrapped-handler-fn*
         #?(:cljs wrapped-handler-fn
@@ -634,9 +644,9 @@
              wrapped-handler-fn
              (let [runner (enc/runner (have map? async))]
                (fn wrapped-handler-fn*
-                 ([      ] (wrapped-handler-fn)) ; Shut down
-                 ([signal]
-                  (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn signal))))]
+                 ([       ] (wrapped-handler-fn)) ; Shut down
+                 ([sig-raw]
+                  (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn sig-raw))))]
                     (when backp-fn
                       (enc/catching
                         (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
