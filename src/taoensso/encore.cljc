@@ -3794,6 +3794,22 @@
 
 ;;;; Rate limits
 
+(defn ^:no-doc rate-limiter-once-per
+  "Private, don't use.
+  Returns a basic rate limiter (fn []) that will return falsey at most once
+  every given number of milliseconds.
+
+  Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run."
+  {:added "Encore v3.98.0 (2024-04-08)"}
+  [msecs]
+  (let [last_ (volatile! 0) ; No specific atomicity needs
+        msecs (long msecs)]
+
+    (fn a-rate-limiter-once-per []
+      (let [t1 (now-udt*)]
+        #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
+           :cljs (if (> (- t1              @last_)  msecs) (do (vreset! last_ t1) nil) true))))))
+
 (deftype LimitSpec  [^long n ^long ms])
 (deftype LimitEntry [^long n ^long udt0])
 (deftype LimitHits  [m worst-lid ^long worst-ms])
@@ -3824,124 +3840,133 @@
   ([opts spec]
    (if (empty? spec)
      [nil (constantly nil)]
-     (let [latch_ (latom nil) ; Used to pause writes during gc
-           reqs_  (latom nil) ; {<rid> {<lid> <LimitEntry>}}
-           spec   (coerce-limit-spec spec) ; {<lid> <LimitSpec>}
+     (let [spec (coerce-limit-spec spec)] ; {<lid> <LimitSpec>}
+       (if-let [once-per-msecs
+                (and
+                  (get opts :basic?) ; Undocumented
+                  (= (count spec) 1)
+                  (let [^LimitSpec s (val (first spec))]
+                    (when (== (.-n s) 1) (.-ms s))))]
 
-           {:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
+         [nil (rate-limiter-once-per once-per-msecs)] ; Single [] arity only
 
-           gc-now? gc-now?
-           gc-rate (let [gce (long gc-every)] (/ 1.0 gce))
+         (let [latch_ (latom nil) ; Used to pause writes during gc
+               reqs_  (latom nil) ; {<rid> {<lid> <LimitEntry>}}
 
-           f1
-           (fn [rid peek?]
-             (let [instant (now-udt)]
+               {:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
 
-               (when (and (not peek?) (gc-now? gc-rate))
-                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
-                   (when (-cas!? latch_ nil latch)
-                     (reqs_
-                       (fn swap-fn [reqs] ; {<rid> <entries>}
-                         (persistent!
-                           (reduce-kv
-                             (fn [acc rid entries]
-                               (let [new-entries
-                                     (reduce-kv
-                                       (fn [acc lid ^LimitEntry e]
-                                         (if-let [^LimitSpec s (get spec lid)]
-                                           (if (>= instant (+ (.-udt0 e) (.-ms s)))
-                                             (dissoc acc lid)
-                                             (do     acc))
-                                           (dissoc acc lid)))
-                                       entries ; {<lid <LimitEntry>}
-                                       entries)]
-                                 (if (empty? new-entries)
-                                   (dissoc! acc rid)
-                                   (assoc!  acc rid new-entries))))
-                             (transient (or reqs {}))
-                             (do            reqs)))))
+               gc-now? gc-now?
+               gc-rate (let [gce (long gc-every)] (/ 1.0 gce))
 
-                     #?(:clj
-                        (do
-                          (reset!     latch_ nil)
-                          (.countDown latch)))
+               f1
+               (fn [rid peek?]
+                 (let [instant (now-udt)]
 
-                     nil)))
+                   (when (and (not peek?) (gc-now? gc-rate))
+                     (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
+                       (when (-cas!? latch_ nil latch)
+                         (reqs_
+                           (fn swap-fn [reqs] ; {<rid> <entries>}
+                             (persistent!
+                               (reduce-kv
+                                 (fn [acc rid entries]
+                                   (let [new-entries
+                                         (reduce-kv
+                                           (fn [acc lid ^LimitEntry e]
+                                             (if-let [^LimitSpec s (get spec lid)]
+                                               (if (>= instant (+ (.-udt0 e) (.-ms s)))
+                                                 (dissoc acc lid)
+                                                 (do     acc))
+                                               (dissoc acc lid)))
+                                           entries ; {<lid <LimitEntry>}
+                                           entries)]
+                                     (if (empty? new-entries)
+                                       (dissoc! acc rid)
+                                       (assoc!  acc rid new-entries))))
+                                 (transient (or reqs {}))
+                                 (do            reqs)))))
 
-               ;; Need to atomically check if all limits pass before
-               ;; committing to any n increments:
-               (loop []
-                 (let [reqs        (reqs_)    ; {<lid> <entries>}
-                       entries (get reqs rid) ; {<lid> <LimitEntry>}
-                       ?hits                  ; ?LimitHits
-                       (when entries
-                         (reduce-kv
-                           (fn [^LimitHits acc lid ^LimitEntry e]
-                             (if-let [^LimitSpec s (get spec lid)]
-                               (if (< (.-n e) (.-n s))
-                                 acc
-                                 (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
-                                   (if (<= tdelta 0)
-                                     acc
-                                     (cond
-                                       (nil? acc) (LimitHits. {lid tdelta} lid tdelta)
+                         #?(:clj
+                            (do
+                              (reset!     latch_ nil)
+                              (.countDown latch)))
 
-                                       (> tdelta (.-worst-ms acc))
-                                       (LimitHits. (assoc (.-m acc) lid tdelta) lid tdelta)
+                         nil)))
 
-                                       :else
-                                       (LimitHits. (assoc (.-m acc) lid tdelta)
-                                         (.-worst-lid acc)
-                                         (.-worst-ms  acc))))))
-                               acc))
-                           nil
-                           entries))]
-
-                   (if (or peek? ?hits)
-                     ;; No action (peeking, or hit >= 1 spec)
-                     (when-let [^LimitHits h ?hits]
-                       [(.-worst-lid h) (.-worst-ms h) (.-m h)])
-
-                     ;; Passed all limits, ready to commit increments:
-                     (if-let [l (latch_)]
-                       #?(:clj (do (.await ^CountDownLatch l) (recur)) :default nil)
-                       (let [new-entries
+                   ;; Need to atomically check if all limits pass before
+                   ;; committing to any n increments:
+                   (loop []
+                     (let [reqs        (reqs_)    ; {<lid> <entries>}
+                           entries (get reqs rid) ; {<lid> <LimitEntry>}
+                           ?hits                  ; ?LimitHits
+                           (when entries
                              (reduce-kv
-                               (fn [acc lid ^LimitSpec s]
-                                 (assoc acc lid
-                                   (if-let [^LimitEntry e (get entries lid)]
-                                     (let [udt0 (.-udt0 e)]
-                                       (if (>= instant (+ udt0 (.-ms s)))
-                                         (LimitEntry. 1 instant)
-                                         (LimitEntry. (inc (.-n e)) udt0)))
-                                     (LimitEntry. 1 instant))))
-                               entries
-                               spec)]
+                               (fn [^LimitHits acc lid ^LimitEntry e]
+                                 (if-let [^LimitSpec s (get spec lid)]
+                                   (if (< (.-n e) (.-n s))
+                                     acc
+                                     (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
+                                       (if (<= tdelta 0)
+                                         acc
+                                         (cond
+                                           (nil? acc) (LimitHits. {lid tdelta} lid tdelta)
 
-                         (if (-cas!? reqs_ reqs (assoc reqs rid new-entries))
-                           nil
-                           (recur)))))))))]
+                                           (> tdelta (.-worst-ms acc))
+                                           (LimitHits. (assoc (.-m acc) lid tdelta) lid tdelta)
 
-       [reqs_
-        (fn a-rate-limiter
-          ([          ] (f1 nil    false))
-          ([    req-id] (f1 req-id false))
-          ([cmd req-id]
-           (case cmd
-             (:rl/reset :limiter/reset)
-             (do
-               (if (case req-id (:rl/all :limiter/all) true false)
-                 (reset! reqs_ nil)
-                 (reqs_ #(dissoc % req-id)))
-               nil)
+                                           :else
+                                           (LimitHits. (assoc (.-m acc) lid tdelta)
+                                             (.-worst-lid acc)
+                                             (.-worst-ms  acc))))))
+                                   acc))
+                               nil
+                               entries))]
 
-             (:rl/peek :limiter/peek) (f1 req-id true)
+                       (if (or peek? ?hits)
+                         ;; No action (peeking, or hit >= 1 spec)
+                         (when-let [^LimitHits h ?hits]
+                           [(.-worst-lid h) (.-worst-ms h) (.-m h)])
 
-             (unexpected-arg! cmd
-               {:context  `rate-limiter
-                :param    'rate-limiter-command
-                :expected #{:rl/reset :rl/peek}
-                :req-id   req-id}))))]))))
+                         ;; Passed all limits, ready to commit increments:
+                         (if-let [l (latch_)]
+                           #?(:clj (do (.await ^CountDownLatch l) (recur)) :default nil)
+                           (let [new-entries
+                                 (reduce-kv
+                                   (fn [acc lid ^LimitSpec s]
+                                     (assoc acc lid
+                                       (if-let [^LimitEntry e (get entries lid)]
+                                         (let [udt0 (.-udt0 e)]
+                                           (if (>= instant (+ udt0 (.-ms s)))
+                                             (LimitEntry. 1 instant)
+                                             (LimitEntry. (inc (.-n e)) udt0)))
+                                         (LimitEntry. 1 instant))))
+                                   entries
+                                   spec)]
+
+                             (if (-cas!? reqs_ reqs (assoc reqs rid new-entries))
+                               nil
+                               (recur)))))))))]
+
+           [reqs_
+            (fn a-rate-limiter
+              ([          ] (f1 nil    false))
+              ([    req-id] (f1 req-id false))
+              ([cmd req-id]
+               (case cmd
+                 (:rl/reset :limiter/reset)
+                 (do
+                   (if (case req-id (:rl/all :limiter/all) true false)
+                     (reset! reqs_ nil)
+                     (reqs_ #(dissoc % req-id)))
+                   nil)
+
+                 (:rl/peek :limiter/peek) (f1 req-id true)
+
+                 (unexpected-arg! cmd
+                   {:context  `rate-limiter
+                    :param    'rate-limiter-command
+                    :expected #{:rl/reset :rl/peek}
+                    :req-id   req-id}))))]))))))
 
 (defn rate-limiter
   "Takes a map spec of form {<limit-id> [<n-max-reqs> <msecs-window>]},
@@ -3979,28 +4004,14 @@
 
   (qb 1e6 (rl1)) ; 122.96
   (dotimes [n 1e6] (rl1 (str (rand)))) ; Test GC
-  (count @s_))
+  (count @s_)
 
-(defn ^:no-doc rate-limiter-once-per
-  "Private, don't use.
-  Returns a basic rate limiter (fn []) that will return falsey at most once
-  every given number of milliseconds.
+  (let [rl1 (rate-limiter-once-per                   250)
+        rl2 (rate-limiter {:basic? true} {"1/250" [1 250]})
+        rl3 (rate-limiter {}             {"1/250" [1 250]})]
 
-  Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run."
-  {:added "Encore v3.98.0 (2024-04-08)"}
-  [msecs]
-  (let [last_ (volatile! 0) ; No specific atomicity needs
-        msecs (long msecs)]
-
-    (fn a-rate-limiter-once-per []
-      (let [t1 (now-udt*)]
-        #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
-           :cljs (if (> (- t1              @last_)  msecs) (do (vreset! last_ t1) nil) true))))))
-
-(comment
-  (let [rl1 (rate-limiter {"1/250" [1 250]})
-        rl2 (rate-limiter-once-per    250)]
-    (qb 1e6 (rl1) (rl2)))) ; [104.11 28.85]
+    (qb 1e6 ; [29.9 29.72 94.08]
+      (rl1) (rl2) (rl3))))
 
 ;;;; Counters
 
