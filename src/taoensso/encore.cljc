@@ -3796,7 +3796,7 @@
 
 (defn ^:no-doc rate-limiter-once-per
   "Private, don't use.
-  Returns a basic rate limiter (fn []) that will return falsey at most once
+  Returns a basic rate limiter (fn []) that will return falsey (allow) at most once
   every given number of milliseconds.
 
   Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run."
@@ -3822,7 +3822,7 @@
       (reduce
         (fn [acc [n ms ?id]] ; ?id for back compatibility
           (assoc acc
-            (or ?id (str n " per " ms " msecs"))
+            (or ?id [n ms] #_(str n "/" ms "ms"))
             (limit-spec n ms)))
         {} x)
 
@@ -3835,7 +3835,7 @@
 
 (defn ^:no-doc rate-limiter*
   "Private, don't use.
-  Like `rate-limiter` but returns [<state_> <rate-limiter>]."
+  Like `rate-limiter` but returns [<state_> <limiter-fn>]."
   ([     spec] (rate-limiter* nil spec))
   ([opts spec]
    (if (empty? spec)
@@ -3969,16 +3969,18 @@
                     :req-id   req-id}))))]))))))
 
 (defn rate-limiter
-  "Takes a map spec of form {<limit-id> [<n-max-reqs> <msecs-window>]},
-  and returns a basic stateful (fn rate-limiter [req-id] [command req-id]).
+  "Takes a spec of form
+    [           [<n-max-reqs> <msecs-window>] ...] or
+    {<limit-id> [<n-max-reqs> <msecs-window>]},
+  and returns a basic stateful (fn a-rate-limiter [req-id] [command req-id]).
 
-  Call fn with a single request id (e.g. username) by which to count/limit.
+  Call the limiter fn with a request id (e.g. username) by which to count/limit.
   Will return:
-    - nil when all limits pass for that id, or
+    - nil when allowed (all limits pass for given req-id), or
     - [<worst-limit-id> <worst-backoff-msecs> {<limit-id> <backoff-msecs>}]
-      when any limits fail for that id.
+      when denied (any limits fail for given req-id).
 
-  Or call fn with an additional command argument:
+  Or call the limiter fn with an additional command argument:
     `:rl/peek`  <req-id> - Check limits w/o incrementing count.
     `:rl/reset` <req-id> - Reset all limits for given req-id.
 

@@ -558,7 +558,7 @@
         {:keys
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
           kind-filter ns-filter id-filter min-level,
-          rl-error rl-backup error-fn backp-fn]}
+          rl-error rl-backp error-fn backp-fn]}
         dispatch-opts
 
         [sample-rate sample-rate-fn]
@@ -574,16 +574,17 @@
 
         middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
 
-        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter-once-per (enc/ms :mins 1)))
-        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter-once-per (enc/ms :mins 1)))
-        error-fn (get dispatch-opts :error-fn  ::default)
-        backp-fn (get dispatch-opts :backp-fn  ::default)
+        rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
+        rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
+        error-fn (get dispatch-opts :error-fn ::default)
+        backp-fn (get dispatch-opts :backp-fn ::default)
 
         signal-error-fn
         (when  error-fn
           (fn [signal error]
             (enc/catching
-              (when-not (and rl-error (rl-error)) ; error-fn rate-limited
+              (if (and rl-error (rl-error)) ; error-fn rate-limited
+                nil ; no-op
                 (when-let [error-fn
                            (if (enc/identical-kw? error-fn ::default)
                              *default-handler-error-fn*
@@ -648,7 +649,8 @@
                   (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn sig-raw))))]
                     (when backp-fn
                       (enc/catching
-                        (when-not (and rl-backp (rl-backp)) ; backp-fn rate-limited
+                        (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
+                          nil ; no-op
                           (let [backp-fn
                                 (if (enc/identical-kw? backp-fn ::default)
                                   *default-handler-backp-fn*
