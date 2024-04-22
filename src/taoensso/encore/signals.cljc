@@ -331,14 +331,14 @@
   (defn expansion-limit!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag 'boolean})
-    [rl-id spec req-id]
+    [rl-id spec]
     (let [rl
           (or
             (get (rate-limiters_) rl-id) ; Common case
-            (rate-limiters_       rl-id #(or % (enc/rate-limiter {} spec))))]
-      (if (rl req-id) true false))))
+            (rate-limiters_       rl-id #(or % (enc/rate-limiter {:basic? true} spec))))]
+      (if (rl) true false))))
 
-(comment (enc/qb 1e6 (expansion-limit!? :limiter-id1 [[1 4000]] :req-id))) ; 122.12
+(comment (enc/qb 1e6 (expansion-limit!? :limiter-id1 [[1 4000]]))) ; 54.02
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
@@ -437,9 +437,8 @@
                          `(let [~'this-expansion-id ~expansion-id] ~when-form))
 
                        rl-form ; Nb last (increments count)
-                       (when-let [spec-form   (get opts :rate-limit)]
-                         (let    [rl-rid-form (get opts :rl-rid)] ; Advanced, undocumented
-                           `(if (expansion-limit!? ~expansion-id ~spec-form ~rl-rid-form) false true)))]
+                       (when-let [spec-form (get opts :rate-limit)]
+                         `(if (expansion-limit!? ~expansion-id ~spec-form) false true))]
 
                    `(and ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
@@ -569,14 +568,14 @@
             [(enc/as-pnum! sample-rate) nil] ; Static  rate
             ))
 
-        rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {} spec))
+        rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {:basic? true} spec))
         sig-filter*  (sig-filter kind-filter ns-filter id-filter min-level)
         stopped?_    (enc/latom false)
 
         middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
 
-        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
-        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter {} [[1 (enc/ms :mins 1)]]))
+        rl-error (get dispatch-opts :rl-error  (enc/rate-limiter-once-per (enc/ms :mins 1)))
+        rl-backp (get dispatch-opts :rl-backup (enc/rate-limiter-once-per (enc/ms :mins 1)))
         error-fn (get dispatch-opts :error-fn  ::default)
         backp-fn (get dispatch-opts :backp-fn  ::default)
 
@@ -584,7 +583,7 @@
         (when  error-fn
           (fn [signal error]
             (enc/catching
-              (when-not (and rl-error (rl-error handler-id)) ; error-fn rate-limited
+              (when-not (and rl-error (rl-error)) ; error-fn rate-limited
                 (when-let [error-fn
                            (if (enc/identical-kw? error-fn ::default)
                              *default-handler-error-fn*
@@ -615,7 +614,7 @@
                          (if sample-rate (< (Math/random) (double sample-rate))  true)
                          (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
                          (if when-fn     (when-fn #_sig-raw)                     true)
-                         (if rl-handler  (if (rl-handler nil) false true)        true) ; Nb last (increments count)
+                         (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
                          )]
 
                    (when allow?
@@ -649,7 +648,7 @@
                   (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn sig-raw))))]
                     (when backp-fn
                       (enc/catching
-                        (when-not (and rl-backp (rl-backp handler-id)) ; backp-fn rate-limited
+                        (when-not (and rl-backp (rl-backp)) ; backp-fn rate-limited
                           (let [backp-fn
                                 (if (enc/identical-kw? backp-fn ::default)
                                   *default-handler-backp-fn*
