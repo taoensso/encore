@@ -914,9 +914,9 @@
      {:added "Encore v3.67.0 (2023-09-08)"
       :arglists '([expr* catch-clauses* ?finally-clause])}
 
-     [expr & clauses]
+     [& forms]
      (let [cljs? (some? (:ns &env))
-           clauses
+           forms
            (mapv
              (fn [in]
                (cond
@@ -946,11 +946,12 @@
                    (if rethrow-critical?
                      `(catch ~s2 ~s3 (throw-critical ~s3) ~@more)
                      `(catch ~s2 ~s3                      ~@more)))))
-             clauses)]
+             forms)]
 
-       `(try ~expr ~@clauses))))
+       `(try ~@forms))))
 
 (comment
+  (macroexpand '(try*         (catch :all              t t 1 2 3) (finally 1 2 3)))
   (macroexpand '(try* (/ 1 0) (catch :all              t t 1 2 3) (finally 1 2 3)))
   (macroexpand '(try* (/ 1 0) (catch :all-but-critical t t 1 2 3) (finally 1 2 3))))
 
