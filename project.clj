@@ -33,6 +33,10 @@
     [[org.clojure/clojure                  "1.11.2"]
      [com.github.clj-easy/graal-build-time "1.0.5"]]}
 
+   :test
+   {:injections [(println "Lein profile: :test")]
+    :aot [taoensso.encore-tests]}
+
    :dev
    {:injections [(println "Lein profile: :dev")]
     :jvm-opts
