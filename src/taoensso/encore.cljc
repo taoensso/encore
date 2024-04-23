@@ -677,7 +677,8 @@
              ;; Need `alter-meta!` to reliably retain macro status!
              (alter-meta!                  (def ~alias-sym ~alias-body) conj ~final-attrs)
              (when ~link? (-alias-link-var (var ~alias-sym) ~src-var         ~alias-attrs))
-             (do                           (var ~alias-sym))))))))
+             ;; (assert (bound? (var ~alias-sym)) ~(str "Alias `" alias-sym "` is bound"))
+             (do                (var ~alias-sym))))))))
 
 #?(:clj
    (defmacro defaliases
