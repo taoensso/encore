@@ -1762,21 +1762,19 @@
         [(is (= (sigs/shut-down-handlers! []) nil))
          (is (= (let [handlers
                       (-> []
-                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 100) "done") {} {})
-                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100) "done") {} {})
-                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 800) "done") {} {})
-                        (sigs/add-handler :hid4 (fn [] (enc/hot-sleep 100) (ex1!)) {} {}))]
+                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 100)  "done") {} {})
+                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100)  "done") {} {})
+                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 1000) "done") {} {})
+                        (sigs/add-handler :hid4 (fn [] (enc/hot-sleep 100)  (ex1!)) {} {}))]
 
                   ((nth handlers 1)) ; Manual shutdown
-                  #?(:clj  (sigs/shut-down-handlers! handlers 500)
+                  #?(:clj  (sigs/shut-down-handlers! handlers 500) ; Incl. time for runners to shut down
                      :cljs (sigs/shut-down-handlers! handlers)))
 
-               {:hid1 {:okay  :shut-down}
-                :hid2 {:okay  :previously-shut-down}
-                :hid4 {:error ex1}
-                :hid3
-                #?(:clj  {:error :timeout}
-                   :cljs {:okay  :shut-down})}))])])
+               {:hid1 {:okay :shut-down}
+                :hid2 {:okay :previously-shut-down}
+                :hid3 #?(:clj {:error :timeout}, :cljs {:okay :shut-down})
+                :hid4 {:error ex1}}))])])
 
    (testing "Filterable expansion"
      [(is (enc/submap? (sapi/sig-exp {:level :info})
