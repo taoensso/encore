@@ -480,8 +480,9 @@
   (run! (fn [wrapped-handler-fn] (wrapped-handler-fn signal)) handlers))
 
 (defn shut-down-handlers!
-  "Shuts down given handlers by calling them with no args.
+  "Shuts down given handlers in parallel by calling each one with no args.
   Returns {<handler-id> {:keys [okay error]}}."
+  {:added "Encore v3.99.0 (2024-04-10)"}
   ([handlers]
    #?(:clj (shut-down-handlers! handlers 5000)
       :cljs
@@ -502,7 +503,10 @@
                            result_      (volatile! {:error :timeout})
                            thread
                            (enc/threaded :daemon
-                             (vreset! result_ (wrapped-handler-fn)))]
+                             (let [result (wrapped-handler-fn)]
+                               ;; Block for handler's runner to shut down
+                               (when-let [runner_  (get result :runner_)] (deref runner_))
+                               (vreset! result_ (dissoc result :runner_))))]
                        (assoc acc handler-id [result_ thread])))
                    nil handlers)]
 
@@ -545,7 +549,9 @@
 (def ^:private default-dispatch-opts
   #?(:cljs {:priority default-handler-priority}
      :clj  {:priority default-handler-priority,
-            :async {:mode :dropping, :buffer-size 4096, :n-threads 1, :daemon-threads? false}}))
+            :async
+            {:mode :dropping, :buffer-size 1024, :n-threads 1,
+             :daemon-threads? true, :shutdown-drain-msecs 5000}}))
 
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
@@ -644,7 +650,7 @@
              wrapped-handler-fn
              (let [runner (enc/runner (have map? async))]
                (fn wrapped-handler-fn*
-                 ([       ] (wrapped-handler-fn)) ; Shut down
+                 ([       ] (enc/assoc-some (wrapped-handler-fn) :runner_ (runner))) ; Shut down
                  ([sig-raw]
                   (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn sig-raw))))]
                     (when backp-fn
@@ -1252,7 +1258,7 @@
      [purpose *sig-handlers* clj?]
      (let [docstring
            (api-docstring 13 purpose
-             "Shuts down all registered %s handlers and returns
+             "Shuts down all registered %s handlers in parallel, and returns
              ?{<handler-id> {:keys [okay error]}}.
 
              Future calls to handlers will no-op.
