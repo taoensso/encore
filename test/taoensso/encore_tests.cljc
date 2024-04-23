@@ -1046,40 +1046,61 @@
 
 #?(:clj
    (deftest _runner
-     [(is (= (let [a (atom nil)
-                   r (enc/runner {:mode :sync})]
-               [(r (fn [] (Thread/sleep 1000) (reset! a :done))) @a])
-            [true :done]))
+     [(let [a (atom nil)
+            r (enc/runner {:mode :sync})]
 
-      (is (= (let [a (atom [])
-                   r (enc/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
+        [(is (= (r (fn [] (Thread/sleep 1000) (reset! a :done))) true))
+         (is (some? (r)))
+         (is (nil?  (r)))
+         (is (= @a  :done))])
 
-               [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                (do (Thread/sleep 500) @a)])
+      (let [a (atom [])
+            r (enc/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
 
-            [[true true true false false false] [0 1 2]]))
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
+                [true true true false false false]))
+         (do (Thread/sleep 500) :sleep)
+         (is (some? (r)))
+         (is (nil?  (r)))
+         (is (= @a  [0 1 2]))])
 
-      (is (= (let [a (atom [])
-                   r (enc/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
+      (let [a (atom [])
+            r (enc/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
 
-               [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                (do (Thread/sleep 500) @a)])
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
+                [true true true false false false]))
+         (do (Thread/sleep 500) :sleep)
+         (is (some? (r)))
+         (is (nil?  (r)))
+         (is (= @a  [3 4 5]))])
 
-            [[true true true false false false] [3 4 5]]))
+      (let [a (atom [])
+            r (enc/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
 
-      (is (= (let [a (atom [])
-                   r (enc/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
-
-               [(vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                (do (Thread/sleep 500) @a)])
-
-            [[true true true false false false] [0 1 2 3 4 5]]))
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
+                [true true true false false false]))
+         (do (Thread/sleep 500) :sleep)
+         (is (some? (r)))
+         (is (nil?  (r)))
+         (is (= @a  [0 1 2 3 4 5]))])
 
       (let [a (atom nil)
             r (enc/runner {:mode :blocking})]
 
         (binding [*dynamic-var* "bound"] (r (fn [] (reset! a *dynamic-var*))))
-        (is (= (do (Thread/sleep 500) @a) "bound") "Runner binding conveyance"))]))
+        (do (Thread/sleep 500) :sleep)
+
+        [(is (some? (r)))
+         (is (nil?  (r)))
+         (is (= @a  "bound") "Runner binding conveyance")])
+
+      (let [r (enc/runner {:mode :dropping, :buffer-size 4})]
+        (dotimes [_ 4] (r (fn [] (Thread/sleep 250))))
+        (is (= (deref (r) 250 ::timeout) ::timeout)))
+
+      (let [r (enc/runner {:mode :dropping, :buffer-size 4})]
+        (dotimes [_ 4] (r (fn [] (Thread/sleep 250))))
+        (is (= (deref (r) 2500 ::timeout) :drained)))]))
 
 ;;;; Bytes
 

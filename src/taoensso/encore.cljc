@@ -5813,11 +5813,11 @@
 
 #?(:clj
    (defmacro ^:no-doc threaded "Private, don't use."
-     [daemon? & body]
-     (have? const-form? daemon?)
-     (if daemon?
-       `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))
-       `(doto (Thread. (fn [] ~@body))                   (.start)))))
+     [kind & body]
+     (case kind
+       :daemon `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))
+       :user   `(doto (Thread. (fn [] ~@body))                   (.start))
+       (unexpected-arg! kind :context `threaded :param kind :expected #{:daemon :user}))))
 
 (comment (threaded :daemon (println "Runs on daemon thread")))
 
@@ -6074,7 +6074,6 @@
 #?(:clj
    (defn runner
      "Experimental, subject to change without notice!
-
      Returns a new stateful \"runner\" such that:
 
       (runner f)
@@ -6086,7 +6085,8 @@
 
       (runner)
         Instructs runner to permanently stop accepting new execution requests.
-        Returns true iff runner's status changed with this call.
+        Returns promise iff runner's status changed with this call.
+        Deref   promise to block until all current execution requests complete.
 
     Runners provide ~similar capabilities to agents, but:
       - Take nullary fns rather than unary fns of state.
@@ -6103,22 +6103,36 @@
                       NB execution order may be non-sequential when n > 1."
 
      {:added "Encore v3.68.0 (2023-09-25)"}
-     [{:keys [mode buffer-size n-threads thread-name daemon-threads?] :as opts
-       :or
-       {mode :dropping
-        buffer-size 1024
-        n-threads   1}}]
+     [{:as opts
+       :keys
+       [mode buffer-size n-threads thread-name,
+        daemon-threads? shutdown-drain-msecs]
 
-     (let [stopped?_ (volatile! false)
-           deref-fn  (fn [] {:opts opts, :active? (not @stopped?_)})
-           stop-fn   (fn [] (when-not (.deref stopped?_) (vreset! stopped?_ true)))]
+       :or
+       {mode        :dropping
+        buffer-size 1024
+        n-threads   1
+
+        daemon-threads?      true
+        shutdown-drain-msecs 5000}}]
+
+     (let [started?_ (volatile! false) ; Ever started?
+           stopped?_ (latom nil) ; nil or promise
+           deref-fn  (fn [] {:opts opts, :active? (not (stopped?_))})
+           stop-fn ; Returns nil or promise (on which caller can block)
+           (fn []
+             (when-not (stopped?_)
+               (let [p (promise)]
+                 (when (compare-and-set! stopped?_ nil p)
+                   (when-not (.deref started?_) (p :drained))
+                   p))))]
 
        (if (= mode :sync)
          (reify
            clojure.lang.IDeref (deref [_] (deref-fn))
            clojure.lang.IFn
            (invoke [_  ] (stop-fn))
-           (invoke [_ f] (when-not (.deref stopped?_) (try* (f) (catch :all-but-critical _)) true)))
+           (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all-but-critical _)) true)))
 
          (let [binding binding-conveyor-fn
                abq (java.util.concurrent.ArrayBlockingQueue.
@@ -6126,30 +6140,39 @@
 
                init!
                (fn []
-                 (when-not daemon-threads?
-                   (.addShutdownHook (Runtime/getRuntime)
-                     (Thread. (fn stop-runner [] (vreset! stopped?_ true)))))
+                 (vreset! started?_ true)
+                 (.addShutdownHook (Runtime/getRuntime)
+                   (Thread.
+                     (fn []
+                       (when-let [p (stop-fn)]
+                         (when-let [msecs shutdown-drain-msecs]
+                           (deref p msecs :timeout))))))
 
                  (dotimes [n (as-pos-int n-threads)]
                    (let [wfn
-                         (fn worker-fn []
+                         (fn a-worker-fn []
                            (loop []
-                             (if-let [f (.poll abq 2000 java.util.concurrent.TimeUnit/MILLISECONDS)]
-                               ;; Recur unconditionally to drain abq even when stopped
-                               (do (try* (f) (catch :all-but-critical _)) (recur))
-                               (when-not (.deref stopped?_)               (recur)))))
+                             (when-let
+                               [continue?
+                                (try*
+                                  (if-let [f (.poll abq 1000 java.util.concurrent.TimeUnit/MILLISECONDS)]
+                                    (do (f) true) ; Recur unconditionally to drain abq even when stopped
+                                    (if-let [p (stopped?_)]
+                                      (do (p :drained) false)
+                                      true))
+                                  (catch :all-but-critical _ true))]
+                               (recur))))
 
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
 
-                     (when daemon-threads? (.setDaemon thread true))
-                     ;; (println "Starting thread:" thread-name)
-                     (.start thread))))
+                     (.setDaemon thread (boolean daemon-threads?))
+                     (.start     thread))))
 
                init!_
                (if-let [msecs (get opts :debug/init-after)]
-                 (delay (future (Thread/sleep (int msecs)) (init!)))
-                 (delay                                    (init!)))
+                 (delay (threaded :daemon (Thread/sleep (int msecs)) (init!)))
+                 (delay                                              (init!)))
 
                run-fn
                (case mode
@@ -6173,12 +6196,12 @@
              clojure.lang.IDeref (deref [_] (deref-fn))
              clojure.lang.IFn
              (invoke [_  ] (stop-fn))
-             (invoke [_ f] (when-not (.deref stopped?_) (.deref init!_) (run-fn (binding f))))))))))
+             (invoke [_ f] (when-not (stopped?_) (.deref init!_) (run-fn (binding f))))))))))
 
 (comment
   (let [r1 (runner {:mode :sync})
         r2 (runner {:mode :blocking})]
-    (qb 1e6 ; [51.02 169.76]
+    (qb 1e6 ; [43.47 161.36]
       (r1 (fn []))
       (r2 (fn [])))))
 
@@ -6226,7 +6249,7 @@
                   (do
                     ;; Ensure exactly 1 async thread is updating cache
                     (when (compare-and-set! cache-update-pending?_ false true)
-                      (threaded true
+                      (threaded :daemon
                         (if-let [new-val (f1 nil)] ; Take as long as needed
                           (reset! cache_ [((promise) new-val) t1]) ; Update p and t
                           (reset! cache_ [p                   t1]) ; Update only  t
@@ -6237,7 +6260,7 @@
                 (let [p (promise)]
                   (when (compare-and-set! cache_ nil [p t1]) ; First call
                     ;; Init cache with pending init value
-                    (threaded false (p (f1 timeout-val))))
+                    (threaded :user (p (f1 timeout-val))))
                   (recur true))))))))))
 
 #?(:clj
