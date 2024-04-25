@@ -730,7 +730,7 @@
 
 #?(:clj
    (defn- api:help:filters
-     [purpose system-vals-info]
+     [purpose env-config-help]
      `(def ~'help:filters
         ~(str
            (api-docstring 13 purpose
@@ -740,8 +740,8 @@
              Compile-time filtering elides (permanently removes!) code for
              disallowed signals. Most users will want only runtime filtering.
 
-             Both compile-time and runtime config can be specified with
-             system values (JVM properties, environment variables, or
+             Both compile-time and runtime config can be specified via
+             environmental config (JVM properties, environment variables, or
              classpath resources) [1].
 
              Runtime config can also be specified with:
@@ -765,7 +765,7 @@
              improve these docs!
 
              [1] ")
-           (or system-vals-info "See library docs for details."))
+           (or env-config-help "See library docs for details."))
         "See docstring")))
 
 (comment (api:help:filters "purpose" nil))
@@ -1044,7 +1044,7 @@
    (defmacro def-filter-api
      "Defines signal filter API vars in current ns.
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter* sig-filter-system-vals-info]
+     [{:keys [purpose sf-arity ct-sig-filter *rt-sig-filter* sig-filter-env-config-help]
        :or   {purpose "signal"}
        :as   opts}]
 
@@ -1062,7 +1062,7 @@
 
        `(do
           (enc/defalias level-aliases)
-          ~(api:help:filters    purpose sig-filter-system-vals-info)
+          ~(api:help:filters    purpose sig-filter-env-config-help)
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
           ~(api:without-filters purpose *rt-sig-filter* clj?)
 
@@ -1322,7 +1322,7 @@
      handler shutdown on JVM shutdown.
 
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts sig-filter-system-vals-info]
+     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts sig-filter-env-config-help]
        :or   {purpose "signal"}
        :as   opts}]
 
