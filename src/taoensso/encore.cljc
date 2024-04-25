@@ -5725,17 +5725,17 @@
                 (when (contains? opts :default)
                   [:default default]))]
 
-          (when (or match-as (= return :debug))
+          (when (or match-as (= return :explain))
             (let [[source value] match-as]
               (case return
-                :value                      value
-                :legacy            {:config value, :source source} ; Back compatibility
-                :map   (assoc-some {:value  value, :source source} :platform platform)
-                :debug (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
+                :value                        value
+                :legacy              {:config value, :source source} ; Back compatibility
+                :map     (assoc-some {:value  value, :source source} :platform platform)
+                :explain (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
                 (throw
                   (ex-info "[encore/get-env] Unexpected `:return` option"
                     {:given {:value return, :type (type return)}
-                     :expected #{:value :map :debug}}))))))))
+                     :expected #{:value :map :explain}}))))))))
 
      (defmacro get-env
        "Flexible cross-platform util for embedding a config value during
@@ -5784,12 +5784,12 @@
        Options:
          `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default `:str`).
          `:default` - Fallback to return unparsed if no value found during search (default `nil`).
-         `:return`  - Return type ∈ #{:value :map :debug} (default `:value`).
+         `:return`  - Return type ∈ #{:value :map :explain} (default `:value`).
 
        Resulting config value must be something that can be safely embedded in code during
        macro-expansion. Symbols in edn will be evaluated during expansion.
 
-       TIP!: Use the {:return :debug} option in tests or at the REPL to verify/inspect
+       TIP!: Use the {:return :explain} option in tests or at the REPL to verify/inspect
        resulting config value, config source, and specific search order of prop/env/res ids."
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
@@ -5803,10 +5803,10 @@
 
 (comment
   (def myvar "myvar")
-  (do           (get-env {:as :edn, :return :debug} [:a.b/c<.platform><.edn>]))
-  (macroexpand '(get-env {:as :edn, :return :debug, :default "my-default"}                                     ::nx))
-  (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/myvar}"]} ::nx))
-  (macroexpand '(get-env {:as :edn, :return :debug, :debug/match [:debug/source "{:x taoensso.encore/nx}"]}    ::nx))
+  (do           (get-env {:as :edn, :return :explain} [:a.b/c<.platform><.edn>]))
+  (macroexpand '(get-env {:as :edn, :return :explain, :default "my-default"}                                     ::nx))
+  (macroexpand '(get-env {:as :edn, :return :explain, :debug/match [:debug/source "{:x taoensso.encore/myvar}"]} ::nx))
+  (macroexpand '(get-env {:as :edn, :return :explain, :debug/match [:debug/source "{:x taoensso.encore/nx}"]}    ::nx))
   (defn foo [x] (get-env {:spec [:const x]})))
 
 ;;;; Async

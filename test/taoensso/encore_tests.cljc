@@ -770,13 +770,13 @@
    (is (= (enc/get-env {:return :map             } ::nx) nil))
    (is (= (enc/get-env {:return :map :default nil} ::nx) {:value nil, :source :default, :platform #?(:clj :clj :cljs :cljs)}))
 
-   (is (enc/submap? (enc/get-env {:return :debug} [:a<.platform> :b])
+   (is (enc/submap? (enc/get-env {:return :explain} [:a<.platform> :b])
          {:search
           #?(:clj  [[:prop "a.clj"]  [:env "A_CLJ"]  [:res "a.clj"]  [:prop "a"] [:env "A"] [:res "a"] [:prop "b"] [:env "B"] [:res "b"]]
              :cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a"] [:env "A"] [:res "a"] [:prop "b"] [:env "B"] [:res "b"]])})
      "Basic search, with dynamic platform")
 
-   (is (enc/submap? (enc/get-env {:as :edn :platform :p :return :debug} [:a<.platform><.edn> :b :<platform.>c<.edn>])
+   (is (enc/submap? (enc/get-env {:as :edn :platform :p :return :explain} [:a<.platform><.edn> :b :<platform.>c<.edn>])
          {:search
           [[:prop "a.p.edn"] [:env "A_P_EDN"] [:res "a.p.edn"]
            [:prop "a.p"]     [:env "A_P"]     [:res "a.p"]
@@ -789,7 +789,7 @@
            [:prop "c"]       [:env "C"]       [:res "c"]]})
      "Extensive search, with fixed platform")
 
-   (is (= (enc/submap? (enc/get-env {:return :debug} [#?(:clj :a.clj :cljs :a.cljs) :a.default])
+   (is (= (enc/submap? (enc/get-env {:return :explain} [#?(:clj :a.clj :cljs :a.cljs) :a.default])
             {:search
              #?(:clj  [[:prop "a.clj"]  [:env "A_CLJ"]  [:res "a.clj"]  [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])
              #?(:cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])}))
@@ -800,7 +800,7 @@
    (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "val:var-cljc/clj"
                                                                                                            :cljs "val:var-cljc/cljs")))
    (testing "Needs :jvm-opts"
-     [(is (enc/submap? (enc/get-env {:return :debug} :taoensso.encore-tests.config.str)
+     [(is (enc/submap? (enc/get-env {:return :explain} :taoensso.encore-tests.config.str)
             {:value "foo"
              :search
              [[:prop "taoensso.encore-tests.config.str"]
@@ -820,7 +820,7 @@
   (def foo {:fn (fn [x] (* x x))})
   (enc/get-env {} nil)
   (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
-  (enc/get-env {:as :edn :return :debug} [:p1]))
+  (enc/get-env {:as :edn :return :explain} [:p1]))
 
 (def ^:dynamic *dynamic-var* nil)
 
