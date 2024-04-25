@@ -736,11 +736,13 @@
            (api-docstring 13 purpose
              "Your filter config determines which %s calls will be allowed.
 
-             Filtering can occur at compile-time (=> elision), or runtime.
-             Both compile-time and runtime config can be specified with:
+             Filtering can occur at compile-time, runtime, or both.
+             Compile-time filtering elides (permanently removes!) code for
+             disallowed signals. Most users will want only runtime filtering.
 
-               System values (JVM properties, environment variables, or
-               classpath resources) [1].
+             Both compile-time and runtime config can be specified with
+             system values (JVM properties, environment variables, or
+             classpath resources) [1].
 
              Runtime config can also be specified with:
 
@@ -1169,6 +1171,9 @@
 
                 Default:
                   {:mode :dropping, :buffer-size 1024, :n-threads 1, :daemon-threads? true}
+
+                  I.e. async by default, with a buffer of size 1024 that drops new entries
+                  when full.
 
                 Options:
                   `mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.
