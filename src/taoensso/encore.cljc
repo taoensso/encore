@@ -5634,10 +5634,9 @@
          - Supports runtime args."
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
-        '([{:keys [as default return]} spec]
-          [{:keys [as default return   spec]
+        '([{:keys [as default return]
             :or   {as     :str
-                   return :value}}])}
+                   return :value}} spec])}
 
        ([opts    spec] (get-env* (assoc opts :spec spec)))
        ([opts-or-spec]
@@ -5687,7 +5686,7 @@
                             ("true"  "1" "t" "T" "TRUE")  true
                             ("false" "0" "f" "F" "FALSE") false
                             (throw
-                              (ex-info "[encore/get-env*] Error parsing as boolean"
+                              (ex-info "[encore/get-env] Error parsing as boolean"
                                 {:bool-str bool-str
                                  :source   source
                                  :platform platform
@@ -5703,7 +5702,7 @@
                             (read-edn (get opts :read-opts) edn)
                             (catch Throwable t
                               (throw
-                                (ex-info "[encore/get-env*] Error reading as edn"
+                                (ex-info "[encore/get-env] Error reading as edn"
                                   {:edn edn :source source :platform platform} t))))]
 
                       ;; Allow `get-env` in ns1 to include lone sym from unrequired ns2.
@@ -5718,10 +5717,10 @@
 
                       [source x]))
 
-                  (unexpected-arg! as
-                    {:context  `get-env*
-                     :param    'as
-                     :expected #{:str :edn :bool}}))
+                  (throw
+                    (ex-info "[encore/get-env] Unexpected `:as` option"
+                      {:given {:value as, :type (type as)}
+                       :expected #{:str :edn :bool}})))
 
                 (when (contains? opts :default)
                   [:default default]))]
@@ -5733,20 +5732,20 @@
                 :legacy            {:config value, :source source} ; Back compatibility
                 :map   (assoc-some {:value  value, :source source} :platform platform)
                 :debug (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
-                (unexpected-arg! return
-                  {:context  `get-env*
-                   :param    'return
-                   :expected #{:value :map}})))))))
+                (throw
+                  (ex-info "[encore/get-env] Unexpected `:return` option"
+                    {:given {:value return, :type (type return)}
+                     :expected #{:value :map :debug}}))))))))
 
      (defmacro get-env
-       "Cross-platform util for embedding flexible environmental config during
+       "Flexible cross-platform util for embedding a config value during
        macro expansion. Used by other Taoensso libraries.
 
        Given a const kw/string id or vector of desc-priority alternative ids,
        parse and return the first of the following that exists:
-         - JVM         property value   for id (\"prop\")
-         - Environment variable value   for id (\"env\")
-         - Classpath   resource content for id (\"res\")
+         - JVM         property value   for id
+         - Environment variable value   for id
+         - Classpath   resource content for id
 
        Ids may include optional segment in `<>` tag (e.g. `<.edn>`).
        Ids may include `<.?platform.?>` tag for auto replacement, useful
@@ -5754,25 +5753,25 @@
 
        Search order: desc by combined [alt-index platform(y/n) optional(y/n)].
 
-       (get-env {:as :edn} [:my-app/alt1<.platform><.edn> :my-app/alt2])
+       So (get-env {:as :edn} [:my-app/alt1<.platform><.edn> :my-app/alt2])
        will parse and return the first of the following that exists:
 
-         1. Alt1 +platform +optional (content type)
+         1. Alt1 +platform +optional (.edn suffix)
            1a. `my-app.alt1.clj.edn` JVM         property value
            1b. `MY_APP_ALT1_CLJ_EDN` environment variable value
            1c. `my-app.alt1.clj.edn` classpath   resource content
 
-         2. Alt1 +platform -optional (content type)
+         2. Alt1 +platform -optional (.edn suffix)
            2a. `my-app.alt1.clj`     JVM         property value
            2b. `MY_APP_ALT1_CLJ`     environment variable value
            2c. `my-app.alt1.clj`     classpath   resource content
 
-         3. Alt1 -platform +optional (content type)
+         3. Alt1 -platform +optional (.edn suffix)
            3a. `my-app.alt1.edn`     JVM         property value
            3b. `MY_APP_ALT1_EDN`     environment variable value
            3c. `my-app.alt1.edn`     classpath   resource content
 
-         4. Alt1 -platform -optional (content type)
+         4. Alt1 -platform -optional (.edn suffix)
            4a. `my-app.alt1`         JVM         property value
            4b. `MY_APP_ALT1`         environment variable value
            4c. `my-app.alt1`         classpath   resource content
@@ -5783,19 +5782,20 @@
            5c. `my-app.alt2`         classpath   resource content
 
        Options:
-         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default :str).
-         `:default` - Fallback to return if no value found during search (default nil).
-         `:return`  - Return type ∈ #{:value :map :debug} (default :value).
-                      TIP: Use `:debug` to inspect/verify search behaviour!
+         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default `:str`).
+         `:default` - Fallback to return unparsed if no value found during search (default `nil`).
+         `:return`  - Return type ∈ #{:value :map :debug} (default `:value`).
 
-       Result must be something that can be safely embedded in code during
-       macro-expansion. Symbols in edn will be evaluated during expansion."
+       Resulting config value must be something that can be safely embedded in code during
+       macro-expansion. Symbols in edn will be evaluated during expansion.
+
+       TIP!: Use the {:return :debug} option in tests or at the REPL to verify/inspect
+       resulting config value, config source, and specific search order of prop/env/res ids."
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
-        '([{:keys [as default return]} spec]
-          [{:keys [as default return   spec]
+        '([{:keys [as default return]
             :or   {as     :str
-                   return :value}}])}
+                   return :value}} spec])}
 
        ([            ] `(get-locals)) ; Back compatibility
        ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc             opts          :macro-env &env :spec spec)))
