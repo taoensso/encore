@@ -697,18 +697,18 @@
 
 (defmacro test-if-cljs [caller]
   `(enc/if-cljs
-     {:target :cljs, :caller ~caller}
-     {:target :clj,  :caller ~caller}))
+     {:platform :cljs, :caller ~caller}
+     {:platform :clj,  :caller ~caller}))
 
 (deftest _if-cljs
-  [#?(:clj  (is (= (test-if-cljs :clj)  {:target :clj,  :caller :clj})))
-   #?(:cljs (is (= (test-if-cljs :cljs) {:target :cljs, :caller :cljs})))])
+  [#?(:clj  (is (= (test-if-cljs :clj)  {:platform :clj,  :caller :clj})))
+   #?(:cljs (is (= (test-if-cljs :cljs) {:platform :cljs, :caller :cljs})))])
 
 #?(:clj
    (defmacro test-get-source [caller]
      #_(spit "debug.txt" (str [(boolean (:ns &env)) (:file (meta &form))] "\n") :append true)
      `{:caller    ~caller
-       :target    ~(if (:ns &env) :cljs :clj)
+       :platform  ~(if (:ns &env) :cljs :clj)
        :form      '~&form
        :*file*    ~(str *file*)
        :env       ~(-> &env       (select-keys [:line :column]))
@@ -720,12 +720,12 @@
 (deftest _get-source
   [#?(:clj
       (let [m (test-get-source :clj)]
-        [(is (enc/submap? m {:target :clj, :caller :clj, :source {:file :submap/some}}))
+        [(is (enc/submap? m {:platform :clj, :caller :clj, :source {:file :submap/some}}))
          (is (= (get-in   m [:source :file]) (get-in m [:*file*])))]))
 
    #?(:cljs
       (let [m (test-get-source :cljs)]
-        [(is (enc/submap?  m {:target :cljs, :caller :cljs, :source {:file :submap/some}}))
+        [(is (enc/submap?  m {:platform :cljs, :caller :cljs, :source {:file :submap/some}}))
          (is (not= (get-in m [:source :file]) (get-in m [:*file*])))]))])
 
 ;;;; Vars, etc.
@@ -768,7 +768,7 @@
    (is (= (enc/get-env {:default :foo} ::nx) :foo))
 
    (is (= (enc/get-env {:return :map             } ::nx) nil))
-   (is (= (enc/get-env {:return :map :default nil} ::nx) {:value nil, :source :default, :target #?(:clj :clj :cljs :cljs)}))
+   (is (= (enc/get-env {:return :map :default nil} ::nx) {:value nil, :source :default, :platform #?(:clj :clj :cljs :cljs)}))
 
    (is (enc/submap? (enc/get-env {:return :debug} [:a<.platform> :b])
          {:search
@@ -776,7 +776,7 @@
              :cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a"] [:env "A"] [:res "a"] [:prop "b"] [:env "B"] [:res "b"]])})
      "Basic search, with dynamic platform")
 
-   (is (enc/submap? (enc/get-env {:as :edn :target :p :return :debug} [:a<.platform><.edn> :b :<platform.>c<.edn>])
+   (is (enc/submap? (enc/get-env {:as :edn :platform :p :return :debug} [:a<.platform><.edn> :b :<platform.>c<.edn>])
          {:search
           [[:prop "a.p.edn"] [:env "A_P_EDN"] [:res "a.p.edn"]
            [:prop "a.p"]     [:env "A_P"]     [:res "a.p"]

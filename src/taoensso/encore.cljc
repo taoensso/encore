@@ -146,9 +146,9 @@
         :read  (do <...>)
         :write (do <...>)
         (unexpected-arg! mode
-          :context  `my-function
-          :param    'mode
-          :expected #{:read :write}))) =>
+          {:context  `my-function
+           :param    'mode
+           :expected #{:read :write}}))) =>
 
     Unexpected argument: :unexpected
     {:arg {:value :unexpected, :type clojure.lang.Keyword},
@@ -5593,10 +5593,10 @@
        "Handles id prep for `get-env`:
          :a<XplatformY><optional> =>
            [\"a.bXcljYoptional\" \"a.bXcljY\" \"a.boptional\" \"a.b\"], etc."
-       [target tf x]
+       [platform tf x]
        (when x
          (if (vector? x)
-           (into [] (comp (map #(prep-env-ids target tf %)) cat (distinct)) x)
+           (into [] (comp (map #(prep-env-ids platform tf %)) cat (distinct)) x)
            (let [tf (or tf identity)
                  s  (as-qname
                       (if (const-form? x)
@@ -5605,10 +5605,10 @@
                           (ex-info "[encore/get-env] Ids must be const forms"
                             {:id x}))))
 
-                 without-platform                 (str/replace s pattern-platform "")
-                 with-platform       (when target (str/replace s pattern-platform (fn [[_ pre post]] (str pre (name target) post))))
-                 without-opt (fn [s] (when s      (str/replace s pattern-opt      "")))
-                 with-opt    (fn [s] (when s      (str/replace s pattern-opt      (fn [[_ cnt]] cnt))))]
+                 without-platform                   (str/replace s pattern-platform "")
+                 with-platform       (when platform (str/replace s pattern-platform (fn [[_ pre post]] (str pre (name platform) post))))
+                 without-opt (fn [s] (when s        (str/replace s pattern-opt      "")))
+                 with-opt    (fn [s] (when s        (str/replace s pattern-opt      (fn [[_ cnt]] cnt))))]
 
              (into [] (comp (filter identity) (distinct) (map tf))
                [(with-opt    with-platform)
@@ -5647,7 +5647,7 @@
                       return :value}} opts
 
               ;;; Advanced opts, undocumented
-              target (get opts :target (if (:ns macro-env) :cljs :clj))
+              platform (get opts :platform (if (:ns macro-env) :cljs :clj))
               custom-res
               (when            (get opts ::allow-recur? true)
                 (let [res-prop (get opts :res-prop)
@@ -5655,13 +5655,13 @@
                   (when (or res-prop env-prop)
                     (get-env*
                       {::allow-recur? false,
-                       :macro-env macro-env, :target target,
+                       :macro-env macro-env, :platform platform,
                        :prop res-prop, :env env-prop, :res nil,
                        :return :value}))))
 
-              props     (prep-env-ids target (fn [id] [:prop (pname id)])                (get opts :prop spec))
-              envs      (prep-env-ids target (fn [id] [:env  (ename id)])                (get opts :env  spec))
-              ress      (prep-env-ids target (fn [id] [:res  (pname id)]) (or custom-res (get opts :res  spec)))
+              props     (prep-env-ids platform (fn [id] [:prop (pname id)])                (get opts :prop spec))
+              envs      (prep-env-ids platform (fn [id] [:env  (ename id)])                (get opts :env  spec))
+              ress      (prep-env-ids platform (fn [id] [:res  (pname id)]) (or custom-res (get opts :res  spec)))
               to-search [props envs ress] ; (vinterleave-all [[:p1 :p2] [:e1] [:r1 :r2 :r3]]) ; => [:p1 :e1 :r1 :p2 :r2 :r3]
 
               match ; ?[source str-val]
@@ -5690,7 +5690,7 @@
                               (ex-info "[encore/get-env*] Error parsing as boolean"
                                 {:bool-str bool-str
                                  :source   source
-                                 :target   target
+                                 :platform platform
                                  :expected
                                  {true  #{"true"  "1" "t" "T" "TRUE"}
                                   false #{"false" "0" "f" "F" "FALSE"}}})))]
@@ -5704,7 +5704,7 @@
                             (catch Throwable t
                               (throw
                                 (ex-info "[encore/get-env*] Error reading as edn"
-                                  {:edn edn :source source :target target} t))))]
+                                  {:edn edn :source source :platform platform} t))))]
 
                       ;; Allow `get-env` in ns1 to include lone sym from unrequired ns2.
                       ;; Useful when ns1 is a library, and ns2 is a user namespace.
@@ -5712,7 +5712,7 @@
                       ;; Undocumented, kept only for back-compatibility (Timbre, etc.).
                       ;; Better to avoid this pattern since Cljs can't support it
                       ;; even after CLJS-1346.
-                      (when (and (symbol? x) (get opts :require-sym-ns? (= target :clj)))
+                      (when (and (symbol? x) (get opts :require-sym-ns? (= platform :clj)))
                         (when-let [clj-ns (namespace x)]
                           (catching (require (symbol clj-ns)))))
 
@@ -5731,8 +5731,8 @@
               (case return
                 :value                      value
                 :legacy            {:config value, :source source} ; Back compatibility
-                :map   (assoc-some {:value  value, :source source} :target target)
-                :debug (assoc-some {:value  value, :source source} :target target, :search (vinterleave-all to-search))
+                :map   (assoc-some {:value  value, :source source} :platform platform)
+                :debug (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
                 (unexpected-arg! return
                   {:context  `get-env*
                    :param    'return
@@ -5817,7 +5817,7 @@
      (case kind
        :daemon `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))
        :user   `(doto (Thread. (fn [] ~@body))                   (.start))
-       (unexpected-arg! kind :context `threaded :param kind :expected #{:daemon :user}))))
+       (unexpected-arg! kind {:context `threaded, :param kind, :expected #{:daemon :user}}))))
 
 (comment (threaded :daemon (println "Runs on daemon thread")))
 
