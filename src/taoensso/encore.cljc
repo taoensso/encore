@@ -197,6 +197,12 @@
 
 (comment (have-class? "org.slf4j.Logger"))
 
+(defn ^:no-doc list-form?
+  "Private, don't use.
+  Returns true if given a list or Cons (=> possible call form)."
+  {:added "Encore vX.Y.Z (YYYY-MM-D)"}
+  [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
+
 ;;;; Core macros
 
 #?(:clj
@@ -427,7 +433,7 @@
                `(if-let ~test ~expr (-cond ~throw? ~@more))
 
                ;; Experimental, assumes `not` = `core/not`:
-               (if (and (list? test) (= (first test) 'not))
+               (if (and (list-form? test) (= (first test) 'not))
                  `(if ~(second test) (-cond ~throw? ~@more) ~expr)
                  `(if ~test ~expr    (-cond ~throw? ~@more)))))))
 
@@ -753,26 +759,9 @@
 
 (declare rsome revery?)
 
-(defn ^:no-doc call-form?
-  "Private, don't use.
-  Returns true if given a list or Cons."
-  {:added "Encore v3.75.0 (2024-01-29)"}
-  [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
-
 #?(:clj
    (do
-     (defn ^:no-doc call-in-form?
-       "Private, don't use.
-       Returns true if given a call form, or coll form containing a call form."
-       {:added "Encore v3.75.0 (2024-01-29)"}
-       [x]
-       (when x
-         (cond
-           (call-form? x) true
-           (coll?      x) (if (rsome call-in-form? x) true false)
-           :else          false)))
-
-     (defn ^:no-doc runtime-form? "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (call-form? form)))
+     (defn ^:no-doc runtime-form? "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
      (defn ^:no-doc const-form?   "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
      (defn ^:no-doc const-form    "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
      (defn ^:no-doc const-forms?  "Private, don't use." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (revery? const-form?   forms))
@@ -928,7 +917,7 @@
            (mapv
              (fn [in]
                (cond
-                 (not (call-form? in))   in
+                 (not (list-form? in))   in
                  :let [[s1 s2 s3 & more] in]
 
                  (not= s1 'catch)    in
@@ -1543,7 +1532,7 @@
 ;;      Returns x if (pred x) is truthy, otherwise returns nil:
 ;;        (when-let [n-records (is pos? (count remaining))] ...), etc."
 ;;      [pred x]
-;;      (if (call-form? x)
+;;      (if (list-form? x)
 ;;        `(let [x# ~x] (when (catching (~pred x#)) x#))
 ;;        (do          `(when (catching (~pred ~x)) ~x)))))
 
@@ -7732,7 +7721,18 @@
        ;;; Deprecated arities:
        ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
        ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
-       ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr))))))
+       ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
+
+  #?(:default (defn ^:no-doc call-form? "Prefer `list-form`." {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} [x] (list-form? x)))
+  #?(:clj
+     (defn ^:no-doc call-in-form?
+       [x]
+       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       (when x
+         (cond
+           (list-form? x) true
+           (coll?      x) (if (rsome list-form? x) true false)
+           :else          false)))))
 
 (deprecated
   #?(:clj

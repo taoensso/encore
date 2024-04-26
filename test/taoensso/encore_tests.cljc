@@ -486,13 +486,11 @@
 
 #?(:clj
    (deftest _forms
-     [(is (false? (enc/call-form?    'foo)))
-      (is (false? (enc/call-form?    '[foo])))
-      (is (true?  (enc/call-form?    '(foo bar))))
-
-      (is (false? (enc/call-in-form? '{:a [:a1 :a2] :b #{:b1 [:b2]}})))
-      (is (true?  (enc/call-in-form? '{:a [:a1 :a2] :b #{:b1 [(b2)]}})))
-
+     [(is (false? (enc/list-form?  'foo)))
+      (is (false? (enc/list-form?  '[foo])))
+      (is (true?  (enc/list-form?  '(foo bar))))
+      (is (true?  (enc/list-form?  ())))
+      (is (true?  (enc/list-form?  '(1 2 3))))
       (is (false? (enc/const-form? 'foo)))
       (is (true?  (enc/const-form? :foo)))]))
 
@@ -1779,7 +1777,7 @@
    (testing "Filterable expansion"
      [(is (enc/submap? (sapi/sig-exp {:level :info})
             {:expansion-id (enc/pred nat-int?)
-             :allow?       (enc/pred enc/call-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
+             :allow?       (enc/pred enc/list-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
              :elide?       :submap/nx
              :location
              {:ns     (enc/pred string?)
