@@ -40,7 +40,7 @@
     [x]
     (throw
       (ex-info "[encore/signals] Invalid level"
-        {:level    {:value x, :type (type x)}
+        {:level    (enc/typed-val x)
          :expected expected}))))
 
 (defn get-level-int
@@ -110,7 +110,7 @@
           (if (fn? x)
             "[encore/signals] Invalid name filter (fn filters no longer supported)"
             "[encore/signals] Invalid name filter")
-          {:name-filter {:value x, :type (type x)}}
+          {:name-filter (enc/typed-val x)}
           t))
       x))
 

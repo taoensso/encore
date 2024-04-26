@@ -28,7 +28,7 @@
         (fn [n target-type target-min target-max]
           (throw
             (ex-info "Failed to cast number to typed int (exceeds type range)"
-              {:given  {:value n :type (type n)}
+              {:given  (enc/typed-val n)
                :target {:type target-type :min target-min :max target-max}})))]
 
     (defn as-byte   ^long [^long n] (if (and (>= n    Byte/MIN_VALUE) (<= n    Byte/MAX_VALUE)) n (fail! n :byte     Byte/MIN_VALUE    Byte/MAX_VALUE)))
@@ -430,7 +430,7 @@
               nil
               (throw
                 (ex-info "Failed to freeze set (encountered element not in bit schema)"
-                  {:element    {:type (type el) :value el}
+                  {:element    (enc/typed-val el)
                    :bit-schema bit-schema})))))
         els)
       (.toByteArray bs))))

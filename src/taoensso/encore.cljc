@@ -117,7 +117,7 @@
         def* defonce try* catching binding -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?
-        with-default-print-opts]])))
+        with-default-print-opts typed-val]])))
 
 (def encore-version [3 104 1])
 
@@ -136,6 +136,13 @@
   (test/run-tests))
 
 ;;;;
+
+#?(:clj
+   (defmacro ^:no-doc typed-val
+     "Private, don't use.
+     Expands to `{:value ~x, :type (type ~x)}."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [x] `{:value ~x, :type (type ~x)}))
 
 (defn unexpected-arg!
   "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
@@ -166,7 +173,7 @@
   ([arg opts]
    (throw
      (ex-info (or (get opts :msg) (str "Unexpected argument: " arg))
-       (conj {:arg {:value arg, :type (type arg)}} (dissoc opts :msg)))))
+       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
 
   ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
   ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
@@ -941,7 +948,7 @@
 
                          (throw
                            (ex-info "[encore/try*] Unexpected catch clause keyword"
-                             {:given    {:value s2, :type (type s2)}
+                             {:given    (typed-val s2)
                               :expected '#{:common :all :all-but-critical :ex-info}})))]
 
                    (if rethrow-critical?
@@ -1075,9 +1082,9 @@
 
        (fn catching-rf
          ([       ] (try* (rf)        (catch :all t (error-fn {:rf rf :call '(rf)} t))))
-         ([acc    ] (try* (rf acc)    (catch :all t (error-fn {:rf rf :call '(rf acc)    :args {:acc {:value acc, :type (type acc)}}} t))))
-         ([acc in ] (try* (rf acc in) (catch :all t (error-fn {:rf rf :call '(rf acc in) :args {:acc {:value acc, :type (type acc)}
-                                                                                                :in  {:value in,  :type (type in)}}} t))))
+         ([acc    ] (try* (rf acc)    (catch :all t (error-fn {:rf rf :call '(rf acc)    :args {:acc (typed-val acc)}} t))))
+         ([acc in ] (try* (rf acc in) (catch :all t (error-fn {:rf rf :call '(rf acc in) :args {:acc (typed-val acc)
+                                                                                                :in  (typed-val in)}} t))))
          ([acc k v]
           (try* (rf acc k v)
             (catch :all t
@@ -1085,9 +1092,9 @@
                 {:rf     rf
                  :call '(rf acc k v)
                  :args
-                 {:acc {:value acc, :type (type acc)}
-                  :k   {:value k,   :type (type k)}
-                  :v   {:value v,   :type (type v)}}}
+                 {:acc (typed-val acc)
+                  :k   (typed-val k)
+                  :v   (typed-val v)}}
                 t)))))))))
 
 (defn catching-xform
@@ -1480,7 +1487,7 @@
   (throw
     (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
       {:pred-kind kind
-       :arg {:value x, :type (type x)}})))
+       :arg (typed-val x)})))
 
 (let [-as-throw -as-throw]
   (defn as-nzero       [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
@@ -1551,7 +1558,7 @@
        (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
          (assoc-some
            {:pred pred
-            :arg  {:value x, :type (type x)}}
+            :arg  (typed-val x)}
            :data data))))))
 
 (comment [(is! false) (is! nil) (is! string? 5) (is string? "foo")])
@@ -2032,7 +2039,7 @@
            :trunc (long       n*)
            (throw
              (ex-info "[encore/round*] Unexpected round kind (expected ∈ #{:round :floor :ceil :trunc})"
-               {:kind {:value kind, :type (type kind)}})))]
+               {:kind (typed-val kind)})))]
 
      (if-not modifier
        (do (long   rounded))                  ; Returns long
@@ -4505,7 +4512,7 @@
             form
             (throw
               (ex-info "[encore/norm-str] Unrecognized normalization form (expected ∈ #{:nfc :nfkc :nfd :nfkd <java.text.Normalizer$Form>})"
-                {:form {:value form, :type (type form)}}))))))))
+                {:form (typed-val form)}))))))))
 
 (comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
 
@@ -4889,7 +4896,7 @@
      (not (string? s))
      (throw
        (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
-         {:arg {:value s, :type (type s)}}))
+         {:arg (typed-val s)}))
 
      :else
      (let [readers (get opts :readers ::dynamic)
@@ -5261,7 +5268,7 @@
            (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
            (throw
              (ex-info "[encore/hex-str->ba] Invalid hex string (length must be even)"
-               {:given {:value s, :type (type s)}})))))
+               {:given (typed-val s)})))))
 
      ;; TODO Any way to auto select fastest implementation?
      ;; Ref. <https://stackoverflow.com/a/58118078/1982742>
@@ -5719,7 +5726,7 @@
 
                   (throw
                     (ex-info "[encore/get-env] Unexpected `:as` option"
-                      {:given {:value as, :type (type as)}
+                      {:given (typed-val as)
                        :expected #{:str :edn :bool}})))
 
                 (when (contains? opts :default)
@@ -5734,7 +5741,7 @@
                 :explain (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
                 (throw
                   (ex-info "[encore/get-env] Unexpected `:return` option"
-                    {:given {:value return, :type (type return)}
+                    {:given (typed-val return)
                      :expected #{:value :map :explain}}))))))))
 
      (defmacro get-env
@@ -6000,7 +6007,7 @@
                  (.release s)
                  (throw
                    (ex-info "[encore/future-pool] Unexpected arg type (expected function)"
-                     {:arg {:value f, :type (type f)}})))))]
+                     {:arg (typed-val f)})))))]
 
        (fn fp
          ([ ] (.acquire s n) (.release s n) true)
@@ -6875,7 +6882,7 @@
         (not (string? s))
         (throw
           (ex-info "[encore/read-json] Unexpected arg type (expected string or nil)"
-            {:arg {:value s, :type (type s)}}))
+            {:arg (typed-val s)}))
 
         :else
         (if kw-keys?
@@ -6898,7 +6905,7 @@
       (if (pred x)
         x
         (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)"
-                 {:unstub {:value x, :type (type x)}})))))
+                 {:unstub (typed-val x)})))))
 
   #?(:clj
      (defmacro ^:no-doc -intern-stub [ns stub-sym stub-var src]
