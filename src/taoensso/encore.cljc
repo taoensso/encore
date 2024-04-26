@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 104 1])
+(def encore-version [3 105 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -141,7 +141,7 @@
    (defmacro ^:no-doc typed-val
      "Private, don't use.
      Expands to `{:value ~x, :type (type ~x)}."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.105.0 (2024-04-29)"}
      [x] `{:value ~x, :type (type ~x)}))
 
 (defn unexpected-arg!
@@ -200,7 +200,7 @@
 (defn ^:no-doc list-form?
   "Private, don't use.
   Returns true if given a list or Cons (=> possible call form)."
-  {:added "Encore vX.Y.Z (YYYY-MM-D)"}
+  {:added "Encore v3.105.0 (2024-04-29)"}
   [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
 ;;;; Core macros
@@ -7723,11 +7723,11 @@
        ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
        ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
-  #?(:default (defn ^:no-doc call-form? "Prefer `list-form`." {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} [x] (list-form? x)))
+  #?(:default (defn ^:no-doc call-form? "Prefer `list-form`." {:deprecated "Encore v3.105.0 (2024-04-29)"} [x] (list-form? x)))
   #?(:clj
      (defn ^:no-doc call-in-form?
        [x]
-       {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "Encore v3.105.0 (2024-04-29)"}
        (when x
          (cond
            (list-form? x) true
