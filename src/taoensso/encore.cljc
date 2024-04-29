@@ -7731,7 +7731,7 @@
        (when x
          (cond
            (list-form? x) true
-           (coll?      x) (if (rsome list-form? x) true false)
+           (coll?      x) (if (rsome call-in-form? x) true false)
            :else          false)))))
 
 (deprecated

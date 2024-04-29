@@ -1062,7 +1062,7 @@
 
        `(do
           (enc/defalias level-aliases)
-          ~(api:help:filters    purpose sig-filter-env-config-help)
+          ~(api:help:filters    purpose (eval sig-filter-env-config-help))
           ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
           ~(api:without-filters purpose *rt-sig-filter* clj?)
 
