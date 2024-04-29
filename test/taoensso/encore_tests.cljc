@@ -907,6 +907,22 @@
            (let [ff (enc/format-inst-fn {:formatter java.time.format.DateTimeFormatter/ISO_LOCAL_DATE_TIME})]
              (is (= (ff ref-inst) "2024-06-09T21:15:20.17") "Depends on auto zone")))]))])
 
+(deftest _comp-middleware
+  (let [x2 (fn [n] (* (long n) 2))
+        xn (fn [_] nil)
+        x! (fn [_] (ex1!))]
+
+    [(is (= ((enc/comp-middleware nil) :x) :x) "Acts as identity")
+     (is (= ((enc/comp-middleware [])  :x) :x) "Acts as identity")
+     (is (= ((enc/comp-middleware [identity]) :x) :x))
+     (is (= ((enc/comp-middleware  x2 inc x2)  0) 2))
+     (is (= ((enc/comp-middleware [x2 inc x2]) 0) 2))
+
+     (testing "`xn` short-circuits (skips `x!`)"
+       [(is (= ((enc/comp-middleware  inc xn x!)             0) nil))
+        (is (= ((enc/comp-middleware [inc xn x!])            0) nil))
+        (is (= ((enc/comp-middleware  inc inc inc inc xn x!) 0) nil))])]))
+
 ;;;; Futures
 
 #?(:clj
@@ -1721,12 +1737,13 @@
       (testing "Handler middleware"
         (let [v1 (atom ::nx)
               v2 (atom ::nx)
-              v3 (atom ::nx)]
+              v3 (atom ::nx)
+              cm enc/comp-middleware]
 
           [(is (nil? (cnt :set 0)))
-           (is (enc/submap? (sapi/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                               }) {:hid1 :submap/ex}))
-           (is (enc/submap? (sapi/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware [#(str % ".mw1") #(str % ".mw2")]}) {:hid2 :submap/ex}))
-           (is (enc/submap? (sapi/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware [(fn [_] nil)]})                    {:hid3 :submap/ex}))
+           (is (enc/submap? (sapi/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                                  }) {:hid1 :submap/ex}))
+           (is (enc/submap? (sapi/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware (cm #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
+           (is (enc/submap? (sapi/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware (fn [_] nil)})                         {:hid3 :submap/ex}))
            (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
 
            #?(:clj (do (Thread/sleep 4000) :sleep))

@@ -6885,6 +6885,23 @@
           (js->clj (js/JSON.parse s) :keywordize-keys true)
           (js->clj (js/JSON.parse s)))))))
 
+(defn comp-middleware
+  "Returns a single (composite) unary fn that applies all given unary fns
+  sequentially (left->right!: f1, f2, ...). If any given fn returns nil, the
+  returned composite fn immediately returns nil:
+
+    ((comp-middleware inc #(* % 2) inc) 1) => 5 ; (inc (* (inc 1) 2))
+    ((comp-middleware inc (fn [_] nil) (fn [_] (throw (Exception. \"Never thrown!\")))) 1) => nil
+
+  Useful for composing Ring-style middleware fns."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  ([fs           ] (fn [x] (reduce (fn [x f] (or (f x) (reduced nil))) x fs)))
+  ([f1 f2        ] (fn [x] (when-let [x (f1 x)                    ] (f2 x))))
+  ([f1 f2 f3     ] (fn [x] (when-let [x (f1 x), x (f2 x)          ] (f3 x))))
+  ([f1 f2 f3 & fs] (fn [x] (when-let [x (f1 x), x (f2 x), x (f3 x)] ((comp-middleware fs) x)))))
+
+(comment ((comp-middleware inc inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))) 0))
+
 ;;;; Stubs (experimental)
 ;; Could do with a refactor
 

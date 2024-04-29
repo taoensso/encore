@@ -528,24 +528,6 @@
             async-results
             async-results))))))
 
-(defn get-middleware-fn
-  "Takes ?[<unary-fn> ... <unary-fn>] and returns nil, or a single unary fn
-  that is the left->right composition of the others and that short-circuits if
-  any returns nil."
-  {:added "Encore v3.75.0 (2024-01-29)"}
-  [middleware]
-  (enc/cond
-    (empty?   middleware)    nil
-    (= (count middleware) 1) (first middleware)
-    :else
-    (fn multi-middleware-fn [in]
-      (reduce (fn [in mf] (or (mf in) (reduced nil)))
-        in middleware))))
-
-(comment
-  ((get-middleware-fn [inc inc inc str]) 1)
-  ((get-middleware-fn [inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))]) 1))
-
 (def ^:private default-handler-priority 100)
 (def ^:private default-dispatch-opts
   #?(:cljs {:priority default-handler-priority}
@@ -558,6 +540,19 @@
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
 (enc/defonce ^:dynamic *default-handler-backp-fn* nil)
+
+(defn as-middleware-fn
+  "Returns (composed) unary middleware fn, or nil."
+  [fn-or-fns]
+  (when                    fn-or-fns
+    (if (vector?           fn-or-fns)
+      (enc/comp-middleware fn-or-fns)
+      (if (fn? fn-or-fns)
+        (do    fn-or-fns)
+        (throw
+          (ex-info "[encore/signals] Unexpected middleware value"
+            {:given    (enc/typed-val fn-or-fns)
+             :expected '#{nil fn [f1 f2 ...]}}))))))
 
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
@@ -576,11 +571,12 @@
             [(enc/as-pnum! sample-rate) nil] ; Static  rate
             ))
 
-        rl-handler   (when-let [spec rate-limit] (enc/rate-limiter {:basic? true} spec))
-        sig-filter*  (sig-filter kind-filter ns-filter id-filter min-level)
-        stopped?_    (enc/latom false)
+        rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:basic? true} spec))
+        sig-filter*   (sig-filter kind-filter ns-filter id-filter min-level)
+        stopped?_     (enc/latom false)
 
-        middleware-fn (get-middleware-fn middleware) ; (fn [signal-value]) => transformed ?signal-value*
+        middleware    (as-middleware-fn    middleware) ; Deprecated, kept temporarily for back compatibility
+        ;; middleware (have [:or nil? fn?] middleware) ; (fn [signal-value]) => ?modified-signal-value
 
         rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
         rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
@@ -634,9 +630,9 @@
 
                        (enc/try*
                          (when-let [sig-val* ; Library-level handler-arg -> arb user-level value
-                                    (if middleware-fn
-                                      (middleware-fn sig-val)
-                                      (do            sig-val))]
+                                    (if middleware
+                                      (middleware sig-val) ; Apply handler middleware
+                                      (do         sig-val))]
 
                            (enc/try*
                              (handler-fn sig-val*) true
@@ -1215,11 +1211,10 @@
                                           and 10 calls per 60   secs
 
              `middleware`
-               Optional vector of unary middleware fns to apply (left-to-right/sequentially)
-               to `handler-arg` before passing to `handler-fn`. If any middleware fn returns
-               nil, aborts immediately without calling `handler-fn`.
+               Optional (fn [handler-arg]) => ?modified-handler-arg to apply before
+               handling. When middleware returns nil, skips handler.
 
-               Useful for transforming `handler-arg` before handling.
+               Compose multiple middleware fns together with `comp-middleware`.
 
              `error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
              `backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back-pressure.
@@ -1375,3 +1370,10 @@
      :ct-sig-filter    my-ct-sig-filter
      :*rt-sig-filter* *my-rt-sig-filter*
      :*sig-handlers*  *my-sig-handlers*}))
+
+;;;;
+
+(enc/deprecated
+  (defn ^:no-doc get-middleware-fn "Prefer `as-middleware-fn`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    [middleware] (as-middleware-fn middleware)))
