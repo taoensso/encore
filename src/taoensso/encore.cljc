@@ -6102,7 +6102,8 @@
      [{:as opts
        :keys
        [mode buffer-size n-threads thread-name,
-        daemon-threads? shutdown-drain-msecs]
+        daemon-threads? shutdown-drain-msecs,
+        convey-bindings?]
 
        :or
        {mode        :dropping
@@ -6110,7 +6111,8 @@
         n-threads   1
 
         daemon-threads?      true
-        shutdown-drain-msecs 5000}}]
+        shutdown-drain-msecs 5000
+        convey-bindings?     true}}]
 
      (let [started?_ (volatile! false) ; Ever started?
            stopped?_ (latom nil) ; nil or promise
@@ -6130,7 +6132,7 @@
            (invoke [_  ] (stop-fn))
            (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all-but-critical _)) true)))
 
-         (let [binding binding-conveyor-fn
+         (let [binding (when convey-bindings? binding-conveyor-fn)
                abq (java.util.concurrent.ArrayBlockingQueue.
                      (as-pos-int buffer-size) false)
 
@@ -6192,7 +6194,12 @@
              clojure.lang.IDeref (deref [_] (deref-fn))
              clojure.lang.IFn
              (invoke [_  ] (stop-fn))
-             (invoke [_ f] (when-not (stopped?_) (.deref init!_) (run-fn (binding f))))))))))
+             (invoke [_ f]
+               (when-not (stopped?_)
+                 (.deref init!_)
+                 (if binding
+                   (run-fn (binding f))
+                   (run-fn          f))))))))))
 
 (comment
   (let [r1 (runner {:mode :sync})
