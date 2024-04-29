@@ -259,8 +259,8 @@
                 (enc/fmemoize
                   (fn allow-signal?
 
-                    ;; Used for compile-time filtering (not perf sensitive, ignore nils)
                     ([{:keys [kind ns id level]}]
+                     ;; Used for compile-time filtering (not perf sensitive, ignore nils)
                      (and
                        (if (and kind-filter kind)  (allow-name? kind-filter kind)         true)
                        (if (and   ns-filter ns)    (allow-name?   ns-filter   ns)         true)
@@ -289,7 +289,7 @@
       ([        kind-filter ns-filter id-filter min-level]             (get-cached kind-filter ns-filter id-filter min-level))
       ([{:keys [kind-filter ns-filter id-filter min-level :as specs]}] (get-cached kind-filter ns-filter id-filter min-level)))))
 
-(comment ; [62.11 61.44 65.25]
+(comment ; [59.96 60.37 60.41]
   (let [sf (sig-filter nil "*" nil nil)]
     (enc/qb 1e6
       (sf :kind :ns     :info)
@@ -551,7 +551,8 @@
      :clj  {:priority default-handler-priority,
             :async
             {:mode :dropping, :buffer-size 1024, :n-threads 1,
-             :daemon-threads? true, :shutdown-drain-msecs 5000}}))
+             :daemon-threads? true, :shutdown-drain-msecs 5000,
+             :convey-bindings? true}}))
 
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
