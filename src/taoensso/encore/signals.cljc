@@ -1375,5 +1375,5 @@
 
 (enc/deprecated
   (defn ^:no-doc get-middleware-fn "Prefer `as-middleware-fn`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.106.0 (2024-05-01)"}
     [middleware] (as-middleware-fn middleware)))

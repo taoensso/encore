@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 105 1])
+(def encore-version [3 106 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -6895,7 +6895,7 @@
     ((comp-middleware inc (fn [_] nil) (fn [_] (throw (Exception. \"Never thrown!\")))) 1) => nil
 
   Useful for composing Ring-style middleware fns."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.106.0 (2024-05-01)"}
   ([fs           ] (fn [x] (reduce (fn [x f] (or (f x) (reduced nil))) x fs)))
   ([f1 f2        ] (fn [x] (when-let [x (f1 x)                    ] (f2 x))))
   ([f1 f2 f3     ] (fn [x] (when-let [x (f1 x), x (f2 x)          ] (f3 x))))
