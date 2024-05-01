@@ -1582,9 +1582,10 @@
 (deftest _signal-api
   [(testing "Signal filtering"
      [(is (nil? (enc/update-var-root! sapi/*rt-sig-filter* (fn [_] nil))))
-      (is (= (sapi/set-kind-filter!     "*") {:kind-filter "*", :ns-filter nil, :id-filter nil, :min-level nil}))
-      (is (= (sapi/set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter nil, :min-level nil}))
-      (is (= (sapi/set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level nil}))
+      (is (= (sapi/get-filters)              nil))
+      (is (= (sapi/set-kind-filter!     "*") {:kind-filter "*"                                                  }))
+      (is (= (sapi/set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*"                                  }))
+      (is (= (sapi/set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*"                  }))
       (is (= (sapi/set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
       (is (= @sapi/*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
       (is (= (sapi/get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))

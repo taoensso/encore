@@ -219,8 +219,9 @@
 (deftype SigFilter [kind-filter ns-filter id-filter min-level filter-fn]
   #?(:clj clojure.lang.IDeref :cljs IDeref)
   (#?(:clj deref :cljs -deref) [_]
-    {:kind-filter kind-filter :ns-filter ns-filter 
-     :id-filter     id-filter :min-level min-level})
+    (enc/assoc-some nil
+      :kind-filter kind-filter :ns-filter ns-filter
+      :id-filter     id-filter :min-level min-level))
 
   #?(:clj clojure.lang.IFn :cljs IFn)
   (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns id level))
