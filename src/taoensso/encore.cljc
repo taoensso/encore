@@ -628,26 +628,29 @@
                (core-merge (meta src-var) dst-attrs))))))))
 
 #?(:clj (defn- alias-attrs [meta] (select-keys meta )))
-#?(:clj
-   (let [resolve-clj resolve ; Returns var
-         resolve-cljs ; Returns analysis map, {:keys [meta ...]}
-         (when-let [ns (find-ns 'cljs.analyzer.api)
-                    v  (ns-resolve ns 'resolve)]
-           @v)]
+#?(:clj (def ^:private resolve-cljs
+          "?(fn [macro-env sym]) => {:keys [meta ns name ...]} analysis map."
+          (when-let [ns (find-ns 'cljs.analyzer.api)
+                     v  (ns-resolve ns 'resolve)]
+            @v)))
 
-     (defn- var-info
-       "Returns {:keys [var meta]} for given symbol."
-       [macro-env sym]
-       (when (symbol? sym)
-         (if (:ns macro-env)
-           (when resolve-cljs {:meta (:meta (resolve-cljs macro-env sym))})
-           (let [v (resolve macro-env sym)]
+#?(:clj
+   (defn- var-info
+     "Returns ?{:keys [var meta ns name ...]} for given symbol."
+     [macro-env sym]
+     (when (symbol? sym)
+       (if (:ns macro-env)
+         (and resolve-cljs (resolve-cljs macro-env sym)) ; ?{:keys [meta ns name ...]}
+         (when-let [v      (resolve      macro-env sym)]
+           (let [m (meta v)]
              {:var v
               :meta
-              (let [m (meta v)]
-                (if-let [x (get m :arglists)]
-                  (assoc m :arglists `'~x) ; Quote
-                  (do    m)))}))))))
+              (if-let [x (get m :arglists)]
+                (assoc m :arglists `'~x) ; Quote
+                (do    m))
+
+              :ns   (get m :ns)
+              :name (get m :name)}))))))
 
 #?(:clj
    (defmacro defalias
@@ -665,7 +668,8 @@
             src-sym   (-have symbol? src)
             alias-sym (-have symbol? (or alias (symbol (name src-sym))))
 
-            {src-var, :var src-attrs :meta} (var-info &env src-sym)
+            src-var-info (var-info &env src-sym)
+            {src-var, :var src-attrs :meta} src-var-info
 
             alias-attrs
             (if (string? alias-attrs) ; Back compatibility
@@ -683,6 +687,12 @@
             alias-body  (or alias-body (if cljs? src-sym `@~src-var))]
 
         #_(spit "debug.txt" (str (if cljs? "cljs: " "clj:  ") src-sym ": " (meta alias-sym) "\n") :append true)
+
+        (when (or resolve-cljs (not cljs?))
+          (when-not src-var-info
+            (throw
+              (ex-info (str "[encore/defalias] Source var not found: " src)
+                {:src src, :ns (str *ns*)}))))
 
         (if cljs?
           `(def ~alias-sym ~alias-body)
@@ -1105,19 +1115,10 @@
 ;;;; Vars, etc.
 
 #?(:clj
-   (let [resolve-clj clojure.core/resolve ; Returns Var
-         resolve-cljs ; Returns analysis map
-         (when-let [ns (find-ns 'cljs.analyzer.api)
-                    v  (ns-resolve ns 'resolve)]
-           @v)
-
-         resolve-auto
+   (let [qualified-sym
          (fn [macro-env sym]
-           (when-let [m
-                      (if (:ns macro-env)
-                        (when resolve-cljs (catching (resolve-cljs macro-env sym)))
-                        (do                    (meta (resolve-clj  macro-env sym))))]
-             (symbol (str (:ns m)) (name (:name m)))))]
+           (when-let [{var-ns :ns, var-name :name} (var-info macro-env sym)]
+             (symbol (str var-ns) (name var-name))))]
 
      ;; Note a couple fundamental limitations:
      ;;   - Macros targeting Cljs cannot expand to a Cljs symbol in an unrequired namespace.
@@ -1131,12 +1132,12 @@
        ([macro-env sym may-require-ns?]
         (when (symbol? sym)
           (if-not may-require-ns?
-            (resolve-auto macro-env sym)
+            (qualified-sym macro-env sym)
             (or
-              (resolve-auto macro-env sym)
+              (qualified-sym macro-env sym)
               (when-let [ns (namespace sym)]
                 (when (catching (do (require (symbol ns)) true))
-                  (resolve-auto macro-env sym))))))))))
+                  (qualified-sym macro-env sym))))))))))
 
 (comment (resolve-sym nil 'string?))
 
