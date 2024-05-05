@@ -135,53 +135,6 @@
   (:api (interns-overview))
   (test/run-tests))
 
-;;;;
-
-#?(:clj
-   (defmacro ^:no-doc typed-val
-     "Private, don't use.
-     Expands to `{:value ~x, :type (type ~x)}."
-     {:added "Encore v3.105.0 (2024-04-29)"}
-     [x] `{:value ~x, :type (type ~x)}))
-
-(defn unexpected-arg!
-  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
-  Takes optional kvs for merging into exception's data map.
-
-    (let [mode :unexpected]
-      (case mode
-        :read  (do <...>)
-        :write (do <...>)
-        (unexpected-arg! mode
-          {:context  `my-function
-           :param    'mode
-           :expected #{:read :write}}))) =>
-
-    Unexpected argument: :unexpected
-    {:arg {:value :unexpected, :type clojure.lang.Keyword},
-     :context 'taoensso.encore/my-function
-     :param 'mode
-     :expected #{:read :write}}"
-
-  {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists
-   '([arg]
-     [arg   {:keys [msg context param expected ...]}]
-     [arg & {:keys [msg context param expected ...]}])}
-
-  ([arg     ] (unexpected-arg! arg nil))
-  ([arg opts]
-   (throw
-     (ex-info (or (get opts :msg) (str "Unexpected argument: " arg))
-       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
-
-  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
-  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
-  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
-  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
-
-(comment (unexpected-arg! :arg :expected '#{string?}))
-
 #?(:clj
    (defn ^:no-doc have-resource? "Private, don't use."
      [res-name] (boolean (try (jio/resource res-name) (catch Throwable _)))))
@@ -366,6 +319,52 @@
          (boolean @v)))))
 
 (comment (compiling-cljs?))
+
+#?(:clj
+   (defmacro ^:no-doc typed-val
+     "Private, don't use.
+     Expands to `{:value ~x, :type (type ~x)}."
+     {:added "Encore v3.105.0 (2024-04-29)"}
+     [x] `{:value ~x, :type (type ~x)}))
+
+(defn unexpected-arg!
+  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
+  Takes optional kvs for merging into exception's data map.
+
+    (let [mode :unexpected]
+      (case mode
+        :read  (do <...>)
+        :write (do <...>)
+        (unexpected-arg! mode
+          {:context  `my-function
+           :param    'mode
+           :expected #{:read :write}}))) =>
+
+    Unexpected argument: :unexpected
+    {:arg {:value :unexpected, :type clojure.lang.Keyword},
+     :context 'taoensso.encore/my-function
+     :param 'mode
+     :expected #{:read :write}}
+
+  See also `bad-arg!`."
+  {:added "Encore v3.51.0 (2023-03-13)"
+   :arglists
+   '([arg]
+     [arg   {:keys [msg context param expected ...]}]
+     [arg & {:keys [msg context param expected ...]}])}
+
+  ([arg     ] (unexpected-arg! arg nil))
+  ([arg opts]
+   (throw
+     (ex-info (or (get opts :msg) (str "Unexpected argument: " (if (nil? arg) "<nil>" arg)))
+       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
+
+  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
+  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
+  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
+  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
+
+(comment (unexpected-arg! :arg :expected '#{string?}))
 
 #?(:clj
    (defmacro binding
@@ -1163,6 +1162,8 @@
      {:added "Encore v3.61.0 (2023-07-07)"}
      [& body] `(with-meta (do ~@body) (meta ~'&form))))
 
+(declare assoc-some)
+
 #?(:clj
    (defn get-source
      "Returns {:keys [ns line column file]} source location given a macro's
@@ -1179,13 +1180,14 @@
                  (do                 (str      url)))
                file))]
 
-       {:ns     (str *ns*)
-        :line   line
-        :column column
-        :file
-        (when (string? file)
-          (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
-            file))})))
+       (assoc-some
+         {:ns (str *ns*)}
+         :line   line
+         :column column
+         :file
+         (when (string? file)
+           (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
+             file))))))
 
 (comment (jio/resource "taoensso/encore.cljc"))
 
@@ -1524,8 +1526,6 @@
     (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
 ;;;; Validation
-
-(declare assoc-some)
 
 ;; #?(:clj
 ;;    (defmacro is
@@ -3350,7 +3350,7 @@
 
   Returns a (fn format [instant]) that:
     - Takes a platform instant (`java.time.Instant` or `js/Date`).
-    - Returns a formatted human-readable string.
+    - Returns a formatted human-readable instant string.
 
   Options:
     `:zone` (Clj only) `java.time.ZoneOffset` (defaults to UTC).
@@ -4237,7 +4237,7 @@
   #?(:cljs (               [init] (if (instance? goog.string.StringBuffer init) init (goog.string.StringBuffer. (str init))))))
 
 (defn sb-length
-  "Returns string builder's current length (character count)."
+  "Returns given string builder's current length (character count)."
   {:added "Encore v3.107.0 (2024-05-05)"}
   #?(:clj ^long [^StringBuilder sb] :cljs [sb])
   #?(:clj  (.length    sb)
@@ -4263,11 +4263,10 @@
 
 (defn ^:no-doc sb-appender
   "Private, don't use.
-  Returns a stateful string-building (fn [x & more]) that appends
-  non-nil xs to string builder, starting with a separator IFF string
-  building has started and at least one x is non-nil.
-
-  The fn returns the underlying string builder."
+  Returns a stateful string-building (fn [x & more]) that:
+    - Appends non-nil xs to a string builder, starting with a separator IFF
+      string building has started and at least one x is non-nil.
+    - Returns the underlying string builder."
   {:added "Encore v3.98.0 (2024-04-08)"}
   ([            ] (sb-appender (str-builder) " "))
   ([   separator] (sb-appender (str-builder) separator))
