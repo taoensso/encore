@@ -4236,6 +4236,13 @@
   #?(:clj  (^StringBuilder [init] (if (instance?            StringBuilder init) init            (StringBuilder. (str init)))))
   #?(:cljs (               [init] (if (instance? goog.string.StringBuffer init) init (goog.string.StringBuffer. (str init))))))
 
+(defn sb-length
+  "Returns string builder's current length (character count)."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  #?(:clj ^long [^StringBuilder sb] :cljs [sb])
+  #?(:clj  (.length    sb)
+     :cljs (.getLength sb)))
+
 (defn sb-append
   "Appends given string/s to given string builder. See also `str-builder.`"
   (#?(:clj ^StringBuilder [^StringBuilder str-builder x]
