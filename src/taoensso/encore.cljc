@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 106 0])
+(def encore-version [3 107 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -4238,7 +4238,7 @@
 
 (defn sb-length
   "Returns string builder's current length (character count)."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.107.0 (2024-05-05)"}
   #?(:clj ^long [^StringBuilder sb] :cljs [sb])
   #?(:clj  (.length    sb)
      :cljs (.getLength sb)))
