@@ -366,26 +366,6 @@
 
 (comment (unexpected-arg! :arg :expected '#{string?}))
 
-(defmacro ^:no-doc bad-arg!
-  "Private, don't use.
-  Like `unexpected-arg!` but adds default `:param` and `:location` opts."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
-  ([arg     ] `(bad-arg! ~arg nil))
-  ([arg opts]
-   (let [;; {:keys [ns line column] :as source} (get-source &form &env)
-         {:keys [line column]} (meta &form)
-         location (str *ns* (when line (str "(" line (when column (str "," column)) ")")))
-         opts
-         (assoc opts
-           :param    (get opts :param `'~arg)
-           :location location)]
-
-     `(unexpected-arg! ~arg ~opts))))
-
-(comment
-  (macroexpand '(bad-arg! x   {:param 'y :expected 'map?}))
-  (do           (bad-arg! nil {:param 'y :expected 'map?, :msg "Test message"})))
-
 #?(:clj
    (defmacro binding
      "For Clj: faster version of `core/binding`.
