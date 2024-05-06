@@ -561,6 +561,7 @@
         (enc/nested-merge
           default-dispatch-opts ; From Encore
           api-dispatch-opts     ; From library
+          (when-let [m (meta handler-fn)] (get m :dispatch-opts)) ; From handler
           dispatch-opts ; From `add-handler!` call
           )
 
