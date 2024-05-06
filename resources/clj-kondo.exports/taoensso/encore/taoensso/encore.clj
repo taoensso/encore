@@ -14,3 +14,15 @@
                 (hooks/token-node (hooks/sexpr sym))
                 (hooks/token-node (hooks/sexpr src))])
              (meta src))}))
+
+(defn defn-cached [{:keys [node] :as x}]
+  (let [[sym _opts binding-vec & body] (rest (:children node))]
+    {:node (hooks/list-node
+            (list
+             (hooks/token-node 'def)
+             sym
+             (hooks/list-node
+              (list*
+               (hooks/token-node 'fn)
+               binding-vec
+               body))))}))
