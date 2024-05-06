@@ -556,8 +556,14 @@
 
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
-  [handler-id handler-fn, base-dispatch-opts dispatch-opts]
-  (let [dispatch-opts (enc/nested-merge default-dispatch-opts base-dispatch-opts dispatch-opts)
+  [handler-id handler-fn, api-dispatch-opts dispatch-opts]
+  (let [dispatch-opts
+        (enc/nested-merge
+          default-dispatch-opts ; From Encore
+          api-dispatch-opts     ; From library
+          dispatch-opts ; From `add-handler!` call
+          )
+
         {:keys
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
           kind-filter ns-filter id-filter min-level,
@@ -687,13 +693,13 @@
        (conj (or (remove-handler handlers handler-id) []) pre-wrapped-handler-fn))))
 
   ;; Given unwrapped handler-fn
-  ([handlers handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts]
+  ([handlers handler-id unwrapped-handler-fn, api-dispatch-opts dispatch-opts]
    (if-not unwrapped-handler-fn
      handlers
      (if (get dispatch-opts :no-wrap?) ; Undocumented
        (add-handler handlers handler-id unwrapped-handler-fn)
        (add-handler handlers handler-id
-         (wrap-handler handler-id unwrapped-handler-fn, base-dispatch-opts dispatch-opts))))))
+         (wrap-handler handler-id unwrapped-handler-fn, api-dispatch-opts dispatch-opts))))))
 
 ;;;; Local API
 
@@ -1136,7 +1142,7 @@
 
 #?(:clj
    (defn- api:add-handler!
-     [purpose *sig-handlers* base-dispatch-opts]
+     [purpose *sig-handlers* api-dispatch-opts]
      `(defn ~'add-handler!
         ~(api-docstring 11 purpose
            "Registers given %s handler and returns
@@ -1251,9 +1257,9 @@
            (enc/update-var-root! ~*sig-handlers*
              (fn [m#]
                (add-handler m# ~'handler-id ~'handler-fn,
-                 ~base-dispatch-opts ~'dispatch-opts))))))))
+                 ~api-dispatch-opts ~'dispatch-opts))))))))
 
-(comment (api:add-handler! "purpose" `*my-sig-handlers* 'base-dispatch-opts))
+(comment (api:add-handler! "purpose" `*my-sig-handlers* 'api-dispatch-opts))
 
 #?(:clj
    (defn- api:shut-down-handlers!
@@ -1287,28 +1293,28 @@
 
 #?(:clj
    (defn- api:with-handler
-     [purpose *sig-handlers* base-dispatch-opts clj?]
+     [purpose *sig-handlers* api-dispatch-opts clj?]
      (when clj?
        `(defmacro ~'with-handler
           ~(api-docstring 11 purpose
              "Executes form with ONLY the given handler-fn registered.
              Useful for tests/debugging. See also `with-handler+`.")
           ~'[handler-id handler-fn dispatch-opts form]
-          `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+          `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
 
 (comment (api:with-handler "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
 
 #?(:clj
    (defn- api:with-handler+
-     [purpose *sig-handlers* base-dispatch-opts clj?]
+     [purpose *sig-handlers* api-dispatch-opts clj?]
      (when clj?
        `(defmacro ~'with-handler+
           ~(api-docstring 11 purpose
              "Executes form with the given handler-fn registered.
              Useful for tests/debugging. See also `with-handler`.")
           ~'[handler-id handler-fn dispatch-opts form]
-          `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~base-dispatch-opts ~~'dispatch-opts)]
+          `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
 
 (comment (api:with-handler+ "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
@@ -1319,7 +1325,7 @@
      handler shutdown on JVM shutdown.
 
      NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* base-dispatch-opts sig-filter-env-config-help]
+     [{:keys [purpose sf-arity *rt-sig-filter* *sig-handlers* api-dispatch-opts sig-filter-env-config-help]
        :or   {purpose "signal"}
        :as   opts}]
 
@@ -1334,9 +1340,9 @@
          ~(api:help:handlers       purpose)
          ~(api:get-handlers        purpose *sig-handlers*)
          ~(api:remove-handler!     purpose *sig-handlers*)
-         ~(api:add-handler!        purpose *sig-handlers* base-dispatch-opts)
-         ~(api:with-handler        purpose *sig-handlers* base-dispatch-opts clj?)
-         ~(api:with-handler+       purpose *sig-handlers* base-dispatch-opts clj?)
+         ~(api:add-handler!        purpose *sig-handlers* api-dispatch-opts)
+         ~(api:with-handler        purpose *sig-handlers* api-dispatch-opts clj?)
+         ~(api:with-handler+       purpose *sig-handlers* api-dispatch-opts clj?)
          ~(api:shut-down-handlers! purpose *sig-handlers* clj?)
          ~(when clj?
             (api:add-shutdown-hook! *sig-handlers*))))))
