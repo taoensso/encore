@@ -533,7 +533,7 @@
   #?(:cljs {:priority default-handler-priority}
      :clj  {:priority default-handler-priority,
             :async
-            {:mode :dropping, :buffer-size 1024, :n-threads 1,
+            {:mode :blocking, :buffer-size 1024, :n-threads 1,
              :daemon-threads? true, :shutdown-drain-msecs 5000,
              :convey-bindings? true}}))
 
@@ -1175,10 +1175,10 @@
                 NB handling order may be non-sequential when `n-threads` > 1.
 
                 Default:
-                  {:mode :dropping, :buffer-size 1024, :n-threads 1, :daemon-threads? true}
+                  {:mode :blocking, :buffer-size 1024, :n-threads 1, :daemon-threads? true}
 
-                  I.e. async by default, with a buffer of size 1024 that drops new entries
-                  when full.
+                  I.e. async by default, with a buffer of size 1024 that blocks on new
+                  entries when full.
 
                 Options:
                   `mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.

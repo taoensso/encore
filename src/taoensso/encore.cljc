@@ -6100,10 +6100,16 @@
     These properties make them useful as configurable async workers, etc.
 
     Options include:
-      `mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.
-      `buffer-size` - Size of buffer before back-pressure mechanism is engaged.
-      `n-threads`   - Number of threads for asynchronously executing fns.
-                      NB execution order may be non-sequential when n > 1."
+      `:buffer-size` - Size of request buffer (max number of queued requests).
+      `:mode`        - Back-pressure mechanism ∈ #{:blocking :dropping :sliding}.
+        Determines what happens when the request buffer is full and a new
+        request is made:
+          `:blocking` => Will block caller until buffer space is available
+          `:dropping` => Will drop the newest request (no-op)
+          `:sliding`  => Will drop the oldest request
+
+      `:n-threads` - Number of threads for asynchronously executing fns (servicing
+        request buffer). NB execution order may be non-sequential when n > 1."
 
      {:added "Encore v3.68.0 (2023-09-25)"}
      [{:as opts
@@ -6113,7 +6119,7 @@
         convey-bindings?]
 
        :or
-       {mode        :dropping
+       {mode        :blocking
         buffer-size 1024
         n-threads   1
 
@@ -6132,7 +6138,7 @@
                    (when-not (.deref started?_) (p :drained))
                    p))))]
 
-       (if (= mode :sync)
+       (if (= mode :sync) ; Undocumented
          (reify
            clojure.lang.IDeref (deref [_] (deref-fn))
            clojure.lang.IFn
