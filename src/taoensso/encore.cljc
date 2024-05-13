@@ -6111,7 +6111,7 @@
       - Take nullary fns rather than unary fns of state.
       - Have no validators or watches.
       - Have (configurable) back-pressure.
-      - May execute fns in non-sequential order when n-threads > 1.
+      - Can have >1 thread (in which case fns may execute out-of-order!).
 
     These properties make them useful as configurable async workers, etc.
 
@@ -6140,8 +6140,8 @@
         n-threads   1
 
         daemon-threads?      true
-        shutdown-drain-msecs 5000
-        convey-bindings?     true}}]
+        convey-bindings?     true
+        shutdown-drain-msecs 6000}}]
 
      (let [started?_ (volatile! false) ; Ever started?
            stopped?_ (latom nil) ; nil or promise
@@ -6165,6 +6165,9 @@
                abq (java.util.concurrent.ArrayBlockingQueue.
                      (as-pos-int buffer-size) false)
 
+               n-threads  (as-pos-int           n-threads)
+               stop-latch (CountDownLatch. (int n-threads))
+
                init!
                (fn []
                  (vreset! started?_ true)
@@ -6175,20 +6178,24 @@
                          (when-let [msecs shutdown-drain-msecs]
                            (deref p msecs :timeout))))))
 
-                 (dotimes [n (as-pos-int n-threads)]
+                 (dotimes [n n-threads]
                    (let [wfn
                          (fn a-worker-fn []
                            (loop []
-                             (when-let
-                               [continue?
-                                (try*
-                                  (if-let [f (.poll abq 1000 java.util.concurrent.TimeUnit/MILLISECONDS)]
-                                    (do (f) true) ; Recur unconditionally to drain abq even when stopped
-                                    (if-let [p (stopped?_)]
-                                      (do (p :drained) false)
-                                      true))
-                                  (catch :all-but-critical _ true))]
-                               (recur))))
+                             (let [recur?
+                                   (if-let [f (.poll abq 200 java.util.concurrent.TimeUnit/MILLISECONDS)]
+                                     (do
+                                       (try* (f) (catch :all-but-critical _))
+                                       :recur ; Unconditionally drain abq even when stopped
+                                       )
+                                     (if-let [p (stopped?_)]
+                                       (do
+                                         (.countDown stop-latch) ; Indicate this this worker has     stopped
+                                         (.await     stop-latch) ; Wait on other workers to likewise stopped
+                                         (p :drained)
+                                         (not :recur))
+                                       :recur))]
+                               (when recur? (recur)))))
 
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
@@ -6204,15 +6211,15 @@
                run-fn
                (case mode
                  :blocking (fn blocking-run [f] (or (.offer abq f) (do (.put abq f) false)))
-                 :dropping (fn dropping-run [f] (or (.offer abq f)                  false))
+                 :dropping (fn dropping-run [f]     (.offer abq f))
                  :sliding
                  (fn sliding-run [f]
                    (or
                      (.offer abq f) ; Common case
                      (loop []
-                       (.poll abq) ; Drop
+                       (.poll abq) ; Drop earliest f
                        (if (.offer abq f)
-                         false ; Indicate that drop/s occurred
+                         false ; Successfully took new f, but still indicate that drop/s occurred
                          (recur)))))
 
                  (unexpected-arg! mode

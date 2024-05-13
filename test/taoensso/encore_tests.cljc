@@ -1133,13 +1133,20 @@
          (is (nil?  (r)))
          (is (= @a  "bound") "Runner binding conveyance")])
 
-      (let [r (enc/runner {:mode :dropping, :buffer-size 4})]
-        (dotimes [_ 4] (r (fn [] (Thread/sleep 250))))
-        (is (= (deref (r) 250 ::timeout) ::timeout)))
+      (let [r (enc/runner {:mode :dropping, :buffer-size 4})] (dotimes [_ 4] (r (fn [] (Thread/sleep 250)))) (is (= (deref (r) 250  ::timeout) ::timeout)))
+      (let [r (enc/runner {:mode :dropping, :buffer-size 4})] (dotimes [_ 4] (r (fn [] (Thread/sleep 250)))) (is (= (deref (r) 2500 ::timeout) :drained)))
 
-      (let [r (enc/runner {:mode :dropping, :buffer-size 4})]
-        (dotimes [_ 4] (r (fn [] (Thread/sleep 250))))
-        (is (= (deref (r) 2500 ::timeout) :drained)))]))
+      (testing "High-volume, cross-thread runner calls"
+        ;; May block up to 200 msecs per @(r)
+        (every? true?
+          (let [n  2e4 ; Laps per run
+                fp (enc/future-pool [:ratio 1.0])]
+            (flatten
+              (for [_ (range 16)]
+                [(let [c (enc/counter), r (enc/runner {:mode :sync                    })] (is (== (do (dotimes [_ n] (fp (fn [] (r (fn [] (c)))))) (fp) @(r) @c) n)))
+                 (let [c (enc/counter), r (enc/runner {:mode :blocking, :buffer-size 1})] (is (== (do (dotimes [_ n] (fp (fn [] (r (fn [] (c)))))) (fp) @(r) @c) n)))
+                 (let [c (enc/counter), r (enc/runner {:mode :dropping, :buffer-size n})] (is (== (do (dotimes [_ n] (fp (fn [] (r (fn [] (c)))))) (fp) @(r) @c) n)))
+                 (let [c (enc/counter), r (enc/runner {:mode :sliding,  :buffer-size n})] (is (== (do (dotimes [_ n] (fp (fn [] (r (fn [] (c)))))) (fp) @(r) @c) n)))])))))]))
 
 ;;;; Bytes
 
