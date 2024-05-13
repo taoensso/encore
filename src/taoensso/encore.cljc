@@ -5815,14 +5815,17 @@
 ;;;; Async
 
 #?(:clj
-   (defmacro ^:no-doc threaded "Private, don't use."
+   (defmacro ^:no-doc threaded
+     "Private, don't use.
+     Creates a new #{:daemon :user} thread to execute body, and returns the thread."
+     {:added "Encore v3.104.0 (2024-04-24)"}
      [kind & body]
      (case kind
        :daemon `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))
        :user   `(doto (Thread. (fn [] ~@body))                   (.start))
        (unexpected-arg! kind {:context `threaded, :param kind, :expected #{:daemon :user}}))))
 
-(comment (threaded :daemon (println "Runs on daemon thread")))
+(comment (.getName (threaded :daemon (println "Runs on daemon thread"))))
 
 #?(:clj
    (defn virtual-executor
@@ -6079,14 +6082,14 @@
      "Experimental, subject to change without notice!
      Returns a new stateful \"runner\" such that:
 
-      (runner f)
+      (runner f) ; Arity 1 call
         Requests runner to execute given nullary fn according to runner's opts.
         Returns:
           - `true`  if runner accepted fn for execution without back-pressure.
           - `false` if runner experienced back-pressure (fn may/not execute).
           - `nil`   if runner has stopped accepting new execution requests.
 
-      (runner)
+      (runner) ; Arity 0 call
         Instructs runner to permanently stop accepting new execution requests.
         Returns promise iff runner's status changed with this call.
         Deref   promise to block until all current execution requests complete.

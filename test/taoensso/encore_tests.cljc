@@ -139,6 +139,28 @@
              :chain [ex2-map ex1-map]
              :trace (enc/pred #?(:clj #(vector? (force %)) :cljs string?)))))]))
 
+(deftest _try*
+  [(is (= (enc/try*        ) nil) "No body or catch")
+   (is (= (enc/try* (+ 0 1)) 1)   "No catch")
+   (is (= (let [a (atom false)] (enc/try* (finally (reset! a true))) @a) true) "Lone finally")
+   (is (= (enc/try* (ex1!) (catch :all     _ :caught)) :caught))
+   (is (= (enc/try* (ex1!) (catch :all     _ :caught)) :caught))
+   (is (= (enc/try* (ex1!) (catch :common  _ :caught)) :caught))
+   (is (= (enc/try* (ex1!) (catch :ex-info _ :caught)) :caught))
+   (is (enc/throws?
+         (let [err #?(:clj (Exception. "Ex1") :cljs (js/Error. "Err1"))]
+           (enc/try* (throw err) (catch :ex-info _ :caught)))))
+
+   #?(:clj
+      [(is           (= (enc/try* (throw (Exception.))      (catch :all              _ :caught)) :caught))
+       (is           (= (enc/try* (throw (Throwable.))      (catch :all              _ :caught)) :caught))
+       (is           (= (enc/try* (throw (Error.))          (catch :all              _ :caught)) :caught))
+
+       (is           (= (enc/try* (throw (Exception.))      (catch :all-but-critical _ :caught)) :caught))
+       (is           (= (enc/try* (throw (Throwable.))      (catch :all-but-critical _ :caught)) :caught))
+       (is           (= (enc/try* (throw (AssertionError.)) (catch :all-but-critical _ :caught)) :caught))
+       (is (enc/throws? (enc/try* (throw (Error.))          (catch :all-but-critical _ :caught))))])])
+
 (deftest _matching-error
   [(is (enc/error? (enc/matching-error                     (enc/try* ("") (catch :all t t)))))
    (is (enc/error? (enc/matching-error            :common  (enc/try* ("") (catch :all t t)))))

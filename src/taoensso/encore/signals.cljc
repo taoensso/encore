@@ -528,8 +528,10 @@
             async-results
             async-results))))))
 
-(def ^:private default-handler-priority 100)
-(def ^:private default-dispatch-opts
+(def default-handler-priority 100)
+(def default-handler-dispatch-opts
+  "Default `add-handler!` dispatch options.
+  See `add-handler!` docstring for details."
   #?(:cljs {:priority default-handler-priority}
      :clj  {:priority default-handler-priority,
             :async
@@ -559,8 +561,8 @@
   [handler-id handler-fn, api-dispatch-opts dispatch-opts]
   (let [dispatch-opts
         (enc/nested-merge
-          default-dispatch-opts ; From Encore
-          api-dispatch-opts     ; From library
+          default-handler-dispatch-opts ; From Encore
+          api-dispatch-opts             ; From library
           (when-let [m (meta handler-fn)] (get m :dispatch-opts)) ; From handler
           dispatch-opts ; From `add-handler!` call
           )
@@ -587,11 +589,10 @@
 
         rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
         rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
-        error-fn (get dispatch-opts :error-fn ::default)
         backp-fn (get dispatch-opts :backp-fn ::default)
-
-        signal-error-fn
-        (when  error-fn
+        error-fn (get dispatch-opts :error-fn ::default)
+        error-fn*
+        (when error-fn
           (fn [signal error]
             (enc/catching
               (if (and rl-error (rl-error)) ; error-fn rate-limited
@@ -600,7 +601,9 @@
                            (if (enc/identical-kw? error-fn ::default)
                              *default-handler-error-fn*
                              error-fn)]
-                  (error-fn {:handler-id handler-id, :signal signal, :error error}))))))
+                  (if signal
+                    (error-fn {:handler-id handler-id, :signal signal, :error error})
+                    (error-fn {:handler-id handler-id,                 :error error})))))))
 
         wrapped-handler-fn
         (fn wrapped-handler-fn
@@ -611,8 +614,7 @@
                (handler-fn) ; Notify handler-fn to shut down
                {:okay :shut-down}
                (catch :all t
-                 (when (and error-fn (not (enc/identical-kw? error-fn ::default)))
-                   (enc/catching (error-fn {:handler-id handler-id, :error t}))) ; No :signal key
+                 (when error-fn (error-fn nil t))
                  {:error t}))))
 
           ([sig-raw]
@@ -643,9 +645,9 @@
 
                            (enc/try*
                              (handler-fn sig-val*) true
-                             (catch :all t (when signal-error-fn (signal-error-fn sig-val* t)))))
-                         (catch     :all t (when signal-error-fn (signal-error-fn sig-val  t)))))))
-                 (catch             :all t (when signal-error-fn (signal-error-fn sig-raw  t))))
+                             (catch :all t (when error-fn* (error-fn* sig-val* t)))))
+                         (catch     :all t (when error-fn* (error-fn* sig-val  t)))))))
+                 (catch             :all t (when error-fn* (error-fn* sig-raw  t))))
                false))))
 
         wrapped-handler-fn*
@@ -671,7 +673,8 @@
     (with-meta wrapped-handler-fn*
       {:handler-id    handler-id
        :handler-fn    handler-fn ; Unwrapped
-       :dispatch-opts dispatch-opts})))
+       :dispatch-opts dispatch-opts ; Merged
+       })))
 
 (defn remove-handler
   "Returns updated, non-empty handlers vec."
@@ -1299,7 +1302,10 @@
        `(defmacro ~'with-handler
           ~(api-docstring 11 purpose
              "Executes form with ONLY the given handler-fn registered.
-             Useful for tests/debugging. See also `with-handler+`.")
+             Useful for tests/debugging.
+
+             See `add-handler!` for info on `dispatch-opts`.
+             See also `with-handler+`.")
           ~'[handler-id handler-fn dispatch-opts form]
           `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
@@ -1313,7 +1319,10 @@
        `(defmacro ~'with-handler+
           ~(api-docstring 11 purpose
              "Executes form with the given handler-fn registered.
-             Useful for tests/debugging. See also `with-handler`.")
+             Useful for tests/debugging.
+
+             See `add-handler!` for info on `dispatch-opts`.
+             See also `with-handler`.")
           ~'[handler-id handler-fn dispatch-opts form]
           `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
              ~~'form)))))
