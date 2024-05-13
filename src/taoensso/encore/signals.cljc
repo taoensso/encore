@@ -481,63 +481,45 @@
   (run! (fn [wrapped-handler-fn] (wrapped-handler-fn signal)) handlers))
 
 (defn shut-down-handlers!
-  "Shuts down given handlers in parallel by calling each one with no args.
-  Returns {<handler-id> {:keys [okay error]}}."
+  "Shuts down given handlers in parallel and returns
+    {<handler-id> {:keys [okay error]}}."
   {:added "Encore v3.99.0 (2024-04-10)"}
-  ([handlers]
-   #?(:clj (shut-down-handlers! handlers 5000)
-      :cljs
-      (reduce ; ?{<handler-id> <result>}
-        (fn [acc wrapped-handler-fn]
-          (let [handler-meta (meta wrapped-handler-fn)
-                handler-id   (get handler-meta :handler-id)]
-            (assoc acc handler-id (wrapped-handler-fn))))
-        nil handlers)))
+  [handlers]
+  (when-let [results ; ?{<handler-id> <result-or-promise>}
+             (reduce
+               (fn [acc wrapped-handler-fn]
+                 (let [handler-meta (meta wrapped-handler-fn)
+                       handler-id   (get handler-meta :handler-id)]
+                   (assoc acc handler-id
+                     #?(:cljs                       (wrapped-handler-fn)
+                        :clj  (enc/promised :daemon (wrapped-handler-fn))))))
+               nil handlers)]
 
-  #?(:clj
-     ([handlers timeout-msecs]
-      (when-let [async-results
-                 (reduce ; ?{<handler-id> [<result_> <thread>]}
-                   (fn [acc wrapped-handler-fn]
-                     (let [handler-meta (meta wrapped-handler-fn)
-                           handler-id   (get handler-meta :handler-id)
-                           result_      (volatile! {:error :timeout})
-                           thread
-                           (enc/threaded :daemon
-                             (let [result (wrapped-handler-fn)]
-                               ;; Block for handler's runner to shut down
-                               (when-let [runner_  (get result :runner_)] (deref runner_))
-                               (vreset! result_ (dissoc result :runner_))))]
-                       (assoc acc handler-id [result_ thread])))
-                   nil handlers)]
-
-        (let [joining-thread
-              (enc/threaded :daemon
-                (enc/run-kv!
-                  (fn [_handler-id [result_ thread]] (.join ^Thread thread))
-                  async-results))]
-
-          ;; Wait for all handlers to complete shutdown
-          (if timeout-msecs
-            (.join ^Thread joining-thread (int timeout-msecs))
-            (.join ^Thread joining-thread))
-
-          (reduce-kv
-            (fn [acc handler-id [result_ thread]]
-              (assoc acc handler-id @result_))
-            async-results
-            async-results))))))
+    #?(:cljs results
+       :clj
+       (reduce-kv
+         (fn [    acc handler-id  result_]
+           (assoc acc handler-id @result_))
+         results
+         results))))
 
 (def default-handler-priority 100)
 (def default-handler-dispatch-opts
   "Default `add-handler!` dispatch options.
   See `add-handler!` docstring for details."
   #?(:cljs {:priority default-handler-priority}
-     :clj  {:priority default-handler-priority,
-            :async
-            {:mode :blocking, :buffer-size 1024, :n-threads 1,
-             :daemon-threads? true, :shutdown-drain-msecs 5000,
-             :convey-bindings? true}}))
+     :clj
+     {:priority default-handler-priority,
+      :async
+      {:mode :blocking
+       :buffer-size 1024
+       :n-threads   1
+       :daemon-threads?  true
+       :convey-bindings? true}
+
+      :max-shutdown-msecs 8000
+      ;; :max-drain-msecs 6000 ; nx => 80% of `max-shutdown-msecs`
+      }))
 
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
@@ -605,72 +587,106 @@
                     (error-fn {:handler-id handler-id, :signal signal, :error error})
                     (error-fn {:handler-id handler-id,                 :error error})))))))
 
-        wrapped-handler-fn
-        (fn wrapped-handler-fn
-          ([] ; Shut down => {:keys [okay error]}
-           (if-not (enc/-cas!? stopped?_ false true)
-             {:okay :previously-shut-down}
-             (enc/try*
-               (handler-fn) ; Notify handler-fn to shut down
-               {:okay :shut-down}
-               (catch :all t
-                 (when error-fn (error-fn nil t))
-                 {:error t}))))
+        shut-down! ; Block => {:keys [okay error]}
+        (fn [runner]
+          ;; Immediately stop accepting new signals
+          (if-not (enc/-cas!? stopped?_ false true)
+            {:okay :previously-shut-down}
+            #?(:cljs
+               (enc/try*
+                 ;; Nb Cljs doesn't enforce runtime arity, so this can trigger arity-1
+                 ;; handler-fn with nil signal (not usually a problem).
+                 (handler-fn) ; Close/release resources
+                 {:okay :shut-down}
+                 (catch :all t
+                   (when error-fn* (error-fn* nil t))
+                   {:error t}))
 
-          ([sig-raw]
-           (if (stopped?_)
-             nil
-             (or
-               (enc/try* ; Non-specific (global) trap
-                 (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
-                       allow?
-                       (and
-                         (if sample-rate (< (Math/random) (double sample-rate))  true)
-                         (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
-                         (if when-fn     (when-fn #_sig-raw)                     true)
-                         (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
-                         )]
+               :clj
+               (let [shutdown-msecs (get dispatch-opts :max-shutdown-msecs)
+                     drain-msecs
+                     (get dispatch-opts :max-drain-msecs ; Currently undocumented
+                       (when   shutdown-msecs
+                         (let [shutdown-msecs (long  shutdown-msecs)]
+                           (Math/round        (* 0.8 shutdown-msecs)))))
 
-                   (when allow?
-                     (when-let [sig-val ; Raw signal -> library-level handler-arg
-                                (signal-value sig-raw
-                                  (when              sample-rate
-                                    (HandlerContext. sample-rate)))]
-
+                     p
+                     (enc/promised :daemon
                        (enc/try*
-                         (when-let [sig-val* ; Library-level handler-arg -> arb user-level value
-                                    (if middleware
-                                      (middleware sig-val) ; Apply handler middleware
-                                      (do         sig-val))]
+                         ;; Allow runner to try finish handling already-queued signals
+                         (when-let [runner_ (when runner (runner))]
+                           (if-let [msecs drain-msecs]
+                             (deref runner_ msecs nil)
+                             (deref runner_)))
 
-                           (enc/try*
-                             (handler-fn sig-val*) true
-                             (catch :all t (when error-fn* (error-fn* sig-val* t)))))
-                         (catch     :all t (when error-fn* (error-fn* sig-val  t)))))))
-                 (catch             :all t (when error-fn* (error-fn* sig-raw  t))))
-               false))))
+                         (handler-fn) ; Close/release resources
+                         {:okay :shut-down}
+                         (catch :all t
+                           (when error-fn* (error-fn* nil t))
+                           {:error t})))]
 
-        wrapped-handler-fn*
-        #?(:cljs wrapped-handler-fn
-           :clj
-           (if-not async
-             wrapped-handler-fn
-             (let [runner (enc/runner (have map? async))]
-               (fn wrapped-handler-fn*
-                 ([       ] (enc/assoc-some (wrapped-handler-fn) :runner_ (runner))) ; Shut down
+                 (if-let [msecs shutdown-msecs]
+                   (deref p msecs {:error :timeout})
+                   (deref p))))))
+
+        handle-signal! ; Block => truthy
+        (fn [sig-raw]
+          (or
+            (enc/try* ; Non-specific (global) trap
+              (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
+                    allow?
+                    (and
+                      (if sample-rate (< (Math/random) (double sample-rate))  true)
+                      (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
+                      (if when-fn     (when-fn #_sig-raw)                     true)
+                      (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
+                      )]
+
+                (when allow?
+                  (when-let [sig-val ; Raw signal -> library-level handler-arg
+                             (signal-value sig-raw
+                               (when              sample-rate
+                                 (HandlerContext. sample-rate)))]
+
+                    (enc/try*
+                      (when-let [sig-val* ; Library-level handler-arg -> arb user-level value
+                                 (if middleware
+                                   (middleware sig-val) ; Apply handler middleware
+                                   (do         sig-val))]
+
+                        (enc/try*
+                          (handler-fn sig-val*) true
+                          (catch :all t (when error-fn* (error-fn* sig-val* t)))))
+                      (catch     :all t (when error-fn* (error-fn* sig-val  t)))))))
+              (catch             :all t (when error-fn* (error-fn* sig-raw  t))))
+            false))
+
+        wrapped-handler-fn
+        (if-let [use-runner? #?(:clj async, :cljs false)]
+          #?(:cljs (throw (ex-info "Unexpected (Cljs doesn't support async dispatch)" {}))
+             :clj
+             (let [runner (enc/runner (assoc (have map? async) :shutdown-drain-msecs nil))]
+               (fn async-wrapped-handler-fn
+                 ([       ] (shut-down! runner))
                  ([sig-raw]
-                  (when-let [back-pressure? (false? (runner (fn [] (wrapped-handler-fn sig-raw))))]
-                    (when backp-fn
-                      (enc/catching
-                        (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
-                          nil ; no-op
-                          (let [backp-fn
-                                (if (enc/identical-kw? backp-fn ::default)
-                                  *default-handler-backp-fn*
-                                  backp-fn)]
-                            (backp-fn {:handler-id handler-id})))))))))))]
+                  (when-not (stopped?_)
+                    ;; NB note that the fn we pass to runner isn't subject to (stopped?_)
+                    (when-let [back-pressure? (false? (runner (fn [] (handle-signal! sig-raw))))]
+                      (when backp-fn
+                        (enc/catching
+                          (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
+                            nil                         ; no-op
+                            (let [backp-fn
+                                  (if (enc/identical-kw? backp-fn ::default)
+                                    *default-handler-backp-fn*
+                                    backp-fn)]
+                              (backp-fn {:handler-id handler-id})))))))))))
 
-    (with-meta wrapped-handler-fn*
+          (fn sync-wrapped-handler-fn
+            ([       ] (shut-down! nil))
+            ([sig-raw] (when-not (stopped?_) (handle-signal! sig-raw)))))]
+
+    (with-meta wrapped-handler-fn
       {:handler-id    handler-id
        :handler-fn    handler-fn ; Unwrapped
        :dispatch-opts dispatch-opts ; Merged
@@ -1153,12 +1169,12 @@
            {<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
            now registered.
 
-           `handler-fn` should be a fn of 1-2 arities:
+           `handler-fn` should be a fn of 2 arities:
 
-             ([handler-arg]) => Handle the given argument (e.g. write to disk/db, etc.)
-             ([]) => Optional arity, called exactly once on system shutdown.
-                     Provides an opportunity for handler to close/release
-                     any resources that it may have opened/acquired.
+             [handler-arg] ; Handle the given argument (e.g. write to disk/db, etc.)
+             [] ; Called exactly once on system shutdown to provide an opportunity for
+                  handler to close/release any resources that it may have opened/acquired.
+                  See also `:max-shutdown-msecs` dispatch option.
 
            See the relevant docstring/s for `handler-arg` details.
 
@@ -1168,49 +1184,50 @@
              channel, filter, aggregate, use for a realtime analytics dashboard,
              examine for outliers or unexpected data, etc.
 
-           Dispatch options include:
+           Dispatch options include (see also `default-handler-dispatch-opts`):
 
-             `async` (Clj only)
+             `:async` (Clj only)
                 Options for running handler asynchronously via `taoensso.encore/runner`,
                 {:keys [mode buffer-size n-threads daemon-threads? ...]}
 
                 Supports `:blocking`, `:dropping`, and `:sliding` back-pressure modes.
                 NB handling order may be non-sequential when `n-threads` > 1.
 
-                Default:
-                  {:mode :blocking, :buffer-size 1024, :n-threads 1, :daemon-threads? true}
-
-                  I.e. async by default, with a buffer of size 1024 that blocks on new
-                  entries when full.
-
                 Options:
-                  `mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.
-                  `buffer-size` - Size of buffer before back-pressure mechanism is engaged.
-                  `n-threads`   - Number of threads for asynchronously executing fns.
-                                  NB execution order may be non-sequential when n > 1.
+                  `:mode`        - Mode of operation, ∈ #{:sync :blocking :dropping :sliding}.
+                  `:buffer-size` - Size of buffer before back-pressure mechanism is engaged.
+                  `:n-threads`   - Number of threads for asynchronously executing fns.
+                                   NB execution order may be non-sequential when n > 1.
 
-             `priority`
-               Optional handler priority ∈ℤ (default 100). Handlers will be called in
-               descending priority order.
+                Default: {:mode :blocking, :buffer-size 1024, :n-threads 1 ...},
+                  i.e. async but will block when >1024 handler-args already waiting.
 
-             `sample-rate`
+             `:max-shutdown-msecs` (Clj only)
+               Maximum time (in milliseconds) that handler will block system shutdown
+               to drain its async buffer and/or close/release its resources.
+
+             `:priority`
+               Optional handler priority ∈ℤ (default 100).
+               Handlers will be called in descending priority order.
+
+             `:sample-rate`
                Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
                When present, handle only this (random) proportion of args:
                  1.0 => handle every arg (same as `nil` rate, default)
                  0.0 => noop   every arg
                  0.5 => handle random 50%% of args
 
-             `kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
-             `ns-filter`   - Namespace filter as in `set-ns-filter!`
-             `id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
-             `min-level`   - Minimum   level  as in `set-min-level!`
+             `:kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
+             `:ns-filter`   - Namespace filter as in `set-ns-filter!`
+             `:id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
+             `:min-level`   - Minimum   level  as in `set-min-level!`
 
-             `when-fn`
+             `:when-fn`
                Optional nullary (fn allow? []) that must return truthy for handler to be
                called. When present, called *after* sampling and other filters, but before
                rate limiting.
 
-             `rate-limit`
+             `:rate-limit`
                Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
                {<limit-id> [<n-max-calls> <msecs-window>]}.
 
@@ -1220,14 +1237,14 @@
                   \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
                                           and 10 calls per 60   secs
 
-             `middleware`
+             `:middleware`
                Optional (fn [handler-arg]) => ?modified-handler-arg to apply before
                handling. When middleware returns nil, skips handler.
 
                Compose multiple middleware fns together with `comp-middleware`.
 
-             `error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
-             `backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back-pressure.
+             `:error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
+             `:backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back-pressure.
 
            Flow sequence:
 
@@ -1276,11 +1293,13 @@
              Future calls to handlers will no-op.
              Clj only: `shut-down-handlers!` is called automatically on JVM shutdown.")]
 
+       `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*))
+       #_
        (if-not clj?
          `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*))
          `(defn ~'shut-down-handlers! ~docstring
-            ([              ] (shut-down-handlers! ~*sig-handlers*))
-            ([timeout-msecs#] (shut-down-handlers! ~*sig-handlers* timeout-msecs#)))))))
+            ([             ] (shut-down-handlers! ~*sig-handlers*))
+            ([timeout-opts#] (shut-down-handlers! ~*sig-handlers* timeout-opts#)))))))
 
 (comment (api:shut-down-handlers! "purpose" `*my-sig-handlers* :clj))
 
@@ -1307,8 +1326,11 @@
              See `add-handler!` for info on `dispatch-opts`.
              See also `with-handler+`.")
           ~'[handler-id handler-fn dispatch-opts form]
-          `(binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
-             ~~'form)))))
+          `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
+             (enc/try*
+               (binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
+               (finally
+                 (~'wrapped-handler-fn#))))))))
 
 (comment (api:with-handler "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
 
@@ -1324,8 +1346,11 @@
              See `add-handler!` for info on `dispatch-opts`.
              See also `with-handler`.")
           ~'[handler-id handler-fn dispatch-opts form]
-          `(binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
-             ~~'form)))))
+          `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
+             (enc/try*
+               (binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
+               (finally
+                 (~'wrapped-handler-fn#))))))))
 
 (comment (api:with-handler+ "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
 

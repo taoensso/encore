@@ -1700,21 +1700,6 @@
          (is (nil? (sapi/remove-handler! :hid1)))
          (is (nil? sapi/*sig-handlers*) "Removal yields non-empty map")
 
-         (let [sig_ (atom ::nx)]
-           (sapi/with-handler :hid1 (fn [x] (reset! sig_ x)) {:async nil}
-             (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
-           (is (= @sig_ "foo") "`with-handler` macro works"))
-
-         (let [sig1_ (atom ::nx)
-               sig2_ (atom ::nx)]
-
-           (sapi/with-handler    :hid1 (fn [x] (reset! sig1_ x)) {:async nil}
-             (sapi/with-handler+ :hid2 (fn [x] (reset! sig2_ x)) {:async nil}
-               (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
-
-           [(is (= @sig1_ "foo") "`with-handler`  macro works")
-            (is (= @sig2_ "foo") "`with-handler+` macro works")])
-
          (let [a (atom nil)
                handlers
                [(sigs/wrap-handler :hid1 (fn [x] (reset! a *dynamic-var*))
@@ -1723,7 +1708,48 @@
             (binding [*dynamic-var* "bound"]
               (sigs/call-handlers! handlers (MySignal. :info "foo"))
               #?(:clj (Thread/sleep 500))
-              (is (= @a "bound") "Handler binding conveyance")))])
+              (is (= @a "bound") "Handler binding conveyance")))
+
+         (testing "with-handler, etc."
+           [(let [sig_ (atom ::nx)
+                  sd?_ (atom false)]
+
+              (sapi/with-handler :hid1
+                (fn
+                  ([x] (reset! sig_ x))
+                  ([ ] (reset! sd?_ true)))
+                {:async nil}
+
+                (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
+
+              [(is (= @sig_ "foo") "hid1 was called with signal")
+               (is (= @sd?_  true) "hid1 was auto shut down")])
+
+            #?(:clj
+               (let [test1
+                     (fn [sd?_ sleep-msecs sd-msecs]
+                       (sapi/with-handler :hid1
+                         (fn ([_]) ([ ] (Thread/sleep (int sleep-msecs)) (reset! sd?_ true)))
+                         {:max-shutdown-msecs sd-msecs}
+                         (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
+                       @sd?_)]
+
+                 [(is (is (false? (test1 (atom false) 2000 500))))
+                  (is (is (true?  (test1 (atom false) 100  500))))]))
+
+            (let [sig1_ (atom ::nx)
+                  sig2_ (atom ::nx)
+                  sd1?_ (atom false)
+                  sd2?_ (atom false)]
+
+              (sapi/with-handler    :hid1 (fn ([x] (reset! sig1_ x)) ([] (reset! sd1?_ true))) {:async nil}
+                (sapi/with-handler+ :hid2 (fn ([x] (reset! sig2_ x)) ([] (reset! sd2?_ true))) {:async nil}
+                  (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
+
+              [(is (= @sig1_ "foo") "hid1 was called with signal")
+               (is (= @sig2_ "foo") "hid2 was called with signal")
+               (is (= @sd1?_  true) "hid1 was auto shut down")
+               (is (= @sd2?_  true) "hid2 was auto shut down")])])])
 
       (testing "Handler priorities"
         (let [handler-order
@@ -1810,14 +1836,13 @@
         [(is (= (sigs/shut-down-handlers! []) nil))
          (is (= (let [handlers
                       (-> []
-                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 100)  "done") {} {})
-                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100)  "done") {} {})
-                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 1000) "done") {} {})
+                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 500)  "done") {} {:max-shutdown-msecs 1000})
+                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100)  "done") {} {:max-shutdown-msecs nil})
+                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 1000) "done") {} {:max-shutdown-msecs 100})
                         (sigs/add-handler :hid4 (fn [] (enc/hot-sleep 100)  (ex1!)) {} {}))]
 
                   ((nth handlers 1)) ; Manual shutdown
-                  #?(:clj  (sigs/shut-down-handlers! handlers 500) ; Incl. time for runners to shut down
-                     :cljs (sigs/shut-down-handlers! handlers)))
+                  (sigs/shut-down-handlers! handlers))
 
                {:hid1 {:okay :shut-down}
                 :hid2 {:okay :previously-shut-down}
