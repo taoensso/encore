@@ -4047,12 +4047,12 @@
          (:+=   :add-get) (do        (set! c (+ c n)) c)))))
 
 (defn counter
-  "Returns a fast atomic Counter with `init` initial int value:
-    - (<counter>    ) -> add 1, return old val
-    - (<counter> <n>) -> add n, return old val
-
-    Experimental 3-arity version takes an `action`:
-      :add, :set, :set-get, :get-set, :get-add, :add-get"
+  "Returns a fast atomic `Counter` with `init` initial integer value with:
+    - @counter           => Return current val
+    - (counter)          => Add 1 and return old val
+    - (counter n)        => Add n and return old val
+    - (counter action n) => Experimental, action ∈
+        {:add :set :set-get :get-set :get-add :add-get}."
   ([    ] (counter 0))
   ([init]
    #?(:clj  (Counter. (java.util.concurrent.atomic.AtomicLong. (long init)))

@@ -1,7 +1,7 @@
 (ns ^:no-doc taoensso.encore.stats
-  "Experimental, subject to change without notice!
-  Private stats utils."
-  {:added "Encore vX.Y.Z (2024-03-22)"}
+  "Private stats utils.
+  Experimental, subject to change without notice!"
+  {:added "Encore v3.98.0 (2024-04-08)"}
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc  :refer [have have? have!]]
@@ -433,7 +433,7 @@
 
 (defprotocol ISummaryStatsBuffered
   ;; TODO Later generalize protocol for other stateful SummaryStats types?
-  (ssb-deref [_] [_ flush-buffer?] "Returns current ?sstats.")
+  (ssb-deref [_] [_ flush?] "Returns current ?sstats.")
   (ssb-clear [_]   "Clears all internal state and returns nil.")
   (ssb-flush [_]   "Flushes internal buffer and returns newly merged sstats or nil.")
   (ssb-push  [_ n] "Adds given num to internal buffer."))
@@ -459,8 +459,8 @@
       :cljs [             IFn (-invoke [this n] (ssb-push this n))])
 
   ISummaryStatsBuffered
-  (ssb-deref [this              ] (ssb-deref this true))
-  (ssb-deref [this flush-buffer?] (or (and flush-buffer? (ssb-flush this)) (sstats_)))
+  (ssb-deref [this       ] (ssb-deref this true))
+  (ssb-deref [this flush?] (or (and flush? (ssb-flush this)) (sstats_)))
   (ssb-clear [_]
     #?(:clj (locking buf_ (reset! buf_ (buf-new)))
        :cljs              (reset! buf_ (buf-new)))
@@ -502,7 +502,7 @@
   "Returns a new stateful `SummaryStatsBuffered` with:
     (ssb <num>) => Adds given number to internal buffer.
     (deref ssb) => Flushes buffer if necessary, and returns a mergeable
-                   ?SummaryStats. Deref again to get a map of summary
+                   `?SummaryStats`. Deref again to get a map of summary
                    stats for all numbers ever added to ssb:
                      {:keys [n sum min max p25 ... p99 mean var mad]}.
 
@@ -533,7 +533,7 @@
      )))
 
 (defn summary-stats-buffered-fast
-  "Returns fastest possible SummaryStatsBuffered."
+  "Returns fastest possible `SummaryStatsBuffered`."
   [^long buffer-size merge-cb]
   (SummaryStatsBuffered.
     (enc/latom nil)

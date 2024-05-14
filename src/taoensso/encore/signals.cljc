@@ -1293,13 +1293,7 @@
              Future calls to handlers will no-op.
              Clj only: `shut-down-handlers!` is called automatically on JVM shutdown.")]
 
-       `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*))
-       #_
-       (if-not clj?
-         `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*))
-         `(defn ~'shut-down-handlers! ~docstring
-            ([             ] (shut-down-handlers! ~*sig-handlers*))
-            ([timeout-opts#] (shut-down-handlers! ~*sig-handlers* timeout-opts#)))))))
+       `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*)))))
 
 (comment (api:shut-down-handlers! "purpose" `*my-sig-handlers* :clj))
 
