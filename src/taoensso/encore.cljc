@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 109 0])
+(def encore-version [3 110 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -5832,7 +5832,7 @@
      "Private, don't use.
      Executes body on #{:daemon :user} thread and delivers result to a promise.
      Returns the promise."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.110.0 (2024-05-14)"}
      [kind & body]
      `(let [p# (promise)]
         (threaded ~kind (p# (do ~@body)))
