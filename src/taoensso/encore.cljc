@@ -5828,6 +5828,19 @@
 (comment (.getName (threaded :daemon (println "Runs on daemon thread"))))
 
 #?(:clj
+   (defmacro ^:no-doc promised
+     "Private, don't use.
+     Executes body on #{:daemon :user} thread and delivers result to a promise.
+     Returns the promise."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [kind & body]
+     `(let [p# (promise)]
+        (threaded ~kind (p# (do ~@body)))
+        p#)))
+
+(comment @(promised :daemon (Thread/sleep 2000) "done"))
+
+#?(:clj
    (defn virtual-executor
      "Experimental, subject to change without notice!
      Returns new virtual `java.util.concurrent.ThreadPerTaskExecutor` when
