@@ -626,21 +626,17 @@
              (reset-meta! dst-var
                (core-merge (meta src-var) dst-attrs))))))))
 
-#?(:clj (defn- alias-attrs [meta] (select-keys meta )))
-#?(:clj (def ^:private resolve-cljs
-          "?(fn [macro-env sym]) => {:keys [meta ns name ...]} analysis map."
-          (when-let [ns (find-ns 'cljs.analyzer.api)
-                     v  (ns-resolve ns 'resolve)]
-            @v)))
-
 #?(:clj
    (defn- var-info
      "Returns ?{:keys [var meta ns name ...]} for given symbol."
      [macro-env sym]
      (when (symbol? sym)
        (if (:ns macro-env)
-         (and resolve-cljs (resolve-cljs macro-env sym)) ; ?{:keys [meta ns name ...]}
-         (when-let [v      (resolve      macro-env sym)]
+         (let [ns (-have (find-ns 'cljs.analyzer.api))
+               v  (-have (ns-resolve ns 'resolve))] ; Don't cache!
+           (@v macro-env sym)) ; ?{:keys [meta ns name ...]}
+
+         (when-let [v (resolve macro-env sym)]
            (let [m (meta v)]
              {:var v
               :meta
@@ -687,11 +683,10 @@
 
         #_(spit "debug.txt" (str (if cljs? "cljs: " "clj:  ") src-sym ": " (meta alias-sym) "\n") :append true)
 
-        (when (or resolve-cljs (not cljs?))
-          (when-not src-var-info
-            (throw
-              (ex-info (str "[encore/defalias] Source var not found: " src)
-                {:src src, :ns (str *ns*)}))))
+        (when-not src-var-info
+          (throw
+            (ex-info (str "[encore/defalias] Source var not found: " src)
+              {:src src, :ns (str *ns*)})))
 
         (if cljs?
           `(def ~alias-sym ~alias-body)
