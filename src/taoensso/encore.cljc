@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 111 0])
+(def encore-version [3 112 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -5816,7 +5816,7 @@
 #?(:clj
    (defn ^:no-doc threaded*
      "Private, don't use. Returns a new #{:daemon :user} thread to execute given fn."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.112.0 (2024-05-23)"}
      ^Thread [kind nullary-fn]
      (case kind
        :daemon (doto (Thread. ^Runnable nullary-fn) (.setDaemon true) (.start))
