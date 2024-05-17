@@ -1089,48 +1089,47 @@
             r (enc/runner {:mode :sync})]
 
         [(is (= (r (fn [] (Thread/sleep 1000) (reset! a :done))) true))
-         (is (some? (r)))
-         (is (nil?  (r)))
-         (is (= @a  :done))])
+         (is (= @a   :done))
+         (is (= @(r) :drained))
+         (is (=  (r) nil))
+         (is (= @@r  :drained))])
 
       (let [a (atom [])
             r (enc/runner {:mode :dropping, :buffer-size 3, :debug/init-after 100})]
 
-        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                [true true true false false false]))
-         (do (Thread/sleep 500) :sleep)
-         (is (some? (r)))
-         (is (nil?  (r)))
-         (is (= @a  [0 1 2]))])
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 100) (swap! a conj n))))) [true true true false false false]))
+         (is (= @a   []))
+         (is (= @(r) :drained))
+         (is (=  (r) nil))
+         (is (= @@r  :drained))
+         (is (= @a   [0 1 2]))])
 
       (let [a (atom [])
             r (enc/runner {:mode :sliding, :buffer-size 3, :debug/init-after 100})]
 
-        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                [true true true false false false]))
-         (do (Thread/sleep 500) :sleep)
-         (is (some? (r)))
-         (is (nil?  (r)))
-         (is (= @a  [3 4 5]))])
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 100) (swap! a conj n))))) [true true true false false false]))
+         (is (= @a   []))
+         (is (= @(r) :drained))
+         (is (=  (r) nil))
+         (is (= @@r  :drained))
+         (is (= @a   [3 4 5]))])
 
       (let [a (atom [])
             r (enc/runner {:mode :blocking, :buffer-size 3, :debug/init-after 100})]
 
-        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 20) (swap! a conj n)))))
-                [true true true false false false]))
-         (do (Thread/sleep 500) :sleep)
-         (is (some? (r)))
-         (is (nil?  (r)))
-         (is (= @a  [0 1 2 3 4 5]))])
+        [(is (= (vec (for [n (range 6)] (r (fn [] (Thread/sleep 100) (swap! a conj n))))) [true true true false false false]))
+         (is (= @a   [0 1]) "Blocked 3x to get 2x executed and 1x executing")
+         (is (= @(r) :drained))
+         (is (=  (r) nil))
+         (is (= @@r  :drained))
+         (is (= @a   [0 1 2 3 4 5]))])
 
       (let [a (atom nil)
             r (enc/runner {:mode :blocking})]
 
-        (binding [*dynamic-var* "bound"] (r (fn [] (reset! a *dynamic-var*))))
-        (do (Thread/sleep 500) :sleep)
-
-        [(is (some? (r)))
-         (is (nil?  (r)))
+        (binding [*dynamic-var* "bound"] (r (fn [] (Thread/sleep 100) (reset! a *dynamic-var*))))
+        [(is (= @(r) :drained))
+         (is (=  (r) nil))
          (is (= @a  "bound") "Runner binding conveyance")])
 
       (let [r (enc/runner {:mode :dropping, :buffer-size 4})] (dotimes [_ 4] (r (fn [] (Thread/sleep 250)))) (is (= (deref (r) 250  ::timeout) ::timeout)))
@@ -1710,46 +1709,22 @@
               #?(:clj (Thread/sleep 500))
               (is (= @a "bound") "Handler binding conveyance")))
 
-         (testing "with-handler, etc."
-           [(let [sig_ (atom ::nx)
-                  sd?_ (atom false)]
+         (testing "with-handler/+"
+           (let [sleep! (fn [] (enc/hot-sleep 2000))
+                 sig1_  (atom ::nx)
+                 sig2_  (atom ::nx)
+                 sig3_  (atom ::nx)
+                 st1?_  (atom false)
+                 st2?_  (atom false)
+                 st3?_  (atom false)]
 
-              (sapi/with-handler :hid1
-                (fn
-                  ([x] (reset! sig_ x))
-                  ([ ] (reset! sd?_ true)))
-                {:async nil}
+             (sapi/with-handler      :hid1 (fn ([x] (sleep!) (reset! sig1_ x)) ([] (sleep!) (reset! st1?_ true))) {}
+               (sapi/with-handler+   :hid2 (fn ([x] (sleep!) (reset! sig2_ x)) ([] (sleep!) (reset! st2?_ true))) {:needs-stopping? true}
+                 (sapi/with-handler+ :hid3 (fn ([x] (sleep!) (reset! sig3_ x)) ([] (sleep!) (reset! st3?_ true))) {}
+                   (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))))
 
-                (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
-
-              [(is (= @sig_ "foo") "hid1 was called with signal")
-               (is (= @sd?_  true) "hid1 was auto shut down")])
-
-            #?(:clj
-               (let [test1
-                     (fn [sd?_ sleep-msecs sd-msecs]
-                       (sapi/with-handler :hid1
-                         (fn ([_]) ([ ] (Thread/sleep (int sleep-msecs)) (reset! sd?_ true)))
-                         {:max-shutdown-msecs sd-msecs}
-                         (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
-                       @sd?_)]
-
-                 [(is (is (false? (test1 (atom false) 2000 500))))
-                  (is (is (true?  (test1 (atom false) 100  500))))]))
-
-            (let [sig1_ (atom ::nx)
-                  sig2_ (atom ::nx)
-                  sd1?_ (atom false)
-                  sd2?_ (atom false)]
-
-              (sapi/with-handler    :hid1 (fn ([x] (reset! sig1_ x)) ([] (reset! sd1?_ true))) {:async nil}
-                (sapi/with-handler+ :hid2 (fn ([x] (reset! sig2_ x)) ([] (reset! sd2?_ true))) {:async nil}
-                  (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
-
-              [(is (= @sig1_ "foo") "hid1 was called with signal")
-               (is (= @sig2_ "foo") "hid2 was called with signal")
-               (is (= @sd1?_  true) "hid1 was auto shut down")
-               (is (= @sd2?_  true) "hid2 was auto shut down")])])])
+             [(is (= [@sig1_ @sig2_ @sig3_] ["foo" "foo" "foo"]) "Auto-drained all")
+              (is (= [@st1?_ @st2?_ @st3?_] [false true  false]) "Auto-stopped one")]))])
 
       (testing "Handler priorities"
         (let [handler-order
@@ -1757,7 +1732,7 @@
                 (let [log_ (atom [])
                       log! (fn [hid] (swap! log_ conj hid))
                       handlers
-                      (-> {}
+                      (-> []
                         (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
                         (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
                         (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
@@ -1832,22 +1807,46 @@
              (Thread/sleep 4000) ; Wait for second signal to enqueue
              (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
 
-      (testing "Handler shutdown"
-        [(is (= (sigs/shut-down-handlers! []) nil))
-         (is (= (let [handlers
+      (testing "Handler stopping"
+        [(is (= (sigs/stop-handlers! []) nil))
+         (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
+                      handlers
                       (-> []
-                        (sigs/add-handler :hid1 (fn [] (enc/hot-sleep 500)  "done") {} {:max-shutdown-msecs 1000})
-                        (sigs/add-handler :hid2 (fn [] (enc/hot-sleep 100)  "done") {} {:max-shutdown-msecs nil})
-                        (sigs/add-handler :hid3 (fn [] (enc/hot-sleep 1000) "done") {} {:max-shutdown-msecs 100})
-                        (sigs/add-handler :hid4 (fn [] (enc/hot-sleep 100)  (ex1!)) {} {}))]
+                        (sigs/add-handler :hid1 (fn ([_] (sleep!)))  {} {})
+                        (sigs/add-handler :hid2 (fn ([_] (sleep!)))  {} {:async {:drain-msecs nil}})
+                        (sigs/add-handler :hid3 (fn ([_] (sleep!)))  {} {:async {:drain-msecs 1000}})
+                        (sigs/add-handler :hid4 (fn ([_] (sleep!)))  {} {:async {:drain-msecs 100}})
+                        (sigs/add-handler :hid5 (fn ([_] (sleep!)) ([] (sleep!)))        {} {:needs-stopping? true})
+                        (sigs/add-handler :hid6 (fn ([_] (sleep!)) ([] (sleep!) (ex1!))) {} {:needs-stopping? true}))]
 
-                  ((nth handlers 1)) ; Manual shutdown
-                  (sigs/shut-down-handlers! handlers))
+                  (sigs/call-handlers!  handlers (MySignal. :info "foo"))
+                  [(sigs/stop-handlers! handlers)
+                   (sigs/stop-handlers! handlers)])
 
-               {:hid1 {:okay :shut-down}
-                :hid2 {:okay :previously-shut-down}
-                :hid3 #?(:clj {:error :timeout}, :cljs {:okay :shut-down})
-                :hid4 {:error ex1}}))])])
+               [{:hid1 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid2 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid3 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid4 {:okay :no-stopping-needed, #?@(:clj [:drained? false])},
+                 :hid5 {:okay :stopped,            #?@(:clj [:drained? true])},
+                 :hid6 {:error ex1,                #?@(:clj [:drained? true])}}
+
+                {:hid1 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid2 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid3 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid4 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
+                 :hid5 {:okay :previously-stopped, #?@(:clj [:drained? true])},
+                 :hid6 {:okay :previously-stopped, #?@(:clj [:drained? true])}}]))
+
+         (let [st1?_ (atom false)
+               st2?_ (atom false)]
+
+           (sapi/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st1?_ true))))
+           (sapi/add-handler!    :hid2 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st2?_ true))) {:needs-stopping? true})
+           (sapi/remove-handler! :hid1)
+           (sapi/remove-handler! :hid2)
+
+           [(is (false? @st1?_) "Removing :hid1 didn't auto stop it")
+            (is (true?  @st2?_) "Removing :hid2 did    auto stop it")])])])
 
    (testing "Filterable expansion"
      [(is (enc/submap? (sapi/sig-exp {:level :info})

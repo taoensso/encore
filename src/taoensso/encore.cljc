@@ -6106,111 +6106,128 @@
           - `false` if runner experienced back-pressure (fn may/not execute).
           - `nil`   if runner has stopped accepting new execution requests.
 
-      (runner) ; Arity 0 call
-        Instructs runner to permanently stop accepting new execution requests.
-        Returns promise iff runner's status changed with this call.
-        Deref   promise to block until all current execution requests complete.
+      (deref runner)
+        Returns a promise that will be delivered once all pending execution
+        requests complete.
 
-    Runners provide ~similar capabilities to agents, but:
+      (runner) ; Arity 0 call
+        Causes runner to permanently stop accepting new execution requests.
+        On first call returns a promise that will be delivered once all pending
+        execution requests complete. On subsequent calls returns nil.
+
+    Runners are a little like agents, but:
       - Take nullary fns rather than unary fns of state.
       - Have no validators or watches.
-      - Have (configurable) back-pressure.
+      - Have configurable back-pressure.
       - Can have >1 thread (in which case fns may execute out-of-order!).
 
-    These properties make them useful as configurable async workers, etc.
+    These properties make them useful as configurable general-purpose async workers.
 
     Options include:
-      `:buffer-size` - Size of request buffer (max number of queued requests).
-      `:mode`        - Back-pressure mechanism ∈ #{:blocking :dropping :sliding}.
-        Determines what happens when the request buffer is full and a new
-        request is made:
-          `:blocking` => Will block caller until buffer space is available
-          `:dropping` => Will drop the newest request (no-op)
-          `:sliding`  => Will drop the oldest request
 
-      `:n-threads` - Number of threads for asynchronously executing fns (servicing
-        request buffer). NB execution order may be non-sequential when n > 1."
+      `:buffer-size` (default 1024)
+        Size of request buffer, and the max number of pending requests before
+        configured back-pressure behaviour is triggered (see `:mode`).
+
+      `:mode` (default `:blocking`)
+        Back-pressure mode ∈ #{:blocking :dropping :sliding}.
+        Controls what happens when a new request is made while request buffer is full:
+          `:blocking` => Blocks caller until buffer space is available
+          `:dropping` => Drops the newest request (noop)
+          `:sliding`  => Drops the oldest request
+
+      `:n-threads` (default 1)
+        Number of threads to use for executing fns (servicing request buffer).
+        NB execution order may be non-sequential when n > 1.
+
+      `:drain-msecs` (default 6000 msecs)
+        Maximum time (in milliseconds) to try allow pending execution requests to
+        complete during JVM shutdown."
 
      {:added "Encore v3.68.0 (2023-09-25)"}
      [{:as opts
        :keys
-       [mode buffer-size n-threads thread-name,
-        daemon-threads? shutdown-drain-msecs,
-        convey-bindings?]
+       [mode buffer-size n-threads thread-name drain-msecs,
+        auto-stop? convey-bindings? daemon-threads?]
 
        :or
        {mode        :blocking
         buffer-size 1024
         n-threads   1
+        drain-msecs 6000
 
-        daemon-threads?      true
-        convey-bindings?     true
-        shutdown-drain-msecs 6000}}]
+        ;;; Advanced (undocumented)
+        auto-stop?       true
+        convey-bindings? true
+        daemon-threads?  true}}]
 
-     (let [started?_ (volatile! false) ; Ever started?
-           stopped?_ (latom nil) ; nil or promise
-           deref-fn  (fn [] {:opts opts, :active? (not (stopped?_))})
-           stop-fn ; Returns nil or promise (on which caller can block)
-           (fn []
-             (when-not (stopped?_)
-               (let [p (promise)]
-                 (when (compare-and-set! stopped?_ nil p)
-                   (when-not (.deref started?_) (p :drained))
-                   p))))]
+     (let [stopped?_ (latom false)]
 
-       (if (= mode :sync) ; Undocumented
+       (if (= mode :sync) ; Undocumented, mostly used for testing
          (reify
-           clojure.lang.IDeref (deref [_] (deref-fn))
+           clojure.lang.IDeref (deref [_] ((promise) :drained))
            clojure.lang.IFn
-           (invoke [_  ] (stop-fn))
+           (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
            (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all-but-critical _)) true)))
 
-         (let [binding (when convey-bindings? binding-conveyor-fn)
-               abq (java.util.concurrent.ArrayBlockingQueue.
-                     (as-pos-int buffer-size) false)
+         (let [binding       (when convey-bindings? binding-conveyor-fn)
+               cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
+               abq           (java.util.concurrent.ArrayBlockingQueue.
+                               (as-pos-int buffer-size) false)
 
-               n-threads  (as-pos-int           n-threads)
-               stop-latch (CountDownLatch. (int n-threads))
-
-               init!
+               drained-fn
                (fn []
-                 (vreset! started?_ true)
+                 (promised :daemon
+                   (loop []
+                     (if (and
+                           (zero? (.size abq))
+                           (zero? (.get cnt-executing)))
+                       :drained
+                       (recur)))))
+
+               init-fn
+               (fn []
                  (.addShutdownHook (Runtime/getRuntime)
                    (Thread.
                      (fn []
-                       (when-let [p (stop-fn)]
-                         (when-let [msecs shutdown-drain-msecs]
-                           (deref p msecs :timeout))))))
+                       (when auto-stop? (compare-and-set! stopped?_ false true))
+                       ;; Optionally block JVM shutdown to complete pending requests
+                       (if-let [^long msecs drain-msecs]
+                         (when (pos?  msecs) (deref (drained-fn) msecs nil))
+                         (do                 (deref (drained-fn)))))))
 
-                 (dotimes [n n-threads]
+                 ;; Create worker threads
+                 (dotimes [n (as-pos-int n-threads)]
                    (let [wfn
                          (fn a-worker-fn []
                            (loop []
-                             (let [recur?
-                                   (if-let [f (.poll abq 200 java.util.concurrent.TimeUnit/MILLISECONDS)]
-                                     (do
-                                       (try* (f) (catch :all-but-critical _))
-                                       :recur ; Unconditionally drain abq even when stopped
-                                       )
-                                     (if-let [p (stopped?_)]
-                                       (do
-                                         (.countDown stop-latch) ; Indicate this this worker has     stopped
-                                         (.await     stop-latch) ; Wait on other workers to likewise stopped
-                                         (p :drained)
-                                         (not :recur))
-                                       :recur))]
-                               (when recur? (recur)))))
+                             (if-let [f (.poll abq 200 java.util.concurrent.TimeUnit/MILLISECONDS)]
+                               (do
+                                 (.incrementAndGet cnt-executing)
+                                 (try*
+                                   (f)
+                                   (catch :all-but-critical _)
+                                   (finally (.decrementAndGet cnt-executing)))
+                                 ;; Unconditionally drain abq even when stopped
+                                 (recur))
+                               (when-not (stopped?_) (recur)))))
 
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
+
+                     ;; Daemon worker threads are almost always the right choice here since
+                     ;; they allow the flexibility of *optionally* blocking JVM shutdown
+                     ;; (via our shutdown hook), whereas user worker threads outright
+                     ;; prevent our hook from even running and so would make users
+                     ;; responsible for stopping runners manually.
 
                      (.setDaemon thread (boolean daemon-threads?))
                      (.start     thread))))
 
                init!_
                (if-let [msecs (get opts :debug/init-after)]
-                 (delay (threaded :daemon (Thread/sleep (int msecs)) (init!)))
-                 (delay                                              (init!)))
+                 (delay (threaded :daemon (Thread/sleep (int msecs)) (init-fn)))
+                 (delay                                              (init-fn)))
 
                run-fn
                (case mode
@@ -6223,7 +6240,7 @@
                      (loop []
                        (.poll abq) ; Drop earliest f
                        (if (.offer abq f)
-                         false ; Successfully took new f, but still indicate that drop/s occurred
+                         false ; Successfully took new f, but drop/s occurred
                          (recur)))))
 
                  (unexpected-arg! mode
@@ -6231,9 +6248,9 @@
                     :expected #{:sync :blocking :dropping :sliding}}))]
 
            (reify
-             clojure.lang.IDeref (deref [_] (deref-fn))
+             clojure.lang.IDeref (deref [_] (drained-fn))
              clojure.lang.IFn
-             (invoke [_  ] (stop-fn))
+             (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
              (invoke [_ f]
                (when-not (stopped?_)
                  (.deref init!_)
@@ -6244,7 +6261,7 @@
 (comment
   (let [r1 (runner {:mode :sync})
         r2 (runner {:mode :blocking})]
-    (qb 1e6 ; [43.47 161.36]
+    (qb 1e6 ; [50.56 144.44]
       (r1 (fn []))
       (r2 (fn [])))))
 
