@@ -37,6 +37,11 @@
    {:injections [(println "Lein profile: :test")]
     :aot [taoensso.encore-tests]}
 
+   :test-shutdown
+   {:injections   [(println "Lein profile: :test-shutdown")]
+    :source-paths ["test-shutdown"]
+    :main           test-shutdown}
+
    :dev
    {:injections [(println "Lein profile: :dev")]
     :jvm-opts
@@ -88,6 +93,7 @@
    "build-once" ["do" ["clean"] ["cljsbuild" "once"]]
    "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
 
-   "test-clj"   ["with-profile" "+c1.12:+c1.11:+c1.10:+c1.9" "test"]
-   "test-cljs"  ["with-profile" "+c1.12" "cljsbuild"         "test"]
-   "test-all"   ["do" ["clean"] ["test-clj"] ["test-cljs"]]})
+   "test-clj"      ["with-profile" "+c1.12:+c1.11:+c1.10:+c1.9" "test"]
+   "test-cljs"     ["with-profile" "+c1.12" "cljsbuild"         "test"]
+   "test-all"      ["do" ["clean"] ["test-clj"] ["test-cljs"] ["test-shutdown"]]
+   "test-shutdown" ["with-profile" "+c1.12,+test-shutdown" "run"]})
