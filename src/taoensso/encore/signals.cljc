@@ -578,7 +578,7 @@
           (fn [signal error]
             (enc/catching
               (if (and rl-error (rl-error)) ; error-fn rate-limited
-                nil ; no-op
+                nil ; noop
                 (when-let [error-fn
                            (if (enc/identical-kw? error-fn ::default)
                              *default-handler-error-fn*
@@ -675,7 +675,7 @@
                       (when backp-fn
                         (enc/catching
                           (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
-                            nil                         ; no-op
+                            nil                         ; noop
                             (let [backp-fn
                                   (if (enc/identical-kw? backp-fn ::default)
                                     *default-handler-backp-fn*
@@ -1290,7 +1290,7 @@
              "Shuts down all registered %s handlers in parallel, and returns
              ?{<handler-id> {:keys [okay error]}}.
 
-             Future calls to handlers will no-op.
+             Future calls to handlers will noop.
              Clj only: `shut-down-handlers!` is called automatically on JVM shutdown.")]
 
        `(defn ~'shut-down-handlers! ~docstring [] (shut-down-handlers! ~*sig-handlers*)))))
@@ -1405,10 +1405,3 @@
      :ct-sig-filter    my-ct-sig-filter
      :*rt-sig-filter* *my-rt-sig-filter*
      :*sig-handlers*  *my-sig-handlers*}))
-
-;;;;
-
-(enc/deprecated
-  (defn ^:no-doc get-middleware-fn "Prefer `as-middleware-fn`."
-    {:deprecated "Encore v3.106.0 (2024-05-01)"}
-    [middleware] (as-middleware-fn middleware)))

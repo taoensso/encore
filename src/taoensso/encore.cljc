@@ -4960,7 +4960,7 @@
 #?(:clj
    (defmacro require-telemere-if-present
      "Experimental, subject to change without notice!
-     Requires Telemere if it's present, otherwise no-ops.
+     Requires Telemere if it's present, otherwise noops.
      For Cljs: needs ClojureScript >= v1.9.293, and must be placed at top of file.
      Used in cooperation with `signal!`."
      {:added "Encore v3.68.0 (2023-09-25)"}
@@ -4972,7 +4972,7 @@
    (defmacro signal!
      "Experimental, subject to change without notice!
      Expands to `taoensso.telemere/signal!` call if Telemere is present,
-     otherwise expands to `fallback` form.
+     otherwise expands to arbitrary `fallback` form.
 
      MUST be used with `require-telemere-if-present`:
 
@@ -6275,27 +6275,27 @@
          (loop [force-use-cache? false]
 
            (if (or force-use-cache? (cache-update-pending?_))
-            (let [[p] (cache_)] (deref-safely p timeout-msecs timeout-val))
-            (let [t1 (System/currentTimeMillis)]
-              (if-let [[p ^long t0] (cache_)]
-                (if (< (- t1 t0) (long cache-msecs)) ; Have fresh cache
-                  (deref-safely p timeout-msecs timeout-val)
-                  (do
-                    ;; Ensure exactly 1 async thread is updating cache
-                    (when (compare-and-set! cache-update-pending?_ false true)
-                      (threaded :daemon
-                        (if-let [new-val (f1 nil)] ; Take as long as needed
-                          (reset! cache_ [((promise) new-val) t1]) ; Update p and t
-                          (reset! cache_ [p                   t1]) ; Update only  t
-                          )
-                        (reset! cache-update-pending?_ false)))
-                    (recur true)))
+             (let [[p] (cache_)] (deref-safely p timeout-msecs timeout-val))
+             (let [t1 (System/currentTimeMillis)]
+               (if-let [[p ^long t0] (cache_)]
+                 (if (< (- t1 t0) (long cache-msecs)) ; Have fresh cache
+                   (deref-safely p timeout-msecs timeout-val)
+                   (do
+                     ;; Ensure exactly 1 async thread is updating cache
+                     (when (compare-and-set! cache-update-pending?_ false true)
+                       (threaded :daemon
+                         (if-let [new-val (f1 nil)] ; Take as long as needed
+                           (reset! cache_ [((promise) new-val) t1]) ; Update p and t
+                           (reset! cache_ [p                   t1]) ; Update only  t
+                           )
+                         (reset! cache-update-pending?_ false)))
+                     (recur true)))
 
-                (let [p (promise)]
-                  (when (compare-and-set! cache_ nil [p t1]) ; First call
-                    ;; Init cache with pending init value
-                    (threaded :user (p (f1 timeout-val))))
-                  (recur true))))))))))
+                 (let [p (promise)]
+                   (when (compare-and-set! cache_ nil [p t1]) ; First call
+                     ;; Init cache with pending init value
+                     (threaded :user (p (f1 timeout-val))))
+                   (recur true))))))))))
 
 #?(:clj
    (let [f1 (fn [fallback] (try (.getHostAddress (java.net.InetAddress/getLocalHost)) (catch Exception _ (force fallback))))
