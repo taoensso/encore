@@ -5810,15 +5810,20 @@
 ;;;; Async
 
 #?(:clj
-   (defmacro ^:no-doc threaded
-     "Private, don't use.
-     Creates a new #{:daemon :user} thread to execute body, and returns the thread."
-     {:added "Encore v3.104.0 (2024-04-24)"}
-     [kind & body]
+   (defn ^:no-doc threaded*
+     "Private, don't use. Returns a new #{:daemon :user} thread to execute given fn."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ^Thread [kind nullary-fn]
      (case kind
-       :daemon `(doto (Thread. (fn [] ~@body)) (.setDaemon true) (.start))
-       :user   `(doto (Thread. (fn [] ~@body))                   (.start))
-       (unexpected-arg! kind {:context `threaded, :param kind, :expected #{:daemon :user}}))))
+       :daemon (doto (Thread. ^Runnable nullary-fn) (.setDaemon true) (.start))
+       :user   (doto (Thread. ^Runnable nullary-fn)                   (.start))
+       (unexpected-arg! kind {:context `threaded*, :param kind, :expected #{:daemon :user}}))))
+
+#?(:clj
+   (defmacro ^:no-doc threaded
+     "Private, don't use. Returns a new #{:daemon :user} thread to execute body."
+     {:added "Encore v3.104.0 (2024-04-24)"}
+     [kind & body] `(threaded* ~kind (fn [] ~@body))))
 
 (comment (.getName (threaded :daemon (println "Runs on daemon thread"))))
 
