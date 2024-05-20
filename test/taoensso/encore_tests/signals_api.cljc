@@ -7,16 +7,13 @@
 (do
   (def            ct-sig-filter  nil)
   (def ^:dynamic *rt-sig-filter* nil)
-  (def ^:dynamic *sig-handlers*  nil)
-  (def ^:dynamic *auto-stop-handlers?* true))
+  (def ^:dynamic *sig-handlers*  nil))
 
 (sigs/def-api
-  {:purpose  "testing"
-   :sf-arity 4
-   :ct-sig-filter         ct-sig-filter
-   :*rt-sig-filter*       *rt-sig-filter*
-   :*sig-handlers*        *sig-handlers*
-   :*auto-stop-handlers?* *auto-stop-handlers?*})
+  {:sf-arity 4
+   :ct-sig-filter    ct-sig-filter
+   :*rt-sig-filter* *rt-sig-filter*
+   :*sig-handlers*  *sig-handlers*})
 
 #?(:clj
    (defmacro sig-exp
@@ -31,3 +28,8 @@
             :ct-sig-filter     ct-sig-filter
             :*rt-sig-filter* `*rt-sig-filter*}
            opts))))
+
+(comment
+  (add-handler!    :hid1 (fn [x]) {})
+  (remove-handler! :hid1)
+  (get-handlers))

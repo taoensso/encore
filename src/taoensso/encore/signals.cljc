@@ -1,16 +1,14 @@
 (ns ^:no-doc taoensso.encore.signals
   "Experimental, subject to change without notice!
-  Private low-level signal toolkit for use by Telemere, Tufte, Timbre, etc.
+  Private signal toolkit for use by Telemere, Tufte, Timbre, etc.
 
-  \"Signal\" is used here as an internal name for any
-  abstract event/object/data that:
-    - May have a kind (type/taxonomy/etc.)
+  \"Signal\" refers here to any abstract event/data/object (usu. map) that:
     - Originates in an ns (generated or received there, etc.)
-    - May have an identifier
-    - Has a level (priority/significance/etc.)"
+    - Has a level (priority/significance/etc.)
+    - May have a kind (type/taxonomy/etc.)
+    - May have an identifier"
 
   {:added "Encore v3.68.0 (2023-09-25)"}
-
   (:refer-clojure :exclude [binding])
   (:require
    [clojure.string  :as str]
@@ -213,7 +211,7 @@
         simplified
         new-vec))))
 
-;;;; SigFilter
+;;;; Signal filtering
 
 (comment (enc/defonce ^:dynamic *rt-sig-filter* "`SigFilter`, or nil." nil))
 
@@ -298,12 +296,10 @@
       (sf       :ns :id :info)
       (sf       :ns :id :info))))
 
-(deftype HandlerContext [sample-rate]) ; Using an object for future extensibility (extra fields, etc.)
-
 (defprotocol IFilterableSignal
   "Protocol that app/library signal-like types must implement to support signal API."
-  (allow-signal? [_ sig-filter]      "Returns true iff given signal is allowed by given `SigFilter`.")
-  (signal-value  [_ handler-context] "Returns signal's user-facing value as given to handlers, etc."))
+  (allow-signal? [_ sig-filter]          "Returns true iff given signal is allowed by given `SigFilter`.")
+  (signal-value  [_ handler-sample-rate] "Returns signal's user-facing value as given to handlers, etc."))
 
 (let [nil-sf (SigFilter. nil nil nil nil nil)]
   (defn update-sig-filter
@@ -325,7 +321,7 @@
 
 (comment (update-sig-filter nil {}))
 
-;;;; Expansion filtering
+;;;; Filterable expansions
 
 #?(:clj (enc/defonce expansion-counter (enc/counter)))
 
@@ -551,13 +547,13 @@
        (conj (or (remove-handler handlers-vec handler-id) []) pre-wrapped-handler-fn))))
 
   ;; Given unwrapped handler-fn
-  ([handlers-vec handler-id unwrapped-handler-fn, api-dispatch-opts dispatch-opts]
+  ([handlers-vec handler-id unwrapped-handler-fn, lib-dispatch-opts dispatch-opts]
    (if-not unwrapped-handler-fn
      handlers-vec
      (if (get dispatch-opts :no-wrap?) ; Undocumented
        (add-handler handlers-vec handler-id unwrapped-handler-fn)
        (add-handler handlers-vec handler-id
-         (wrap-handler handler-id unwrapped-handler-fn, api-dispatch-opts dispatch-opts))))))
+         (wrap-handler handler-id unwrapped-handler-fn, lib-dispatch-opts dispatch-opts))))))
 
 ;;; Telemere will set these when it's present
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
@@ -595,14 +591,14 @@
 
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
-  [handler-id handler-fn, api-dispatch-opts user-dispatch-opts]
+  [handler-id handler-fn, lib-dispatch-opts user-dispatch-opts]
   (let [dispatch-opts
         (enc/nested-merge
-          default-handler-dispatch-opts ; From Encore
-          api-dispatch-opts             ; From library
-          (when-let [m (meta handler-fn)] (get m :dispatch-opts)) ; From handler
-          user-dispatch-opts                                      ; From user
-          )
+          default-handler-dispatch-opts ; Encore  defaults
+          lib-dispatch-opts             ; Library defaults
+          (when-let [m (meta handler-fn)]
+            (get m :dispatch-opts))     ; Unwrapped handler-fn defaults
+          user-dispatch-opts)
 
         {:keys
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
@@ -721,14 +717,10 @@
                       (when track-stats? (if allow? (cnt-allowed) (cnt-disallowed)))
 
                       (when allow?
-                        (when-let [sig-val ; Raw signal -> library-level handler-arg
-                                   (signal-value sig-raw
-                                     (when              sample-rate
-                                       (HandlerContext. sample-rate)))]
-
+                        (when-let [sig-val (signal-value sig-raw sample-rate)]
                           (enc/try*
                             (enc/if-not
-                                [sig-val* ; Library-level handler-arg -> arb user-level value
+                                [sig-val*
                                  (if middleware
                                    (middleware sig-val) ; Apply handler middleware
                                    (do         sig-val))]
@@ -804,259 +796,479 @@
 
 ;;;; Local API
 
-;; #?(:clj
-;;    (defmacro api:debug [outer]
-;;      (let [code `(defmacro ~'api-debug ~'[inner] `(vector ~~outer ~~'inner))]
-;;        ;; (spit "debug.txt" (str code "\n") :append true)
-;;        code)))
-
-;; (comment
-;;   (macroexpand '(api:debug "o1"))
-;;   (macroexpand '(api-debug "i1"))
-;;   (api:debug "o1")
-;;   (api-debug "i1"))
-
-#?(:clj
-   (defn- api-docstring [column purpose doc-template]
-     (let [doc (apply format doc-template (repeat 10 purpose))
-           [l1 & lines] (str/split-lines doc)
-           left-trim (- (long column) 2)]
-       (reduce
-         (fn [acc in] (str acc "\n" (enc/get-substr-by-idx in left-trim)))
-         l1 lines))))
-
 (comment
-  (enc/def* foo
-    {:doc
-     (api-docstring 7 nil
-       "Line 1
-       Line 2")}
-    nil))
+  [*auto-stop-handlers?* ; Clj
+   level-aliases
+
+   help:filters
+   help:handlers
+   help:handler-dispatch-options
+
+   get-filters get-min-levels
+
+   get-handlers
+   get-handlers-stats
+
+   without-filters
+   with-kind-filter set-kind-filter!
+   with-ns-filter   set-ns-filter!
+   with-id-filter   set-id-filter!
+   with-min-level   set-min-level!
+
+   with-handler with-handler+
+   add-handler! remove-handler! stop-handlers!])
+
+;;;
 
 #?(:clj
-   (defn- api:help:filters
-     [purpose env-config-help]
-     `(def ~'help:filters
-        ~(str
-           (api-docstring 13 purpose
-             "Your filter config determines which %s calls will be allowed.
+   (defn- api:help:filters []
+     `(def  ~'help:filters
+        "A signal will be provided to a handler iff ALL of the following are true:
 
-             Filtering can occur at compile-time, runtime, or both.
-             Compile-time filtering elides (permanently removes!) code for
-             disallowed signals. Most users will want only runtime filtering.
+    1. Signal (creation) is allowed by compile-time \"signal  filters\"
+    2. Signal (creation) is allowed by runtime      \"signal  filters\"
+    3. Signal (handling) is allowed by runtime      \"handler filters\"
 
-             Both compile-time and runtime config can be specified via
-             environmental config (JVM properties, environment variables, or
-             classpath resources) [1].
+    4. Signal  middleware does not suppress the signal (return nil)
+    5. Handler middleware does not suppress the signal (return nil)
 
-             Runtime config can also be specified with:
+  So we have:
 
-               `set-kind-filter!`, `with-kind-filter` - for filtering calls by %s kind (when relevant)
-               `set-ns-filter!`,   `with-ns-filter`   - for filtering calls by namespace
-               `set-id-filter!`,   `with-id-filter`   - for filtering calls by %s id   (when relevant)
-               `set-min-level!`,   `with-min-level!`  - for filtering calls by %s level
+    - Signal  filters - applied at compile-time and/or runtime,
+                        determine which signals are/not created.
 
-               See the relevant docstrings for details.
+    - Handler filters - applied at runtime only, determine which (created)
+                        signals are/not handled by each registered handler.
 
-             Filtering can also be applied per handler,
-             see `help:handler-dispatch-options` for details.
+  All filters (1-3) may depend on (in order):
 
-             Flow:
+    Sample rate → namespace → kind → id → level → when form/fn → rate limit
 
-               1. Per %s call (n=1)
-                 a. Sampling
-                 b. Filtering (kind, namespace, id, level, when-form)
-                 c. Rate limiting
-                 d. Middleware
+  Setting signal filters (1-2):
 
-               2. Per %s handler (n>=0)
-                 a. Sampling
-                 b. Filtering (kind, namespace, id, level, when-fn)
-                 c. Rate limiting
-                 d. Middleware
-                 e. Hander fn
+    Both compile-time and runtime signal filters can be specified via environmental
+    config (see `help:environmental-config` for details).
 
-             Note: call filters should generally be at least as permissive as handler filters,
-             otherwise calls will be suppressed before reaching handlers.
+    Runtime signal filters can also be specified with:
 
-             See also:
+      `with-kind-filter`, `set-kind-filter!` - filters by signal kind (when relevant)
+      `with-ns-filter`,   `set-ns-filter!`   - filters by signal namespace
+      `with-id-filter`,   `set-id-filter!`   - filters by signal id   (when relevant)
+      `with-min-level`,   `set-min-level!`   - filters by signal level
 
-               `get-filters`     - to see current filter config
-               `get-min-level`   - to see current minimum level
-               `without-filters` - to disable all runtime filtering
+  Setting handler filters (3):
 
-             If anything is unclear, please ping me (@ptaoussanis) so that I can
-             improve these docs!
+    These are set when calling `add-handler!` or `with-handler/+`,
+    see `help:handler-dispatch-options` for details.
 
-             [1] ")
-           (or env-config-help "See library docs for details."))
+    Note that signal filters should generally be AT LEAST as permissive as handler
+    filters, otherwise signals will be suppressed before reaching handlers.
 
+  Compile-time vs runtime filters:
+
+    Compile-time filters are an advanced feature that can be tricky to set
+    and use correctly. Most folks will want ONLY runtime filters.
+
+    Compile-time filters works by eliding (completely removing the code for)
+    disallowed signals. This means zero performance cost for these signals,
+    but also means that compile-time filters are PERMANENT once applied.
+
+    So if you set `:info` as the compile-time minimum level, that'll REMOVE
+    CODE for every signal below `:info` level. To decrease that minimum level,
+    you'll need to rebuild.
+
+    Compile-time filters can be set ONLY with environmental config
+    (see `help:environmental-config` for details).
+
+  Signal and handler sampling is multiplicative:
+
+    Both signals and handlers can have independent sample rates, and these
+    MULTIPLY! If a signal is created with 20% sampling and a handler
+    handles 50% of received signals, then 10% of possible signals will be
+    handled (50% of 20%).
+
+    The final (multiplicative) rate is helpfully reflected in each signal's
+    `:sample-rate` value.
+
+  For more info:
+
+    - On signal  filters, see: `help:filters`
+    - On handler filters, see: `help:handler-dispatch-options`
+
+  If anything is unclear, please ping me (@ptaoussanis) so that I can
+  improve these docs!"
         "See docstring")))
 
-(comment (api:help:filters "purpose" nil))
+(comment (api:help:filters))
 
 #?(:clj
-   (defn- api:get-filters
-     [purpose *rt-sig-filter* ct-sig-filter]
+   (defn- api:help:handlers []
+     `(def  ~'help:handlers
+        "Signal handlers process created signals to do something with them (analyse them,
+        write them to console/file/queue/db, etc.).
+
+  Manage handlers with:
+
+    `get-handlers`       - Returns info  on  registered handlers (dispatch options, etc.)
+    `get-handlers-stats` - Returns stats for registered handlers (handling times,   etc.)
+    `stop-handlers!`     - Stops (relevant)  registered handlers
+
+    `add-handler!`       - Registers   given handler
+    `remove-handler!`    - Unregisters given handler
+
+    `with-handler`       - Executes form with ONLY the given handler        registered
+    `with-handler+`      - Executes form with      the given handler (also) registered
+
+  See the relevant docstrings for details.
+  See `help:handler-dispatch-options` for handler filters, etc.
+
+  Clj only:  `stop-handlers!` is called automatically on JVM shutdown
+  when `*auto-stop-handlers?*` is true (it is by default).
+
+  If anything is unclear, please ping me (@ptaoussanis) so that I can
+  improve these docs!"
+        "See docstring")))
+
+#?(:clj
+   (defn- api:help:handler-dispatch-options []
+     `(def  ~'help:handler-dispatch-options
+        "Dispatch options can be provided for each signal handler when calling
+  `add-handler!` or `with-handler/+`. These options will be merged over the
+  defaults specified by `default-handler-dispatch-opts`.
+
+  All handlers support the same dispatch options, including:
+
+    `:async` (Clj only) options include:
+
+      `:buffer-size` (default 1024)
+        Size of request buffer, and the max number of pending requests before
+        configured back-pressure behaviour is triggered (see `:mode`).
+
+      `:mode` (default `:blocking`)
+        Back-pressure mode ∈ #{:blocking :dropping :sliding}.
+        Controls what happens when a new request is made while request buffer is full:
+          `:blocking` => Blocks caller until buffer space is available
+          `:dropping` => Drops the newest request (noop)
+          `:sliding`  => Drops the oldest request
+
+      `:n-threads` (default 1)
+        Number of threads to use for executing fns (servicing request buffer).
+        NB execution order may be non-sequential when n > 1.
+
+      `:drain-msecs` (default 6000 msecs)
+        Maximum time (in milliseconds) to try allow pending execution requests to
+        complete during JVM shutdown, etc. See `*auto-stop-handlers?*` for more.
+
+    `:needs-stopping?` (default false)
+      Enable this (only) for handlers that need to close/release resources or otherwise
+      finalize themselves. Iff true, `handler-fn` will be called with no arguments when:
+        1. Handler is removed by    `remove-handler!` call
+        2. Handler is removed after `with-handler/+`  call
+        3. `stop-handlers!` is called (typically on system shutdown)
+
+    `:priority` (default 100)
+      Optional handler priority ∈ℤ.
+      Handlers will be called in descending priority order.
+
+    `:sample-rate` (default nil => no sampling)
+      Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
+      When present, handle only this (random) proportion of args:
+        1.0 => handle every arg (same as `nil` rate, default)
+        0.0 => noop   every arg
+        0.5 => handle random 50% of args
+
+    `:kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
+    `:ns-filter`   - Namespace filter as in `set-ns-filter!`
+    `:id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
+    `:min-level`   - Minimum   level  as in `set-min-level!`
+
+    `:when-fn` (default nil => always allow)
+      Optional nullary (fn allow? []) that must return truthy for handler to be
+      called. When present, called *after* sampling and other filters, but before
+      rate limiting.
+
+    `:rate-limit` (default nil => no rate limit)
+      Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
+      {<limit-id> [<n-max-calls> <msecs-window>]}.
+
+      Examples:
+        {\"1/sec\"  [1   1000]} => Max 1  call  per 1000 msecs
+        {\"1/sec\"  [1   1000]
+         \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
+                                 and 10 calls per 60   secs
+
+    `:middleware` (default nil => no middleware)
+      Optional (fn [signal]) => ?modified-signal to apply before
+      handling signal. When middleware returns nil, skips handler.
+
+      Compose multiple middleware fns together with `comp-middleware`.
+
+    `:error-fn` - (fn [{:keys [handler-id signal error]}]) to call on handler error.
+    `:backp-fn` - (fn [{:keys [handler-id             ]}]) to call on handler back-pressure.
+
+  If anything is unclear, please ping me (@ptaoussanis) so that I can
+  improve these docs!"
+        "See docstring")))
+
+;;;
+
+#?(:clj
+   (defn- api:get-filters [*rt-sig-filter* ct-sig-filter]
      `(defn ~'get-filters
-        ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} filter config.")
+        "Returns current ?{:keys [compile-time runtime]} filter config."
         []
         (enc/assoc-some nil
           :compile-time (enc/force-ref  ~ct-sig-filter)
           :runtime      (enc/force-ref ~*rt-sig-filter*)))))
 
-(comment (api:get-filters "purpose" `my-ct-sig-filter `*my-rt-sig-filter*))
+(comment (api:get-filters `my-ct-sig-filter `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:without-filters
-     [purpose *rt-sig-filter* clj?]
-     (when clj?
-       `(defmacro ~'without-filters
-          ~(api-docstring 0 purpose "Executes form without any runtime filters.")
-          ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form)))))
+   (defn- api:get-min-levels [sf-arity *rt-sig-filter* ct-sig-filter]
+     (case (int sf-arity)
+       (4)
+       `(defn ~'get-min-levels
+          "Returns current ?{:keys [compile-time runtime]} minimum signal levels."
+          (~'[       ] (~'get-min-levels nil    (str *ns*)))
+          (~'[kind   ] (~'get-min-levels ~'kind (str *ns*)))
+          (~'[kind ns]
+           (enc/assoc-some nil
+             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
+             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns))))
 
-(comment (api:without-filters "purpose" `*my-rt-sig-filter* :clj))
+       (2 3)
+       `(defn ~'get-min-levels
+          "Returns current ?{:keys [compile-time runtime]} minimum signal levels."
+          (~'[  ] (~'get-min-levels nil (str *ns*)))
+          (~'[ns]
+           (enc/assoc-some nil
+             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
+             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)))))))
+
+(comment (api:get-min-levels 4 `*my-rt-sig-filter* `my-ct-sig-filter))
+
+;;;
 
 #?(:clj
-   (defn- api:set-kind-filter!
-     [purpose *rt-sig-filter*]
+   (defn- api:get-handlers [*sig-handlers*]
+     `(defn ~'get-handlers
+        "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn handler-stats_]}}
+  for all registered signal handlers."
+        [] (get-handlers-map ~*sig-handlers*))))
+
+(comment (api:get-handlers `*my-sig-handlers*))
+
+#?(:clj
+   (defn- api:get-handlers-stats [*sig-handlers*]
+     `(defn ~'get-handlers-stats
+        "Alpha, subject to change.
+  Returns ?{<handler-id> {:keys [handling-nsecs counts]}} for all registered
+  signal handlers that have the `:track-stats?` dispatch option enabled
+  (it is by default).
+
+  Stats include:
+
+    `:handling-nsecs` - Summary stats of nanosecond handling times, keys:
+      `:min`  - Minimum handling time
+      `:max`  - Maximum handling time
+      `:mean` - Arithmetic mean handling time
+      `:mad`  - Mean absolute deviation of handling time (measure of dispersion)
+      `:var`  - Variance                of handling time (measure of dispersion)
+      `:p50`  - 50th percentile of handling time (50% of times <= this)
+      `:p90`  - 90th percentile of handling time (90% of times <= this)
+      `:p99`  - 99th percentile of handling time
+      `:last` - Most recent        handling time
+      ...
+
+    `:counts` - Integer counts for handler outcomes, keys (chronologically):
+
+      `:dropped`       - Noop handler calls due to stopped handler
+      `:back-pressure` - Handler calls that experienced (async) back-pressure
+                         (possible noop, depending on back-pressure mode)
+
+       `:sampled`      - Noop  handler calls due to sample rate
+       `:filtered`     - Noop  handler calls due to kind/ns/id/level/when filtering
+       `:rate-limited` - Noop  handler calls due to rate limit
+       `:disallowed`   - Noop  handler calls due to sampling/filtering/rate-limiting
+       `:allowed`      - Other handler calls    (no sampling/filtering/rate-limiting)
+
+       `:suppressed`   - Noop handler calls due to nil middleware result
+       `:handled`      - Handler calls that completed successfully
+       `:errors`       - Handler calls that threw an error
+
+       Note that for performance reasons returned counts are not mutually atomic,
+       e.g. `:sampled` count may be incremented before `:disallowed` count is.
+
+  Useful for understanding/debugging how your handlers behave in practice,
+  especially when they're under stress (high-volumes, etc.).
+
+  Handler stats are tracked from the time each handler is last registered
+  (e.g. with an `add-handler!` call)."
+        [] (get-handlers-stats ~*sig-handlers*))))
+
+(comment (api:get-handlers-stats `*my-sig-handlers*))
+
+;;;
+
+#?(:clj
+   (defn-     api:without-filters [*rt-sig-filter*]
+     `(defmacro ~'without-filters
+        "Executes form without any runtime signal filters."
+        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
+
+(comment (api:without-filters `*my-rt-sig-filter*))
+
+#?(:clj
+   (defn-     api:with-kind-filter [*rt-sig-filter*]
+     `(defmacro ~'with-kind-filter
+        "Executes form with given signal kind filter in effect.
+  See `set-kind-filter!` for details."
+        ~'[kind-filter form]
+        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
+           ~~'form))))
+
+(comment (api:with-kind-filter `*my-rt-sig-filter*))
+
+#?(:clj
+   (defn- api:set-kind-filter! [*rt-sig-filter*]
      `(defn ~'set-kind-filter!
-        ~(api-docstring 11 purpose
-           "Sets %s call kind filter based on given `kind-filter` spec.
-           `kind-filter` may be:
+        "Sets signal kind filter based on given `kind-filter` spec.
+  `kind-filter` may be:
 
-             - A str/kw/sym, in which \"*\"s act as wildcards.
-             - A regex pattern of kind/s to allow.
-             - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :disallow <spec>} with specs as above.
-               If present, `:allow`    spec MUST     match, AND
-               If present, `:disallow` spec MUST NOT match.")
-
+    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A regex pattern of kind/s to allow.
+    - A vector or set of regex patterns or strs/kws/syms.
+    - {:allow <spec> :disallow <spec>} with specs as above.
+      If present, `:allow`    spec MUST     match, AND
+      If present, `:disallow` spec MUST NOT match."
         ~'[kind-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:kind-filter ~'kind-filter})))))))
 
-(comment (api:set-ns-filter! "purpose" `*my-rt-sig-filter*))
+(comment (api:set-ns-filter! `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:with-kind-filter
-     [purpose *rt-sig-filter* clj?]
-     (when clj?
-       `(defmacro ~'with-kind-filter
-          ~(api-docstring 13 purpose
-             "Executes form with given %s call kind filter in effect.
-             See `set-kind-filter!` for details.")
-          ~'[kind-filter form]
-          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
-             ~~'form)))))
+   (defn-     api:with-ns-filter [*rt-sig-filter*]
+     `(defmacro ~'with-ns-filter
+        "Executes form with given signal namespace filter in effect.
+  See `set-ns-filter!` for details."
+        ~'[ns-filter form]
+        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
+           ~~'form))))
 
-(comment (api:with-kind-filter "purpose" `*my-rt-sig-filter* :clj))
+(comment (api:with-ns-filter `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:set-ns-filter!
-     [purpose *rt-sig-filter*]
+   (defn- api:set-ns-filter! [*rt-sig-filter*]
      `(defn ~'set-ns-filter!
-        ~(api-docstring 11 purpose
-           "Sets %s call namespace filter based on given `ns-filter` spec.
-           `ns-filter` may be:
+        "Sets signal namespace filter based on given `ns-filter` spec.
+  `ns-filter` may be:
 
-             - A namespace.
-             - A str/kw/sym, in which \"*\"s act as wildcards.
-             - A regex pattern of namespace/s to allow.
-             - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :disallow <spec>} with specs as above.
-               If present, `:allow`    spec MUST     match, AND
-               If present, `:disallow` spec MUST NOT match.")
-
+    - A namespace.
+    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A regex pattern of namespace/s to allow.
+    - A vector or set of regex patterns or strs/kws/syms.
+    - {:allow <spec> :disallow <spec>} with specs as above.
+      If present, `:allow`    spec MUST     match, AND
+      If present, `:disallow` spec MUST NOT match."
         ~'[ns-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))))
 
-(comment (api:set-ns-filter! "purpose" `*my-rt-sig-filter*))
+(comment (api:set-ns-filter! `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:with-ns-filter
-     [purpose *rt-sig-filter* clj?]
-     (when clj?
-       `(defmacro ~'with-ns-filter
-          ~(api-docstring 13 purpose
-             "Executes form with given %s call namespace filter in effect.
-             See `set-ns-filter!` for details.")
-          ~'[ns-filter form]
-          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
-             ~~'form)))))
+   (defn-     api:with-id-filter [*rt-sig-filter*]
+     `(defmacro ~'with-id-filter
+        "Executes form with given signal id filter in effect.
+  See `set-id-filter!` for details."
+        ~'[id-filter form]
+        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
+           ~~'form))))
 
-(comment (api:with-ns-filter "purpose" `*my-rt-sig-filter* :clj))
+(comment (api:with-id-filter `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:with-id-filter
-     [purpose *rt-sig-filter* clj?]
-     (when clj?
-       `(defmacro ~'with-id-filter
-          ~(api-docstring 13 purpose
-             "Executes form with given %s call id filter in effect.
-             See `set-id-filter!` for details.")
-          ~'[id-filter form]
-          `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
-             ~~'form)))))
-
-(comment (api:with-id-filter "purpose" `*my-rt-sig-filter* :clj))
-
-#?(:clj
-   (defn- api:set-id-filter!
-     [purpose *rt-sig-filter*]
+   (defn- api:set-id-filter! [*rt-sig-filter*]
      `(defn ~'set-id-filter!
-        ~(api-docstring 11 purpose
-           "Sets %s call id filter based on given `id-filter` spec.
-           `id-filter` may be:
+        "Sets signal id filter based on given `id-filter` spec.
+  `id-filter` may be:
 
-             - A str/kw/sym, in which \"*\"s act as wildcards.
-             - A regex pattern of id/s to allow.
-             - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :disallow <spec>} with specs as above.
-               If present, `:allow`    spec MUST     match, AND
-               If present, `:disallow` spec MUST NOT match.")
-
+    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A regex pattern of id/s to allow.
+    - A vector or set of regex patterns or strs/kws/syms.
+    - {:allow <spec> :disallow <spec>} with specs as above.
+      If present, `:allow`    spec MUST     match, AND
+      If present, `:disallow` spec MUST NOT match."
         ~'[id-filter]
         (enc/force-ref
           (enc/update-var-root! ~*rt-sig-filter*
             (fn [old#] (update-sig-filter old# {:id-filter ~'id-filter})))))))
 
-(comment (api:set-id-filter! "purpose" `*my-rt-sig-filter*))
+(comment (api:set-id-filter! `*my-rt-sig-filter*))
 
 #?(:clj
-   (defn- api:set-min-level!
-     [purpose sf-arity *rt-sig-filter*]
+   (defn- api:with-min-level [sf-arity *rt-sig-filter*]
+     (let [self (symbol (str *ns*) "with-min-level")]
+       (case (int sf-arity)
+         (4)
+         `(defmacro ~'with-min-level
+            "Executes form with given minimum signal level in effect.
+  See `set-min-level!` for details."
+            (~'[               min-level form] (list '~self nil    nil ~'min-level ~'form))
+            (~'[kind           min-level form] (list '~self ~'kind nil ~'min-level ~'form))
+            (~'[kind ns-filter min-level form]
+             `(binding [~'~*rt-sig-filter*
+                        (update-sig-filter ~'~*rt-sig-filter*
+                          {:min-level-fn
+                           (fn [~'old-ml#]
+                             (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
+                ~~'form)))
+
+         (2 3)
+         `(defmacro ~'with-min-level
+            "Executes form with given minimum signal level in effect.
+  See `set-min-level!` for details."
+            (~'[          min-level form] (list '~self nil ~'min-level ~'form))
+            (~'[ns-filter min-level form]
+             `(binding [~'~*rt-sig-filter*
+                        (update-sig-filter ~'~*rt-sig-filter*
+                          {:min-level-fn
+                           (fn [~'old-ml#]
+                             (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
+                ~~'form)))))))
+
+(comment (api:with-min-level 4 `*my-rt-sig-filter*))
+
+#?(:clj
+   (defn- api:set-min-level! [sf-arity *rt-sig-filter*]
      (case (int sf-arity)
        (4)
        `(defn ~'set-min-level!
-          ~(api-docstring 13 purpose
-             "Sets minimum %s call level based on given `min-level` spec.
-             `min-level` may be:
+          "Sets minimum signal level based on given `min-level` spec.
+  `min-level` may be:
 
-               - `nil` (=> no minimum level).
-               - A level keyword (see `level-aliases` var for details).
-               - An integer.
+    - `nil` (=> no minimum level).
+    - A level keyword (see `level-aliases` var for details).
+    - An integer.
 
-             If `ns-filter` is provided, then the given minimum level
-             will apply only for the namespace/s that match `ns-filter`.
-             See `set-ns-filter!` for details.
+  If `ns-filter` is provided, then the given minimum level
+  will apply only for the namespace/s that match `ns-filter`.
+  See `set-ns-filter!` for details.
 
-             If non-nil `kind` is provided, then the given minimum level
-             will apply only for that %s kind.
+  If non-nil `kind` is provided, then the given minimum level
+  will apply only for that signal kind.
 
-             Examples:
+  Examples:
+    (set-min-level! nil)   ; Disable        minimum level
+    (set-min-level! :info) ; Set `:info` as minimum level
+    (set-min-level! 100)   ; Set 100     as minimum level
 
-               (set-min-level! nil)   ; Disable        minimum level
-               (set-min-level! :info) ; Set `:info` as minimum level
-               (set-min-level! 100)   ; Set 100     as minimum level
-
-               ;; Set `:debug` as minimum level for current namespace
-               ;; (nil `kind` => apply to all kinds)
-               (set-min-level! nil *ns* :debug)")
-
+    ;; Set `:debug` as minimum level for current namespace
+    ;; (nil `kind` => all kinds)
+    (set-min-level! nil *ns* :debug)"
           (~'[               min-level] (~'set-min-level! nil    nil ~'min-level))
           (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
           (~'[kind ns-filter min-level]
@@ -1070,27 +1282,24 @@
 
        (2 3)
        `(defn ~'set-min-level!
-          ~(api-docstring 13 purpose
-             "Sets minimum %s call level based on given `min-level` spec.
-             `min-level` may be:
+          "Sets minimum signal level based on given `min-level` spec.
+`min-level` may be:
 
-               - `nil` (=> no minimum level).
-               - A level keyword (see `level-aliases` var for details).
-               - An integer.
+  - `nil` (=> no minimum level).
+  - A level keyword (see `level-aliases` var for details).
+  - An integer.
 
-             If `ns-filter` is provided, then the given minimum level
-             will apply only for the namespace/s that match `ns-filter`.
-             See `set-ns-filter!` for details.
+If `ns-filter` is provided, then the given minimum level
+will apply only for the namespace/s that match `ns-filter`.
+See `set-ns-filter!` for details.
 
-             Examples:
+Examples:
+  (set-min-level! nil)   ; Disable        minimum level
+  (set-min-level! :info) ; Set `:info` as minimum level
+  (set-min-level! 100)   ; Set 100     as minimum level
 
-               (set-min-level! nil)   ; Disable        minimum level
-               (set-min-level! :info) ; Set `:info` as minimum level
-               (set-min-level! 100)   ; Set 100     as minimum level
-
-               ;; Set `:debug` as minimum level for current namespace
-               (set-min-level! *ns* :debug)")
-
+  ;; Set `:debug` as minimum level for current namespace
+  (set-min-level! *ns* :debug)"
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]
            (enc/force-ref
@@ -1101,335 +1310,69 @@
                     (fn [old-ml#]
                       (update-min-level old-ml# nil ~'ns-filter ~'min-level))})))))))))
 
-(comment (api:set-min-level! "purpose" 4 `*my-rt-sig-filter*))
+(comment (api:set-min-level! 4 `*my-rt-sig-filter*))
+
+;;;
 
 #?(:clj
-   (defn- api:with-min-level
-     [purpose sf-arity *rt-sig-filter* clj?]
-     (when clj?
-       (let [self (symbol (str *ns*) "with-min-level")]
-         (case (int sf-arity)
-           (4)
-           `(defmacro ~'with-min-level
-              ~(api-docstring 17 purpose
-                 "Executes form with given minimum %s call level in effect.
-                 See `set-min-level!` for details.")
-              (~'[               min-level form] (list '~self nil    nil ~'min-level ~'form))
-              (~'[kind           min-level form] (list '~self ~'kind nil ~'min-level ~'form))
-              (~'[kind ns-filter min-level form]
-               `(binding [~'~*rt-sig-filter*
-                          (update-sig-filter ~'~*rt-sig-filter*
-                            {:min-level-fn
-                             (fn [~'old-ml#]
-                               (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
-                  ~~'form)))
+   (defn- api:with-handler [*sig-handlers* lib-dispatch-opts]
+     (let [self (symbol (str *ns*) "with-handler")]
+       `(defmacro ~'with-handler
+          "Executes form with ONLY the given signal handler registered.
+  Useful for tests/debugging.
 
-           (2 3)
-           `(defmacro ~'with-min-level
-              ~(api-docstring 17 purpose
-                 "Executes form with given minimum %s call level in effect.
-                 See `set-min-level!` for details.")
-              (~'[          min-level form] (list '~self nil ~'min-level ~'form))
-              (~'[ns-filter min-level form]
-               `(binding [~'~*rt-sig-filter*
-                          (update-sig-filter ~'~*rt-sig-filter*
-                            {:min-level-fn
-                             (fn [~'old-ml#]
-                               (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
-                  ~~'form))))))))
+  See `help:handler-dispatch-options` for handler filters, etc.
+  See also `with-handler+`."
+          (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
+          (~'[handler-id handler-fn dispatch-opts form]
+           `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~lib-dispatch-opts ~~'dispatch-opts)]
+              (enc/try*
+                (binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
+                (finally (~'wrapped-handler-fn#)))))))))
 
-(comment (api:with-min-level "purpose" 4 `*my-rt-sig-filter* :clj))
+(comment (api:with-handler `*my-sig-handlers* {:my-opt :foo}))
 
 #?(:clj
-   (defn- api:get-min-level
-     [purpose sf-arity *rt-sig-filter* ct-sig-filter]
-     (case (int sf-arity)
-       (4)
-       `(defn ~'get-min-level
-          ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} minimum levels.")
-          (~'[       ] (~'get-min-level nil    (str *ns*)))
-          (~'[kind   ] (~'get-min-level ~'kind (str *ns*)))
-          (~'[kind ns]
-           (enc/assoc-some nil
-             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
-             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns))))
+   (defn- api:with-handler+ [*sig-handlers* lib-dispatch-opts]
+     (let [self (symbol (str *ns*) "with-handler+")]
+       `(defmacro ~'with-handler+
+          "Executes form with the given signal handler (also) registered.
+  Useful for tests/debugging.
 
-       (2 3)
-       `(defn ~'get-min-level
-          ~(api-docstring 0 purpose "Returns current ?{:keys [compile-time runtime]} minimum levels.")
-          (~'[  ] (~'get-min-level nil (str *ns*)))
-          (~'[ns]
-           (enc/assoc-some nil
-             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
-             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)))))))
+  See `help:handler-dispatch-options` for handler filters, etc.
+  See also `with-handler`."
+          (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
+          (~'[handler-id handler-fn dispatch-opts form]
+           `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~lib-dispatch-opts ~~'dispatch-opts)]
+              (enc/try*
+                (binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
+                (finally (~'wrapped-handler-fn#)))))))))
 
-(comment (api:get-min-level "purpose" 4 `*my-rt-sig-filter* `my-ct-sig-filter))
+(comment (api:with-handler+ `*my-sig-handlers* {:my-opt :foo}))
 
 #?(:clj
-   (defmacro def-filter-api
-     "Defines signal filter API vars in current ns.
-     NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [purpose sf-arity ct-sig-filter sig-filter-env-config-help *rt-sig-filter*]
-       :or   {purpose "signal"}
-       :as   opts}]
-
-     ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
-     (enc/have? [:ks>= #{:purpose :sf-arity :ct-sig-filter :*rt-sig-filter* #_:*sig-handlers*}] opts)
-     (enc/have? [:or nil? symbol?]           ct-sig-filter  *rt-sig-filter*  #_*sig-handlers*)
-
-     (let [sf-arity        (int (or sf-arity -1))
-           clj?            (not (:ns &env))
-           ct-sig-filter   (enc/resolve-sym &env  ct-sig-filter)
-           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)]
-
-       (when-not (contains? #{1 2 3 4} sf-arity)
-         (unexpected-sf-artity! sf-arity `def-filter-api))
-
-       `(do
-          (enc/defalias level-aliases)
-          ~(api:help:filters    purpose (eval sig-filter-env-config-help))
-          ~(api:get-filters     purpose *rt-sig-filter* ct-sig-filter)
-          ~(api:without-filters purpose *rt-sig-filter* clj?)
-
-          ~(when (>= sf-arity 4)
-             `(do
-                ~(api:set-kind-filter! purpose *rt-sig-filter*)
-                ~(api:with-kind-filter purpose *rt-sig-filter* clj?)))
-
-          ~(api:set-ns-filter! purpose *rt-sig-filter*)
-          ~(api:with-ns-filter purpose *rt-sig-filter* clj?)
-
-          ~(when (>= sf-arity 3)
-             `(do
-                ~(api:set-id-filter! purpose *rt-sig-filter*)
-                ~(api:with-id-filter purpose *rt-sig-filter* clj?)))
-
-          ~(api:set-min-level! purpose sf-arity *rt-sig-filter*)
-          ~(api:with-min-level purpose sf-arity *rt-sig-filter* clj?)
-          ~(api:get-min-level  purpose sf-arity *rt-sig-filter* ct-sig-filter)))))
-
-(comment
-  (macroexpand '(def-filter-api {:purpose nil, :sf-arity 3, :ct-sig-filter my-ct-sig-filter, :*rt-sig-filter* *my-rt-sig-filter*}))
-  (do           (def-filter-api {:purpose nil, :sf-arity 3, :ct-sig-filter my-ct-sig-filter, :*rt-sig-filter* *my-rt-sig-filter*})))
-
-#?(:clj
-   (defn- api:help:handlers
-     [purpose]
-     `(def ~'help:handlers
-        ~(api-docstring 11 purpose
-           "Manage handlers with:
-
-             `get-handlers`       - Returns info  on  registered handlers (dispatch options, etc.)
-             `get-handlers-stats` - Returns stats for registered handlers (handling times,   etc.)
-             `stop-handlers!`     - Stops (relevant)  registered handlers
-
-             `add-handler!`       - Registers   given handler
-             `remove-handler!`    - Unregisters given handler
-
-             `with-handler`       - Executes form with ONLY the given handler        registered
-             `with-handler+`      - Executes form with      the given handler (also) registered
-
-           See the relevant docstrings for details.
-           See `help:handler-dispatch-options` for handler filtering, etc.
-           Clj only: `stop-handlers!` is called automatically on JVM shutdown.
-
-           If anything is unclear, please ping me (@ptaoussanis) so that I can
-           improve these docs!")
-
-        "See docstring")))
-
-(comment (api:help:handlers "purpose"))
-
-#?(:clj
-   (defn- api:help:handler-dispatch-options
-     [purpose]
-     `(def ~'help:handler-dispatch-options
-        ~(api-docstring 11 purpose
-           "Dispatch options can be provided for each handler when calling
-           `add-handler!` or `with-handler/+`. These options will be merged over the
-           defaults specified by `default-handler-dispatch-opts`.
-
-           Dispatch options include:
-
-             `:async` (Clj only) options include:
-
-                 `:buffer-size` (default 1024)
-                   Size of request buffer, and the max number of pending requests before
-                   configured back-pressure behaviour is triggered (see `:mode`).
-
-                 `:mode` (default `:blocking`)
-                   Back-pressure mode ∈ #{:blocking :dropping :sliding}.
-                   Controls what happens when a new request is made while request buffer is full:
-                     `:blocking` => Blocks caller until buffer space is available
-                     `:dropping` => Drops the newest request (noop)
-                     `:sliding`  => Drops the oldest request
-
-                 `:n-threads` (default 1)
-                   Number of threads to use for executing fns (servicing request buffer).
-                   NB execution order may be non-sequential when n > 1.
-
-                 `:drain-msecs` (default 6000 msecs)
-                   Maximum time (in milliseconds) to try allow pending execution requests to
-                   complete during JVM shutdown.
-
-             `:needs-stopping?` (default false)
-               Enable this (only) for handlers that need to close/release resources or otherwise
-               finalize themselves. Iff true, `handler-fn` will be called with no arguments when:
-                 1. Handler is removed by    `remove-handler!` call
-                 2. Handler is removed after `with-handler/+`  call
-                 3. `stop-handlers!` is called (typically on system shutdown)
-
-             `:priority` (default 100)
-               Optional handler priority ∈ℤ.
-               Handlers will be called in descending priority order.
-
-             `:sample-rate` (default nil => no sampling)
-               Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
-               When present, handle only this (random) proportion of args:
-                 1.0 => handle every arg (same as `nil` rate, default)
-                 0.0 => noop   every arg
-                 0.5 => handle random 50%% of args
-
-             `:kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
-             `:ns-filter`   - Namespace filter as in `set-ns-filter!`
-             `:id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
-             `:min-level`   - Minimum   level  as in `set-min-level!`
-
-             `:when-fn` (default nil => always allow)
-               Optional nullary (fn allow? []) that must return truthy for handler to be
-               called. When present, called *after* sampling and other filters, but before
-               rate limiting.
-
-             `:rate-limit` (default nil => no rate limit)
-               Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
-               {<limit-id> [<n-max-calls> <msecs-window>]}.
-
-               Examples:
-                 {\"1/sec\"  [1   1000]} => Max 1  call  per 1000 msecs
-                 {\"1/sec\"  [1   1000]
-                  \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
-                                          and 10 calls per 60   secs
-
-             `:middleware` (default nil => no middleware)
-               Optional (fn [handler-arg]) => ?modified-handler-arg to apply before
-               handling. When middleware returns nil, skips handler.
-
-               Compose multiple middleware fns together with `comp-middleware`.
-
-             `:error-fn` - (fn [{:keys [handler-id handler-arg error]}]) to call on handler error.
-             `:backp-fn` - (fn [{:keys [handler-id                  ]}]) to call on handler back-pressure.
-
-           If anything is unclear, please ping me (@ptaoussanis) so that I can
-           improve these docs!")
-
-        "See docstring")))
-
-#?(:clj
-   (defn- api:get-handlers
-     [purpose *sig-handlers*]
-     `(defn ~'get-handlers
-        ~(api-docstring 11 purpose
-           "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn handler-stats_]}}
-           for all registered %s handlers.")
-        [] (get-handlers-map ~*sig-handlers*))))
-
-(comment (api:get-handlers "purpose" `*my-sig-handlers*))
-
-#?(:clj
-   (defn- api:get-handlers-stats
-     [purpose *sig-handlers*]
-     `(defn ~'get-handlers-stats
-        ~(api-docstring 11 purpose
-           "Alpha, subject to change.
-           Returns ?{<handler-id> {:keys [handling-nsecs counts]}} for all registered
-           %s handlers that have the `:track-stats?` dispatch option enabled.
-
-           Stats include:
-
-             `:handling-nsecs` - Summary stats of nanosecond handling times, keys:
-               `:min`  - Minimum handling time
-               `:max`  - Maximum handling time
-               `:mean` - Arithmetic mean handling time
-               `:mad`  - Mean absolute deviation of handling time (measure of dispersion)
-               `:var`  - Variance                of handling time (measure of dispersion)
-               `:p50`  - 50th percentile of handling time (50%% of times <= this)
-               `:p90`  - 90th percentile of handling time (90%% of times <= this)
-               `:p99`  - 99th percentile of handling time
-               `:last` - Most recent        handling time
-               ...
-
-             `:counts` - Integer counts for handler outcomes, keys (chronologically):
-
-               `:dropped`       - Noop handler calls due to stopped handler
-               `:back-pressure` - Handler calls that experienced (async) back-pressure
-                                  (possible noop, depending on back-pressure mode)
-
-               `:sampled`       - Noop  handler calls due to sample rate
-               `:filtered`      - Noop  handler calls due to kind/ns/id/level/when filtering
-               `:rate-limited`  - Noop  handler calls due to rate limit
-               `:disallowed`    - Noop  handler calls due to sampling/filtering/rate-limiting
-               `:allowed`       - Other handler calls    (no sampling/filtering/rate-limiting)
-
-               `:suppressed`    - Noop handler calls due to nil middleware result
-               `:handled`       - Handler calls that completed successfully
-               `:errors`        - Handler calls that threw an error
-
-               Note that for performance reasons returned counts are not mutually atomic,
-               e.g. `:sampled` count may be incremented before `:disallowed` count is.
-
-           Useful for understanding/debugging how your handlers behave in practice,
-           especially when they're under stress (high-volumes, etc.).
-
-           Handler stats are tracked from the time each handler is last registered
-           (e.g. with an `add-handler!` call).")
-        [] (get-handlers-stats ~*sig-handlers*))))
-
-(comment (api:get-handlers-stats "purpose" `*my-sig-handlers*))
-
-#?(:clj
-   (defn- api:remove-handler!
-     [purpose *sig-handlers*]
-     `(defn ~'remove-handler!
-        ~(api-docstring 11 purpose
-           "Deregisters %s handler with given id, and returns
-           ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
-           still registered.")
-        ~'[handler-id]
-        (let [removed-handler#  (get-wrapped-handler-fn ~*sig-handlers* ~'handler-id)
-              new-handlers-vec# (enc/update-var-root!   ~*sig-handlers*
-                                  (fn [m#] (remove-handler m# ~'handler-id)))]
-
-          (when removed-handler# (removed-handler#))
-          (get-handlers-map new-handlers-vec#)))))
-
-(comment (api:remove-handler! "purpose" `*my-sig-handlers*))
-
-#?(:clj
-   (defn- api:add-handler!
-     [purpose *sig-handlers* api-dispatch-opts]
+   (defn- api:add-handler! [*sig-handlers* lib-dispatch-opts]
      `(defn ~'add-handler!
-        ~(api-docstring 11 purpose
-           "Registers given %s handler and returns
-           {<handler-id> {:keys [dispatch-opts handler-fn]}} for all %s handlers
-           now registered.
+        "Registers given signal handler and returns
+  {<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
+  now registered.
 
-           `handler-fn` should be a fn of 1 or 2 arities:
+  `handler-fn` should be a fn of 1 or 2 arities:
 
-             [handler-arg] ; Single argument
-               Called asynchronously or synchronously (depending on dispatch options)
-               to do something useful with the given %s data.
+    [signal] ; Single argument
+      Called asynchronously or synchronously (depending on dispatch options)
+      to do something useful with the given signal.
 
-               Example actions:
-                 Save data to disk or db, `tap>`, log, `put!` to an appropriate
-                 `core.async` channel, filter, aggregate, use for a realtime analytics
-                 dashboard, examine for outliers or unexpected data, etc.
+      Example actions:
+        Save data to disk or db, `tap>`, log, `put!` to an appropriate
+        `core.async` channel, filter, aggregate, use for a realtime analytics
+        dashboard, examine for outliers or unexpected data, etc.
 
-             [] ; No arguments
-               Called exactly once when gracefully stopping handler to provide an opportunity
-               for handler to close/release any resources that it may have opened/acquired, etc.
+    [] ; No arguments
+      Called exactly once when gracefully stopping handler to provide an opportunity
+      for handler to close/release any resources that it may have opened/acquired, etc.
 
-           See `help:handler-dispatch-options` for handler filtering, etc.")
-
+  See `help:handler-dispatch-options` for handler filters, etc."
         (~'[handler-id handler-fn              ] (~'add-handler! ~'handler-id ~'handler-fn nil))
         (~'[handler-id handler-fn dispatch-opts]
          {:arglists
@@ -1444,146 +1387,125 @@
            (enc/update-var-root! ~*sig-handlers*
              (fn [m#]
                (add-handler m# ~'handler-id ~'handler-fn,
-                 ~api-dispatch-opts ~'dispatch-opts))))))))
+                 ~lib-dispatch-opts ~'dispatch-opts))))))))
 
-(comment (api:add-handler! "purpose" `*my-sig-handlers* 'api-dispatch-opts))
-
-#?(:clj
-   (defn- api:stop-handlers!
-     [purpose *sig-handlers* clj?]
-     (let [docstring
-           (api-docstring 13 purpose
-             "Stops relevant registered %s handlers in parallel, and returns
-             ?{<handler-id> {:keys [okay error]}}.
-
-             Future calls to stopped handlers will noop.
-             Clj only: `stop-handlers!` is called automatically on JVM shutdown.")]
-
-       `(defn ~'stop-handlers! ~docstring [] (stop-handlers! ~*sig-handlers*)))))
-
-(comment (api:stop-handlers! "purpose" `*my-sig-handlers* :clj))
+(comment (api:add-handler! `*my-sig-handlers* 'lib-dispatch-opts))
 
 #?(:clj
-   (defn- api:add-shutdown-hook!
-     [*sig-handlers* *auto-stop-handlers?*]
-     `(enc/defonce ~'_handler-shutdown-hook {:private true}
-        (.addShutdownHook (Runtime/getRuntime)
-          (Thread.
-            (fn []
-              (when ~*auto-stop-handlers?*
-                ;; JVM is about to terminate anyway so keep runners active as long
-                ;; as possible for benefit of async handlers that don't need stopping
-                (binding [*stop-runners?* false]
-                  (stop-handlers! ~*sig-handlers*)))))))))
+   (defn- api:remove-handler! [*sig-handlers*]
+     `(defn ~'remove-handler!
+        "Deregisters signal handler with given id, and returns
+  ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
+  still registered."
+        ~'[handler-id]
+        (let [removed-handler#  (get-wrapped-handler-fn ~*sig-handlers* ~'handler-id)
+              new-handlers-vec# (enc/update-var-root!   ~*sig-handlers*
+                                  (fn [m#] (remove-handler m# ~'handler-id)))]
 
-(comment (api:add-shutdown-hook! `*my-sig-handlers* `*my-auto-stop-handlers?*))
+          (when removed-handler# (removed-handler#))
+          (get-handlers-map new-handlers-vec#)))))
 
-#?(:clj
-   (defn- api:with-handler
-     [purpose *sig-handlers* api-dispatch-opts clj?]
-     (when clj?
-       (let [self (symbol (str *ns*) "with-handler")]
-         `(defmacro ~'with-handler
-            ~(api-docstring 15 purpose
-               "Executes form with ONLY the given handler-fn registered.
-               Useful for tests/debugging.
-
-               See `help:handler-dispatch-options` for handler filtering, etc.
-               See also `with-handler+`.")
-            (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
-            (~'[handler-id handler-fn dispatch-opts form]
-             `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
-                (enc/try*
-                  (binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
-                  (finally (~'wrapped-handler-fn#))))))))))
-
-(comment (api:with-handler "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
+(comment (api:remove-handler! `*my-sig-handlers*))
 
 #?(:clj
-   (defn- api:with-handler+
-     [purpose *sig-handlers* api-dispatch-opts clj?]
-     (when clj?
-       (let [self (symbol (str *ns*) "with-handler+")]
-         `(defmacro ~'with-handler+
-            ~(api-docstring 15 purpose
-               "Executes form with the given handler-fn (also) registered.
-               Useful for tests/debugging.
+   (defn- api:stop-handlers! [*sig-handlers*]
+     `(defn ~'stop-handlers!
+        "Stops relevant registered signal handlers in parallel, and returns
+  ?{<handler-id> {:keys [okay error]}}.
 
-               See `help:handler-dispatch-options` for handler filtering, etc.
-               See also `with-handler`.")
-            (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
-            (~'[handler-id handler-fn dispatch-opts form]
-             `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~api-dispatch-opts ~~'dispatch-opts)]
-                (enc/try*
-                  (binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
-                  (finally (~'wrapped-handler-fn#))))))))))
+  Future calls to stopped handlers will noop.
 
-(comment (api:with-handler+ "purpose" `*my-sig-handlers* {:my-opt :foo} :clj))
+  Clj only:  `stop-handlers!` is called automatically on JVM shutdown
+  when `*auto-stop-handlers?*` is true (it is by default)."
+        [] (stop-handlers! ~*sig-handlers*))))
+
+(comment (api:stop-handlers! `*my-sig-handlers*))
 
 #?(:clj
-   (defmacro def-handler-api
-     "Defines signal handler API vars in current ns.
-     NB: Cljs ns will need appropriate `:require-macros`."
-     [{:as opts
-       :keys
-       [purpose sf-arity api-dispatch-opts sig-filter-env-config-help,
-        *rt-sig-filter* *sig-handlers* *auto-stop-handlers?*]
-
-       :or
-       {purpose "signal"}}]
-
-     ;; `purpose` ∈ #{"signal" "profiling" "logging" ...}
-     (enc/have? [:ks>= #{:purpose :sf-arity #_:ct-sig-filter :*rt-sig-filter* :*sig-handlers*}] opts)
-     (enc/have? [:or nil? symbol?]           #_ct-sig-filter  *rt-sig-filter*  *sig-handlers* *auto-stop-handlers?*)
-
-     (let [clj?            (not (:ns &env))
-           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)
-           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)
-           *auto-stop-handlers?*
-           (when clj?
-             (if-let [sym *auto-stop-handlers?*]
-               (enc/resolve-sym &env sym)
-               :always))]
-
+   (defn- api:shutdown-hook [*sig-handlers*]
+     (let [*auto-stop-handlers?* (symbol (str *ns*) "*auto-stop-handlers?*")]
        `(do
-          ~(api:help:handlers                 purpose)
-          ~(api:help:handler-dispatch-options purpose)
-          ~(api:get-handlers                  purpose *sig-handlers*)
-          ~(api:get-handlers-stats            purpose *sig-handlers*)
-          ~(api:remove-handler!               purpose *sig-handlers*)
-          ~(api:add-handler!                  purpose *sig-handlers* api-dispatch-opts)
-          ~(api:with-handler                  purpose *sig-handlers* api-dispatch-opts clj?)
-          ~(api:with-handler+                 purpose *sig-handlers* api-dispatch-opts clj?)
-          ~(api:stop-handlers!                purpose *sig-handlers* clj?)
-          ~(when clj?
-             (api:add-shutdown-hook! *sig-handlers* *auto-stop-handlers?*))))))
+          (enc/defonce ~*auto-stop-handlers?* {:dynamic true}
+            "Automatically call `stop-handlers!` on JVM shutdown iff this is
+  enabled (it is by default). Advanced users may want to disable this in order
+  to instead call `stop-handlers!` manually as part of their own shutdown
+  procedure (e.g. AFTER successful app shutdown)."
+            true)
 
-(comment
-  (macroexpand '(def-handler-api {:purpose nil, :sf-arity 3, :*rt-sig-filter* *my-rt-sig-filter*, :*sig-handlers* *my-sig-handlers*}))
-  (do           (def-handler-api {:purpose nil, :sf-arity 3, :*rt-sig-filter* *my-rt-sig-filter*, :*sig-handlers* *my-sig-handlers*}))
+          (enc/defonce ~'_handler-shutdown-hook {:private true}
+            (.addShutdownHook (Runtime/getRuntime)
+              (Thread.
+                (fn []
+                  (when ~*auto-stop-handlers?*
+                    ;; JVM is about to terminate anyway so keep runners active as long
+                    ;; as possible for benefit of async handlers that don't need stopping
+                    (binding [*stop-runners?* false]
+                      (stop-handlers! ~*sig-handlers*)))))))))))
 
-  (add-handler!    :hid1 (fn [x]) {})
-  (remove-handler! :hid1)
-  (get-handlers))
+(comment (api:shutdown-hook `*my-sig-handlers*))
+
+;;;;
 
 #?(:clj
    (defmacro def-api
-     "Calls both `def-filter-api` and `def-handler-api` with given opts.
-     NB: Cljs ns will need appropriate `:require-macros`."
-     [opts]
-     `(do
-        (def-filter-api  ~opts)
-        (def-handler-api ~opts))))
+     "Defines signal API vars in current ns.
+  NB: Cljs ns will need appropriate `:require-macros`."
+     [{:keys [sf-arity ct-sig-filter *rt-sig-filter* *sig-handlers* lib-dispatch-opts]
+       :as opts}]
+
+     (enc/have? [:ks>= #{:sf-arity :ct-sig-filter :*rt-sig-filter* :*sig-handlers*}] opts)
+     (enc/have? [:or nil? symbol?]  ct-sig-filter  *rt-sig-filter*  *sig-handlers*)
+
+     (when-not (contains? #{2 3 4} sf-arity)
+       (unexpected-sf-artity! sf-arity `def-api))
+
+     (let [clj?            (not (:ns &env))
+           sf-arity        (int sf-arity)
+           ct-sig-filter   (enc/resolve-sym &env  ct-sig-filter)
+           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)
+           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)]
+
+       `(do
+          (enc/defalias level-aliases)
+
+          ~(api:help:filters)
+          ~(api:help:handlers)
+          ~(api:help:handler-dispatch-options)
+
+          ~(api:get-filters             *rt-sig-filter* ct-sig-filter)
+          ~(api:get-min-levels sf-arity *rt-sig-filter* ct-sig-filter)
+
+          ~(api:get-handlers       *sig-handlers*)
+          ~(api:get-handlers-stats *sig-handlers*)
+
+          ~(when clj? (api:without-filters *rt-sig-filter*))
+
+          ~(when (and (>= sf-arity 4) clj?) (api:with-kind-filter *rt-sig-filter*))
+          ~(when      (>= sf-arity 4)       (api:set-kind-filter! *rt-sig-filter*))
+
+          ~(when clj? (api:with-ns-filter *rt-sig-filter*))
+          ~(do        (api:set-ns-filter! *rt-sig-filter*))
+
+          ~(when (and (>= sf-arity 3) clj?) (api:with-id-filter *rt-sig-filter*))
+          ~(when      (>= sf-arity 3)       (api:set-id-filter! *rt-sig-filter*))
+
+          ~(when clj? (api:with-min-level sf-arity *rt-sig-filter*))
+          ~(do        (api:set-min-level! sf-arity *rt-sig-filter*))
+
+          ~(when clj? (api:with-handler  *sig-handlers* lib-dispatch-opts))
+          ~(when clj? (api:with-handler+ *sig-handlers* lib-dispatch-opts))
+
+          ~(api:add-handler!    *sig-handlers* lib-dispatch-opts)
+          ~(api:remove-handler! *sig-handlers*)
+          ~(api:stop-handlers!  *sig-handlers*)
+
+          ~(when clj? (api:shutdown-hook *sig-handlers*))))))
 
 (comment
-  (do
-    (def            my-ct-sig-filter  nil)
-    (def ^:dynamic *my-rt-sig-filter* nil)
-    (def ^:dynamic *my-sig-handlers*  nil))
-
-  (def-filter-api
-    {:purpose         "testing"
-     :sf-arity        3
-     :ct-sig-filter    my-ct-sig-filter
-     :*rt-sig-filter* *my-rt-sig-filter*
-     :*sig-handlers*  *my-sig-handlers*}))
+  ;; See `taoensso.encore-tests.signal-api` ns
+  (macroexpand
+    '(def-api
+       {:sf-arity 4
+        :ct-sig-filter    my-ct-sig-filter
+        :*rt-sig-filter* *my-rt-sig-filter*
+        :*sig-handlers*  *my-sig-handlers*})))

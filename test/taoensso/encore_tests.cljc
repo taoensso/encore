@@ -1616,15 +1616,12 @@
 
 ;;;;
 
-;; (sigs/api:debug :o1)
-;; (is (= (api-debug :i1) [:o1 :i1]))
-
 (def cnt (enc/counter 0))
 
 (deftype MySignal [level cnt]
   sigs/IFilterableSignal
-  (signal-value  [_ _] cnt)
-  (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level)))
+  (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))
+  (signal-value  [_ _] cnt))
 
 (deftest _signal-api
   [(testing "Signal filtering"
@@ -1636,10 +1633,10 @@
       (is (= (sapi/set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
       (is (= @sapi/*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
       (is (= (sapi/get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))
-      (is (= (sapi/get-min-level)  {:runtime                                                               :info}))
+      (is (= (sapi/get-min-levels) {:runtime                                                               :info}))
 
-      (is (= (sapi/without-filters (sapi/get-filters))   nil))
-      (is (= (sapi/without-filters (sapi/get-min-level)) nil))
+      (is (= (sapi/without-filters (sapi/get-filters))    nil))
+      (is (= (sapi/without-filters (sapi/get-min-levels)) nil))
 
       (is (enc/submap? (sapi/with-kind-filter "-" @sapi/*rt-sig-filter*) {:kind-filter "-"}))
       (is (enc/submap? (sapi/with-ns-filter   "-" @sapi/*rt-sig-filter*) {:ns-filter   "-"}))
@@ -1649,9 +1646,9 @@
       (is (enc/submap? (sapi/with-min-level :kind1 "ns1" 100 @sapi/*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
       (is (enc/submap?
             (sapi/with-min-level :kind1 "ns1" :warn
-              {:l1 (sapi/get-min-level)
-               :l2 (sapi/get-min-level :kind1)
-               :l3 (sapi/get-min-level :kind1 "ns1")})
+              {:l1 (sapi/get-min-levels)
+               :l2 (sapi/get-min-levels :kind1)
+               :l3 (sapi/get-min-levels :kind1 "ns1")})
 
             {:l1 {:runtime :info}, :l2 {:runtime :info}, :l3 {:runtime :warn}}))
 
