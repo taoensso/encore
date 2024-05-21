@@ -7101,7 +7101,7 @@
             {:context  `name-filter
              :param    'filter-spec
              :expected '#{string keyword symbol set regex namespace
-                          {:allow <spec>, :deny <spec>}}})))]
+                          {:allow <spec>, :disallow <spec>}}})))]
 
   (defn name-filter
     "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
@@ -7116,46 +7116,40 @@
         Will conform on ANY match.
         If you need literal \"*\"s, use #\"\\*\" regex instead.
 
-      - {:allow <spec> :deny <spec>} with specs as above.
-        Will conform iff `allow` spec matches AND `deny` spec does NOT.
+      - {:allow <spec> :disallow <spec>} with specs as above.
+        Will conform iff `allow` spec matches AND `disallow` spec does NOT.
 
-    Resulting conform fn is useful as allowlist and/or denylist.
     Example inputs: namespace strings, class names, ids, etc.
 
     Spec examples:
       *ns*, #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
-      {:allow #{\"foo\" \"bar.*\"} :deny #{\"foo.*.bar.*\"}},
+      {:allow #{\"foo\" \"bar.*\"} :disallow #{\"foo.*.bar.*\"}},
       #\"(foo1|foo2)\\.bar\"."
 
     {:added "Encore v3.67.0 (2023-09-08)"}
     [spec]
     (if-not (map? spec)
-      (recur {:allow spec :deny nil})
-      (let [cache?         (get spec :cache?)
-            allow-spec (or (get spec :allow) (get spec :whitelist))
-            deny-spec  (or (get spec :deny)  (get spec :blacklist))
+      (recur {:allow spec :disallow nil})
+      (let [cache?            (get spec :cache?)
+            allow-spec    (or (get spec :allow)    (get spec :whitelist))
+            disallow-spec (or (get spec :disallow) (get spec :blacklist) (get spec :deny))
 
-            allow (when-let [as allow-spec] (compile->match-fn as cache?))
-            deny  (when-let [ds deny-spec]  (compile->match-fn ds cache?))]
+            allow     (when-let [as    allow-spec] (compile->match-fn as cache?))
+            disallow  (when-let [ds disallow-spec] (compile->match-fn ds cache?))]
 
         (cond
-          (= deny  always) never
-          (= allow never)  never
+          (= disallow always) never
+          (=    allow never)  never
 
-          (and allow deny)
-          (fn conform? [in]
-            (if ^boolean (allow in)
-              (if ^boolean (deny in)
-                false
-                true)
-              false))
+          (and allow disallow)
+          (fn conform? [in] (if ^boolean (allow in) (if ^boolean (disallow in) false true) false))
 
-          allow (if (= allow always) always (fn conform? [in] (if ^boolean (allow in) true  false)))
-          deny  (if (= deny  never)  always (fn conform? [in] (if ^boolean (deny  in) false true)))
+          allow    (if (= allow    always) always (fn conform? [in] (if ^boolean (allow    in) true  false)))
+          disallow (if (= disallow never)  always (fn conform? [in] (if ^boolean (disallow in) false true)))
           :else
           (throw
-            (ex-info "[encore/name-filter] `allow-spec` and `deny-spec` cannot both be nil"
-              {:allow-spec allow-spec :deny-spec deny-spec})))))))
+            (ex-info "[encore/name-filter] `allow-spec` and `disallow-spec` cannot both be nil"
+              {:allow-spec allow-spec :disallow-spec disallow-spec})))))))
 
 (comment (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo")))) ; 118.25
 
@@ -7461,7 +7455,7 @@
       ([whitelist blacklist]
        (if (and (nolist? whitelist) (nolist? blacklist))
          (fn [_] true) ; Unfortunate API choice
-         (name-filter {:allow whitelist :deny blacklist})))))
+         (name-filter {:allow whitelist :disallow blacklist})))))
 
   #?(:clj (defn ^:no-doc ^:deprecated set-body      [rresp body]    (ring-set-body      body    rresp)))
   #?(:clj (defn ^:no-doc ^:deprecated set-status    [rresp code]    (ring-set-status    code    rresp)))

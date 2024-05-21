@@ -827,9 +827,9 @@
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A regex pattern of kind/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.
-               If present, `:allow` spec MUST     match, AND
-               If present, `:deny`  spec MUST NOT match.")
+             - {:allow <spec> :disallow <spec>} with specs as above.
+               If present, `:allow`    spec MUST     match, AND
+               If present, `:disallow` spec MUST NOT match.")
 
         ~'[kind-filter]
         (enc/force-ref
@@ -864,9 +864,9 @@
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A regex pattern of namespace/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.
-               If present, `:allow` spec MUST     match, AND
-               If present, `:deny`  spec MUST NOT match.")
+             - {:allow <spec> :disallow <spec>} with specs as above.
+               If present, `:allow`    spec MUST     match, AND
+               If present, `:disallow` spec MUST NOT match.")
 
         ~'[ns-filter]
         (enc/force-ref
@@ -914,9 +914,9 @@
              - A str/kw/sym, in which \"*\"s act as wildcards.
              - A regex pattern of id/s to allow.
              - A vector or set of regex patterns or strs/kws/syms.
-             - {:allow <spec> :deny <spec>} with specs as above.
-               If present, `:allow` spec MUST     match, AND
-               If present, `:deny`  spec MUST NOT match.")
+             - {:allow <spec> :disallow <spec>} with specs as above.
+               If present, `:allow`    spec MUST     match, AND
+               If present, `:disallow` spec MUST NOT match.")
 
         ~'[id-filter]
         (enc/force-ref

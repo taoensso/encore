@@ -1055,14 +1055,14 @@
    (is (true?  ((enc/name-filter ["foo" "b*"])  :bar)))
    (is (false? ((enc/name-filter ["foo" "b*"])  :qux)))
 
-   (is (false? ((enc/name-filter {:allow :any :deny :any}) "foo")))
-   (is (true?  ((enc/name-filter {:allow :any :deny  #{}}) "foo")))
+   (is (false? ((enc/name-filter {:allow :any :disallow :any}) "foo")))
+   (is (true?  ((enc/name-filter {:allow :any :disallow  #{}}) "foo")))
 
    (is (true? ((enc/name-filter {:allow "foo*"}) "foo")))
    (is (true? ((enc/name-filter {:allow "foo*"}) :foobar)))
 
-   (is (false? ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobar)))
-   (is (true?  ((enc/name-filter {:allow "foo*" :deny "foobar"}) :foobaz)))])
+   (is (false? ((enc/name-filter {:allow "foo*" :disallow "foobar"}) :foobar)))
+   (is (true?  ((enc/name-filter {:allow "foo*" :disallow "foobar"}) :foobaz)))])
 
 ;;;;
 
@@ -1575,13 +1575,13 @@
       (is (true?  (sf-allow? [{:allow #{"a.*.c"}}    "a.b3.c"] [nil :info])))
       (is (true?  (sf-allow? [{:allow #{"a.*.c"}} "a.b1.b2.c"] [nil :info])))
 
-      (is (true?  (sf-allow? [{:deny #{}}     "ns1"] [nil :info])))
-      (is (false? (sf-allow? [{:deny #{"*"}}  "ns1"] [nil :info])))
-      (is (false? (sf-allow? [{:deny #{:any}} "ns1"] [nil :info])))
-      (is (false? (sf-allow? [{:deny "*"}     "ns1"] [nil :info])))
-      (is (false? (sf-allow? [{:deny :any}    "ns1"] [nil :info])))
+      (is (true?  (sf-allow? [{:disallow #{}}     "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:disallow #{"*"}}  "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:disallow #{:any}} "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:disallow "*"}     "ns1"] [nil :info])))
+      (is (false? (sf-allow? [{:disallow :any}    "ns1"] [nil :info])))
 
-      (is (false? (sf-allow? [{:allow :any :deny :any} "ns1"] [nil :info])) "Deny > allow")
+      (is (false? (sf-allow? [{:allow :any :disallow :any} "ns1"] [nil :info])) "Disallow > allow")
 
       (is (false? (sf-allow? ["ns1" nil] [nil :info]))                                          "ns spec without ns")
       (is (->>    (sf-allow? [nil   nil] [:info nil]) (enc/throws? :common "Invalid level")) "level spec without level")])
