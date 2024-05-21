@@ -1846,7 +1846,22 @@
            (sapi/remove-handler! :hid2)
 
            [(is (false? @st1?_) "Removing :hid1 didn't auto stop it")
-            (is (true?  @st2?_) "Removing :hid2 did    auto stop it")])])])
+            (is (true?  @st2?_) "Removing :hid2 did    auto stop it")])])
+
+      (testing "Handler stats"
+        (sapi/add-handler! :hid1 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
+        (sapi/add-handler! :hid2 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
+        (sapi/add-handler! :hid3 (fn [_]) {:async nil             :track-stats? false})
+        (dotimes [_ 1e3] (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))
+
+        [(is (enc/submap? (sapi/get-handlers-stats)
+               {:hid1 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
+                :hid2 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
+                :hid3 :submap/nx}))
+
+         (is (enc/submap? @(get-in (sapi/get-handlers) [:hid1 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
+         (is (enc/submap? @(get-in (sapi/get-handlers) [:hid2 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
+         (is (not (contains? (get  (sapi/get-handlers) :hid3) :handler-stats_)))])])
 
    (testing "Filterable expansion"
      [(is (enc/submap? (sapi/sig-exp {:level :info})

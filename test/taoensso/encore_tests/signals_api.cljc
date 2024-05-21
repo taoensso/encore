@@ -2,6 +2,8 @@
   (:require
    [taoensso.encore.signals :as sigs]))
 
+(comment (remove-ns 'taoensso.encore-tests.signals-api))
+
 (do
   (def            ct-sig-filter  nil)
   (def ^:dynamic *rt-sig-filter* nil)

@@ -14,7 +14,8 @@
   (:refer-clojure :exclude [binding])
   (:require
    [clojure.string  :as str]
-   [taoensso.encore :as enc :refer [binding have have?]])
+   [taoensso.encore :as enc :refer [binding have have?]]
+   [taoensso.encore.stats :as stats])
 
   #?(:cljs
      (:require-macros
@@ -463,17 +464,31 @@
 
 (defn get-handlers-map
   "Returns non-empty ?{<handler-id> {:keys [dispatch-opts handler-fn ...]}}."
-  ([handlers-vec         ] (get-handlers-map handlers-vec false))
-  ([handlers-vec verbose?]
+  ([handlers-vec     ] (get-handlers-map handlers-vec false))
+  ([handlers-vec raw?]
    (when handlers-vec
      (reduce
        (fn [m wrapped-handler-fn]
          (let [whm (meta wrapped-handler-fn)]
            (assoc m (get whm :handler-id)
-             (if verbose?
-               (assoc       whm :wrapped-handler-fn wrapped-handler-fn)
-               (select-keys whm [:dispatch-opts :handler-fn])))))
+             (if raw?
+               whm
+               (let [info (select-keys  whm [:dispatch-opts :handler-fn])]
+                 (if-let [stats-fn (get whm :stats-fn)]
+                   (assoc info :handler-stats_ (delay (stats-fn)))
+                   (do    info)))))))
        nil handlers-vec))))
+
+(defn get-handlers-stats
+  "Returns non-empty ?{<handler-id> ?{:keys [handling-nsecs counts]}}."
+  [handlers-vec]
+  (when-let [handlers-map (get-handlers-map handlers-vec :raw)]
+    (reduce-kv
+      (fn [m handler-id {:keys [stats-fn]}]
+        (if stats-fn
+          (assoc m handler-id (stats-fn))
+          (do    m)))
+      nil handlers-map)))
 
 (defn call-handlers!
   "Calls given handlers with the given signal.
@@ -487,7 +502,7 @@
   "Stops relevant handlers in parallel and returns
   {<handler-id> {:keys [okay error drained?]}}."
   [handlers-vec]
-  (when-let [handlers-map (get-handlers-map handlers-vec :verbose)]
+  (when-let [handlers-map (get-handlers-map handlers-vec :raw)]
     (let [#?@(:clj [stop-runners? *stop-runners?*])
           results ; {<handler-id> <result-or-promise>}
           (reduce-kv
@@ -565,9 +580,13 @@
 (def           default-handler-dispatch-opts
   "Default handler dispatch options, see
   `help:handler-dispatch-options` for details."
-  #?(:cljs {:priority default-handler-priority}
+  #?(:cljs
+     {:priority default-handler-priority
+      :track-stats? false}
+
      :clj
      {:priority default-handler-priority,
+      :track-stats? true
       :async
       {:mode :blocking
        :buffer-size 1024
@@ -589,7 +608,7 @@
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
           kind-filter ns-filter id-filter min-level,
           rl-error rl-backp error-fn backp-fn,
-          needs-stopping?]}
+          needs-stopping? track-stats?]}
         dispatch-opts
 
         [sample-rate sample-rate-fn]
@@ -670,37 +689,62 @@
 
             (enc/assoc-some result :drained? drained?)))
 
+        ssb (when track-stats? (stats/summary-stats-buffered-fast 1e5 nil))
+
+        [cnt-allowed cnt-disallowed cnt-handled cnt-errors cnt-backp,
+         cnt-sampled cnt-filtered cnt-rate-limited cnt-suppressed cnt-dropped]
+        (when track-stats? (repeatedly 10 enc/counter))
+
         handle-signal! ; Block => truthy
         (fn [sig-raw]
-          (or
-            (enc/try* ; Non-specific (global) trap
-              (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
-                    allow?
-                    (and
-                      (if sample-rate (< (Math/random) (double sample-rate))  true)
-                      (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
-                      (if when-fn     (when-fn #_sig-raw)                     true)
-                      (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
-                      )]
+          (let [ns0 (when track-stats? (enc/now-nano))
+                result
+                (or
+                  (enc/try* ; Non-specific (global) trap
+                    (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
+                          allow?
+                          (if track-stats?
+                            (and
+                              (if sample-rate (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
+                              (if sig-filter* (if (allow-signal? sig-raw sig-filter*)    true (do (cnt-filtered) false)) true)
+                              (if when-fn     (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
+                              (if rl-handler  (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
+                              )
 
-                (when allow?
-                  (when-let [sig-val ; Raw signal -> library-level handler-arg
-                             (signal-value sig-raw
-                               (when              sample-rate
-                                 (HandlerContext. sample-rate)))]
+                            (and
+                              (if sample-rate (< (Math/random) (double sample-rate))  true)
+                              (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
+                              (if when-fn     (when-fn #_sig-raw)                     true)
+                              (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
+                              ))]
 
-                    (enc/try*
-                      (when-let [sig-val* ; Library-level handler-arg -> arb user-level value
+                      (when track-stats? (if allow? (cnt-allowed) (cnt-disallowed)))
+
+                      (when allow?
+                        (when-let [sig-val ; Raw signal -> library-level handler-arg
+                                   (signal-value sig-raw
+                                     (when              sample-rate
+                                       (HandlerContext. sample-rate)))]
+
+                          (enc/try*
+                            (enc/if-not
+                                [sig-val* ; Library-level handler-arg -> arb user-level value
                                  (if middleware
                                    (middleware sig-val) ; Apply handler middleware
                                    (do         sig-val))]
 
-                        (enc/try*
-                          (handler-fn sig-val*) true
-                          (catch :all t (when error-fn* (error-fn* sig-val* t)))))
-                      (catch     :all t (when error-fn* (error-fn* sig-val  t)))))))
-              (catch             :all t (when error-fn* (error-fn* sig-raw  t))))
-            false))
+                              (do (when track-stats? (cnt-suppressed)) nil)
+                              (enc/try*
+                                (handler-fn sig-val*)
+                                (when track-stats? (cnt-handled))
+                                true
+                                (catch :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val* t)))))
+                            (catch     :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val  t)))))))
+                    (catch             :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-raw  t))))
+                  false)]
+
+            (when track-stats? (ssb (- (enc/now-nano) ^long ns0)))
+            result))
 
         wrapped-handler-fn
         (if runner
@@ -709,9 +753,11 @@
              (fn async-wrapped-handler-fn
                ([] (maybe-stop-fn))
                ([sig-raw]
-                (when-not (stopped?_)
+                (if (stopped?_)
+                  (do (when track-stats? (cnt-dropped)) nil)
                   ;; NB note that the fn we pass to runner isn't subject to (stopped?_)
                   (when-let [back-pressure? (false? (runner (fn [] (handle-signal! sig-raw))))]
+                    (when track-stats? (cnt-backp))
                     (when backp-fn
                       (enc/catching
                         (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
@@ -724,13 +770,37 @@
 
           (fn sync-wrapped-handler-fn
             ([] (maybe-stop-fn))
-            ([sig-raw] (when-not (stopped?_) (handle-signal! sig-raw)))))]
+            ([sig-raw]
+             (if (stopped?_)
+               (do (when track-stats? (cnt-dropped)) nil)
+               (handle-signal! sig-raw)))))
+
+        stats-fn
+        (when track-stats?
+          (fn
+            ([action] (throw (ex-info "Not currently implemented" {})))
+            ([]
+             {:handling-nsecs (when-let [sstats @ssb] @sstats)
+              :counts ; Chronologically
+              {:dropped       @cnt-dropped
+               :back-pressure @cnt-backp
+
+               :sampled       @cnt-sampled
+               :filtered      @cnt-filtered
+               :rate-limited  @cnt-rate-limited
+               :disallowed    @cnt-disallowed
+               :allowed       @cnt-allowed
+
+               :suppressed    @cnt-suppressed
+               :handled       @cnt-handled
+               :errors        @cnt-errors}})))]
 
     (with-meta wrapped-handler-fn
-      {:handler-id     handler-id
-       :handler-fn     handler-fn    ; Unwrapped
-       :dispatch-opts  dispatch-opts ; Merged
-       })))
+      {:handler-id         handler-id
+       :handler-fn         handler-fn
+       :dispatch-opts      dispatch-opts
+       :wrapped-handler-fn wrapped-handler-fn
+       :stats-fn           stats-fn})))
 
 ;;;; Local API
 
@@ -1149,15 +1219,15 @@
         ~(api-docstring 11 purpose
            "Manage handlers with:
 
-             `get-handlers`    - Returns info on registered handlers
-             `stop-handlers!`  - Stops relevant  registered handlers
-             `add-handler!`    - Registers   given handler
-             `remove-handler!` - Unregisters given handler
+             `get-handlers`       - Returns info  on  registered handlers (dispatch options, etc.)
+             `get-handlers-stats` - Returns stats for registered handlers (handling times,   etc.)
+             `stop-handlers!`     - Stops (relevant)  registered handlers
 
-           Test/debug handlers with:
+             `add-handler!`       - Registers   given handler
+             `remove-handler!`    - Unregisters given handler
 
-             `with-handler`   - Executes form with ONLY the given handler        registered
-             `with-handler+`  - Executes form with      the given handler (also) registered
+             `with-handler`       - Executes form with ONLY the given handler        registered
+             `with-handler+`      - Executes form with      the given handler (also) registered
 
            See the relevant docstrings for details.
            See `help:handler-dispatch-options` for handler filtering, etc.
@@ -1259,11 +1329,62 @@
      [purpose *sig-handlers*]
      `(defn ~'get-handlers
         ~(api-docstring 11 purpose
-           "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all
-           registered %s handlers.")
+           "Returns ?{<handler-id> {:keys [dispatch-opts handler-fn handler-stats_]}}
+           for all registered %s handlers.")
         [] (get-handlers-map ~*sig-handlers*))))
 
 (comment (api:get-handlers "purpose" `*my-sig-handlers*))
+
+#?(:clj
+   (defn- api:get-handlers-stats
+     [purpose *sig-handlers*]
+     `(defn ~'get-handlers-stats
+        ~(api-docstring 11 purpose
+           "Alpha, subject to change.
+           Returns ?{<handler-id> {:keys [handling-nsecs counts]}} for all registered
+           %s handlers that have the `:track-stats?` dispatch option enabled.
+
+           Stats include:
+
+             `:handling-nsecs` - Summary stats of nanosecond handling times, keys:
+               `:min`  - Minimum handling time
+               `:max`  - Maximum handling time
+               `:mean` - Arithmetic mean handling time
+               `:mad`  - Mean absolute deviation of handling time (measure of dispersion)
+               `:var`  - Variance                of handling time (measure of dispersion)
+               `:p50`  - 50th percentile of handling time (50%% of times <= this)
+               `:p90`  - 90th percentile of handling time (90%% of times <= this)
+               `:p99`  - 99th percentile of handling time
+               `:last` - Most recent        handling time
+               ...
+
+             `:counts` - Integer counts for handler outcomes, keys (chronologically):
+
+               `:dropped`       - Noop handler calls due to stopped handler
+               `:back-pressure` - Handler calls that experienced (async) back-pressure
+                                  (possible noop, depending on back-pressure mode)
+
+               `:sampled`       - Noop  handler calls due to sample rate
+               `:filtered`      - Noop  handler calls due to kind/ns/id/level/when filtering
+               `:rate-limited`  - Noop  handler calls due to rate limit
+               `:disallowed`    - Noop  handler calls due to sampling/filtering/rate-limiting
+               `:allowed`       - Other handler calls    (no sampling/filtering/rate-limiting)
+
+               `:suppressed`    - Noop handler calls due to nil middleware result
+               `:handled`       - Handler calls that completed successfully
+               `:errors`        - Handler calls that threw an error
+
+               Note that for performance reasons returned counts are not mutually atomic,
+               e.g. `:sampled` count may be incremented before `:disallowed` count is.
+
+           Useful for understanding/debugging how your handlers behave in practice,
+           especially when they're under stress (high-volumes, etc.).
+
+           Handler stats are tracked from the time each handler is last registered
+           (e.g. with an `add-handler!` call).")
+        [] (get-handlers-stats ~*sig-handlers*))))
+
+(comment (api:get-handlers-stats "purpose" `*my-sig-handlers*))
 
 #?(:clj
    (defn- api:remove-handler!
@@ -1428,6 +1549,7 @@
           ~(api:help:handlers                 purpose)
           ~(api:help:handler-dispatch-options purpose)
           ~(api:get-handlers                  purpose *sig-handlers*)
+          ~(api:get-handlers-stats            purpose *sig-handlers*)
           ~(api:remove-handler!               purpose *sig-handlers*)
           ~(api:add-handler!                  purpose *sig-handlers* api-dispatch-opts)
           ~(api:with-handler                  purpose *sig-handlers* api-dispatch-opts clj?)
