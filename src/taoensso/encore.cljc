@@ -527,8 +527,10 @@
   with support for `defn` style `?docstring` and `?attrs-map`."
   ([sym args            ] (name-with-attrs sym args nil))
   ([sym args attrs-merge]
-   (let [[?docstring args] (if (and (string? (first args)) (next args)) [(first args) (next args)] [nil args])
-         [attrs      args] (if (and (map?    (first args)) (next args)) [(first args) (next args)] [{}  args])
+   (let [[?docstring args] (if (and (string? (first args)) (next args)) [(first args) (next args)] [nil        args])
+         [attrs      args] (if (and (map?    (first args)) (next args)) [(first args) (next args)] [{}         args])
+         [?docstring args] (if (and (string? (first args)) (next args)) [(first args) (next args)] [?docstring args])
+
          attrs (if ?docstring (assoc attrs :doc ?docstring) attrs)
          attrs (if-let [m (meta sym)] (conj m attrs) attrs)
          attrs (conj attrs attrs-merge)]
@@ -543,6 +545,8 @@
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
+
+(comment (meta (def* foo {:private true} "docstring" "value")))
 
 #?(:clj
    (defmacro defonce
