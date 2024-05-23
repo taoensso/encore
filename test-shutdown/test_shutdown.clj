@@ -8,15 +8,13 @@
   (def            ct-sig-filter        nil)
   (def ^:dynamic *rt-sig-filter*       nil)
   (def ^:dynamic *sig-handlers*        nil)
-  (def ^:dynamic *auto-stop-handlers?* true)
 
   (sigs/def-api
     {:purpose "testing"
      :sf-arity 4
-     :ct-sig-filter          ct-sig-filter
-     :*rt-sig-filter*       *rt-sig-filter*
-     :*sig-handlers*        *sig-handlers*
-     :*auto-stop-handlers?* *auto-stop-handlers?*})
+     :ct-sig-filter    ct-sig-filter
+     :*rt-sig-filter* *rt-sig-filter*
+     :*sig-handlers*  *sig-handlers*})
 
   (deftype MySignal []
     sigs/IFilterableSignal

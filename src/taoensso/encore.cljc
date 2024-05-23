@@ -895,8 +895,8 @@
       (ex-map         ex)
       (Throwable->map ex))))
 
-#?(:clj (defn-     critical-throwable? [x] (and (instance? Error     x) (not (instance? AssertionError x)))))
-#?(:clj (defn- non-critical-throwable? [x] (and (instance? Throwable x) (not (critical-throwable?      x)))))
+#?(:clj (defn ^:no-doc critical-error?     [x] (and (instance? Error     x) (not (instance? AssertionError x)))))
+#?(:clj (defn-     non-critical-throwable? [x] (and (instance? Throwable x) (not (critical-error? x)))))
 #?(:clj
    (defn ^:no-doc throw-critical
      "Private, don't use.
@@ -904,7 +904,7 @@
      Useful as a hack to allow easily catching both `Exception` and `AssertionError`:
        (try <body> (catch Throwable t (throw-critical t) <body>)), etc."
      {:added "Encore v3.98.0 (2024-04-08)"}
-     [x] (when (critical-throwable? x) (throw x))))
+     [x] (when (critical-error? x) (throw x))))
 
 #?(:clj
    (defmacro try*
@@ -4389,7 +4389,7 @@
   "Returns ?substring from given string.
 
   Like `subs` but:
-    - Provides consistent clj/s behaviour.
+    - Provides consistent Clj/s behaviour.
     - Never throws (snaps to valid indexes).
     - Indexes may be -ive (=> indexed from end of string).
 
@@ -4512,7 +4512,7 @@
 (comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
 
 (defn str-replace
-  "Like `str/replace` but provides consistent clj/s behaviour.
+  "Like `str/replace` but provides consistent Clj/s behaviour.
 
   Workaround for <http://dev.clojure.org/jira/browse/CLJS-794>,
                  <http://dev.clojure.org/jira/browse/CLJS-911>.
@@ -5740,8 +5740,8 @@
                      :expected #{:value :map :explain}}))))))))
 
      (defmacro get-env
-       "Flexible cross-platform util for embedding a config value during
-       macro expansion. Used by other Taoensso libraries.
+       "Flexible cross-platform util for embedding an environmental config value
+       during macro expansion. Used by other Taoensso libraries.
 
        Given a const kw/string id or vector of desc-priority alternative ids,
        parse and return the first of the following that exists:
@@ -7017,9 +7017,9 @@
                  ;; In Cljs, a macro+fn can have the same name. Preference will be
                  ;; given to the macro in contexts where both are applicable.
                  ;; So there's 3 cases to consider:
-                 ;;   1. clj   stub: def var, clj macro
-                 ;;   2. cljs  stub: def volatile, 2 fns
-                 ;;   3. clj/s stub: def volatile, 2 fns, var, and clj/s macro
+                 ;;   1. Clj   stub: def var, clj macro
+                 ;;   2. Cljs  stub: def volatile, 2 fns
+                 ;;   3. Clj/s stub: def volatile, 2 fns, var, and Clj/s macro
                 `(~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
                 `(-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
                    ~stub-var# ~~'x))))))))
