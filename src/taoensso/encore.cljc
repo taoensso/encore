@@ -6168,7 +6168,7 @@
            clojure.lang.IDeref (deref [_] ((promise) :drained))
            clojure.lang.IFn
            (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
-           (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all-but-critical _)) true)))
+           (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all _)) true)))
 
          (let [binding       (when convey-bindings? binding-conveyor-fn)
                cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
@@ -6206,7 +6206,7 @@
                                  (.incrementAndGet cnt-executing)
                                  (try*
                                    (f)
-                                   (catch :all-but-critical _)
+                                   (catch :all _)
                                    (finally (.decrementAndGet cnt-executing)))
                                  ;; Unconditionally drain abq even when stopped
                                  (recur))
