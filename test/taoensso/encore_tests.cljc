@@ -604,12 +604,16 @@
          f     (enc/memoize-last (fn [& args] (c) (vec args)))
          test1 (fn [args] (dotimes [_ 100] (apply f args)) [@c (apply f args)])]
 
-     [(is (= (test1 [:x1    ]) [1 [:x1    ]]))
-      (is (= (test1 [       ]) [2 [       ]]))
-      (is (= (test1 [:x1    ]) [3 [:x1    ]]))
-      (is (= (test1 [:x1 :x2]) [4 [:x1 :x2]]))
-      (is (= (test1 [:x1    ]) [5 [:x1    ]]))
-      (is (= (test1 [       ]) [6 [       ]]))])])
+     [(is (= (test1 [:x1            ]) [1 [:x1            ]]))
+      (is (= (test1 [               ]) [2 [               ]]))
+      (is (= (test1 [:x1            ]) [3 [:x1            ]]))
+      (is (= (test1 [:x1 :x2        ]) [4 [:x1 :x2        ]]))
+      (is (= (test1 [:x1 :x2 :x3    ]) [5 [:x1 :x2 :x3    ]]))
+      (is (= (test1 [:x1 :x2 :x3    ]) [5 [:x1 :x2 :x3    ]]))
+      (is (= (test1 [:x1 :x2 :x3 :x4]) [6 [:x1 :x2 :x3 :x4]]))
+      (is (= (test1 [:x1 :x2 :x3 :x4]) [6 [:x1 :x2 :x3 :x4]]))
+      (is (= (test1 [:x1            ]) [7 [:x1            ]]))
+      (is (= (test1 [               ]) [8 [               ]]))])])
 
 ;;;; Swap API
 

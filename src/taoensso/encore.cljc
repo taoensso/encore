@@ -3410,44 +3410,40 @@
 (comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [53.21 24.16]
 
 (defn memoize-last
-  "Like `core/memoize` but only caches the given fn's last input.
+  "Like `core/memoize` but only caches the given fn's latest input.
+  Speeds repeated fn calls with the same arguments.
   Great for ReactJS render fn caching, etc."
   [f]
-  #?(:cljs
-     (let [sentinel        (new-object)
-           in_  (volatile! (new-object))
-           out_ (volatile! nil)
-           call
-           (fn [in* f0]
-             (loop []
-               (if (= in* @in_)
-                 @out_
-                 (let [out (f0)]
-                   (vreset! in_  in*)
-                   (vreset! out_ out)
-                   out))))]
-
-       (fn memoized-fn
-         ([        ] (call sentinel          (fn [] (f))))
-         ([x       ] (call x                 (fn [] (f x))))
-         ([x & more] (call [x more sentinel] (fn [] (apply f x more))))))
-
-     :clj
-     (let [sentinel (new-object)
-           cache_   (java.util.concurrent.atomic.AtomicReference. nil) ; [in out_]
-           call
-           (fn [in* f0]
-             (deref!
+  (let [sentinel (new-object)
+        call
+        #?(:cljs
+           (let [in_  (volatile! (new-object))
+                 out_ (volatile! nil)]
+             (fn [in* f0]
                (loop []
-                 (let [current (.get cache_)]
-                   (or
-                     (when-let [[in out_] current] (when (= in in*) out_))
-                     (let [dv (delay (f0))] (if (.compareAndSet cache_ current [in* dv]) dv (recur))))))))]
+                 (if (= in* @in_)
+                   @out_
+                   (let [out (f0)]
+                     (vreset! in_  in*)
+                     (vreset! out_ out)
+                     out)))))
 
-       (fn memoized-fn
-         ([        ] (call sentinel          (fn [] (f))))
-         ([x       ] (call x                 (fn [] (f x))))
-         ([x & more] (call [x more sentinel] (fn [] (apply f x more))))))))
+           :clj
+           (let [cache_ (java.util.concurrent.atomic.AtomicReference. nil)] ; [in out_]
+             (fn [in* f0]
+               (deref!
+                 (loop []
+                   (let [current (.get cache_)]
+                     (or
+                       (when-let [[in out_] current] (when (= in in*) out_))
+                       (let [dv (delay (f0))] (if (.compareAndSet cache_ current [in* dv]) dv (recur))))))))))]
+
+    (fn memoized-fn
+      ([            ] (call sentinel              (fn [] (f))))
+      ([x           ] (call x                     (fn [] (f x))))
+      ([x y         ] (call [sentinel x y       ] (fn [] (f x y))))
+      ([x y z       ] (call [sentinel x y z     ] (fn [] (f x y z))))
+      ([x y z & more] (call [sentinel x y z more] (fn [] (apply f x y z more)))))))
 
 (comment (let [f1 (memoize-last (fn [& args] (println [:last args])))] (qb 1e6 (f1 :x)))) ; 36.23
 
