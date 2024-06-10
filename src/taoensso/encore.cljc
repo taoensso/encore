@@ -1676,9 +1676,17 @@
        "Returns hash int of given byte[]."
        ^long [^bytes x] (java.util.Arrays/hashCode x))
 
-     ;; Java strings are UTF-16, but we'll use UTF-8 encoding when converting to/from bytes
-     (defn utf8-ba->str {:added "Encore v3.53.0 (2023-03-22)"} ^String [^bytes ba] (String. ba  java.nio.charset.StandardCharsets/UTF_8))
-     (defn str->utf8-ba {:added "Encore v3.53.0 (2023-03-22)"} ^bytes  [^String s] (.getBytes s java.nio.charset.StandardCharsets/UTF_8))
+     (defn utf8-ba->str
+       "Returns String by decoding given UTF-8 byte[]."
+       {:added "Encore v3.53.0 (2023-03-22)"
+        :inline   (fn [ba] `(let [^"[B" ba# ~ba] (String. ba# java.nio.charset.StandardCharsets/UTF_8)))}
+       ^String [^bytes ba]                       (String. ba  java.nio.charset.StandardCharsets/UTF_8))
+
+     (defn str->utf8-ba
+       "Returns given String encoded as a UTF-8 byte[]."
+       {:added "Encore v3.53.0 (2023-03-22)"
+        :inline   (fn [s] `(let [^String s# ~s] (.getBytes s# java.nio.charset.StandardCharsets/UTF_8)))}
+       ^bytes [^String s]                       (.getBytes s  java.nio.charset.StandardCharsets/UTF_8))
 
      (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
        (let [l1  (alength ba1)
@@ -4211,7 +4219,7 @@
 ;;;; Strings
 
 (def ^:const a-utf8-str
-  "Example UTF8 string for tests, etc."
+  "Example UTF-8 string for tests, etc."
   "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10")
 
 (defn str-builder?
