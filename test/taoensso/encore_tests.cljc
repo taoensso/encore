@@ -409,42 +409,46 @@
    (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
    (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
 
-(deftest _merge-with
-  [(is (= (enc/merge)                     nil))
-   (is (= (enc/merge nil         nil)     nil))
-   (is (= (enc/merge {}          nil)      {}))
-   (is (= (enc/merge nil          {})      {}))
-   (is (= (enc/merge {:a :A}     nil) {:a :A}))
-   (is (= (enc/merge nil     {:a :A}) {:a :A}))
+(deftest _merging
+  [(testing "Basics"
+     [(is (= (enc/merge)                     nil))
+      (is (= (enc/merge nil         nil)     nil))
+      (is (= (enc/merge {}          nil)      {}))
+      (is (= (enc/merge nil          {})      {}))
+      (is (= (enc/merge {:a :A}     nil) {:a :A}))
+      (is (= (enc/merge nil     {:a :A}) {:a :A}))
 
-   (is (= (enc/merge {:a :A1 :b :B1} {:b :B2 :c :C2}) {:a :A1, :b :B2, :c :C2}))
-   (is (= (enc/merge {:a :A1 :c :C1} {:b :B2       }) {:a :A1, :b :B2, :c :C1}))
+      (is (= (enc/merge {:a 1} {:b 2} {:a 3} {:c 4}) {:a 3, :b 2, :c 4}))])
 
-   (is (= (enc/merge {:a :A1} {:b :B2} {:a :A3}) {:a :A3, :b :B2}))
+   (testing "Transient support (currently undocumented)"
+     [(is (= (enc/merge (transient {})) {}))
+      (is (= (enc/merge nil (transient {})) nil))
+      (is (= (enc/merge (transient {:a 1}) {:a 2} (transient {:a 3})) {:a 3}))])
 
-   (is (= (enc/merge {:a :A1 :b :B1} {:a :A1 :b :merge/dissoc})      {:a :A1}))
-   (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? true})  {:b :B2}))
-   (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? false}) {:a :A1, :b :B2}))
+   (testing "Preserve left-most metadata"
+     [(is (= (meta (enc/merge ^:m1 {}                )) {:m1 true}))
+      (is (= (meta (enc/merge ^:m1 {} ^:m2 {}        )) {:m1 true}))
+      (is (= (meta (enc/merge nil     ^:m2 {}        )) nil))
+      (is (= (meta (enc/merge nil     ^:m2 {} ^:m3 {})) nil))])
 
-   (is (= (enc/nested-merge) nil))
-   (is (= (enc/nested-merge
-            {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
-            {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :swap/dissoc}}}
-            nil)
-         {:a1 :A1, :b1 :B1*, :c1 {:a2 :A2, :b2 {:a3 :A3, :b3 :B3*, :d1 nil}}}))])
+   (testing "Cardinality optimizations"
+     [(is (= (enc/merge {:a 1 :b 1 :_1 nil} {:b 2 :c 2           }) {:a 1 :b 2 :c 2 :_1 nil})         "|m1| > |m2|")
+      (is (= (enc/merge {:a 1 :b 1        } {:b 2 :c 2 :_1 nil   }) {:a 1 :b 2 :c 2 :_1 nil})         "|m1| < |m2|")
+      (is (= (enc/merge {:a 1 :c 1        } {:b 2                }) {:a 1 :b 2 :c 1})                 "|m1| > |m1|")
+      (is (= (enc/merge {:a 1 :c 1        } {:b 2 :_1 nil :_2 nil}) {:a 1 :b 2 :c 1 :_1 nil :_2 nil}) "|m1| < |m2|")])
 
-(deftest _fast-merge
-  [(is (= (enc/fast-merge [])                  nil))
-   (is (= (enc/fast-merge nil)                 nil))
-   (is (= (enc/fast-merge nil         nil)     nil))
-   (is (= (enc/fast-merge {}          nil)      {}))
-   (is (= (enc/fast-merge nil          {})      {}))
-   (is (= (enc/fast-merge {:a :A}     nil) {:a :A}))
-   (is (= (enc/fast-merge nil     {:a :A}) {:a :A}))
+   (testing "Special vals"
+     [(is (= (enc/merge {:a :A1 :b :B1} {:a :A1 :b :merge/dissoc})      {:a :A1}))
+      (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? true})  {:b :B2}))
+      (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? false}) {:a :A1 :b :B2}))])
 
-   (is (= (enc/fast-merge  {:a :A1 :b :B1} {:b :B2 :c :C2})  {:a :A1, :b :B2, :c :C2}))
-   (is (= (enc/fast-merge  {:a :A1 :c :C1} {:b :B2       })  {:a :A1, :b :B2, :c :C1}))
-   (is (= (enc/fast-merge [{:a :A1 :b :B1} {:b :B2 :c :C2}]) {:a :A1, :b :B2, :c :C2}))])
+   (testing "Nesting"
+     [(is (= (enc/nested-merge) nil))
+      (is (= (enc/nested-merge
+               {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
+               {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :swap/dissoc}}}
+               nil)
+            {:a1 :A1, :b1 :B1* :c1 {:a2 :A2 :b2 {:a3 :A3, :b3 :B3* :d1 nil}}}))])])
 
 ;;;; Strings
 

@@ -2664,92 +2664,130 @@
         (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
 
 #?(:clj (defmacro new-object [] (if (:ns &env) `(cljs.core/js-obj) `(Object.))))
+(defn- p! [m] (if (transient? m) (persistent! m) m))
 
-(defn ^:no-doc -merge-with
-  "Private, don't use. Low-level merge function, flexible and optimized."
-  ([nest? f maps] (reduce (partial -merge-with nest? f) nil maps))
-  ([nest? f m1 m2]
-   (cond
-     :let  [n2  (count m2)]
-     (zero? n2) (or m1 m2)
+(let [nx (new-object)
+      min-transient-card 64 ; Elevated transient overhead here
+      dissoc? (fn [v]   (case v (:merge/dissoc :swap/dissoc) true false))
+      dissoc* (fn [m k] (if (transient? m) (dissoc! m k) (dissoc m k)))]
 
-     :if-let [e (find m2 :merge/replace?)] ; Currently undocumented
-     (let [m2 (dissoc m2 :merge/replace?)]
-       (if (val e)
-         (do                     m2)
-         (-merge-with nest? f m1 m2)))
+  (defn ^:no-doc merge-with*
+    "Private, don't use. Flexible low-level merge util.
+    Optimized for reasonable worst-case performance."
+    ([nest? f maps] (reduce (partial merge-with* nest? f) nil maps))
+    ([nest? f m1 m2]
+     (cond
+       :let  [n2  (count m2)]
+       (zero? n2) (or m1 (when (can-meta? m2) (with-meta m2 nil)))
 
-     :let [n1 (count m1)]
+       :if-let [e  (find m2 :merge/replace?)] ; Undocumented
+       (let [m2 (dissoc* m2 :merge/replace?)]
+         (if (val e)
+           (do                     m2)
+           (merge-with* nest? f m1 m2)))
 
-     (>= n1 n2)
-     (reduce-kv
-       (fn [acc1 k2 v2] ; m2 kvs into m1
-         (cond
-           (case v2 (:merge/dissoc :swap/dissoc) true false) (dissoc acc1 k2)
-           :let [v1 (get m1 k2 ::nx)]
-           (and nest? (map? v1) (map? v2)) (assoc acc1 k2 (-merge-with true f v1 v2))
-           (identical-kw? v1 ::nx)         (assoc acc1 k2 v2)
-           :else
-           (let [v3 (f v1 v2)]
-             (if (case v3 (:merge/dissoc :swap/dissoc) true false)
-               (dissoc acc1 k2)
-               (assoc  acc1 k2 v3)))))
-       m1 m2)
+       :let [n1 (count m1)]
 
-     :else
-     (reduce-kv
-       (fn [acc2 k1 v1] ; m1 kvs into m2
-         (cond
-           :let [v2 (get m2 k1 ::nx)]
-           (case v2 (:merge/dissoc :swap/dissoc) true false) (dissoc acc2 k1)
-           (and nest? (map? v1) (map? v2)) (assoc acc2 k1 (-merge-with true f v1 v2))
-           (identical-kw? v2 ::nx)         (assoc acc2 k1 v1)
-           :else
-           (let [v3 (f v1 v2)]
-             (if (case v3 (:merge/dissoc :swap/dissoc) true false)
-               (dissoc acc2 k1)
-               (assoc  acc2 k1 v3)))))
-       m2 m1))))
+       (>= n1 n2) ; |m1| >= |m2|: use m1 as base, add everything from m2
+       (let [m1*    (if (transient? m1) m1 (if (>= n1 min-transient-card) (transient m1) m1))
+             assoc* (if (transient? m1*) assoc! assoc)]
 
-(let [-merge-with -merge-with]
+         (reduce-kv
+           (fn [m1* k2 v2] ; m2 kvs into m1
+             (let [v1 (get m1 k2 nx)]
+               (cond
+                 (and nest? (map? v1) (map? v2)) (assoc*  m1* k2 (p! (merge-with* true f v1 v2)))
+                 (identical? v1 nx)              (assoc*  m1* k2                            v2)
+                 (dissoc?    v2)                 (dissoc* m1* k2)
+                 f
+                 (let [v3 (f v1 v2)]
+                   (if (dissoc? v3)
+                     (dissoc*  m1* k2)
+                     (assoc*   m1* k2 v3)))
+                 :else (assoc* m1* k2 v2))))
+           m1* (p! m2)))
 
-  (defn merge
-    "Like `core/merge` but faster, supports `:merge/dissoc` rvals."
-    [& maps] (-merge-with false (fn [x y] y) maps))
+       :else ; |m2| >= |m1|: use m2 as base, add everything from m1 not in m2
+       (let [m2*
+             (if (transient? m2)
+               m2
+               (let [m2 (with-meta m2 (meta m1))] ; Preserve left metadata
+                 (if (>= n2 min-transient-card)
+                   (transient m2)
+                   (do        m2))))
 
-  (defn merge-with
-    "Like `core/merge-with` but faster, supports `:merge/dissoc` rvals."
-    [f & maps] (-merge-with false f maps))
+             assoc* (if (transient? m2*) assoc! assoc)]
 
-  (defn nested-merge
-    "Like `merge` but does nested merging."
-    [& maps] (-merge-with true (fn [x y] y) maps))
+         (reduce-kv
+           (fn [m2* k1 v1] ; m1 kvs into m2
+             (let [v2 (get m2 k1 nx)]
+               (cond
+                 (and nest? (map? v1) (map? v2)) (assoc*  m2* k1 (p! (merge-with* true f v1 v2)))
+                 (identical? v2 nx)              (assoc*  m2* k1                         v1)
+                 (dissoc?    v2)                 (dissoc* m2* k1)
+                 f
+                 (let [v3 (f v1 v2)]
+                   (if (dissoc? v3)
+                     (dissoc* m2* k1)
+                     (assoc*  m2* k1 v3)))
+                 :else        m2*)))
+           m2* (p! m1)))))))
 
-  (defn nested-merge-with
-    "Like `merge-with` but does nested merging."
-    [f & maps] (-merge-with true f maps)))
+(defn merge
+  "Like `core/merge` but:
+    - Often faster, with much better worst-case performance.
+    - Supports `:merge/dissoc` vals."
+  ([               ] nil)
+  ([m1             ] (p! m1))
+  ([m1 m2          ] (p!                                                     (merge-with* false nil m1 m2)))
+  ([m1 m2 m3       ] (p!                              (merge-with* false nil (merge-with* false nil m1 m2) m3)))
+  ([m1 m2 m3 & more] (p! (merge-with* false nil (cons (merge-with* false nil (merge-with* false nil m1 m2) m3) more)))))
 
-(defn fast-merge
-  "Like `core/merge` but faster.
-  Doesn't support zero arity, single arity case takes a collection of maps."
-  ([maps] (reduce fast-merge nil maps))
-  ([m1 m2]
-   (let [n2 (count m2)]
-     (if (zero? n2)
-       (or m1 m2)
-       (let [n1 (count m1)]
-         (if (>= n1 n2)
-           (reduce-kv assoc m1 m2) ; Unexpectedly faster than (conj m1 m2)
-           (reduce-kv (fn [m k v] (if (contains? m k) m (assoc m k v))) m2 m1))))))
+(defn nested-merge
+  "Like `core/merge` but:
+    - Often faster, with much better worst-case performance.
+    - Supports `:merge/dissoc` vals.
+    - Recursively merges nested maps."
+  ([               ] nil)
+  ([m1             ] (p! m1))
+  ([m1 m2          ] (p!                                                   (merge-with* true nil m1 m2)))
+  ([m1 m2 m3       ] (p!                             (merge-with* true nil (merge-with* true nil m1 m2) m3)))
+  ([m1 m2 m3 & more] (p! (merge-with* true nil (cons (merge-with* true nil (merge-with* true nil m1 m2) m3) more)))))
 
-  ([m1 m2 m3   ] (-> (fast-merge m1 m2) (fast-merge m3)))
-  ([m1 m2 m3 m4] (-> (fast-merge m1 m2) (fast-merge m3) (fast-merge m4))))
+(defn merge-with
+  "Like `core/merge-with` but:
+    - Often faster, with much better worst-case performance.
+    - Supports `:merge/dissoc` vals."
+  ([f                ] nil)
+  ([f m1             ] (p! m1))
+  ([f m1 m2          ] (p!                                                 (merge-with* false f m1 m2)))
+  ([f m1 m2 m3       ] (p!                            (merge-with* false f (merge-with* false f m1 m2) m3)))
+  ([f m1 m2 m3 & more] (p! (merge-with* false f (cons (merge-with* false f (merge-with* false f m1 m2) m3) more)))))
+
+(defn nested-merge-with
+  "Like `core/merge-with` but:
+    - Often faster, with much better worst-case performance.
+    - Supports `:merge/dissoc` vals.
+    - Recursively merges nested maps."
+  ([f                ] nil)
+  ([f m1             ] (p! m1))
+  ([f m1 m2          ] (p!                                               (merge-with* true f m1 m2)))
+  ([f m1 m2 m3       ] (p!                           (merge-with* true f (merge-with* true f m1 m2) m3)))
+  ([f m1 m2 m3 & more] (p! (merge-with* true f (cons (merge-with* true f (merge-with* true f m1 m2) m3) more)))))
 
 (comment
-  (qb 1e6 ; [382.24 327.81 171.19] ~worst case
-    (core-merge {:a :A1} {:a :A2} {:a :A3})
-    (merge      {:a :A1} {:a :A2} {:a :A3})
-    (fast-merge {:a :A1} {:a :A2} {:a :A3})))
+  (qb 1e6 ; [182.63 122.16 167.18]
+    (core-merge   {:a 1} {:a {:b 1}} {:a {:c 1}})
+    (merge        {:a 1} {:a {:b 1}} {:a {:c 1}})
+    (nested-merge {:a 1} {:a {:b 1}} {:a {:c 1}}))
+
+  (let [m1 (zipmap (range  32) (range  32))
+        m2 (zipmap (range   8) (range   8))
+        m3 (zipmap (range 512) (range 512))]
+
+    (qb 1e4 ; [449.24 11.25]
+      (core-merge m1 m2 m3)
+      (merge      m1 m2 m3))))
 
 (deftype Pred [pred-fn]) ; Note: can support any arity (unary, kv, etc.)
 (defn pred
@@ -7771,6 +7809,8 @@
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
   (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
   (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore v3.98.0 (2024-04-08)"} println)
+  (def* ^:no-doc -merge-with    "Prefer `merge-with*`."   {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} merge-with*)
+  (def* ^:no-doc fast-merge     "Prefer `merge`."         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} merge)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
