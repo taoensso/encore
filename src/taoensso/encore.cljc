@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 112 0])
+(def encore-version [3 113 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -7809,8 +7809,8 @@
   (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
   (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
   (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore v3.98.0 (2024-04-08)"} println)
-  (def* ^:no-doc -merge-with    "Prefer `merge-with*`."   {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} merge-with*)
-  (def* ^:no-doc fast-merge     "Prefer `merge`."         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} merge)
+  (def* ^:no-doc -merge-with    "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
+  (def* ^:no-doc fast-merge     "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
 
   #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
