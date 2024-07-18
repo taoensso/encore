@@ -985,7 +985,9 @@
     `:when-fn` (default nil => always allow)
       Optional nullary (fn allow? []) that must return truthy for handler to be
       called. When present, called *after* sampling and other filters, but before
-      rate limiting.
+      rate limiting. Useful for filtering based on external state/context.
+
+      See `:middleware` for an alternative that takes a signal argument.
 
     `:rate-limit` (default nil => no rate limit)
       Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
@@ -1135,7 +1137,7 @@
         "Sets signal kind filter based on given `kind-filter` spec.
   `kind-filter` may be:
 
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of kind/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
@@ -1166,7 +1168,7 @@
   `ns-filter` may be:
 
     - A namespace.
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of namespace/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
@@ -1196,7 +1198,7 @@
         "Sets signal id filter based on given `id-filter` spec.
   `id-filter` may be:
 
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of id/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
