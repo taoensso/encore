@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 113 0])
+(def encore-version [3 114 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -6141,7 +6141,7 @@
      "Registers given nullary fn as a JVM shutdown hook.
      (f) will be called sometime during shutdown. While running, it will
      attempt to block shutdown."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.114.0 (2024-08-07)"}
      [f]
      (.addShutdownHook (Runtime/getRuntime)
        (Thread. ^Runnable f))))
