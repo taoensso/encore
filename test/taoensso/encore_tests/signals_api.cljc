@@ -32,4 +32,11 @@
 (comment
   (add-handler!    :hid1 (fn [x]) {})
   (remove-handler! :hid1)
-  (get-handlers))
+  (get-handlers)
+
+  (set-ctx!  {:base 1})
+  (with-ctx  {:ctx 2} (do *ctx*))
+  (with-ctx+ {:ctx 2} (do *ctx*))
+
+  (set-middleware! nil)
+  (with-middleware identity (do)))

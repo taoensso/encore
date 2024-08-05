@@ -816,7 +816,10 @@
    with-min-level   set-min-level!
 
    with-handler with-handler+
-   add-handler! remove-handler! stop-handlers!])
+   add-handler! remove-handler! stop-handlers!
+
+   *ctx*        with-ctx        set-ctx!
+   *middleware* with-middleware set-middleware!])
 
 ;;;
 
@@ -825,44 +828,41 @@
      `(def  ~'help:filters
         "A signal will be provided to a handler iff ALL of the following are true:
 
-    1. Signal (creation) is allowed by compile-time \"signal  filters\"
-    2. Signal (creation) is allowed by runtime      \"signal  filters\"
-    3. Signal (handling) is allowed by runtime      \"handler filters\"
+    1. Signal creation is allowed by \"signal filters\":
+      a. Compile-time: sample rate, kind, ns, id, level, when form, rate limit
+      b. Runtime:      sample rate, kind, ns, id, level, when form, rate limit
 
-    4. Signal  middleware does not suppress the signal (return nil)
-    5. Handler middleware does not suppress the signal (return nil)
+    2. Signal handling is allowed by \"handler filters\":
+      a. Compile-time: not applicable
+      b. Runtime:      sample rate, kind, ns, id, level, when fn, rate limit
 
-  So we have:
+    3. Signal  middleware (fn [signal]) => ?modified-signal does not return nil
+    4. Handler middleware (fn [signal]) => ?modified-signal does not return nil
 
-    - Signal  filters - applied at compile-time and/or runtime,
-                        determine which signals are/not created.
+  Note that middleware provides a flexible way to suppress (filter) signals by
+  arbitrary signal data/content conditions (return nil to suppress).
 
-    - Handler filters - applied at runtime only, determine which (created)
-                        signals are/not handled by each registered handler.
+  Config:
 
-  All filters (1-3) may depend on (in order):
+    To set signal filters (1a, 1b):
 
-    Sample rate → namespace → kind → id → level → when form/fn → rate limit
+      Use:
+        `with-kind-filter`, `set-kind-filter!`
+        `with-ns-filter`,   `set-ns-filter!`
+        `with-id-filter`,   `set-id-filter!`
+        `with-min-level`,   `set-min-level!`
+        or see `help:environmental-config`.
 
-  Setting signal filters (1-2):
+    To set handler filters (2b) or handler middleware (4):
 
-    Both compile-time and runtime signal filters can be specified via environmental
-    config (see `help:environmental-config` for details).
+      Provide relevant opts when calling `add-handler!` or `with-handler/+`.
+      See `help:handler-dispatch-options` for details.
 
-    Runtime signal filters can also be specified with:
+      Note: signal filters (1a, 1b) should generally be AT LEAST as permissive as
+      handler filters (2b), otherwise signals will be suppressed before reaching
+      handlers.
 
-      `with-kind-filter`, `set-kind-filter!` - filters by signal kind (when relevant)
-      `with-ns-filter`,   `set-ns-filter!`   - filters by signal namespace
-      `with-id-filter`,   `set-id-filter!`   - filters by signal id   (when relevant)
-      `with-min-level`,   `set-min-level!`   - filters by signal level
-
-  Setting handler filters (3):
-
-    These are set when calling `add-handler!` or `with-handler/+`,
-    see `help:handler-dispatch-options` for details.
-
-    Note that signal filters should generally be AT LEAST as permissive as handler
-    filters, otherwise signals will be suppressed before reaching handlers.
+    To set signal middleware (3): use `with-middleware`, `set-middleware!`
 
   Compile-time vs runtime filters:
 
@@ -1447,11 +1447,111 @@ Examples:
 ;;;;
 
 #?(:clj
+   (defn- api:*ctx* []
+     `(enc/def* ~'*ctx* {:dynamic true}
+        "Optional context (state) attached to all signals.
+  Value may be any type, but is usually nil or a map. Default (root) value is nil.
+
+  Useful for dynamically attaching arbitrary app-level state to signals.
+
+  Re/bind dynamic        value using `with-ctx`, `with-ctx+`, or `binding`.
+  Modify  root (default) value using `set-ctx!`.
+
+  As with all dynamic Clojure vars, \"binding conveyance\" applies when using
+  futures, agents, etc.
+
+  Tips:
+    - Value may be (or may contain) an atom if you want mutable semantics.
+    - Value may be of form {<scope-id> <data>} for custom scoping, etc.
+    - Use `get-env` to set default (root) value based on environmental config."
+        nil)))
+
+#?(:clj
+   (defn- api:*middleware* []
+     `(enc/def* ~'*middleware* {:dynamic true}
+        "Optional (fn [signal]) => ?modified-signal to apply to all signals.
+  When middleware returns nil, skips all handlers. Default (root) value is nil.
+
+  Useful for dynamically transforming signals and/or filtering signals
+  by signal data/content/etc.
+
+  Re/bind dynamic        value using `with-middleware`, `binding`.
+  Modify  root (default) value using `set-middleware!`.
+
+  As with all dynamic Clojure vars, \"binding conveyance\" applies when using
+  futures, agents, etc.
+
+  Tips:
+    - Compose multiple middleware fns together with `comp-middleware`.
+    - Use `get-env` to set default (root) value based on environmental config."
+        nil)))
+
+(defn update-ctx
+  "Returns `new-ctx` given `old-ctx` and an update map or fn."
+  [old-ctx update-map-or-fn]
+  (enc/cond
+    (nil? update-map-or-fn)              old-ctx
+    (map? update-map-or-fn) (enc/merge   old-ctx update-map-or-fn) ; Before ifn
+    (ifn? update-map-or-fn) (update-map-or-fn old-ctx)
+    :else
+    (enc/unexpected-arg! update-map-or-fn
+      {:context  `update-ctx
+       :param    'update-map-or-fn
+       :expected '#{nil map fn}})))
+
+#?(:clj
+   (defn- api:set-ctx! []
+     `(defn ~'set-ctx!
+        "Set `*ctx*` var's default (root) value. See `*ctx*` for details."
+        ~'[root-ctx-val] (enc/set-var-root! ~'*ctx* ~'root-ctx-val))))
+
+#?(:clj
+   (defn- api:set-middleware! []
+     `(defn ~'set-middleware!
+        "Set `*middleware*` var's default (root) value. See `*middleware*` for details."
+        ~'[?root-middleware-fn]
+        (enc/set-var-root! ~'*middleware* ~'?root-middleware-fn))))
+
+#?(:clj
+   (defn- api:with-ctx []
+     (let [*ctx* (symbol (str *ns*) "*ctx*")]
+       `(defmacro ~'with-ctx
+          "Evaluates given form with given `*ctx*` value. See `*ctx*` for details."
+          ~'[ctx-val form] `(binding [~'~*ctx* ~~'ctx-val] ~~'form)))))
+
+#?(:clj
+   (defn- api:with-middleware []
+     (let [*middleware* (symbol (str *ns*) "*middleware*")]
+       `(defmacro ~'with-middleware
+          "Evaluates given form with given `*middleware*` value.
+  See `*middleware*` for details."
+          ~'[?middleware-fn form]
+          `(binding [~'~*middleware* ~~'?middleware-fn] ~~'form)))))
+
+#?(:clj
+   (defn- api:with-ctx+ []
+     (let [*ctx* (symbol (str *ns*) "*ctx*")]
+       `(defmacro ~'with-ctx+
+          "Evaluates given form with updated `*ctx*` value.
+
+  `update-map-or-fn` may be:
+    - A map to merge with    current `*ctx*` value, or
+    - A unary fn to apply to current `*ctx*` value
+
+  See `*ctx*` for details."
+          ~'[update-map-or-fn form]
+          `(binding [~'~*ctx* (update-ctx ~'~*ctx* ~~'update-map-or-fn)] ~~'form)))))
+
+;;;;
+
+#?(:clj
    (defmacro def-api
      "Defines signal API vars in current ns.
   NB: Cljs ns will need appropriate `:require-macros`."
-     [{:keys [sf-arity ct-sig-filter *rt-sig-filter* *sig-handlers* lib-dispatch-opts]
-       :as opts}]
+     [{:as opts
+       :keys
+       [sf-arity lib-dispatch-opts
+        ct-sig-filter *rt-sig-filter* *sig-handlers*]}]
 
      (enc/have? [:ks>= #{:sf-arity :ct-sig-filter :*rt-sig-filter* :*sig-handlers*}] opts)
      (enc/have? [:or nil? symbol?]  ct-sig-filter  *rt-sig-filter*  *sig-handlers*)
@@ -1498,6 +1598,16 @@ Examples:
           ~(api:add-handler!    *sig-handlers* lib-dispatch-opts)
           ~(api:remove-handler! *sig-handlers*)
           ~(api:stop-handlers!  *sig-handlers*)
+
+          ~(api:*ctx*)
+          ~(api:*middleware*)
+
+          ~(api:set-ctx!)
+          ~(api:set-middleware!)
+
+          ~(api:with-ctx)
+          ~(api:with-ctx+)
+          ~(api:with-middleware)
 
           ~(when clj? (api:shutdown-hook *sig-handlers*))))))
 

@@ -1622,7 +1622,7 @@
       (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 10} 10])))
       (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])])
 
-;;;;
+;;;; Signal API
 
 (def cnt (enc/counter 0))
 
@@ -1905,7 +1905,19 @@
                (clojure.core/if-let [sf taoensso.encore-tests.signals-api/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
                (clojure.core/let [this-expansion-id -1] (> 1 0))
                (if (taoensso.encore.signals/expansion-limit!? -1 [[1 1000]]) false true))})
-        "Full `allow?` expansion")])])
+        "Full `allow?` expansion")])
+
+   (testing "Dynamic context (`*ctx*`)"
+     [(is (= (binding [sapi/*ctx* "my-ctx"] sapi/*ctx*) "my-ctx") "Supports manual `binding`")
+      (is (= (sapi/with-ctx       "my-ctx"  sapi/*ctx*) "my-ctx") "Supports any data type")
+
+      (is (= (sapi/with-ctx "my-ctx1"       (sapi/with-ctx+ nil                        sapi/*ctx*)) "my-ctx1")              "nil update => keep old-ctx")
+      (is (= (sapi/with-ctx "my-ctx1"       (sapi/with-ctx+ (fn [old] [old "my-ctx2"]) sapi/*ctx*)) ["my-ctx1" "my-ctx2"])  "fn  update => apply")
+      (is (= (sapi/with-ctx {:a :A1 :b :B1} (sapi/with-ctx+ {:a :A2 :c :C2}            sapi/*ctx*)) {:a :A2 :b :B1 :c :C2}) "map update => merge")])
+
+   (testing "Dynamic middleware (`*middleware*`)"
+     [(is (= (binding [sapi/*middleware* identity] sapi/*middleware*) identity) "via `binding`")
+      (is (= (sapi/with-middleware       identity  sapi/*middleware*) identity) "via `with-middleware`")])])
 
 ;;;;
 
