@@ -17,9 +17,9 @@
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
               :dependencies [[org.clojure/clojurescript "1.11.132"]
-                             [org.clojure/clojure       "1.11.3"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0-alpha12"]]}
-   :c1.11    {:dependencies [[org.clojure/clojure       "1.11.3"]]}
+                             [org.clojure/clojure       "1.11.4"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0-rc1"]]}
+   :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
 
@@ -30,7 +30,7 @@
     :aot [taoensso.graal-tests]
     :uberjar-name "graal-tests.jar"
     :dependencies
-    [[org.clojure/clojure                  "1.11.3"]
+    [[org.clojure/clojure                  "1.11.4"]
      [com.github.clj-easy/graal-build-time "1.0.5"]]}
 
    :test
