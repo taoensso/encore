@@ -1904,7 +1904,7 @@
                (clojure.core/< (Math/random) 0.5)
                (clojure.core/if-let [sf taoensso.encore-tests.signals-api/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
                (clojure.core/let [this-expansion-id -1] (> 1 0))
-               (if (taoensso.encore.signals/expansion-limit!? -1 [[1 1000]]) false true))})
+               (if (taoensso.encore.signals/expansion-limited!? -1 [[1 1000]]) false true))})
         "Full `allow?` expansion")])
 
    (testing "Dynamic context (`*ctx*`)"

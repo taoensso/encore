@@ -3,7 +3,7 @@
   Private signal toolkit for use by Telemere, Tufte, Timbre, etc.
 
   \"Signal\" refers here to any abstract event/data/object (usu. map) that:
-    - Originates in an ns (generated or received there, etc.)
+    - Originates in an ns (created or received there, etc.)
     - Has a level (priority/significance/etc.)
     - May have a kind (type/taxonomy/etc.)
     - May have an identifier"
@@ -326,7 +326,7 @@
 #?(:clj (enc/defonce expansion-counter (enc/counter)))
 
 (let [rate-limiters_ (enc/latom {})]
-  (defn expansion-limit!?
+  (defn expansion-limited!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag 'boolean})
     [rl-id spec]
@@ -336,7 +336,7 @@
             (rate-limiters_       rl-id #(or % (enc/rate-limiter {:basic? true} spec))))]
       (if (rl) true false))))
 
-(comment (enc/qb 1e6 (expansion-limit!? :limiter-id1 [[1 4000]]))) ; 54.02
+(comment (enc/qb 1e6 (expansion-limited!? :limiter-id1 [[1 4000]]))) ; 54.02
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
@@ -436,7 +436,7 @@
 
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form (get opts :rate-limit)]
-                         `(if (expansion-limit!? ~expansion-id ~spec-form) false true))]
+                         `(if (expansion-limited!? ~expansion-id ~spec-form) false true))]
 
                    `(and ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
@@ -810,16 +810,16 @@
    get-handlers-stats
 
    without-filters
-   with-kind-filter set-kind-filter!
-   with-ns-filter   set-ns-filter!
-   with-id-filter   set-id-filter!
-   with-min-level   set-min-level!
+   set-kind-filter! with-kind-filter
+   set-ns-filter!   with-ns-filter
+   set-id-filter!   with-id-filter
+   set-min-level!   with-min-level
 
    with-handler with-handler+
    add-handler! remove-handler! stop-handlers!
 
-   *ctx*        with-ctx        set-ctx!
-   *middleware* with-middleware set-middleware!])
+   *ctx*        set-ctx!        with-ctx
+   *middleware* set-middleware! with-middleware])
 
 ;;;
 
@@ -839,18 +839,18 @@
     3. Signal  middleware (fn [signal]) => ?modified-signal does not return nil
     4. Handler middleware (fn [signal]) => ?modified-signal does not return nil
 
-  Note that middleware provides a flexible way to suppress (filter) signals by
-  arbitrary signal data/content conditions (return nil to suppress).
+  Note that middleware provides a flexible way to filter signals by arbitrary
+  signal data/content conditions (return nil to suppress signal).
 
   Config:
 
     To set signal filters (1a, 1b):
 
       Use:
-        `with-kind-filter`, `set-kind-filter!`
-        `with-ns-filter`,   `set-ns-filter!`
-        `with-id-filter`,   `set-id-filter!`
-        `with-min-level`,   `set-min-level!`
+        `set-kind-filter!`, `with-kind-filter`
+        `set-ns-filter!`,   `with-ns-filter`
+        `set-id-filter!`,   `with-id-filter`
+        `set-min-level!`,   `with-min-level`
         or see `help:environmental-config`.
 
     To set handler filters (2b) or handler middleware (4):
@@ -862,7 +862,7 @@
       handler filters (2b), otherwise signals will be suppressed before reaching
       handlers.
 
-    To set signal middleware (3): use `with-middleware`, `set-middleware!`
+    To set signal middleware (3): use `set-middleware!`, `with-middleware`
 
   Compile-time vs runtime filters:
 
@@ -966,14 +966,16 @@
         2. Handler is removed after `with-handler/+`  call
         3. `stop-handlers!` is called (typically on system shutdown)
 
+      Handlers that need stopping will immediately close to new input when stopped.
+
     `:priority` (default 100)
       Optional handler priority ∈ℤ.
-      Handlers will be called in descending priority order.
+      Handlers will be called in descending priority order (larger ints first).
 
     `:sample-rate` (default nil => no sampling)
       Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
       When present, handle only this (random) proportion of args:
-        1.0 => handle every arg (same as `nil` rate, default)
+        1.0 => handle every arg (same as nil rate, default)
         0.0 => noop   every arg
         0.5 => handle random 50% of args
 
@@ -985,7 +987,9 @@
     `:when-fn` (default nil => always allow)
       Optional nullary (fn allow? []) that must return truthy for handler to be
       called. When present, called *after* sampling and other filters, but before
-      rate limiting.
+      rate limiting. Useful for filtering based on external state/context.
+
+      See `:middleware` for an alternative that takes a signal argument.
 
     `:rate-limit` (default nil => no rate limit)
       Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
@@ -1135,7 +1139,7 @@
         "Sets signal kind filter based on given `kind-filter` spec.
   `kind-filter` may be:
 
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of kind/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
@@ -1166,7 +1170,7 @@
   `ns-filter` may be:
 
     - A namespace.
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of namespace/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
@@ -1196,7 +1200,7 @@
         "Sets signal id filter based on given `id-filter` spec.
   `id-filter` may be:
 
-    - A str/kw/sym, in which \"*\"s act as wildcards.
+    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
     - A regex pattern of id/s to allow.
     - A vector or set of regex patterns or strs/kws/syms.
     - {:allow <spec> :disallow <spec>} with specs as above.
@@ -1250,7 +1254,7 @@
           "Sets minimum signal level based on given `min-level` spec.
   `min-level` may be:
 
-    - `nil` (=> no minimum level).
+    - nil (=> no minimum level).
     - A level keyword (see `level-aliases` var for details).
     - An integer.
 
@@ -1285,21 +1289,21 @@
           "Sets minimum signal level based on given `min-level` spec.
 `min-level` may be:
 
-  - `nil` (=> no minimum level).
-  - A level keyword (see `level-aliases` var for details).
-  - An integer.
+    - nil (=> no minimum level).
+    - A level keyword (see `level-aliases` var for details).
+    - An integer.
 
-If `ns-filter` is provided, then the given minimum level
-will apply only for the namespace/s that match `ns-filter`.
-See `set-ns-filter!` for details.
+  If `ns-filter` is provided, then the given minimum level
+  will apply only for the namespace/s that match `ns-filter`.
+  See `set-ns-filter!` for details.
 
-Examples:
-  (set-min-level! nil)   ; Disable        minimum level
-  (set-min-level! :info) ; Set `:info` as minimum level
-  (set-min-level! 100)   ; Set 100     as minimum level
+  Examples:
+    (set-min-level! nil)   ; Disable        minimum level
+    (set-min-level! :info) ; Set `:info` as minimum level
+    (set-min-level! 100)   ; Set 100     as minimum level
 
-  ;; Set `:debug` as minimum level for current namespace
-  (set-min-level! *ns* :debug)"
+    ;; Set `:debug` as minimum level for current namespace
+    (set-min-level! *ns* :debug)"
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]
            (enc/force-ref
@@ -1547,7 +1551,7 @@ Examples:
 #?(:clj
    (defmacro def-api
      "Defines signal API vars in current ns.
-  NB: Cljs ns will need appropriate `:require-macros`."
+  NB Cljs ns will need appropriate `:require-macros`."
      [{:as opts
        :keys
        [sf-arity lib-dispatch-opts
