@@ -492,20 +492,17 @@
   [handlers-vec signal]
   (run! (fn [wrapped-handler-fn] (wrapped-handler-fn signal)) handlers-vec))
 
-#?(:clj (def ^:dynamic ^:private *stop-runners?* true))
-
 (defn stop-handlers!
-  "Stops relevant handlers in parallel and returns
+  "Stops handlers in parallel and returns
   {<handler-id> {:keys [okay error drained?]}}."
   [handlers-vec]
   (when-let [handlers-map (get-handlers-map handlers-vec :raw)]
-    (let [#?@(:clj [stop-runners? *stop-runners?*])
-          results ; {<handler-id> <result-or-promise>}
+    (let [results ; {<handler-id> <result-or-promise>}
           (reduce-kv
             (fn [m handler-id {:keys [wrapped-handler-fn]}]
               (assoc m handler-id
-                #?(:cljs                                                               (wrapped-handler-fn)
-                   :clj (enc/promised :daemon (binding [*stop-runners?* stop-runners?] (wrapped-handler-fn))))))
+                #?(:clj (enc/promised :daemon (wrapped-handler-fn))
+                   :cljs                      (wrapped-handler-fn))))
             nil handlers-map)]
 
       #?(:cljs results
@@ -603,8 +600,7 @@
         {:keys
          [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
           kind-filter ns-filter id-filter min-level,
-          rl-error rl-backp error-fn backp-fn,
-          needs-stopping? track-stats?]}
+          rl-error rl-backp error-fn backp-fn, track-stats?]}
         dispatch-opts
 
         [sample-rate sample-rate-fn]
@@ -648,42 +644,41 @@
                  :drain-msecs 0))))
 
         stopped?_ (enc/latom false)
-        maybe-stop-fn ; Block => {:keys [okay error drained?]}
+        stop-fn ; Block => {:keys [okay error drained?]}
         (fn []
-          ;; Called by: `stop-handlers!`, `remove-handler!`, `with-handler/+`, process:
-          ;;   1. ?Stop accepting new signals
-          ;;   2. ?Stop ?runner
-          ;;   3. Drain ?runner
-          ;;   4. ?Call (handler-fn)
-          (let [stopped-now? (and needs-stopping? (compare-and-set! stopped?_ false true))
-                drained?
-                (if-not runner
-                  nil
+          ;; Called by `remove-handler!`, `with-handler/+`, `stop-handlers!`
+          (if-not (compare-and-set! stopped?_ false true) ; Stop accepting new signals
+            #?(:cljs                 {:okay :stopped}
+               :clj  (enc/assoc-some {:okay :stopped}
+                       :drained? (when runner (boolean (deref @runner 0 nil)))))
+
+            (let [drained? ; Block <= `:drain-msecs` to finish handling current signals
                   #?(:cljs nil
                      :clj
-                     (boolean
-                       ;; First ?stop runner, then drain (complete pending)
-                       (let [stop-runner? (or stopped-now? *stop-runners?*)]
-                         (when-let [drained_ (or (and stop-runner? (runner)) @runner)]
+                     (when runner
+                       (boolean
+                         (when-let [drained_ @runner]
                            (if-let [drain-msecs (get-in dispatch-opts [:async :drain-msecs])]
                              (deref drained_ drain-msecs nil)
-                             (deref drained_)))))))
+                             (deref drained_))))))
 
-                result
-                (cond
-                  (not needs-stopping?) {:okay :no-stopping-needed}
-                  (not stopped-now?)    {:okay :previously-stopped}
-                  :else
+                  handler-result
                   (enc/try*
-                    ;; Note that Cljs doesn't enforce runtime arity, so this can trigger
-                    ;; arity-1 handler-fn with nil signal (not usually a problem)
-                    (handler-fn)
+                    (handler-fn) ; Give hander-fn opportunity to finalize, etc.
                     {:okay :stopped}
+
+                    ;; Note that Cljs doesn't enforce runtime arity.
+                    ;; ((fn f1 [x])) will actually trigger (f1 nil), so it's best for
+                    ;; handlers to always include both (0, 1) arities.
+
+                    #?(:clj (catch clojure.lang.ArityException _ {:okay :stopped}))
                     (catch :all t
                       (when error-fn* (error-fn* nil t))
-                      {:error t})))]
+                      {:error t})
 
-            (enc/assoc-some result :drained? drained?)))
+                    (finally (when runner (runner))))]
+
+              (enc/assoc-some handler-result :drained? drained?))))
 
         ssb (when track-stats? (stats/summary-stats-buffered-fast 1e5 nil))
 
@@ -739,29 +734,29 @@
             result))
 
         wrapped-handler-fn
-        (if runner
-          #?(:cljs (throw (ex-info "Unexpected (Cljs doesn't support async dispatch)" {}))
-             :clj
-             (fn async-wrapped-handler-fn
-               ([] (maybe-stop-fn))
-               ([sig-raw]
-                (if (stopped?_)
-                  (do (when track-stats? (cnt-dropped)) nil)
-                  ;; NB note that the fn we pass to runner isn't subject to (stopped?_)
-                  (when-let [back-pressure? (false? (runner (fn [] (handle-signal! sig-raw))))]
-                    (when track-stats? (cnt-backp))
-                    (when backp-fn
-                      (enc/catching
-                        (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
-                          nil                         ; noop
-                          (let [backp-fn
-                                (if (enc/identical-kw? backp-fn ::default)
-                                  *default-handler-backp-fn*
-                                  backp-fn)]
-                            (backp-fn {:handler-id handler-id}))))))))))
+        (or
+          #?(:clj
+             (when runner
+               (fn async-wrapped-handler-fn
+                 ([       ] (stop-fn))
+                 ([sig-raw]
+                  (if (stopped?_)
+                    (do (when track-stats? (cnt-dropped)) nil)
+                    ;; Note that fn passed to runner isn't itself subject to (stopped?_)
+                    (when-let [back-pressure? (false? (runner (fn [] (handle-signal! sig-raw))))]
+                      (when track-stats? (cnt-backp))
+                      (when backp-fn
+                        (enc/catching
+                          (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
+                            nil                         ; noop
+                            (let [backp-fn
+                                  (if (enc/identical-kw? backp-fn ::default)
+                                    *default-handler-backp-fn*
+                                    backp-fn)]
+                              (backp-fn {:handler-id handler-id})))))))))))
 
           (fn sync-wrapped-handler-fn
-            ([] (maybe-stop-fn))
+            ([       ] (stop-fn))
             ([sig-raw]
              (if (stopped?_)
                (do (when track-stats? (cnt-dropped)) nil)
@@ -797,8 +792,7 @@
 ;;;; Local API
 
 (comment
-  [*auto-stop-handlers?* ; Clj
-   level-aliases
+  [level-aliases
 
    help:filters
    help:handlers
@@ -911,7 +905,6 @@
 
     `get-handlers`       - Returns info  on  registered handlers (dispatch options, etc.)
     `get-handlers-stats` - Returns stats for registered handlers (handling times,   etc.)
-    `stop-handlers!`     - Stops (relevant)  registered handlers
 
     `add-handler!`       - Registers   given handler
     `remove-handler!`    - Unregisters given handler
@@ -919,11 +912,13 @@
     `with-handler`       - Executes form with ONLY the given handler        registered
     `with-handler+`      - Executes form with      the given handler (also) registered
 
+    `stop-handlers!`     - Stops registered handlers
+      NB you should always call `stop-handlers!` somewhere appropriate - usually
+      near the end of your `-main` or shutdown procedure, AFTER all other code has
+      completed that could create signals.
+
   See the relevant docstrings for details.
   See `help:handler-dispatch-options` for handler filters, etc.
-
-  Clj only:  `stop-handlers!` is called automatically on JVM shutdown
-  when `*auto-stop-handlers?*` is true (it is by default).
 
   If anything is unclear, please ping me (@ptaoussanis) so that I can
   improve these docs!"
@@ -957,16 +952,7 @@
 
       `:drain-msecs` (default 6000 msecs)
         Maximum time (in milliseconds) to try allow pending execution requests to
-        complete during JVM shutdown, etc. See `*auto-stop-handlers?*` for more.
-
-    `:needs-stopping?` (default false)
-      Enable this (only) for handlers that need to close/release resources or otherwise
-      finalize themselves. Iff true, `handler-fn` will be called with no arguments when:
-        1. Handler is removed by    `remove-handler!` call
-        2. Handler is removed after `with-handler/+`  call
-        3. `stop-handlers!` is called (typically on system shutdown)
-
-      Handlers that need stopping will immediately close to new input when stopped.
+        complete when stopping handler. nil => no maximum.
 
     `:priority` (default 100)
       Optional handler priority ∈ℤ.
@@ -1323,7 +1309,7 @@
      (let [self (symbol (str *ns*) "with-handler")]
        `(defmacro ~'with-handler
           "Executes form with ONLY the given signal handler registered.
-  Useful for tests/debugging.
+  Stops handler after use. Useful for tests/debugging.
 
   See `help:handler-dispatch-options` for handler filters, etc.
   See also `with-handler+`."
@@ -1341,7 +1327,7 @@
      (let [self (symbol (str *ns*) "with-handler+")]
        `(defmacro ~'with-handler+
           "Executes form with the given signal handler (also) registered.
-  Useful for tests/debugging.
+  Stops handler after use. Useful for tests/debugging.
 
   See `help:handler-dispatch-options` for handler filters, etc.
   See also `with-handler`."
@@ -1361,7 +1347,7 @@
   {<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
   now registered.
 
-  `handler-fn` should be a fn of 1 or 2 arities:
+  `handler-fn` should be a fn of exactly 2 arities:
 
     [signal] ; Single argument
       Called asynchronously or synchronously (depending on dispatch options)
@@ -1373,8 +1359,12 @@
         dashboard, examine for outliers or unexpected data, etc.
 
     [] ; No arguments
-      Called exactly once when gracefully stopping handler to provide an opportunity
-      for handler to close/release any resources that it may have opened/acquired, etc.
+      Called exactly once when stopping handler to provide an opportunity
+      for handler to flush buffers, close files, etc. May just noop.
+
+  NB you should always call `stop-handlers!` somewhere appropriate - usually
+  near the end of your `-main` or shutdown procedure, AFTER all other code has
+  completed that could create signals.
 
   See `help:handler-dispatch-options` for handler filters, etc."
         (~'[handler-id handler-fn              ] (~'add-handler! ~'handler-id ~'handler-fn nil))
@@ -1398,7 +1388,7 @@
 #?(:clj
    (defn- api:remove-handler! [*sig-handlers*]
      `(defn ~'remove-handler!
-        "Deregisters signal handler with given id, and returns
+        "Stops and deregisters signal handler with given id, and returns
   ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
   still registered."
         ~'[handler-id]
@@ -1414,39 +1404,21 @@
 #?(:clj
    (defn- api:stop-handlers! [*sig-handlers*]
      `(defn ~'stop-handlers!
-        "Stops relevant registered signal handlers in parallel, and returns
-  ?{<handler-id> {:keys [okay error]}}.
+        "Stops registered signal handlers in parallel by calling each
+  handler-fn with no arguments. This gives each handler the opportunity
+  to flush buffers, close files, etc.
 
-  Future calls to stopped handlers will noop.
+  Each handler will immediately stop accepting new signals, nooping if called.
 
-  Clj only:  `stop-handlers!` is called automatically on JVM shutdown
-  when `*auto-stop-handlers?*` is true (it is by default)."
+  Blocks to return ?{<handler-id> {:keys [okay error]}}, honouring each
+  handler's `:drain-msecs` value (see `help:handler-dispatch-options`).
+
+  NB you should always call `stop-handlers!` somewhere appropriate - usually
+  near the end of your `-main` or shutdown procedure, AFTER all other code has
+  completed that could create signals."
         [] (stop-handlers! ~*sig-handlers*))))
 
 (comment (api:stop-handlers! `*my-sig-handlers*))
-
-#?(:clj
-   (defn- api:shutdown-hook [*sig-handlers*]
-     (let [*auto-stop-handlers?* (symbol (str *ns*) "*auto-stop-handlers?*")]
-       `(do
-          (enc/defonce ~*auto-stop-handlers?* {:dynamic true}
-            "Automatically call `stop-handlers!` on JVM shutdown iff this is
-  enabled (it is by default). Advanced users may want to disable this in order
-  to instead call `stop-handlers!` manually as part of their own shutdown
-  procedure (e.g. AFTER successful app shutdown)."
-            true)
-
-          (enc/defonce ~'_handler-shutdown-hook {:private true}
-            (.addShutdownHook (Runtime/getRuntime)
-              (Thread.
-                (fn []
-                  (when ~*auto-stop-handlers?*
-                    ;; JVM is about to terminate anyway so keep runners active as long
-                    ;; as possible for benefit of async handlers that don't need stopping
-                    (binding [*stop-runners?* false]
-                      (stop-handlers! ~*sig-handlers*)))))))))))
-
-(comment (api:shutdown-hook `*my-sig-handlers*))
 
 ;;;;
 
@@ -1611,9 +1583,7 @@
 
           ~(api:with-ctx)
           ~(api:with-ctx+)
-          ~(api:with-middleware)
-
-          ~(when clj? (api:shutdown-hook *sig-handlers*))))))
+          ~(api:with-middleware)))))
 
 (comment
   ;; See `taoensso.encore-tests.signal-api` ns

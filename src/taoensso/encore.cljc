@@ -6137,6 +6137,16 @@
     (def f2 (pre-cache 4 fp (fn [] (Thread/sleep 500)  :f2)))))
 
 #?(:clj
+   (defn call-on-shutdown!
+     "Registers given nullary fn as a JVM shutdown hook.
+     (f) will be called sometime during shutdown. While running, it will
+     attempt to block shutdown."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [f]
+     (.addShutdownHook (Runtime/getRuntime)
+       (Thread. ^Runnable f))))
+
+#?(:clj
    (defn runner
      "Experimental, subject to change without notice!
      Returns a new stateful \"runner\" such that:
@@ -6184,7 +6194,7 @@
 
       `:drain-msecs` (default 6000 msecs)
         Maximum time (in milliseconds) to try allow pending execution requests to
-        complete during JVM shutdown."
+        complete when stopping runner. nil => no maximum."
 
      {:added "Encore v3.68.0 (2023-09-25)"}
      [{:as opts
@@ -6217,26 +6227,22 @@
                abq           (java.util.concurrent.ArrayBlockingQueue.
                                (as-pos-int buffer-size) false)
 
+               drained? (fn [] (and (zero? (.size abq)) (zero? (.get cnt-executing))))
                drained-fn
                (fn []
-                 (promised :daemon
-                   (loop []
-                     (if (and
-                           (zero? (.size abq))
-                           (zero? (.get cnt-executing)))
-                       :drained
-                       (recur)))))
+                 (if (drained?)
+                   ((promise) :drained)
+                   (promised :daemon (loop [] (if (drained?) :drained (recur))))))
 
                init-fn
                (fn []
-                 (.addShutdownHook (Runtime/getRuntime)
-                   (Thread.
-                     (fn []
-                       (when auto-stop? (compare-and-set! stopped?_ false true))
-                       ;; Optionally block JVM shutdown to complete pending requests
-                       (if-let [^long msecs drain-msecs]
-                         (when (pos?  msecs) (deref (drained-fn) msecs nil))
-                         (do                 (deref (drained-fn)))))))
+                 (call-on-shutdown!
+                   (fn []
+                     (when auto-stop? (compare-and-set! stopped?_ false true))
+                     ;; Optionally block JVM shutdown to complete pending requests
+                     (if-let [^long msecs drain-msecs]
+                       (when (pos?  msecs) (deref (drained-fn) msecs nil))
+                       (do                 (deref (drained-fn))))))
 
                  ;; Create worker threads
                  (dotimes [n (as-pos-int n-threads)]

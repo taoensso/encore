@@ -1715,7 +1715,7 @@
               (is (= @a "bound") "Handler binding conveyance")))
 
          (testing "with-handler/+"
-           (let [sleep! (fn [] (enc/hot-sleep 2000))
+           (let [sleep! (fn [] (enc/hot-sleep 1000))
                  sig1_  (atom ::nx)
                  sig2_  (atom ::nx)
                  sig3_  (atom ::nx)
@@ -1723,13 +1723,13 @@
                  st2?_  (atom false)
                  st3?_  (atom false)]
 
-             (sapi/with-handler      :hid1 (fn ([x] (sleep!) (reset! sig1_ x)) ([] (sleep!) (reset! st1?_ true))) {}
-               (sapi/with-handler+   :hid2 (fn ([x] (sleep!) (reset! sig2_ x)) ([] (sleep!) (reset! st2?_ true))) {:needs-stopping? true}
-                 (sapi/with-handler+ :hid3 (fn ([x] (sleep!) (reset! sig3_ x)) ([] (sleep!) (reset! st3?_ true))) {}
+             (sapi/with-handler      :hid1 (fn ([x] (sleep!) (reset! sig1_ (str x ".1")))          ([] (sleep!) (reset! st1?_ true)))        {}
+               (sapi/with-handler+   :hid2 (fn ([x] (sleep!) (reset! sig2_ (str x ".2")))          ([] (sleep!) (reset! st2?_ true) (ex1!))) {}
+                 (sapi/with-handler+ :hid3 (fn ([x] (sleep!) (reset! sig3_ (str x ".3"))) #?(:cljs ([])))                                    {}
                    (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo")))))
 
-             [(is (= [@sig1_ @sig2_ @sig3_] ["foo" "foo" "foo"]) "Auto-drained all")
-              (is (= [@st1?_ @st2?_ @st3?_] [false true  false]) "Auto-stopped one")]))])
+             [(is (= [@sig1_ @sig2_ @sig3_] ["foo.1" "foo.2" "foo.3"]) "Drained all")
+              (is (= [@st1?_ @st2?_ @st3?_] [true true false])         "Stopped all")]))])
 
       (testing "Handler priorities"
         (let [handler-order
@@ -1814,44 +1814,39 @@
 
       (testing "Handler stopping"
         [(is (= (sigs/stop-handlers! []) nil))
+
+         (let [st?_ (atom false)]
+           (sapi/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
+           (sapi/remove-handler! :hid1)
+           (is (true? @st?_) "Removing handler stops it"))
+
          (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
                       handlers
                       (-> []
-                        (sigs/add-handler :hid1 (fn ([_] (sleep!)))  {} {})
-                        (sigs/add-handler :hid2 (fn ([_] (sleep!)))  {} {:async {:drain-msecs nil}})
-                        (sigs/add-handler :hid3 (fn ([_] (sleep!)))  {} {:async {:drain-msecs 1000}})
-                        (sigs/add-handler :hid4 (fn ([_] (sleep!)))  {} {:async {:drain-msecs 100}})
-                        (sigs/add-handler :hid5 (fn ([_] (sleep!)) ([] (sleep!)))        {} {:needs-stopping? true})
-                        (sigs/add-handler :hid6 (fn ([_] (sleep!)) ([] (sleep!) (ex1!))) {} {:needs-stopping? true}))]
+                        (sigs/add-handler :hid1 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {})
+                        (sigs/add-handler :hid2 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs nil}})
+                        (sigs/add-handler :hid3 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 1000}})
+                        (sigs/add-handler :hid4 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 100}})
+                        (sigs/add-handler :hid5 (fn ([_] (sleep!))          ([]))        {} {})
+                        (sigs/add-handler :hid6 (fn ([_] (sleep!))          ([] (ex1!))) {} {}))]
 
                   (sigs/call-handlers!  handlers (MySignal. :info "foo"))
                   [(sigs/stop-handlers! handlers)
                    (sigs/stop-handlers! handlers)])
 
-               [{:hid1 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid2 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid3 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid4 {:okay :no-stopping-needed, #?@(:clj [:drained? false])},
-                 :hid5 {:okay :stopped,            #?@(:clj [:drained? true])},
-                 :hid6 {:error ex1,                #?@(:clj [:drained? true])}}
+               [{:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid4 {:okay :stopped, #?@(:clj [:drained? false])},
+                 :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid6 {:error ex1,     #?@(:clj [:drained? true])}}
 
-                {:hid1 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid2 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid3 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid4 {:okay :no-stopping-needed, #?@(:clj [:drained? true])},
-                 :hid5 {:okay :previously-stopped, #?@(:clj [:drained? true])},
-                 :hid6 {:okay :previously-stopped, #?@(:clj [:drained? true])}}]))
-
-         (let [st1?_ (atom false)
-               st2?_ (atom false)]
-
-           (sapi/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st1?_ true))))
-           (sapi/add-handler!    :hid2 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st2?_ true))) {:needs-stopping? true})
-           (sapi/remove-handler! :hid1)
-           (sapi/remove-handler! :hid2)
-
-           [(is (false? @st1?_) "Removing :hid1 didn't auto stop it")
-            (is (true?  @st2?_) "Removing :hid2 did    auto stop it")])])
+                {:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid4 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
+                 :hid6 {:okay :stopped, #?@(:clj [:drained? true])}}]))])
 
       (testing "Handler stats"
         (sapi/add-handler! :hid1 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
