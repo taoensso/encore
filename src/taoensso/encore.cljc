@@ -2244,8 +2244,8 @@
       1. Avoids unnecessary evaluation of `not-found`.
          Useful when `not-found` is expensive or contains side-effects.
 
-      2. Supports multiple prioritized keys (k1, k2, etc.). Returns val for first
-         key that exists in map. Useful for key aliases or fallbacks.
+      2. Supports multiple prioritized keys (k1, k2, etc.). Returns val for
+         first key that exists in map. Useful for key aliases or fallbacks.
 
     Equivalent to:
 
@@ -4909,8 +4909,8 @@
 
 (comment
   (let [x {:foo "hello world"}]
-    (qb 1e5 ; [126.73 121.85 109.93]
-      (clojure.core/pr-str x) (pr-edn x) (pr-edn* x)))
+    (qb 1e5 ; [122.91 117.25 104.89 106.39]
+      (clojure.core/pr-str x) (pr-edn x) (pr-edn* x) (str x)))
 
   (qb 1e6 ; [778.55 332.36]
     (with-out-str (clojure.core/println :a :b))
@@ -5041,7 +5041,7 @@
            fallback, ; Unique to `encore/signal!`
            elidable? location inst uid middleware,
            sample-rate kind ns id level when rate-limit,
-           ctx parent trace?, do let data msg error run & kvs]}])}
+           ctx parent root trace?, do let data msg error run & kvs]}])}
 
      [opts]
      (have? map? opts)
@@ -5107,33 +5107,32 @@
 ;;;; (S)RNG, etc.
 
 #?(:clj
-   (deftype ReseedingSRNG [^java.security.SecureRandom srng ^:volatile-mutable ^long call-count]
-     clojure.lang.IFn
-     (invoke [_]
-       ;; Regularly supplement seed for extra security
-       (if  (< call-count 1024)
-         (set! call-count (unchecked-inc call-count))
-         (do
-           (set! call-count 0)
-           (.setSeed srng (.generateSeed srng 8))))
-       srng)))
-
-#?(:clj
-   (defn ^:no-doc reseeding-srng
-     "Private, don't use. Returns a new stateful `ReseedingSRNG`."
-     {:added "Encore v3.75.0 (2024-01-29)"}
-     ^ReseedingSRNG []
-     (compile-if      #(java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
-       (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
-       (ReseedingSRNG. (java.security.SecureRandom/getInstance "SHA1SRNG") 0))))
-
-(comment (let [rsrng (reseeding-srng)] (qb 1e6 (secure-rng) (rsrng)))) ; [47.98 26.09]
-
-#?(:clj (def ^:private rsrng* (thread-local-proxy (reseeding-srng))))
-#?(:clj
    (do
+     (deftype ReseedingSRNG [^java.security.SecureRandom srng ^:volatile-mutable ^long call-count]
+       clojure.lang.IFn
+       (invoke [_]
+         ;; Regularly supplement seed for extra security
+         (if  (< call-count 1024)
+           (set! call-count (unchecked-inc call-count))
+           (do
+             (set! call-count 0)
+             (.setSeed srng (.generateSeed srng 8))))
+         srng))
+
+     (comment (let [rsrng (reseeding-srng)] (qb 1e6 (secure-rng) (rsrng)))) ; [48.71 28.9]
+
+     (defn ^:no-doc reseeding-srng
+       "Private, don't use. Returns a new stateful `ReseedingSRNG`."
+       {:added "Encore v3.75.0 (2024-01-29)"}
+       ^ReseedingSRNG []
+       (compile-if        java.security.SecureRandom/getInstanceStrong ; Java 8+, blocking
+         (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
+         (ReseedingSRNG. (java.security.SecureRandom/getInstance "SHA1SRNG") 0)))
+
+     (def ^:private rsrng* (thread-local-proxy (reseeding-srng)))
+
      (defn secure-rng
-       "Returns a an auto-reseeding thread-local `java.security.SecureRandom`.
+       "Returns an auto-reseeding thread-local `java.security.SecureRandom`.
        Favours security over performance. May block while waiting on entropy!"
        ^java.security.SecureRandom [] ((.get ^ThreadLocal rsrng*)))
 
@@ -5195,7 +5194,9 @@
 
         nchars       (count chars)
         max-char-idx (dec  nchars)
-        chars #?(:clj (.toCharArray (str chars)) :cljs (object-array chars))
+        chars
+        #?(:clj  (.toCharArray (str chars))
+           :cljs (object-array      chars))
 
         ;; (bit-and <rand-byte> <mask>) uniformly maps <rand-byte> (256 vals) to
         ;; the valid subset of <rand-char-idx> (<256) *without* bias. Downside is that
@@ -5232,8 +5233,8 @@
 (comment
   (let [f0 nanoid
         f1 (rand-id-fn {:len 21, :chars :nanoid})
-        f2 (rand-id-fn {:len 22, :chars :no-look-alikes})]
-    (qb 1e6 (uuid-str) (f0) (f1) (f2))) ; [234.65 346.14 399.66 544.64]
+        f2 (rand-id-fn {:len 22, :chars :nanoid-readable})]
+    (qb 1e6 (uuid-str) (f0) (f1) (f2))) ; [180.49 270.15 295.03 444.04]
 
   ;; Bits of entropy
   (/ (Math/log (Math/pow 16 32)) (Math/log 2)) ;                uuid:  128
@@ -7520,7 +7521,7 @@
                   (.substring ^String s start end)))))))))
 
   (def ^:no-doc ^:deprecated ?substr<idx (comp as-?nempty-str get-substr))
-  (def ^:no-doc ^:deprecated ?substr<len (comp as-?nempty-str get-substring))  
+  (def ^:no-doc ^:deprecated ?substr<len (comp as-?nempty-str get-substring))
 
   ;; Used by old versions of Timbre, Tufte
   (let [nolist? #(contains? #{nil [] #{}} %)]
@@ -7580,7 +7581,7 @@
        (defmacro ^:no-doc ^:deprecated repeatedly* [n & body] `(repeatedly-into* [] ~n ~@body))
        (defmacro ^:no-doc ^:deprecated repeatedly-into* ; Used by Nippy < v2.10
          [coll n & body] `(repeatedly-into ~coll ~n (fn [] ~@body)))))
-  
+
   (defn ^:no-doc ^:deprecated nnil-set [x] (disj (ensure-set x) nil))
 
   ;;; Arg order changed for easier partials
