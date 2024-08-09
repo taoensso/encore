@@ -4909,8 +4909,8 @@
 
 (comment
   (let [x {:foo "hello world"}]
-    (qb 1e5 ; [126.73 121.85 109.93]
-      (clojure.core/pr-str x) (pr-edn x) (pr-edn* x)))
+    (qb 1e5 ; [122.91 117.25 104.89 106.39]
+      (clojure.core/pr-str x) (pr-edn x) (pr-edn* x) (str x)))
 
   (qb 1e6 ; [778.55 332.36]
     (with-out-str (clojure.core/println :a :b))
