@@ -6327,6 +6327,22 @@
 
 (comment (hot-sleep 500))
 
+;;;; Thread info
+
+#?(:clj (defn thread-name "Returns string name of current `Thread`." {:added "Encore vX.Y.Z (YYYY-MM-DD)"} ^String [] (.getName (Thread/currentThread))))
+#?(:clj (defn thread-id   "Returns long id of current `Thread`."     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}   ^long [] (.getId   (Thread/currentThread))))
+#?(:clj
+   (defn thread-info
+     "Returns {:keys [group name id]} for current `Thread`."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     []
+     (let [t (Thread/currentThread)]
+       {:group (when-let [g (.getThreadGroup t)] (.getName g))
+        :name  (.getName t)
+        :id    (.getId   t)})))
+
+(comment [(thread-name) (thread-id) (thread-info)] (qb 1e6 (thread-info))) ; 44.49
+
 ;;;; Host info
 
 #?(:clj
