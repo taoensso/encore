@@ -119,7 +119,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 114 0])
+(def encore-version [3 115 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -5152,7 +5152,7 @@
 
 (defn rand-bytes
   "Returns a random byte array of given size."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.115.0 (2024-08-18)"}
   #?(:clj ^bytes [secure? size] :cljs [prefer-secure? size])
   #?(:clj
      (let [ba (byte-array size)]
@@ -6341,12 +6341,12 @@
 
 ;;;; Thread info
 
-#?(:clj (defn thread-name "Returns string name of current `Thread`." {:added "Encore vX.Y.Z (YYYY-MM-DD)"} ^String [] (.getName (Thread/currentThread))))
-#?(:clj (defn thread-id   "Returns long id of current `Thread`."     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}   ^long [] (.getId   (Thread/currentThread))))
+#?(:clj (defn thread-name "Returns string name of current `Thread`." {:added "Encore v3.115.0 (2024-08-18)"} ^String [] (.getName (Thread/currentThread))))
+#?(:clj (defn thread-id   "Returns long id of current `Thread`."     {:added "Encore v3.115.0 (2024-08-18)"}   ^long [] (.getId   (Thread/currentThread))))
 #?(:clj
    (defn thread-info
      "Returns {:keys [group name id]} for current `Thread`."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.115.0 (2024-08-18)"}
      []
      (let [t (Thread/currentThread)]
        {:group (when-let [g (.getThreadGroup t)] (.getName g))
@@ -6415,7 +6415,7 @@
        "Returns ?{:keys [ip name]} with string vals or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -6434,7 +6434,7 @@
        "Returns local host IP string or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -6453,7 +6453,7 @@
        "Returns local hostname string or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -7874,10 +7874,10 @@
   (def* ^:no-doc println-atomic    "Prefer `println`."       {:deprecated "Encore v3.98.0 (2024-04-08)"} println)
   (def* ^:no-doc -merge-with       "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
   (def* ^:no-doc fast-merge        "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
-  (def* ^:no-doc secure-rand-bytes "Prefer `rand-bytes`."    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} (partial rand-bytes true))
+  (def* ^:no-doc secure-rand-bytes "Prefer `rand-bytes`."    {:deprecated "Encore v3.115.0 (2024-08-18)"} (partial rand-bytes true))
 
-  #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} host-ip))
-  #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} hostname))
+  #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore v3.115.0 (2024-08-18)"} host-ip))
+  #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore v3.115.0 (2024-08-18)"} hostname))
   #?(:cljs (def* ^:no-doc ajax-lite    "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
   #?(:cljs (def* ^:no-doc now-dt       "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
   #?(:clj
