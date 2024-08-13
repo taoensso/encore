@@ -6389,40 +6389,68 @@
                    (recur true))))))))))
 
 #?(:clj
-   (let [f1 (fn [fallback] (try (.getHostAddress (java.net.InetAddress/getLocalHost)) (catch Exception _ (force fallback))))
+   (let [f1
+         (fn [fallback-val]
+           (try
+             (let [host (java.net.InetAddress/getLocalHost)]
+               {:name (.getHostName    host),
+                :ip   (.getHostAddress host)})
+             (catch Exception _ (force fallback-val))))
+
          f3 (refreshing-cache f1)]
 
-     (defn get-host-ip
-       "Returns local host ip address string, or `fallback` (default nil).
-       Can be slow, prefer 3-arity caching variant when possible."
-       {:added "Encore v3.98.0 (2024-04-08)"}
-       ([        ] (get-host-ip nil))
-       ([fallback] (f1 fallback))
-       ([cache-msecs timeout-msecs timeout-val] (f3 cache-msecs timeout-msecs timeout-val))
-       ([            timeout-msecs timeout-val]
+     (defn host-info
+       "Returns ?{:keys [ip name]} with string vals or `fallback-val` (default nil).
+       Arities 0 and 3 are   cached, prefer these!
+       Arities 1 and 2 are uncached and intended for advanced users only."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       ([                                      ] (f3 (msecs :mins 1) 5000          nil))
+       ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
+       ([              fallback-val] (f1 fallback-val))
+       ([timeout-msecs fallback-val]
         (let [p (promise)]
-          (future*     (p (f1           timeout-val)))
-          (deref-safely p timeout-msecs timeout-val))))))
+          (future*     (p (f1           fallback-val)))
+          (deref-safely p timeout-msecs fallback-val))))))
 
-(comment (qb 1e6 (get-host-ip (msecs :mins 1) 5000 "UnknownHost"))) ; 60.6
+(comment (qb 1e6 (host-info (msecs :mins 1) 5000 nil))) ; 64.49
 
 #?(:clj
-   (let [f1 (fn [fallback] (try (.getHostName (java.net.InetAddress/getLocalHost)) (catch Exception _ (force fallback))))
+   (let [f1 (fn [fallback-val] (try (.getHostAddress (java.net.InetAddress/getLocalHost)) (catch Exception _ (force fallback-val))))
          f3 (refreshing-cache f1)]
 
-     (defn get-hostname
-       "Returns local hostname string, or `fallback` (default nil).
-       Can be slow, prefer 3-arity caching variant when possible."
-       {:added "Encore v3.82.0 (2024-02-23) (arities: 1, 2, 3)"}
-       ([        ] (get-hostname nil))
-       ([fallback] (f1 fallback))
-       ([cache-msecs timeout-msecs timeout-val] (f3 cache-msecs timeout-msecs timeout-val))
-       ([            timeout-msecs timeout-val]
+     (defn host-ip
+       "Returns local host IP string or `fallback-val` (default nil).
+       Arities 0 and 3 are   cached, prefer these!
+       Arities 1 and 2 are uncached and intended for advanced users only."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       ([                                      ] (f3 (msecs :mins 1) 5000          nil))
+       ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
+       ([              fallback-val] (f1 fallback-val))
+       ([timeout-msecs fallback-val]
         (let [p (promise)]
-          (future*     (p (f1           timeout-val)))
-          (deref-safely p timeout-msecs timeout-val))))))
+          (future*     (p (f1           fallback-val)))
+          (deref-safely p timeout-msecs fallback-val))))))
 
-(comment (qb 1e6 (get-hostname (msecs :mins 1) 5000 "UnknownHost"))) ; 60.36
+(comment (qb 1e6 (host-ip) (get (host-info) :ip))) ; [56.12 76.39]
+
+#?(:clj
+   (let [f1 (fn [fallback-val] (try (.getHostName (java.net.InetAddress/getLocalHost)) (catch Exception _ (force fallback-val))))
+         f3 (refreshing-cache f1)]
+
+     (defn hostname
+       "Returns local hostname string or `fallback-val` (default nil).
+       Arities 0 and 3 are   cached, prefer these!
+       Arities 1 and 2 are uncached and intended for advanced users only."
+       {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+       ([                                      ] (f3 (msecs :mins 1) 5000          nil))
+       ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
+       ([              fallback-val] (f1 fallback-val))
+       ([timeout-msecs fallback-val]
+        (let [p (promise)]
+          (future*     (p (f1           fallback-val)))
+          (deref-safely p timeout-msecs fallback-val))))))
+
+(comment (qb 1e6 (hostname) (get (host-info) :name))) ; [56.31 75.77]
 
 ;;;;
 
@@ -7835,8 +7863,10 @@
   (def* ^:no-doc -merge-with    "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
   (def* ^:no-doc fast-merge     "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
 
-  #?(:cljs (def* ^:no-doc ajax-lite "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
-  #?(:cljs (def* ^:no-doc now-dt    "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
+  #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} host-ip))
+  #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} hostname))
+  #?(:cljs (def* ^:no-doc ajax-lite    "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
+  #?(:cljs (def* ^:no-doc now-dt       "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
