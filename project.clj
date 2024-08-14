@@ -9,6 +9,8 @@
 
   :test-paths ["test" #_"src"]
 
+  :java-source-paths ["src/java"]
+  :javac-options     ["--release" "11" "-g"] ; Support Java >= v11
   :dependencies
   [[org.clojure/tools.reader "1.4.2"]
    [com.taoensso/truss       "1.11.0"]]
