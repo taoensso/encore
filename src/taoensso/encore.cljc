@@ -5148,25 +5148,28 @@
            (getAlgorithm [] (str "INSECURE deterministic, seed=" long-seed))
            (nextBytes [^bytes ba] (.nextBytes insecure-rng ba)))))))
 
-(defn secure-rand-bytes
-  "Returns a random byte array of given size. Uses strong randomness when possible."
-  #?(:clj (^bytes [size] (let [ba (byte-array size)] (.nextBytes (secure-rng) ba) ba))
-     :cljs
-     ([size]
-      (let [ba (js/Uint8Array. size)]
-        (if-let [crypto js-?crypto]
-          (.getRandomValues crypto ba)
-          (dotimes [i size] (aset ba i (Math/floor (* 256 (js/Math.random))))))
-        ba))))
+(defn rand-bytes
+  "Returns a random byte array of given size."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  #?(:clj ^bytes [secure? size] :cljs [prefer-secure? size])
+  #?(:clj
+     (let [ba (byte-array size)]
+       (if secure?
+         (.nextBytes (secure-rng) ba)
+         (.nextBytes (java.util.concurrent.ThreadLocalRandom/current) ba))
+       ba)
 
-(comment
-  (qb  1e6 (secure-rand-bytes 21)) ; 1021.07
-  (do (seq (secure-rand-bytes 21))))
+     :cljs
+     (let [ba (js/Uint8Array. size)]
+       (if-let [crypto (and prefer-secure? js-?crypto)]
+         (.getRandomValues crypto ba)
+         (dotimes [i size] (aset ba i (Math/floor (* 256 (js/Math.random))))))
+       ba)))
+
+(comment (qb 1e6 (rand-bytes false 16) (rand-bytes true 16))) ; [59.66 196.49]
 
 (defn rand-id-fn
   "Returns a (fn rand-id []) that returns random id strings.
-  Uses strong randomness when possible.
-
   Options include:
     `:chars`         - ∈ #{<string> :nanoid :alphanumeric :no-look-alikes ...}
     `:len`           - Length of id strings to generate
@@ -5178,7 +5181,7 @@
     :or
     {chars         :nanoid
      len           21
-     rand-bytes-fn secure-rand-bytes}}]
+     rand-bytes-fn (partial rand-bytes true)}}]
 
   (let [chars
         (case chars
@@ -5248,15 +5251,16 @@
 
   (defn nanoid
     "Returns a random \"Nano ID\" of given length, Ref. <https://github.com/ai/nanoid>.
-    Uses strong randomness when possible. See also `uuid-str`, `rand-id-fn`."
+    See also `uuid-str`, `rand-id-fn`."
     {:tag #?(:clj 'String :cljs 'string)}
 
     ;; Slightly faster, variable-length version of (rand-id-fn {:chars :nanoid}).
     ;; 126 bits of entropy with default length (21).
-    ([         ] (nanoid 21))
-    ([^long len]
+    ([   ] (nanoid true 21))
+    ([len] (nanoid true len))
+    ([#?(:clj secure? :cljs prefer-secure?) ^long len]
      (let [sb (str-builder)
-           ba (secure-rand-bytes len)
+           ba (rand-bytes #?(:clj secure? :cljs prefer-secure?) len)
            max-idx (dec len)]
 
        (loop [idx 0]
@@ -5267,7 +5271,7 @@
 
        (str sb)))))
 
-(comment (qb 1e6 (nanoid) (uuid-str))) ; [341.65 225.23]
+(comment (qb 1e6 (uuid-str) (nanoid) (nanoid false 21))) ; [188.45 284.67 134.5]
 
 ;;;; Hex strings
 
@@ -7856,12 +7860,13 @@
     {:deprecated "Encore v3.70.0 (2023-10-17)"}
     matching-error)
 
-  (def* ^:no-doc limiter*       "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
-  (def* ^:no-doc limiter        "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
-  (def* ^:no-doc dis-assoc-some "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
-  (def* ^:no-doc println-atomic "Prefer `println`."       {:deprecated "Encore v3.98.0 (2024-04-08)"} println)
-  (def* ^:no-doc -merge-with    "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
-  (def* ^:no-doc fast-merge     "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
+  (def* ^:no-doc limiter*          "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
+  (def* ^:no-doc limiter           "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
+  (def* ^:no-doc dis-assoc-some    "Prefer `reassoc-some`."  {:deprecated "Encore v3.87.0 (2024-02-29)"} reassoc-some)
+  (def* ^:no-doc println-atomic    "Prefer `println`."       {:deprecated "Encore v3.98.0 (2024-04-08)"} println)
+  (def* ^:no-doc -merge-with       "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
+  (def* ^:no-doc fast-merge        "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
+  (def* ^:no-doc secure-rand-bytes "Prefer `rand-bytes`."    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} (partial rand-bytes true))
 
   #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} host-ip))
   #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"} hostname))
