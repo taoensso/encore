@@ -5251,27 +5251,33 @@
 
   (defn nanoid
     "Returns a random \"Nano ID\" of given length, Ref. <https://github.com/ai/nanoid>.
+    Faster, variable-length version of (rand-id-fn {:chars :nanoid}).
+    126 bits of entropy with default length (21).
     See also `uuid-str`, `rand-id-fn`."
     {:tag #?(:clj 'String :cljs 'string)}
-
-    ;; Slightly faster, variable-length version of (rand-id-fn {:chars :nanoid}).
-    ;; 126 bits of entropy with default length (21).
     ([   ] (nanoid true 21))
     ([len] (nanoid true len))
-    ([#?(:clj secure? :cljs prefer-secure?) ^long len]
-     (let [sb (str-builder)
-           ba (rand-bytes #?(:clj secure? :cljs prefer-secure?) len)
-           max-idx (dec len)]
+    #?(:clj
+       ([secure? len]
+        (if secure?
+          (com.taoensso.encore.Ids/genNanoId (.get com.taoensso.encore.Ids/SRNG_STRONG) len)
+          (com.taoensso.encore.Ids/genNanoId                                            len)))
 
-       (loop [idx 0]
-         ;; nchars|256 so (bit-and <rand-byte> 0x3f) yields uniform distribution
-         ;; of chars without need for stepping
-         (.append sb (aget chars (bit-and (aget ba idx) 0x3f)))
-         (when (< idx max-idx) (recur (unchecked-inc idx))))
+       :cljs
+       ([prefer-secure? len]
+        (let [sb (str-builder)
+              ba (rand-bytes prefer-secure? len)
+              max-idx (dec len)]
 
-       (str sb)))))
+          (loop [idx 0]
+            ;; nchars|256 so (bit-and <rand-byte> 0x3f) yields uniform
+            ;; distribution of chars without need for stepping
+            (.append sb (aget chars (bit-and (aget ba idx) 0x3f)))
+            (when (< idx max-idx) (recur (unchecked-inc idx))))
 
-(comment (qb 1e6 (uuid-str) (nanoid) (nanoid false 21))) ; [188.45 284.67 134.5]
+          (str sb))))))
+
+(comment (qb 1e6 (uuid-str) (nanoid) (nanoid false 21))) ; [203.98 205.53 83.87]
 
 ;;;; Hex strings
 
