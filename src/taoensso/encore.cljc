@@ -1481,19 +1481,21 @@
        :arg (typed-val x)})))
 
 (let [-as-throw -as-throw]
-  (defn as-nzero       [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
-  (defn as-nblank      [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
-  (defn as-nblank-trim [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
-  (defn as-nempty-str  [x] (or (as-?nempty-str  x) (-as-throw :nempty-str  x)))
-  (defn as-kw          [x] (or (as-?kw          x) (-as-throw :kw          x)))
-  (defn as-name        [x] (or (as-?name        x) (-as-throw :name        x)))
-  (defn as-qname       [x] (or (as-?qname       x) (-as-throw :qname       x)))
+  (defn as-nblank      {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
+  (defn as-nblank-trim {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?nblank-trim x) (-as-throw :nblank-trim x)))
+  (defn as-nempty-str  {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?nempty-str  x) (-as-throw :nempty-str  x)))
+  (defn as-name        {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?name        x) (-as-throw :name        x)))
+  (defn as-qname       {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?qname       x) (-as-throw :qname       x)))
+  (defn as-nzero                                             [x] (or (as-?nzero       x) (-as-throw :nzero       x)))
+  (defn as-kw                                                [x] (or (as-?kw          x) (-as-throw :kw          x)))
 
   (defn as-email
+    {:tag #?(:clj 'String :cljs 'string)}
     ([  x] (or (as-?email   x) (-as-throw :email x)))
     ([n x] (or (as-?email n x) (-as-throw :email x))))
 
   (defn as-nemail
+    {:tag #?(:clj 'String :cljs 'string)}
     ([  x] (or (as-?nemail   x) (-as-throw :nemail x)))
     ([n x] (or (as-?nemail n x) (-as-throw :nemail x))))
 
