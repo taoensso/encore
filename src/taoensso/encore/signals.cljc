@@ -225,7 +225,8 @@
   #?(:clj clojure.lang.IFn :cljs IFn)
   (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns id level))
   (#?(:clj invoke :cljs -invoke) [_      ns id level] (filter-fn      ns id level))
-  (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level)))
+  (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level))
+  (#?(:clj invoke :cljs -invoke) [_           ct-map] (filter-fn ct-map)))
 
 (defn sig-filter?
   "Returns true iff given a `SigFilter`."
@@ -264,7 +265,7 @@
                      (and
                        (if (and kind-filter kind)  (allow-name? kind-filter kind)         true)
                        (if (and   ns-filter ns)    (allow-name?   ns-filter   ns)         true)
-                       (if (and   id-filter id)    (allow-name? kind-filter   id)         true)
+                       (if (and   id-filter id)    (allow-name?   id-filter   id)         true)
                        (if (and   min-level level) (allow-level? min-level kind ns level) true)))
 
                     ([kind ns id level]

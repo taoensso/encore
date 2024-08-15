@@ -1620,7 +1620,24 @@
       (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:k1 20} 10])))
 
       (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 10} 10])))
-      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])])
+      (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])
+
+   (testing "Compile-time arity (1), allow nils!"
+     [(is (true?  ((sigs/sig-filter {:kind-filter :k1}) {:kind :k1})))
+      (is (false? ((sigs/sig-filter {:kind-filter :k1}) {:kind :k2})))
+      (is (true?  ((sigs/sig-filter {:kind-filter :k1}) {:kind nil})) "Allow nil")
+
+      (is (true?  ((sigs/sig-filter {:ns-filter :ns1}) {:ns :ns1})))
+      (is (false? ((sigs/sig-filter {:ns-filter :ns1}) {:ns :ns2})))
+      (is (true?  ((sigs/sig-filter {:ns-filter :ns1}) {:ns  nil})) "Allow nil")
+
+      (is (true?  ((sigs/sig-filter {:id-filter :id1}) {:id :id1})))
+      (is (false? ((sigs/sig-filter {:id-filter :id1}) {:id :id2}))) ;X
+      (is (true?  ((sigs/sig-filter {:id-filter :id3}) {:id  nil})) "Allow nil")
+
+      (is (true?  ((sigs/sig-filter {:min-level :info}) {:level  :info})))
+      (is (false? ((sigs/sig-filter {:min-level :info}) {:level :debug})))
+      (is (true?  ((sigs/sig-filter {:min-level :info}) {:level    nil})) "Allow nil")])])
 
 ;;;; Signal API
 
