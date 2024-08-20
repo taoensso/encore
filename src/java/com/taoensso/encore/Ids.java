@@ -11,9 +11,9 @@ public class Ids {
     /* Common */
 
     // These arrays remain for the lifetime of each thread
-    private static final ThreadLocal<char[]> CHARS_32 = new ThreadLocal<>() { @Override protected char[] initialValue() { return new char[32]; } };
-    private static final ThreadLocal<byte[]> BYTES_21 = new ThreadLocal<>() { @Override protected byte[] initialValue() { return new byte[21]; } };
-    private static final ThreadLocal<byte[]> BYTES_16 = new ThreadLocal<>() { @Override protected byte[] initialValue() { return new byte[16]; } };
+    private static final ThreadLocal<char[]> CHARS_32 = new ThreadLocal<char[]>() { @Override protected char[] initialValue() { return new char[32]; } };
+    private static final ThreadLocal<byte[]> BYTES_21 = new ThreadLocal<byte[]>() { @Override protected byte[] initialValue() { return new byte[21]; } };
+    private static final ThreadLocal<byte[]> BYTES_16 = new ThreadLocal<byte[]>() { @Override protected byte[] initialValue() { return new byte[16]; } };
 
     private static final char[] localChars(int   max_size) { return (max_size <= 32) ? CHARS_32.get() : new char[max_size]; }
     private static final byte[] localBytes(int exact_size) {
