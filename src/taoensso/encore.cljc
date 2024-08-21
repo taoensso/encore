@@ -114,7 +114,8 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        def* defonce try* catching binding -cas!? now-udt* now-nano* min* max*
+        or-some def* defonce try* catching binding
+        -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
@@ -513,12 +514,13 @@
      {:inline (fn [x] `(if (identical? ~x nil) false true))}
      [x]               (if (identical?  x nil) false true)))
 
-(defmacro or-some
-  "Like `or`, but returns the first non-nil form (may be falsey)."
-  {:added "Encore v3.67.0 (2023-09-08)"}
-  ([        ] nil)
-  ([x       ] x)
-  ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#))))
+#?(:clj
+   (defmacro or-some
+     "Like `or`, but returns the first non-nil form (may be falsey)."
+     {:added "Encore v3.67.0 (2023-09-08)"}
+     ([        ] nil)
+     ([x       ] x)
+     ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
 
 (comment (or-some nil nil false true))
 
@@ -3453,9 +3455,14 @@
 (comment (format-inst (now-inst)))
 
 ;;;; Memoization
+#?(:clj
+   (defmacro ^:private deref! [delay]
+     (if (list-form? delay)
+       `(let [~(with-meta 'd {:tag 'clojure.lang.Delay}) ~delay] (.deref ~'d))
+       (list '.deref (with-meta delay '{:tag clojure.lang.Delay})))))
 
-#?(:clj (defmacro ^:private deref! [delay] `(let [~(with-meta 'd {:tag 'clojure.lang.Delay}) ~delay] (.deref ~'d))))
-(comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [53.21 24.16]
+(comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [42.05 23.15]
+(comment (+ ^long (or nil 1) 1)) ; Reflects
 
 (defn memoize-last
   "Like `core/memoize` but only caches the given fn's latest input.
@@ -6046,8 +6053,8 @@
 
      See also `future-call`, `virtual-executor`, `pool-executor`."
      {:added "Encore v3.72.0 (2023-10-24)"}
-     ([                 form] `(future-call*                   (^{:once true} fn* [] ~form)))
-     ([executor-service form] `(future-call* ~executor-service (^{:once true} fn* [] ~form)))))
+     ([                 form] `(future-call*                   (^:once fn* [] ~form)))
+     ([executor-service form] `(future-call* ~executor-service (^:once fn* [] ~form)))))
 
 (comment @(future* (do (println "running") (Thread/sleep 2000) :done)))
 
@@ -6276,11 +6283,12 @@
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
 
-                     ;; Daemon worker threads are almost always the right choice here since
-                     ;; they allow the flexibility of *optionally* blocking JVM shutdown
-                     ;; (via our shutdown hook), whereas user worker threads outright
-                     ;; prevent our hook from even running and so would make users
-                     ;; responsible for stopping runners manually.
+                     ;; Daemon worker threads are almost always the right choice
+                     ;; here since they allow the flexibility of *optionally*
+                     ;; blocking JVM shutdown (via our shutdown hook), whereas
+                     ;; user worker threads outright prevent our hook from even
+                     ;; running and so would make users responsible for stopping
+                     ;; runners manually.
 
                      (.setDaemon thread (boolean daemon-threads?))
                      (.start     thread))))
