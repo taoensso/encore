@@ -6003,19 +6003,44 @@
      (delay (or (virtual-executor) (pool-executor {})))))
 
 #?(:clj
-   (defn ^:no-doc binding-conveyor-fn
-     "Private, don't use."
-     {:added "Encore v3.72.0 (2023-10-24)"}
-     [f]
-     (let [frame (clojure.lang.Var/cloneThreadBindingFrame)]
-       (fn
-         ([            ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f))
-         ([x           ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x))
-         ([x y         ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x y))
-         ([x y z       ] (clojure.lang.Var/resetThreadBindingFrame frame)       (f x y z) )
-         ([x y z & args] (clojure.lang.Var/resetThreadBindingFrame frame) (apply f x y z args))))))
+   (defmacro ^:no-doc binding-fn
+     "Private, don't use. Returns (^:once fn* []) callable from isolated thread."
+     [& body]
+     `(let [frame# (clojure.lang.Var/cloneThreadBindingFrame)]
+        (^:once fn* []
+         (clojure.lang.Var/resetThreadBindingFrame frame#)
+         (do ~@body)))))
 
-(comment (qb 1e6 (binding-conveyor-fn (fn [])))) ; 50.81
+#?(:clj
+   (defmacro ^:no-doc rebinding-fn
+     "Private, don't use. Returns (^:once fn* []) callable from any thread."
+     [& body]
+     `(let [frame1# (clojure.lang.Var/cloneThreadBindingFrame)]
+        (^:once fn* []
+         (let [frame2# (clojure.lang.Var/getThreadBindingFrame)]
+           (try
+             (clojure.lang.Var/resetThreadBindingFrame frame1#)
+             (do ~@body)
+             (finally (clojure.lang.Var/resetThreadBindingFrame frame2#))))))))
+
+#?(:clj
+   (defmacro ^:no-doc bound-delay
+     "Private, don't use.
+     Like `bound-fn` for `delay`- when body is realized, it'll be invoked with
+     the same dynamic bindings in place as when the delay was created."
+     [& body]
+     (if (:ns &env)
+       `(delay                             ~@body)
+       `(clojure.lang.Delay. (rebinding-fn ~@body)))))
+
+(comment
+  (qb 1e6 (do (clojure.lang.Var/resetThreadBindingFrame (clojure.lang.Var/getThreadBindingFrame)))) ; 30.78
+  (qb 1e6 (fn []) (binding-fn))  ; [22.38 36.1]
+  (qb 1e6 (delay) (bound-delay)) ; [42.11 55.09]
+  (do
+    (def ^:dynamic *dyn* nil)
+    (def bd_ (binding [*dyn* 1] (bound-delay *dyn*)))
+    (do @bd_)))
 
 #?(:clj
    (defn future-call*
@@ -6030,7 +6055,7 @@
      {:added "Encore v3.72.0 (2023-10-24)"}
      ([                 f] (future-call* (deref! default-executor_) f))
      ([executor-service f]
-      (let [f   (binding-conveyor-fn f)
+      (let [f   (binding-fn (f))
             fut (.submit ^java.util.concurrent.ExecutorService executor-service
                   ^Callable f)]
 
@@ -6250,8 +6275,7 @@
            (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
            (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all _)) true)))
 
-         (let [binding       (when convey-bindings? binding-conveyor-fn)
-               cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
+         (let [cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
                abq           (java.util.concurrent.ArrayBlockingQueue.
                                (as-pos-int buffer-size) false)
 
@@ -6331,9 +6355,9 @@
              (invoke [_ f]
                (when-not (stopped?_)
                  (.deref init!_)
-                 (if binding
-                   (run-fn (binding f))
-                   (run-fn          f))))))))))
+                 (if convey-bindings?
+                   (run-fn (binding-fn (f)))
+                   (run-fn              f))))))))))
 
 (comment
   (let [r1 (runner {:mode :sync})
