@@ -1512,15 +1512,12 @@
 
 (deftest _sig-filter
   [(testing "Levels"
-     [(is (=   (sigs/get-level-int   -10) -10))
-      (is (=   (sigs/get-level-int :info)  50))
-      (is (=   (sigs/get-level-int   nil)  nil))
-      (is (=   (sigs/get-level-int :__nx)  nil))
-
-      (is (=   (sigs/valid-level-int   -10) -10))
-      (is (=   (sigs/valid-level-int :info)  50))
-      ;; (is (->>          (sigs/valid-level-int     nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
-      (is    (->> ((fn [x] (sigs/valid-level-int x)) nil) (enc/throws? :common "Invalid level")))
+     [(is (=               (sigs/valid-level-int      -10) -10))
+      (is (=               (sigs/valid-level-int    :info)  50))
+      ;; (is (->>          (sigs/valid-level-int      nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
+      ;; (is (->>          (sigs/valid-level-int     :bad) (enc/throws? :common "Invalid level"))) ; Macro-time error
+      (is    (->> ((fn [x] (sigs/valid-level-int x))  nil) (enc/throws? :common "Invalid level")))
+      (is    (->> ((fn [x] (sigs/valid-level-int x)) :bad) (enc/throws? :common "Invalid level")))
 
       (is      (sigs/level>= :error  :info))
       (is      (sigs/level>= :error  :error))
@@ -1912,9 +1909,9 @@
             {:expansion-id -1
              :location {:ns "my-ns"}
              :allow?
-             '(clojure.core/and
+             '(taoensso.encore/and*
                (clojure.core/< (Math/random) 0.5)
-               (clojure.core/if-let [sf taoensso.encore-tests.signals-api/*rt-sig-filter*] (sf :my-sig-kind "my-ns" :my-sig-id :info) true)
+               (clojure.core/let [sf taoensso.encore-tests.signals-api/*rt-sig-filter*] (if sf (sf :my-sig-kind "my-ns" :my-sig-id :info) true))
                (clojure.core/let [this-expansion-id -1] (> 1 0))
                (if (taoensso.encore.signals/expansion-limited!? -1 [[1 1000]]) false true))})
         "Full `allow?` expansion")])

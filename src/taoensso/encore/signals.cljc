@@ -42,36 +42,27 @@
         {:level    (enc/typed-val x)
          :expected expected}))))
 
-(defn get-level-int
-  "Returns valid integer level, or nil."
-  [x]
+(defn ^:no-doc -valid-level-int ^long [x]
   (enc/cond
-    (keyword? x) (get level-aliases x)
-    (integer? x) (long              x)))
+    (keyword? x) (or (get level-aliases x) (bad-level! x))
+    (integer? x) (long x)
+    :else  (bad-level! x)))
 
-(comment (get-level-int :bad))
+(defn ^:no-doc -valid-level [x]
+  (enc/cond
+    (keyword? x) (if (get level-aliases x) x (bad-level! x))
+    (integer? x)      x
+    :else (bad-level! x)))
+
+(comment (enc/qb 1e6 (-valid-level-int :info))) ; 52.88
 
 #?(:clj
    (do
-     (defmacro valid-level-int
-       "Returns valid integer level, or throws."
-       [x]
-       (if (enc/const-form? x)
-         (do           (or (get-level-int x)  (bad-level! x)))
-         `(let [x# ~x] (or (get-level-int x#) (bad-level! x#)))))
+     (defmacro valid-level-int "Returns valid integer level, or throws."
+       [x] (if (enc/const-form? x) (-valid-level-int x) `(-valid-level-int ~x)))
 
-     (defmacro valid-level
-       "Returns valid level, or throws."
-       [x]
-       (if (enc/const-form? x)
-         (do           (if (get-level-int x)  x  (bad-level! x)))
-         `(let [x# ~x] (if (get-level-int x#) x# (bad-level! x#)))))
-
-     (defmacro const-level>=
-       "Returns true, false, or nil (inconclusive)."
-       [x y]
-       (when (and (enc/const-form? x) (enc/const-form? y))
-         (>= (long (valid-level-int x)) (long (valid-level-int y)))))
+     (defmacro valid-level "Returns valid level, or throws."
+       [x] (if (enc/const-form? x) (-valid-level x) `(-valid-level ~x)))
 
      (defmacro level>=
        "Returns true if valid level `x` has value >= valid level `y`.
@@ -79,11 +70,11 @@
        [x y]
        (if (and (enc/const-form? x) (enc/const-form? y))
          (>= (long (valid-level-int x)) (long (valid-level-int y)))
-         `(let [~(with-meta 'x-level {:tag 'long}) (valid-level-int ~x)
-                ~(with-meta 'y-level {:tag 'long}) (valid-level-int ~y)]
-            (>= ~'x-level ~'y-level))))))
+         (let [x (if (enc/const-form? x) (valid-level-int x) `(-valid-level-int ~x))
+               y (if (enc/const-form? y) (valid-level-int y) `(-valid-level-int ~y))]
+           `(>= ~x ~y))))))
 
-(comment (level>= :info :bad))
+(comment (macroexpand '(level>= :info x)))
 
 ;;;; Basic filtering
 
@@ -290,9 +281,9 @@
       ([        kind-filter ns-filter id-filter min-level]             (get-cached kind-filter ns-filter id-filter min-level))
       ([{:keys [kind-filter ns-filter id-filter min-level :as specs]}] (get-cached kind-filter ns-filter id-filter min-level)))))
 
-(comment ; [59.96 60.37 60.41]
+(comment ; [188.41 189.56 188.09]
   (let [sf (sig-filter nil "*" nil nil)]
-    (enc/qb 1e6
+    (enc/qb 3e6
       (sf :kind :ns     :info)
       (sf       :ns :id :info)
       (sf       :ns :id :info))))
@@ -368,7 +359,9 @@
           [elide? allow? expansion-id,
            elidable? location sample-rate kind ns id level filter/when rate-limit rl-rid]}])}
 
-     [{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*] :as core-opts} call-opts]
+     [{:as core-opts
+       :keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}
+      call-opts]
 
      (const-form! 'call-opts      call-opts) ; Must be const map, though vals may be arb forms
      (enc/have? [:or nil? map?]   call-opts)
@@ -426,9 +419,9 @@
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(if-let [~'sf ~*rt-sig-filter*] (~'sf            ~ns-form          ~level-form) true)
-                         3 `(if-let [~'sf ~*rt-sig-filter*] (~'sf            ~ns-form ~id-form ~level-form) true)
-                         4 `(if-let [~'sf ~*rt-sig-filter*] (~'sf ~kind-form ~ns-form ~id-form ~level-form) true)
+                         2 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form          ~level-form) true))
+                         3 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form ~id-form ~level-form) true))
+                         4 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf ~kind-form ~ns-form ~id-form ~level-form) true))
                          (unexpected-sf-artity! sf-arity `expansion-filter))
 
                        when-form
@@ -439,13 +432,14 @@
                        (when-let [spec-form (get opts :rate-limit)]
                          `(if (expansion-limited!? ~expansion-id ~spec-form) false true))]
 
-                   `(and ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
+                   `(enc/and* ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
 (comment
   (filterable-expansion
-    {:sf-arity 2, :*rt-sig-filter* `*foo*}
+    {:macro-form nil, :macro-env nil,
+     :sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*}
     {:location    {:ns (str *ns*)}
      :line        42
      :filter      'false
@@ -583,9 +577,10 @@
       :track-stats? true
       :async
       {:mode :blocking
-       :buffer-size 1024
-       :n-threads   1
-       :drain-msecs 6000}}))
+       :buffer-size      1024
+       :n-threads        1
+       :drain-msecs      6000
+       :convey-bindings? true}}))
 
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
@@ -696,14 +691,14 @@
                     (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
                           allow?
                           (if track-stats?
-                            (and
+                            (enc/and*
                               (if sample-rate (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
                               (if sig-filter* (if (allow-signal? sig-raw sig-filter*)    true (do (cnt-filtered) false)) true)
                               (if when-fn     (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
                               (if rl-handler  (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
                               )
 
-                            (and
+                            (enc/and*
                               (if sample-rate (< (Math/random) (double sample-rate))  true)
                               (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
                               (if when-fn     (when-fn #_sig-raw)                     true)
