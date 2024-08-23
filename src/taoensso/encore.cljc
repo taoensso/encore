@@ -114,7 +114,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        or-some def* defonce try* catching binding
+        or-some and* def* defonce try* catching binding
         -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?
@@ -523,6 +523,14 @@
      ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
 
 (comment (or-some nil nil false true))
+
+#?(:clj
+   (defmacro ^:no-doc and*
+     "Private, don't use. Like `and` but avoids `let` and returns
+     truthy or false (never nil)."
+     ([        ] true)
+     ([x       ] x)
+     ([x & next] `(if ~x (and* ~@next) false))))
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args> <attrs>]
