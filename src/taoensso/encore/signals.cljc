@@ -835,7 +835,7 @@
     4. Handler middleware (fn [signal]) => ?modified-signal does not return nil
 
   Note that middleware provides a flexible way to filter signals by arbitrary
-  signal data/content conditions (return nil to suppress signal).
+  signal data/content conditions (return nil to filter signal).
 
   Config:
 
@@ -854,8 +854,8 @@
       See `help:handler-dispatch-options` for details.
 
       Note: signal filters (1a, 1b) should generally be AT LEAST as permissive as
-      handler filters (2b), otherwise signals will be suppressed before reaching
-      handlers.
+      handler filters (2b), otherwise signals will be filtered before even
+      reaching handlers.
 
     To set signal middleware (3): use `set-middleware!`, `with-middleware`
 
@@ -1457,6 +1457,18 @@
 
   As with all dynamic Clojure vars, \"binding conveyance\" applies when using
   futures, agents, etc.
+
+  Examples:
+
+    ;; Filter signals by returning nil:
+    (t/set-middleware! (fn [signal] (when-not (:skip-me? signal) signal)))
+
+    ;; Remove key/s from signals:
+    (t/set-middleware! (fn [signal] (dissoc signal :unwanted-key1 ...)))
+
+    ;; Remove key/s from signals to specific handler:
+    (t/add-handler! ::my-handler my-handler
+      {:middleware (fn [signal] (dissoc signal :unwanted-key1 ...))})
 
   Tips:
     - Compose multiple middleware fns together with `comp-middleware`.
