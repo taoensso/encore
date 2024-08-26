@@ -384,23 +384,29 @@
                :column (get opts :column (get location-map :column (when location-sym `(get ~location-sym :column))))  ; ''
                :file   (get opts :file   (get location-map :file   (when location-sym `(get ~location-sym :file))))))  ; ''
 
-           kind-form  (get opts     :kind)
-           ns-form    (get location :ns)
-           id-form    (get opts     :id)
-           level-form (get opts     :level)
+           kind-form*  (get opts     :kind)
+           ns-form*    (get location :ns)
+           id-form*    (get opts     :id)
+           level-form* (get opts     :level)
+
+           bound-forms (get opts :bound-forms) ; {:kind '__kind, etc.}
+           kind-form   (or (get bound-forms :kind)  kind-form*)
+           ns-form     (or (get bound-forms :ns)    ns-form*)
+           id-form     (or (get bound-forms :id)    id-form*)
+           level-form  (or (get bound-forms :level) level-form*)
            _
-           (when (enc/const-form? level-form)
-             (valid-level         level-form))
+           (when (enc/const-form? level-form*)
+             (valid-level         level-form*))
 
            elide?
            (and
              (get opts :elidable? true)
              (get opts :elide?
                (when-let [sf ct-sig-filter]
-                 (not (sf {:kind  (enc/const-form  kind-form)
-                           :ns    (enc/const-form    ns-form)
-                           :id    (enc/const-form    id-form)
-                           :level (enc/const-form level-form)})))))
+                 (not (sf {:kind  (enc/const-form  kind-form*)
+                           :ns    (enc/const-form    ns-form*)
+                           :id    (enc/const-form    id-form*)
+                           :level (enc/const-form level-form*)})))))
 
            ;; Unique id for this expansion, changes on every eval.
            ;; So rate limiter will get reset on eval during REPL work, etc.
