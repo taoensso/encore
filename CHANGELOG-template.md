@@ -4,8 +4,10 @@ This project uses [**Break Versioning**](https://www.taoensso.com/break-versioni
 
 # `vX.Y.Z` (YYYY-MM-DD)
 
-> **Dep/s**: TODO is [on Clojars](https://clojars.org/com.taoensso/TODO/versions/X.Y.Z).  
-> **Versioning**: TODO uses [Break Versioning](https://www.taoensso.com/break-versioning).
+📦 [Available on Clojars](https://clojars.org/com.taoensso/TODO/versions/X.Y.Z).  
+Uses [Break Versioning](https://www.taoensso.com/break-versioning).
+
+---
 
 This is a non-breaking **feature and maintenance** (pre-)release.
 
