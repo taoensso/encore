@@ -1356,7 +1356,7 @@
      `(defn ~'add-handler!
         "Registers given signal handler and returns
   {<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
-  now registered.
+  now registered. If an old handler already existed under the same id, stop it.
 
   `handler-fn` should be a fn of exactly 2 arities:
 
@@ -1388,11 +1388,15 @@
                      kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
-         (get-handlers-map
-           (enc/update-var-root! ~*sig-handlers*
-             (fn [m#]
-               (add-handler m# ~'handler-id ~'handler-fn,
-                 ~lib-dispatch-opts ~'dispatch-opts))))))))
+         (let [removed-handler# (get-wrapped-handler-fn ~*sig-handlers* ~'handler-id)
+               new-handlers-vec#
+               (enc/update-var-root! ~*sig-handlers*
+                 (fn [m#]
+                   (add-handler m# ~'handler-id ~'handler-fn,
+                     ~lib-dispatch-opts ~'dispatch-opts)))]
+
+           (when removed-handler# (removed-handler#))
+           (get-handlers-map new-handlers-vec#))))))
 
 (comment (api:add-handler! `*my-sig-handlers* 'lib-dispatch-opts))
 

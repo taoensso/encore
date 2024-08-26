@@ -1653,9 +1653,11 @@
   (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))
   (signal-value  [_ _] cnt))
 
+(defn clear-handlers! [] (enc/update-var-root! sapi/*rt-sig-filter* (fn [_] nil)))
+
 (deftest _signal-api
   [(testing "Signal filtering"
-     [(is (nil? (enc/update-var-root! sapi/*rt-sig-filter* (fn [_] nil))))
+     [(is (nil? (clear-handlers!)))
       (is (= (sapi/get-filters)              nil))
       (is (= (sapi/set-kind-filter!     "*") {:kind-filter "*"                                                  }))
       (is (= (sapi/set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*"                                  }))
@@ -1700,25 +1702,25 @@
 
    (testing "Signal handlers"
      [(testing "Basics"
-        [(is (nil? (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))))
+        [(is (nil? (clear-handlers!)))
          (is (nil? (cnt :set 0)))
 
          (is (=           (sapi/get-handlers) nil))
-         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (sapi/add-handler! :hid2 nil            {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (sapi/get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
 
          (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))))
          (is (= @cnt 0))
 
-         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (sapi/get-handlers)                                                     {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
 
          (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))))
          (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))))
          (is (= @cnt 2))
 
-         (is (enc/submap? (sapi/add-handler! :hid1 (fn [_] (cnt)) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (sapi/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
          (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
          (is (nil? (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
          (is (= @cnt 3))
@@ -1800,7 +1802,8 @@
               v3 (atom ::nx)
               cm enc/comp-middleware]
 
-          [(is (nil? (cnt :set 0)))
+          [(is (nil? (clear-handlers!)))
+           (is (nil? (cnt :set 0)))
            (is (enc/submap? (sapi/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                                  }) {:hid1 :submap/ex}))
            (is (enc/submap? (sapi/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware (cm #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
            (is (enc/submap? (sapi/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware (fn [_] nil)})                         {:hid3 :submap/ex}))
@@ -1819,7 +1822,7 @@
 
       (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
         (let [fn-arg_ (atom nil)]
-          (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))
+          (clear-handlers!)
           (sapi/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
           (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "foo"))
           (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error (enc/pred enc/error?)}))))
@@ -1827,7 +1830,7 @@
       #?(:clj
          (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
            (let [fn-arg_ (atom nil)]
-             (enc/update-var-root! sapi/*sig-handlers* (fn [_] nil))
+             (clear-handlers!)
              (sapi/add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
              (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "1"))
              (sigs/call-handlers! sapi/*sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
@@ -1836,12 +1839,19 @@
 
       (testing "Handler stopping"
         [(is (= (sigs/stop-handlers! []) nil))
-
          (let [st?_ (atom false)]
+           (clear-handlers!)
            (sapi/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
            (sapi/remove-handler! :hid1)
            (is (true? @st?_) "Removing handler stops it"))
 
+         (let [st?_ (atom false)]
+           (clear-handlers!)
+           (sapi/add-handler! :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
+           (sapi/add-handler! :hid1 (fn ([_]) ([])))
+           (is (true? @st?_) "Replacing handler stops old handler"))
+
+         (is (nil? (clear-handlers!)))
          (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
                       handlers
                       (-> []
@@ -1871,6 +1881,7 @@
                  :hid6 {:okay :stopped, #?@(:clj [:drained? true])}}]))])
 
       (testing "Handler stats"
+        (clear-handlers!)
         (sapi/add-handler! :hid1 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
         (sapi/add-handler! :hid2 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
         (sapi/add-handler! :hid3 (fn [_]) {:async nil             :track-stats? false})
