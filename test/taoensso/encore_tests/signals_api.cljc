@@ -1,5 +1,6 @@
 (ns taoensso.encore-tests.signals-api
   (:require
+   [taoensso.encore         :as enc]
    [taoensso.encore.signals :as sigs]))
 
 (comment (remove-ns 'taoensso.encore-tests.signals-api))
@@ -22,12 +23,11 @@
      [opts]
      `(quote
         ~(sigs/filterable-expansion
-           {:macro-form &form
-            :macro-env  &env
-            :sf-arity   4
+           {:sf-arity   4
             :ct-sig-filter     ct-sig-filter
             :*rt-sig-filter* `*rt-sig-filter*}
-           opts))))
+           (assoc opts
+             :location* (enc/get-source &form &env))))))
 
 (comment
   (add-handler!    :hid1 (fn [x]) {})

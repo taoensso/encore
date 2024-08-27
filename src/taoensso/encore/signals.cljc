@@ -355,13 +355,13 @@
      forms in `opts`."
 
      {:arglists
-      '([{:keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}]
+      '([{:keys [sf-arity ct-sig-filter *rt-sig-filter*]}]
         [{:keys
           [elide? allow? expansion-id,
-           elidable? location sample-rate kind ns id level filter/when rate-limit rl-rid]}])}
+           elidable? location location*,
+           sample-rate kind ns id level filter/when rate-limit]}])}
 
-     [{:as core-opts
-       :keys [macro-form macro-env, sf-arity ct-sig-filter *rt-sig-filter*]}
+     [{:as core-opts :keys [sf-arity ct-sig-filter *rt-sig-filter*]}
       call-opts]
 
      (const-form! 'call-opts      call-opts) ; Must be const map, though vals may be arb forms
@@ -369,13 +369,14 @@
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
-     (enc/have? #(contains? core-opts %) :macro-form :macro-env :ct-sig-filter :*rt-sig-filter*)
+     (enc/have? #(contains? core-opts %) :ct-sig-filter :*rt-sig-filter*)
+     (enc/have? #(contains? call-opts %) :location*)
      (enc/have? [:or nil? sig-filter?] ct-sig-filter)
      (enc/have? qualified-symbol?     *rt-sig-filter*)
 
      (let [opts call-opts
            location ; {:keys [ns line column file]} forms
-           (let [location-form (get opts :location (enc/get-source macro-form macro-env))
+           (let [location-form (get opts :location (get opts :location*))
                  location-map  (when (map?    location-form) location-form) ; At least keys const
                  location-sym  (when (symbol? location-form) location-form)]
 
@@ -445,9 +446,9 @@
 
 (comment
   (filterable-expansion
-    {:macro-form nil, :macro-env nil,
-     :sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*}
-    {:location    {:ns (str *ns*)}
+    {:sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*}
+    {:location*   nil
+     :location    {:ns (str *ns*)}
      :line        42
      :filter      'false
      ;; :elide?   true
