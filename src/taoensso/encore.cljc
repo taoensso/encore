@@ -1167,8 +1167,12 @@
      "Returns {:keys [ns line column file]} source location given a macro's
      compile-time `&form` and `&env` vals. See also `keep-callsite`."
      {:added "Encore v3.61.0 (2023-07-07)"}
-     [macro-form macro-env]
-     (let [{:keys [line column file]} (meta macro-form)
+     [macro-form-or-meta macro-env]
+     (let [{:keys [line column file]}
+           (if (map? macro-form-or-meta)
+             (do     macro-form-or-meta)
+             (meta   macro-form-or-meta))
+
            file
            (if-not (:ns macro-env)
              *file* ; Compiling clj
