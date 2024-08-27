@@ -16,7 +16,7 @@
       [taoensso.encore-tests
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer1 callsite-outer2]])))
+        callsite-inner callsite-outer]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -717,14 +717,12 @@
 
 ;;;; Callsites, etc.
 
-(defmacro ^:private callsite-inner  [] (meta &form))
-(defmacro ^:private callsite-outer1 []                    `(callsite-inner))
-(defmacro ^:private callsite-outer2 [] (enc/keep-callsite `(callsite-inner)))
+(defmacro ^:private callsite-inner [] (meta &form))
+(defmacro ^:private callsite-outer [] (enc/keep-callsite `(callsite-inner)))
 
 (deftest _keep-callsite
   [(is (map? (callsite-inner)))
-   (is (nil? (callsite-outer1)))
-   (is (map? (callsite-outer2)))])
+   (is (map? (callsite-outer)))])
 
 (defmacro test-if-cljs [caller]
   `(enc/if-cljs

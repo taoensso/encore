@@ -165,10 +165,7 @@
      to `then`, otherwise expands to `else`."
      {:style/indent 1}
      ([test then     ] `(compile-if ~test ~then nil))
-     ([test then else]
-      (if (try (eval test) (catch Throwable _ false))
-        `(do ~then)
-        `(do ~else)))))
+     ([test then else] (if (try (eval test) (catch Throwable _ false)) then else))))
 
 #?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
 
@@ -1151,25 +1148,17 @@
 
 #?(:clj
    (defmacro keep-callsite
-     "The long-standing CLJ-865 unfortunately means that it's currently
-     not possible for an inner macro to access the &form metadata of an
-     outer macro.
-
-     This means that inner macros lose callsite information like the
-     line number of the outer macro.
+     "The long-standing CLJ-865 means that it's not possible for an inner
+     macro to access the `&form` metadata of a wrapping outer macro. This
+     means that wrapped macros lose calsite info, etc.
 
      This util offers a workaround for macro authors:
-
-       (defmacro inner  [] (meta &form))
-       (defmacro outer1 []                `(inner))
-       (defmacro outer2 [] (keep-callsite `(inner)))
-
-       (inner)  => {:line _, :column _}
-       (outer1) => nil
-       (outer2) => {:line _, :column _}"
+       (defmacro inner [] (meta &form))
+       (defmacro outer [] (keep-callsite `(inner)))
+       (outer) => {:keys [line column ...]}"
 
      {:added "Encore v3.61.0 (2023-07-07)"}
-     [& body] `(with-meta (do ~@body) (meta ~'&form))))
+     [form] `(with-meta ~form (meta ~'&form))))
 
 (declare assoc-some)
 
