@@ -178,21 +178,22 @@
           old-vec (if (vector? old) old (if old [["*" (valid-level old)]] []))
           new-vec
           (not-empty
-            (reduce ; Remove any pre-existing [<str> _] or [#{<str>} _] entries
-              (fn [acc [nf-spec* _min-level :as entry]]
-                (if-let [exact-match?
-                         (or
-                           (= nf-spec*   nf-spec)
-                           (= nf-spec* #{nf-spec}))]
-                  (do   acc)             ; Remove entry
-                  (conj acc entry)       ; Retain entry
-                  ))
+            (let [exact-match? ; `pr-str` for re-patterns, etc.
+                  #{(pr-str   nf-spec)
+                    (pr-str #{nf-spec})}]
 
-              (if new
-                [[nf-spec new]] ; Insert new entry at head
-                [])
+              (reduce ; Remove any pre-existing [<nf-spec> _] or [#{<nf-spec>} _] entries
+                (fn [acc [nf-spec* _min-level :as entry]]
+                  (if (exact-match? (pr-str nf-spec*))
+                    (do   acc)       ; Remove entry
+                    (conj acc entry) ; Retain entry
+                    ))
 
-              old-vec))]
+                (if new
+                  [[nf-spec new]] ; Insert new entry at head
+                  [])
+
+                old-vec)))]
 
       (if-let [simplified ; [["*" <x>]] -> <x>
                (when (= (count new-vec) 1)

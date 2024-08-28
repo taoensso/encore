@@ -1548,11 +1548,15 @@
       (is (=   (sigs/update-min-level :debug nil "ns1" :info) [["ns1" :info] ["*" :debug]]))
       (is (=   (->
                  :debug
-                 (sigs/update-min-level nil "ns1" :info)
-                 (sigs/update-min-level nil "ns2" :trace)
-                 (sigs/update-min-level nil "ns3" -20)
-                 (sigs/update-min-level nil "ns2" :warn))
-            [["ns2" :warn] ["ns3" -20] ["ns1" :info] ["*" :debug]]))
+                 (sigs/update-min-level nil  "ns1" :info)
+                 (sigs/update-min-level nil  "ns2" :trace)
+                 (sigs/update-min-level nil #"ns4" :debug)
+                 (sigs/update-min-level nil  "ns3" -20)
+                 (sigs/update-min-level nil  "ns2" :warn)
+                 (sigs/update-min-level nil #"ns4" :info)
+                 (pr-str) ; Since (not= #"ns" #"ns"), etc.
+                 )
+            "[[#\"ns4\" :info] [\"ns2\" :warn] [\"ns3\" -20] [\"ns1\" :info] [\"*\" :debug]]"))
 
       (is (=   (sigs/update-min-level [["ns1" :info]]  nil      nil :debug)  :debug))
       (is (=   (sigs/update-min-level :info            :my-kind nil :warn)   {:default :info, :my-kind :warn}))
