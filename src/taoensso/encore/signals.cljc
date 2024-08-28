@@ -78,15 +78,15 @@
 
 ;;;; Basic filtering
 
-(let [nf-compile  (fn [nf-spec  ] (enc/name-filter (or nf-spec :any)))
-      nf-conform? (fn [nf-spec n] ((nf-compile nf-spec) n))
+(let [nf-compile (fn [nf-spec  ] (enc/name-filter (or nf-spec :any)))
+      nf-match?  (fn [nf-spec n] ((nf-compile nf-spec) n))
       nf->min-level
       (fn [ml-spec nf-arg]
         (if (vector? ml-spec)
           ;; [[<nf-spec> <min-level>] ... [\"*\" <min-level>]]
           (enc/rsome
             (fn [[nf-spec min-level]]
-              (when (nf-conform? nf-spec nf-arg)
+              (when (nf-match? nf-spec nf-arg)
                 min-level))
             ml-spec)
           ml-spec))]
@@ -108,7 +108,7 @@
     "Low-level name filter."
     #?(:cljs {:tag 'boolean})
     [nf-spec nf-arg]
-    (if ^boolean (nf-conform? nf-spec nf-arg) true false))
+    (if ^boolean (nf-match? nf-spec nf-arg) true false))
 
   (defn parse-min-level
     "Returns simple unvalidated ?min-level from {<kind> [[<nf-spec> <min-level>] ...]}, etc."

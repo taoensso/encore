@@ -7210,8 +7210,10 @@
         (when (str-contains? s "*")
           (re-pattern
             (-> (str "^" s "$")
-              (str/replace "." "\\.")
-              (str/replace "*" "(.*)")))))
+              (str/replace "(.*)"            "__OR_CHILDREN__")
+              (str/replace "."               "\\.")
+              (str/replace "*"               ".*")
+              (str/replace "__OR_CHILDREN__" "(\\..*)?")))))
 
       compile->match-fn
       (fn compile->match-fn
@@ -7268,27 +7270,29 @@
                           {:allow <spec>, :disallow <spec>}}})))]
 
   (defn name-filter
-    "Given filter `spec`, returns a compiled (fn conform? [name]) that takes
-    a namespace or any nameable type (string, keyword, symbol).
+    "Given filter `spec`, returns a compiled (fn match? [x]) that:
+      - Takes a string, keyword, symbol, or namespace.
+      - Returns true iff input matches spec.
+
+    Useful for efficiently filtering namespaces, class names, id kws, etc.
 
     Spec may be:
-      - A namespace. Will conform on exact match.
-      - A str/kw/sym, in which \"*\"s act as wildcards. Will conform on match.
-      - A regex pattern. Will conform on match.
-
-      - A vector or set of regex patterns or strs/kws/syms.
-        Will conform on ANY match.
+      - A namespace     to match exactly
+      - A regex pattern to match
+      - A str/kw/sym    to match, with \"*\" and \"(.*)\" as wildcards:
+        \"foo.*\"   will match \"foo.bar\"
+        \"foo(.*)\" will match \"foo.bar\" and \"foo\"
         If you need literal \"*\"s, use #\"\\*\" regex instead.
 
-      - {:allow <spec> :disallow <spec>} with specs as above.
-        Will conform iff `allow` spec matches AND `disallow` spec does NOT.
-
-    Example inputs: namespace strings, class names, ids, etc.
+      - A set/vector of the above to match any
+      - A map, {:allow <spec> :disallow <spec>} with specs as the above:
+        If present,    `:allow` spec MUST     match, AND
+        If present, `:disallow` spec MUST NOT match.
 
     Spec examples:
-      *ns*, #{}, \"*\", \"foo.bar\", \"foo.bar.*\", #{\"foo\" \"bar.*\"},
-      {:allow #{\"foo\" \"bar.*\"} :disallow #{\"foo.*.bar.*\"}},
-      #\"(foo1|foo2)\\.bar\"."
+      *ns*, #{}, \"*\", \"foo.bar\", \"foo.bar.*\", \"foo.bar(.*)\",
+      #{\"foo\" \"bar.*\"}, #\"(foo1|foo2)\\.bar\",
+      {:allow #{\"foo\" \"bar.*\"} :disallow #{\"foo.*.bar.*\"}}."
 
     {:added "Encore v3.67.0 (2023-09-08)"}
     [spec]
@@ -7306,16 +7310,18 @@
           (=    allow never)  never
 
           (and allow disallow)
-          (fn conform? [in] (if ^boolean (allow in) (if ^boolean (disallow in) false true) false))
+          (fn match? [in] (if ^boolean (allow in) (if ^boolean (disallow in) false true) false))
 
-          allow    (if (= allow    always) always (fn conform? [in] (if ^boolean (allow    in) true  false)))
-          disallow (if (= disallow never)  always (fn conform? [in] (if ^boolean (disallow in) false true)))
+          allow    (if (= allow    always) always (fn match? [in] (if ^boolean (allow    in) true  false)))
+          disallow (if (= disallow never)  always (fn match? [in] (if ^boolean (disallow in) false true)))
           :else
           (throw
             (ex-info "[encore/name-filter] `allow-spec` and `disallow-spec` cannot both be nil"
               {:allow-spec allow-spec :disallow-spec disallow-spec})))))))
 
-(comment (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo")))) ; 118.25
+(comment
+  (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo"))) ; 85.18
+  (let [nf (name-filter "a(.*)")] [(nf "a") (nf "a.b") (nf "aX")]))
 
 ;;;; Namespaces
 

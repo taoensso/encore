@@ -1047,7 +1047,17 @@
 (deftest _name-filter
   [(is (enc/throws? (enc/name-filter  nil)))
 
-   (is (true?  ((enc/name-filter :any)      "foo")))
+   (is (true? ((enc/name-filter :any) "foo")))
+
+   (let [nf (enc/name-filter "a.b.*")]
+     [(is (true?  (nf "a.b.c")))
+      (is (false? (nf "a.b")))
+      (is (false? (nf "a.bX")))])
+
+   (let [nf (enc/name-filter "a.b(.*)")]
+     [(is (true?  (nf "a.b.c")))
+      (is (true?  (nf "a.b")))
+      (is (false? (nf "a.bX")))])
 
    (is (true?  ((enc/name-filter #{:foo*})  "foo")))
    (is (true?  ((enc/name-filter #{"foo*"}) 'foo)))
