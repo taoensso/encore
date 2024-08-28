@@ -1127,10 +1127,13 @@
         "Sets signal kind filter based on given `kind-filter` spec.
   `kind-filter` may be:
 
-    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
-    - A regex pattern of kind/s to allow.
-    - A vector or set of regex patterns or strs/kws/syms.
-    - {:allow <spec> :disallow <spec>} with specs as above.
+    - A regex pattern of kind/s to allow
+    - A str/kw/sym to allow, with \"*\" and \"(.*)\" as wildcards:
+      \"foo.*\"   will allow \"foo.bar\"
+      \"foo(.*)\" will allow \"foo.bar\" and \"foo\"
+
+    - A set/vector of above (allow on any match)
+    - A map, {:allow <spec> :disallow <spec>} with specs as above:
       If present, `:allow`    spec MUST     match, AND
       If present, `:disallow` spec MUST NOT match."
         ~'[kind-filter]
@@ -1158,10 +1161,13 @@
   `ns-filter` may be:
 
     - A namespace.
-    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
-    - A regex pattern of namespace/s to allow.
-    - A vector or set of regex patterns or strs/kws/syms.
-    - {:allow <spec> :disallow <spec>} with specs as above.
+    - A regex pattern of namespaces/s to allow
+    - A str/kw/sym to allow, with \"*\" and \"(.*)\" as wildcards:
+      \"foo.*\"   will allow \"foo.bar\"
+      \"foo(.*)\" will allow \"foo.bar\" and \"foo\"
+
+    - A set/vector of above (allow on any match)
+    - A map, {:allow <spec> :disallow <spec>} with specs as above:
       If present, `:allow`    spec MUST     match, AND
       If present, `:disallow` spec MUST NOT match."
         ~'[ns-filter]
@@ -1188,10 +1194,13 @@
         "Sets signal id filter based on given `id-filter` spec.
   `id-filter` may be:
 
-    - A str/kw/sym to allow, in which \"*\"s act as wildcards.
-    - A regex pattern of id/s to allow.
-    - A vector or set of regex patterns or strs/kws/syms.
-    - {:allow <spec> :disallow <spec>} with specs as above.
+    - A regex pattern of id/s to allow
+    - A str/kw/sym to allow, with \"*\" and \"(.*)\" as wildcards:
+      \"foo.*\"   will allow \"foo.bar\"
+      \"foo(.*)\" will allow \"foo.bar\" and \"foo\"
+
+    - A set/vector of above (allow on any match)
+    - A map, {:allow <spec> :disallow <spec>} with specs as above:
       If present, `:allow`    spec MUST     match, AND
       If present, `:disallow` spec MUST NOT match."
         ~'[id-filter]
