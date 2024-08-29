@@ -1,5 +1,3 @@
-#!/usr/bin/env bb
-
 (ns graal-tests
   (:require
    [clojure.string :as str]

@@ -29,4 +29,8 @@ jobs:
           key: deps-${{ hashFiles('deps.edn') }}
           restore-keys: deps-
 
-      - run: bb graal-tests
+      - name: Run Graal tests
+        run: bb graal-tests
+
+#     - name: Run Babashka tests
+#       run: bb bb-tests

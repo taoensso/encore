@@ -1,10 +1,16 @@
 {:paths ["bb"]
+ :deps  {com.taoensso/encore {:mvn/version "3.117.0"}} ; For bb-tests
  :tasks
- {:requires ([graal-tests])
-  graal-tests
+ {graal-tests
   {:doc "Run Graal native-image tests"
+   :requires ([graal-tests])
    :task
    (do
      (graal-tests/uberjar)
      (graal-tests/native-image)
-     (graal-tests/run-tests))}}}
+     (graal-tests/run-tests))}
+
+  bb-tests
+  {:doc "Run Babashka tests"
+   :requires ([bb-tests])
+   :task (bb-tests/run-tests)}}}
