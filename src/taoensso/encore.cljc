@@ -429,13 +429,25 @@
 #?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
 #?(:clj (defmacro if-cljs [then & [else]] (if (:ns &env) then else)))
 #?(:clj
-   (defn ^:no-doc compiling-cljs?
-     "Return truthy iff currently generating Cljs code.
-     See also `if-cljs`, `if-clj`."
-     []
-     (when-let [ns (find-ns 'cljs.analyzer)]
-       (when-let [v (ns-resolve ns '*cljs-file*)]
-         (boolean @v)))))
+   (defmacro ^:no-doc target-case
+     "Private, don't use. From `net.cgrand/macrovich`.
+     Like a reader conditional, but branches at expansion (not read) time.
+     Chooses form to emit based on target language (not macro language).
+
+     For use by macros or macro-supporting fns, can use un/quoted:
+       (defmacro foo []  (target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))
+       (defmacro foo [] `(target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))"
+
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     [& {:keys [clj cljs cljd]}]
+     (cond
+       (contains? &env '&env)
+       `(cond  (:ns ~'&env) ~cljs (:nses ~'&env) ~cljd :else ~clj)
+       #?(:clj (:ns   &env) :cljs true) cljs
+       #?(:clj (:nses &env) :cljd true) cljd
+       :else clj)))
+
+(comment (clojure.walk/macroexpand-all '(defmacro foo [x] (target-case :clj "clj" :cljs "cljs"))))
 
 (comment (compiling-cljs?))
 
@@ -7573,6 +7585,10 @@
   #?(:clj (defn ^:no-doc ^:deprecated set-status    [rresp code]    (ring-set-status    code    rresp)))
   #?(:clj (defn ^:no-doc ^:deprecated merge-headers [rresp headers] (ring-merge-headers headers rresp)))
   #?(:clj (def  ^:no-doc ^:deprecated redirect-resp ring-redirect-resp))
+  #?(:clj (defn ^:no-doc ^:deprecated compiling-cljs? []
+            (when-let [ns (find-ns 'cljs.analyzer)]
+              (when-let [v (ns-resolve ns '*cljs-file*)]
+                (boolean @v)))))
 
   #?(:clj
      (do
