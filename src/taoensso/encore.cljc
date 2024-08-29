@@ -160,23 +160,12 @@
 ;;;; Core macros
 
 #?(:clj
-   (defmacro compile-if
-     "Evaluates `test`. If it returns logical true (and doesn't throw), expands
-     to `then`, otherwise expands to `else`."
-     {:style/indent 1}
-     ([test then     ] `(compile-if ~test ~then nil))
-     ([test then else] (if (try (eval test) (catch Throwable _ false)) then else))))
-
-#?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
-
-#?(:clj
-   (defmacro try-eval
-     "If `form` can be successfully evaluated at macro-expansion time, expands to `form`.
-     Otherwise expands to `nil`."
-     {:added "Encore v3.50.0 (2023-03-07)"}
-     [form] `(compile-if ~form ~form nil)))
-
-(comment (macroexpand '(try-eval (com.google.common.io.BaseEncoding/base16))))
+   (defmacro ^:no-doc and*
+     "Private, don't use. Like `and` but avoids `let` and returns
+     truthy or false (never nil)."
+     ([        ] true)
+     ([x       ] x)
+     ([x & next] `(if ~x (and* ~@next) false))))
 
 #?(:clj
    (defmacro if-let
@@ -303,95 +292,9 @@
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
 
-;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
-;; different code depending on target (Clj/s), something reader conditionals cannot do.
-#?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
-#?(:clj (defmacro if-cljs [then & [else]] (if (:ns &env) then else)))
 #?(:clj
-   (defn compiling-cljs?
-     "Return truthy iff currently generating Cljs code.
-     See also `if-cljs`, `if-clj`."
-     []
-     (when-let [ns (find-ns 'cljs.analyzer)]
-       (when-let [v (ns-resolve ns '*cljs-file*)]
-         (boolean @v)))))
-
-(comment (compiling-cljs?))
-
-#?(:clj
-   (defmacro ^:no-doc typed-val
-     "Private, don't use.
-     Expands to `{:value ~x, :type (type ~x)}."
-     {:added "Encore v3.105.0 (2024-04-29)"}
-     [x] `{:value ~x, :type (type ~x)}))
-
-(defn unexpected-arg!
-  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
-  Takes optional kvs for merging into exception's data map.
-
-    (let [mode :unexpected]
-      (case mode
-        :read  (do <...>)
-        :write (do <...>)
-        (unexpected-arg! mode
-          {:context  `my-function
-           :param    'mode
-           :expected #{:read :write}}))) =>
-
-    Unexpected argument: :unexpected
-    {:arg {:value :unexpected, :type clojure.lang.Keyword},
-     :context 'taoensso.encore/my-function
-     :param 'mode
-     :expected #{:read :write}}
-
-  See also `bad-arg!`."
-  {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists
-   '([arg]
-     [arg   {:keys [msg context param expected ...]}]
-     [arg & {:keys [msg context param expected ...]}])}
-
-  ([arg     ] (unexpected-arg! arg nil))
-  ([arg opts]
-   (throw
-     (ex-info (or (get opts :msg) (str "Unexpected argument: " (if (nil? arg) "<nil>" arg)))
-       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
-
-  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
-  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
-  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
-  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
-
-(comment (unexpected-arg! :arg :expected '#{string?}))
-
-#?(:clj
-   (defmacro binding
-     "For Clj: faster version of `core/binding`.
-     For Cljs: identical to `core/binding`."
-     {:added "Encore v3.98.0 (2024-04-08)"
-      :style/indent 1}
-     [bindings & body]
-     (if (:ns &env)
-       `(cljs.core/binding ~bindings ~@body)
-       (let [;; Avoids unnecessary runtime map construction
-             bindings-map ; #{<var-form> <val-form>}
-             (reduce-kv (fn [m k v] (assoc m `(var ~k) v))
-               {} (apply hash-map bindings))]
-         `(let [] ; Nb for frame
-            (push-thread-bindings ~bindings-map)
-            (try ~@body (finally (pop-thread-bindings))))))))
-
-(comment
-  (do
-    (def ^:dynamic *d1* nil)
-    (def ^:dynamic *d2* nil)
-    (qb 1e6 ; [409.01 302.93]
-      (clojure.core/binding [*d1* :d1, *d2* :d2] [*d1* *d2*])
-      (binding              [*d1* :d1, *d2* :d2] [*d1* *d2*]))))
-
-#?(:clj
-   (defmacro ^:no-doc -cond [throw? & clauses]
-     (if-let [[test expr & more] (seq clauses)]
+   (defmacro -cond [throw? & clauses]
+     (if-let [[test expr & more]  (seq clauses)]
        (if-not (next clauses)
          test ; Implicit else
          (case test
@@ -500,34 +403,68 @@
    (cond  :if-let [a nil] a (= 1 0) "1=0" #_"default")
    (cond! :if-let [a nil] a (= 1 0) "1=0" #_"default")])
 
-#?(:cljs
-   (defn ^boolean some?
-     "Same as `core/some?` (added in Clojure v1.6)."
-     [x] (if (nil? x) false true))
-
-   :clj
-   (defn some?
-     "Same as `core/some?` (added in Clojure v1.6)."
-     {:inline (fn [x] `(if (identical? ~x nil) false true))}
-     [x]               (if (identical?  x nil) false true)))
+;;;; Conditional compilation, etc.
 
 #?(:clj
-   (defmacro or-some
-     "Like `or`, but returns the first non-nil form (may be falsey)."
-     {:added "Encore v3.67.0 (2023-09-08)"}
-     ([        ] nil)
-     ([x       ] x)
-     ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
+   (defmacro compile-if
+     "Evaluates `test`. If it returns logical true (and doesn't throw), expands
+     to `then`, otherwise expands to `else`."
+     {:style/indent 1}
+     ([test then     ] `(compile-if ~test ~then nil))
+     ([test then else] (if (try (eval test) (catch Throwable _ false)) then else))))
 
-(comment (or-some nil nil false true))
+#?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
 
 #?(:clj
-   (defmacro ^:no-doc and*
-     "Private, don't use. Like `and` but avoids `let` and returns
-     truthy or false (never nil)."
-     ([        ] true)
-     ([x       ] x)
-     ([x & next] `(if ~x (and* ~@next) false))))
+   (defmacro ^:no-doc try-eval
+     "If `form` can be successfully evaluated at macro-expansion time, expands to `form`.
+     Otherwise expands to `nil`."
+     {:added "Encore v3.50.0 (2023-03-07)"}
+     [form] `(compile-if ~form ~form nil)))
+
+(comment (macroexpand '(try-eval (com.google.common.io.BaseEncoding/base16))))
+
+;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
+;; different code depending on target (Clj/s), something reader conditionals cannot do.
+#?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
+#?(:clj (defmacro if-cljs [then & [else]] (if (:ns &env) then else)))
+#?(:clj
+   (defn ^:no-doc compiling-cljs?
+     "Return truthy iff currently generating Cljs code.
+     See also `if-cljs`, `if-clj`."
+     []
+     (when-let [ns (find-ns 'cljs.analyzer)]
+       (when-let [v (ns-resolve ns '*cljs-file*)]
+         (boolean @v)))))
+
+(comment (compiling-cljs?))
+
+;;;;
+
+#?(:clj
+   (defmacro binding
+     "For Clj: faster version of `core/binding`.
+     For Cljs: identical to `core/binding`."
+     {:added "Encore v3.98.0 (2024-04-08)"
+      :style/indent 1}
+     [bindings & body]
+     (if (:ns &env)
+       `(cljs.core/binding ~bindings ~@body)
+       (let [;; Avoids unnecessary runtime map construction
+             bindings-map ; #{<var-form> <val-form>}
+             (reduce-kv (fn [m k v] (assoc m `(var ~k) v))
+               {} (apply hash-map bindings))]
+         `(let [] ; Nb for frame
+            (push-thread-bindings ~bindings-map)
+            (try ~@body (finally (pop-thread-bindings))))))))
+
+(comment
+  (do
+    (def ^:dynamic *d1* nil)
+    (def ^:dynamic *d2* nil)
+    (qb 1e6 ; [409.01 302.93]
+      (clojure.core/binding [*d1* :d1, *d2* :d2] [*d1* *d2*])
+      (binding              [*d1* :d1, *d2* :d2] [*d1* *d2*]))))
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args> <attrs>]
@@ -564,6 +501,75 @@
        (if (:ns &env)
          `(cljs.core/defonce    ~sym ~@body)
          `(clojure.core/defonce ~sym ~@body)))))
+
+;;;;
+
+#?(:cljs
+   (defn ^boolean some?
+     "Same as `core/some?` (added in Clojure v1.6)."
+     [x] (if (nil? x) false true))
+
+   :clj
+   (defn some?
+     "Same as `core/some?` (added in Clojure v1.6)."
+     {:inline (fn [x] `(if (identical? ~x nil) false true))}
+     [x]               (if (identical?  x nil) false true)))
+
+#?(:clj
+   (defmacro or-some
+     "Like `or`, but returns the first non-nil form (may be falsey)."
+     {:added "Encore v3.67.0 (2023-09-08)"}
+     ([        ] nil)
+     ([x       ] x)
+     ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
+
+(comment (or-some nil nil false true))
+
+#?(:clj
+   (defmacro ^:no-doc typed-val
+     "Private, don't use.
+     Expands to `{:value ~x, :type (type ~x)}."
+     {:added "Encore v3.105.0 (2024-04-29)"}
+     [x] `{:value ~x, :type (type ~x)}))
+
+(defn unexpected-arg!
+  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
+  Takes optional kvs for merging into exception's data map.
+
+    (let [mode :unexpected]
+      (case mode
+        :read  (do <...>)
+        :write (do <...>)
+        (unexpected-arg! mode
+          {:context  `my-function
+           :param    'mode
+           :expected #{:read :write}}))) =>
+
+    Unexpected argument: :unexpected
+    {:arg {:value :unexpected, :type clojure.lang.Keyword},
+     :context 'taoensso.encore/my-function
+     :param 'mode
+     :expected #{:read :write}}
+
+  See also `bad-arg!`."
+  {:added "Encore v3.51.0 (2023-03-13)"
+   :arglists
+   '([arg]
+     [arg   {:keys [msg context param expected ...]}]
+     [arg & {:keys [msg context param expected ...]}])}
+
+  ([arg     ] (unexpected-arg! arg nil))
+  ([arg opts]
+   (throw
+     (ex-info (or (get opts :msg) (str "Unexpected argument: " (if (nil? arg) "<nil>" arg)))
+       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
+
+  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
+  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
+  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
+  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
+
+(comment (unexpected-arg! :arg :expected '#{string?}))
 
 #?(:clj
    (defmacro identical-kw?
@@ -7389,7 +7395,7 @@
    (let [msecs (long msecs)
          udt   (+ (now-udt) msecs) ; Approx instant to run
          result__ (latom :timeout/pending)
-         #?(:clj latch) #?(:clj (CountDownLatch. 1))
+         #?@(:clj [latch (CountDownLatch. 1)])
          cas-f
          (fn []
            (let [result_ (delay (f))]
