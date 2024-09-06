@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 117 0])
+(def encore-version [3 118 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -438,7 +438,7 @@
        (defmacro foo []  (target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))
        (defmacro foo [] `(target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))"
 
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.118.0 (2024-09-06)"}
      [& {:keys [clj cljs cljd]}]
      (cond
        (contains? &env '&env)
