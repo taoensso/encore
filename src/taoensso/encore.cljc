@@ -1193,8 +1193,8 @@
 
            file
            (if-not (:ns macro-env)
-             *file* ; Compiling clj
-             (or    ; Compiling cljs
+             *file* ; Compiling Clj
+             (or    ; Compiling Cljs
                (when-let [url (and file (catching (jio/resource file)))]
                  (catching (.getPath (jio/file url)))
                  (do                 (str      url)))
