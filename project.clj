@@ -13,14 +13,14 @@
   :javac-options     ["--release" "8" "-g"] ; Support Java >= v8
   :dependencies
   [[org.clojure/tools.reader "1.4.2"]
-   [com.taoensso/truss       "1.11.0"]]
+   [com.taoensso/truss       "1.12.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
               :dependencies [[org.clojure/clojurescript "1.11.132"]
                              [org.clojure/clojure       "1.11.4"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0-rc1"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure       "1.9.0"]]}
