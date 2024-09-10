@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 118 0])
+(def encore-version [3 119 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
