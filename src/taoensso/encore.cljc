@@ -3072,7 +3072,7 @@
 
 (let [sentinel (new-object)
       return (fn [m0 v0 m1 v1] (not= v0 v1))]
-  
+
   (defn reset-in!? ; Keys: 0, 1, n (general)
     "Like `reset-in!` but returns true iff the atom's value changed."
     ([atom_              val] (-reset-k0! return atom_              val))
@@ -5089,7 +5089,7 @@
        "Private, don't use. Returns a new stateful `ReseedingSRNG`."
        {:added "Encore v3.75.0 (2024-01-29)"}
        ^ReseedingSRNG []
-       (compile-if        java.security.SecureRandom/getInstanceStrong ; Java 8+, blocking
+       (compile-if        (java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
          (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
          (ReseedingSRNG. (java.security.SecureRandom/getInstance "SHA1SRNG") 0)))
 
