@@ -2042,6 +2042,32 @@
      (defmacro clamp* [nmin nmax n] `(let [nmin# ~nmin nmax# ~nmax n# ~n]
                                        (if (< n# nmin#) nmin# (if (> n# nmax#) nmax# n#))))))
 
+#?(:clj
+   (defmacro ^:no-doc multiply
+     "Private, don't use. Expands to nested (* <...>)."
+     [& xs]
+     (let [[x1 x2 & xn] xs]
+       (cond
+         xn `(* (* ~x1 ~x2) (multiply ~@xn))
+         x2    `(* ~x1 ~x2)
+         x1         x1
+         :else 1))))
+
+#?(:clj
+   (defmacro ^:no-doc sum
+     "Private, don't use. Expands to nested (+ <...>)."
+     [& xs]
+     (let [[x1 x2 & xn] xs]
+       (cond
+         xn `(+ (+ ~x1 ~x2) (sum ~@xn))
+         x2    `(+ ~x1 ~x2)
+         x1         x1
+         :else 0))))
+
+(comment
+  (clojure.walk/macroexpand-all '(multiply 1 2 3 4))
+  (clojure.walk/macroexpand-all '(sum      1 2 3 4)))
+
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n))
 (defn round*
