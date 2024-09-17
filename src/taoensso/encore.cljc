@@ -7078,34 +7078,14 @@
 (comment ((comp-middleware inc inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))) 0))
 
 ;;;; Stubs (experimental)
-;; Could do with a refactor
 
-(do
-  #?(:cljs
-     (defn ^:no-doc -new-stubfn_ [name]
-       (volatile!
-         (fn [& args]
-           (throw (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn (" name ")")
-                    {:stub name :args args}))))))
-
-  (defn ^:no-doc -assert-unstub-val [x]
-    (let [pred #?(:clj symbol? :cljs fn?)]
-      (if (pred x)
-        x
-        (throw (ex-info "[encore/stubfn] Unexpected unstub type (expected symbol)"
-                 {:unstub (typed-val x)})))))
-
-  #?(:clj
-     (defmacro ^:no-doc -intern-stub [ns stub-sym stub-var src]
-       (-assert-unstub-val src)
-       `(let [src-var# (var ~src)
-              dst-var# ~stub-var
-              dst-meta#
-              (merge
-                (dissoc      (meta dst-var#) :declared :redef)
-                (select-keys (meta src-var#) [:arglists :doc]))]
-          (intern '~ns (with-meta '~stub-sym dst-meta#)
-            (.getRawRoot src-var#))))))
+(defn ^:no-doc -valid-unstub-impl [x]
+  (if #?(:clj (symbol? x) :cljs (fn? x))
+    x
+    (throw
+      (ex-info "[encore/stubfn] Unexpected unstub implementation "
+        {:given    (typed-val x)
+         :expected #?(:clj 'symbol :cljs 'fn)}))))
 
 #?(:clj
    (defmacro defstub
@@ -7116,54 +7096,41 @@
      Decouples a var's declaration (location) and its initialization (value).
      Useful for defining vars in a shared ns from elsewhere (e.g. a private
      or cyclic ns)."
-     [sym]
-     (let [   stub-sym sym
-            unstub-sym (with-meta (symbol (str  "unstub-" (name stub-sym))) {:doc "Call to initialze stub"})
-           -unstub-sym (with-meta (symbol (str "-unstub-" (name stub-sym))) {:no-doc true})]
+     [stub-sym]
+     (let [stub-ns (symbol (str *ns*))
+           unstub-sym
+           (with-meta (symbol (str  "unstub-" (name stub-sym)))
+             {:doc "Call with implementation fn to initialize stub"
+              :no-doc true})]
 
        (if (:ns &env)
          ;; No declare/intern support
-         `(let [~'stubfn_ (-new-stubfn_ ~(name stub-sym))]
-            (defn ~-unstub-sym [~'f] (vreset! ~'stubfn_ (-assert-unstub-val ~'f)))
-            (defn  ~unstub-sym [~'f] (~-unstub-sym ~'f))
-            (defn    ~stub-sym [~'& ~'args] (apply @~'stubfn_ ~'args)))
+         `(let [stubfn_#
+                (volatile!
+                  (fn [~'& args#]
+                    (throw
+                      (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn")
+                        {:stub '~stub-sym, :args args#}))))]
+
+            (defn ~unstub-sym [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#)))
+            (defn   ~stub-sym
+              ([                  ]       (@stubfn_#         ))
+              ([x#                ]       (@stubfn_# x#      ))
+              ([x# y#             ]       (@stubfn_# x# y#   ))
+              ([x# y# z#          ]       (@stubfn_# x# y# z#))
+              ([x# y# z# ~'& more#] (apply @stubfn_# x# y# z# more#))))
 
          `(let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
-            (defmacro ~unstub-sym
-              [~'x] ; ~'sym for clj, ~'f for cljs
-              (if (:ns ~'&env)
-                 ;; In Cljs, a macro+fn can have the same name. Preference will be
-                 ;; given to the macro in contexts where both are applicable.
-                 ;; So there's 3 cases to consider:
-                 ;;   1. Clj   stub: def var, clj macro
-                 ;;   2. Cljs  stub: def volatile, 2 fns
-                 ;;   3. Clj/s stub: def volatile, 2 fns, var, and Clj/s macro
-                `(~'~(symbol (str *ns*) (str (name -unstub-sym))) ~~'x)
-                `(-intern-stub ~'~(symbol (str *ns*)) ~'~stub-sym
-                   ~stub-var# ~~'x))))))))
+            (defmacro ~unstub-sym [~'impl]
+              `(let [~'impl-var# (var ~(-valid-unstub-impl ~'impl))
+                     ~'stub-sym#
+                     (with-meta '~'~stub-sym
+                       (merge
+                         (dissoc      (meta  ~stub-var#) :declared :redef)
+                         (select-keys (meta ~'impl-var#) [:arglists :doc :macro])))]
 
-(comment
-  (defn- -foo ^long [y] (* y y))
-  (macroexpand-all '(defstub foo))
-  (defstub     foo)
-  (unstub-foo -foo)
-  (qb 1e6 (-foo 5) (foo 5)) ; [68.49 71.88]
-  (meta (first (:arglists (meta #'foo))))
-
-  (do
-    #?(:cljs (def cljs-thing "cljs-thing")
-       :clj  (def clj-thing  "clj-thing"))
-
-    #?(:clj (defmacro cljs-macro [] (if (:ns &env) `cljs-thing `clj-thing)))
-
-    #?(:clj  (cljs-macro)
-       :cljs (enc-macros/cljs-macro))
-
-    #?(:cljs (enc-macros/defstub stub-test)
-       :clj             (defstub stub-test))
-
-    #?(:cljs (enc-macros/unstub-stub-test identity)
-       :clj             (unstub-stub-test identity))))
+                 (intern '~'~stub-ns ~'stub-sym#
+                   (.getRawRoot ~'impl-var#)))))))))
 
 ;;;; Name filter
 

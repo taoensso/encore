@@ -16,7 +16,7 @@
       [taoensso.encore-tests
        :refer
        [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer]])))
+        callsite-inner callsite-outer astub-m1-impl astub-m1]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -774,6 +774,39 @@
      (is (=                       var-cljc                        (str init ".2")))
      (is (= (enc/update-var-root! var-cljc (fn [_] init))              init))
      (is (=                       var-cljc                             init))]))
+
+;;;; Stubs
+
+(do
+  (do     (defn-         astub-f1-impl "Doc" ^long [^long y] (* y y #?(:cljs -1    :clj 1))))
+  (do     (defn-         astub-fn-impl "Doc"       [&  args] (into [#?(:cljs :cljs :clj :clj)] args)))
+  #?(:clj (defmacro      astub-m1-impl "Doc"       [       ] (if (:ns &env)  :cljs :clj)))
+  #?(:clj (def ^:private astub-d1-impl "Doc" :my-val))
+
+  (do     (enc/defstub astub-f1))
+  (do     (enc/defstub astub-fn))
+  #?(:clj (enc/defstub astub-m1))
+  #?(:clj (enc/defstub astub-d1))
+
+  (do     (unstub-astub-f1 astub-f1-impl))
+  (do     (unstub-astub-fn astub-fn-impl))
+  #?(:clj (unstub-astub-m1 astub-m1-impl))
+  #?(:clj (unstub-astub-d1 astub-d1-impl)))
+
+(comment
+  (clojure.walk/macroexpand-all '(defstub astub-f1))
+  (enc/qb 1e6 (astub-f1-impl 5) (astub-f1 5)) ; [39.64 40.71]
+  (astub-m1))
+
+(deftest _stubs
+  [(is (= (astub-f1 5)        #?(:clj 25              :cljs -25)))
+   (is (= (astub-fn :x :y :z) #?(:clj [:clj :x :y :z] :cljs [:cljs :x :y :z])))
+   (is (= (astub-m1)          #?(:clj  :clj           :cljs  :cljs)))
+
+   #?(:clj (is (= astub-d1 :my-val)))
+   #?(:clj (is (enc/submap? (meta #'astub-d1) {:doc "Doc", :private :submap/nx})))
+   #?(:clj (is (enc/submap? (meta #'astub-f1) {:doc "Doc", :private :submap/nx, :arglists '([y])})))
+   #?(:clj (is (= (meta (first (:arglists (meta #'astub-f1)))) {:tag 'long})))])
 
 ;;;; Env config API
 
