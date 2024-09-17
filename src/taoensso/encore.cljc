@@ -298,7 +298,7 @@
        (if-not (next clauses)
          test ; Implicit else
          (case test
-           (true :else :default)       expr                             ; Faster than (if <truthy> ...)
+           (true :else :default :always) expr                           ; Faster than (if <truthy> ...)
            (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
            :do          `(do          ~expr     (-cond ~throw? ~@more))
            :let         `(let         ~expr     (-cond ~throw? ~@more))
@@ -705,7 +705,7 @@
 
             final-attrs
             (select-keys (core-merge src-attrs (meta alias-sym) alias-attrs)
-              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag])
+              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
 
             alias-sym   (with-meta alias-sym final-attrs)
             alias-body  (or alias-body (if cljs? src-sym `@~src-var))]
