@@ -318,18 +318,31 @@
 
 #?(:clj (enc/defonce expansion-counter (enc/counter)))
 
-(let [rate-limiters_ (enc/latom {})]
+(let [basic-rate-limiters_ (enc/latom {})
+      full-rate-limiters_  (enc/latom {})]
+
   (defn expansion-limited!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag 'boolean})
-    [rl-id spec]
-    (let [rl
-          (or
-            (get (rate-limiters_) rl-id) ; Common case
-            (rate-limiters_       rl-id #(or % (enc/rate-limiter {:basic? true} spec))))]
-      (if (rl) true false))))
 
-(comment (enc/qb 1e6 (expansion-limited!? :limiter-id1 [[1 4000]]))) ; 54.02
+    ([exp-id spec] ; Common case (no request ids)
+     (let [rl
+           (or
+             (get (basic-rate-limiters_) exp-id) ; Common case
+             (basic-rate-limiters_       exp-id #(or % (enc/rate-limiter {:basic? true} spec))))]
+       (if (rl) true false)))
+
+    ([exp-id spec req-id]
+     (let [rl
+           (or
+             (get (full-rate-limiters_) exp-id) ; Common case
+             (full-rate-limiters_       exp-id #(or % (enc/rate-limiter {:basic? false} spec))))]
+       (if (rl req-id) true false)))))
+
+(comment
+  (enc/qb 1e6 ; [56.45 104.38]
+    (expansion-limited!? :expansion1 [[1 4000]])
+    (expansion-limited!? :expansion1 [[1 4000]] :req-id1)))
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
@@ -359,7 +372,7 @@
         [{:keys
           [elide? allow? expansion-id,
            elidable? location location*,
-           sample-rate kind ns id level filter/when rate-limit]}])}
+           sample-rate kind ns id level filter/when rate-limit rate-limit-by]}])}
 
      [{:as core-opts :keys [sf-arity ct-sig-filter *rt-sig-filter*]}
       call-opts]
@@ -437,8 +450,10 @@
                          `(let [~'this-expansion-id ~expansion-id] ~when-form))
 
                        rl-form ; Nb last (increments count)
-                       (when-let [spec-form (get opts :rate-limit)]
-                         `(if (expansion-limited!? ~expansion-id ~spec-form) false true))]
+                       (when-let [spec-form     (get opts :rate-limit)]
+                         (if-let [limit-by-form (get opts :rate-limit-by)]
+                           `(if (expansion-limited!? ~expansion-id ~spec-form ~limit-by-form) false true)
+                           `(if (expansion-limited!? ~expansion-id ~spec-form               ) false true)))]
 
                    `(enc/and* ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
