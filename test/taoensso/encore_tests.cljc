@@ -857,10 +857,10 @@
              #?(:cljs [[:prop "a.cljs"] [:env "A_CLJS"] [:res "a.cljs"] [:prop "a.default"] [:env "A_DEFAULT"] [:res "a.default"]])}))
      "Can also use platform-specific ids")
 
-   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* (long x) (long x)))"]} ::nx) 5) 25) "Can embed inline functions via edn")
-   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
-   (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "val:var-cljc/clj"
-                                                                                                           :cljs "val:var-cljc/cljs")))
+   #_(is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* (long x) (long x)))"]} ::nx) 5) 25) "Can embed inline functions via edn")
+   (is   (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]}   ::nx) 5) 25) "Can embed var    functions via edn")
+   (is   (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]} ::nx) #?(:clj  "val:var-cljc/clj"
+                                                                                                             :cljs "val:var-cljc/cljs")))
    (testing "Needs :jvm-opts"
      [(is (enc/submap? (enc/get-env {:return :explain} :taoensso.encore-tests.config.str)
             {:value "foo"

@@ -5686,12 +5686,12 @@
        ([opts    spec] (get-env* (assoc opts :spec spec)))
        ([opts-or-spec]
         (let [opts (parse-opts opts-or-spec)
-              {:keys [as default spec, return macro-env]
+              {:keys [as default spec, return]
                :or   {as     :str
                       return :value}} opts
 
               ;;; Advanced opts, undocumented
-              platform (get opts :platform (if (:ns macro-env) :cljs :clj))
+              platform     (or (get opts :platform) (get opts :platform*))
               custom-res
               (when            (get opts ::allow-recur? true)
                 (let [res-prop (get opts :res-prop)
@@ -5699,7 +5699,7 @@
                   (when (or res-prop env-prop)
                     (get-env*
                       {::allow-recur? false,
-                       :macro-env macro-env, :platform platform,
+                       :platform platform,
                        :prop res-prop, :env env-prop, :res nil,
                        :return :value}))))
 
@@ -5748,19 +5748,21 @@
                             (catch Throwable t
                               (throw
                                 (ex-info "[encore/get-env] Error reading as edn"
-                                  {:edn edn :source source :platform platform} t))))]
+                                  {:edn edn, :source source, :platform platform} t))))]
 
-                      ;; Allow `get-env` in ns1 to include lone sym from unrequired ns2.
-                      ;; Useful when ns1 is a library, and ns2 is a user namespace.
-                      ;;
-                      ;; Undocumented, kept only for back-compatibility (Timbre, etc.).
-                      ;; Better to avoid this pattern since Cljs can't support it
-                      ;; even after CLJS-1346.
-                      (when (and (symbol? x) (get opts :require-sym-ns? (= platform :clj)))
-                        (when-let [clj-ns (namespace x)]
-                          (catching (require (symbol clj-ns)))))
+                      (if-not (and (symbol? x) (get opts :eval-sym? (= platform :clj)))
+                        [source x]
+                        (do
+                          (when (get opts :require-sym-ns? true)
+                            ;; Allow `get-env` in ns1 (e.g. library) to eval lone sym
+                            ;; from unrequired ns2 (e.g. user ns).
+                            ;;
+                            ;; Kept for back-compatibility (Timbre, etc.), but better
+                            ;; to avoid this pattern since Cljs can't support it.
+                            (when-let [clj-ns (namespace x)]
+                              (catching (require (symbol clj-ns)))))
 
-                      [source x]))
+                          [source (eval x)]))))
 
                   (throw
                     (ex-info "[encore/get-env] Unexpected `:as` option"
@@ -5783,40 +5785,40 @@
                      :expected #{:value :map :explain}}))))))))
 
      (defmacro get-env
-       "Flexible cross-platform util for embedding an environmental config value
-       during macro expansion. Used by other Taoensso libraries.
+       "Flexible cross-platform util to return an environmental config value.
 
-       Given a const kw/string id or vector of desc-priority alternative ids,
-       parse and return the first of the following that exists:
+       Given an id (const keyword/string) or vector of desc-priority alternative
+       ids, parse and return the first of the following that exists:
          - JVM         property value   for id
          - Environment variable value   for id
          - Classpath   resource content for id
 
        Ids may include optional segment in `<>` tag (e.g. `<.edn>`).
-       Ids may include `<.?platform.?>` tag for auto replacement, useful
-       for supporting platform-specific config.
+       Ids may include `<.?platform.?>` tag for auto replacement:
+         `<.platform>` => \".clj\" / \".cljs\"
+         `<platform->` => \"clj-\" / \"cljs-\", etc.
 
        Search order: desc by combined [alt-index platform(y/n) optional(y/n)].
 
        So (get-env {:as :edn} [:my-app/alt1<.platform><.edn> :my-app/alt2])
        will parse and return the first of the following that exists:
 
-         1. Alt1 +platform +optional (.edn suffix)
+         1. Alt1 +platform +optional (optional .edn suffix)
            1a. `my-app.alt1.clj.edn` JVM         property value
            1b. `MY_APP_ALT1_CLJ_EDN` environment variable value
            1c. `my-app.alt1.clj.edn` classpath   resource content
 
-         2. Alt1 +platform -optional (.edn suffix)
+         2. Alt1 +platform -optional (optional .edn suffix)
            2a. `my-app.alt1.clj`     JVM         property value
            2b. `MY_APP_ALT1_CLJ`     environment variable value
            2c. `my-app.alt1.clj`     classpath   resource content
 
-         3. Alt1 -platform +optional (.edn suffix)
+         3. Alt1 -platform +optional (optional .edn suffix)
            3a. `my-app.alt1.edn`     JVM         property value
            3b. `MY_APP_ALT1_EDN`     environment variable value
            3c. `my-app.alt1.edn`     classpath   resource content
 
-         4. Alt1 -platform -optional (.edn suffix)
+         4. Alt1 -platform -optional (optional .edn suffix)
            4a. `my-app.alt1`         JVM         property value
            4b. `MY_APP_ALT1`         environment variable value
            4c. `my-app.alt1`         classpath   resource content
@@ -5831,11 +5833,16 @@
          `:default` - Fallback to return unparsed if no value found during search (default `nil`).
          `:return`  - Return type ∈ #{:value :map :explain} (default `:value`).
 
-       Resulting config value must be something that can be safely embedded in code during
-       macro-expansion. Symbols in edn will be evaluated during expansion.
+       For Cljs: resulting config value must be something that can be safely
+                 embedded in code during macro expansion!
 
-       TIP!: Use the {:return :explain} option in tests or at the REPL to verify/inspect
-       resulting config value, config source, and specific search order of prop/env/res ids."
+       Advanced: if resulting config value is a single top-level symbol, it will
+                 be evaluated during macro expansion.
+
+       TIP!: Use the {:return :explain} option in tests or at the REPL to
+             verify/inspect resulting config value, config source, and specific
+             search order of prop/env/res ids."
+
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
         '([{:keys [as default return]
@@ -5843,8 +5850,12 @@
                    return :value}} spec])}
 
        ([            ] `(get-locals)) ; Back compatibility
-       ([opts    spec] (have? const-form? opts    spec) (get-env* (assoc             opts          :macro-env &env :spec spec)))
-       ([opts-or-spec] (have? const-form? opts-or-spec) (get-env* (assoc (parse-opts opts-or-spec) :macro-env &env))))))
+       ([opts    spec] (have? const-form? opts    spec) `(get-env ~(assoc opts :spec spec)))
+       ([opts-or-spec] (have? const-form? opts-or-spec)
+        (let [opts (parse-opts opts-or-spec)]
+          (if (:ns &env)
+             (get-env*  (assoc opts :platform* :cljs)) ; Embed
+            `(get-env* ~(assoc opts :platform* :clj))))))))
 
 (comment
   (def myvar "myvar")
@@ -7932,10 +7943,7 @@
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([spec        ] ^:deprecation-nowarn `(get-sys-val* ~spec ~spec ~spec))
          ([spec env    ] ^:deprecation-nowarn `(get-sys-val* ~spec ~env  ~spec))
-         ([spec env res]
-          (if (str-starts-with? (str *ns*) "taoensso.nippy")
-            `(get-env* {:as :str :spec ~spec :env ~env :res ~res}) ; Back compatibility (don't embed)
-            `(get-env  {:as :str :spec ~spec :env ~env :res ~res}))))
+         ([spec env res] `(get-env {:as :str :spec ~spec :env ~env :res ~res})))
 
        (defmacro ^:no-doc get-sys-bool*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
