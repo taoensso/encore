@@ -329,14 +329,14 @@
      (let [rl
            (or
              (get (basic-rate-limiters_) exp-id) ; Common case
-             (basic-rate-limiters_       exp-id #(or % (enc/rate-limiter {:basic? true} spec))))]
+             (basic-rate-limiters_       exp-id #(or % (enc/rate-limiter {:allow-basic? true} spec))))]
        (if (rl) true false)))
 
     ([exp-id spec req-id]
      (let [rl
            (or
              (get (full-rate-limiters_) exp-id) ; Common case
-             (full-rate-limiters_       exp-id #(or % (enc/rate-limiter {:basic? false} spec))))]
+             (full-rate-limiters_       exp-id #(or % (enc/rate-limiter {:allow-basic? false} spec))))]
        (if (rl req-id) true false)))))
 
 (comment
@@ -629,7 +629,7 @@
             [(enc/as-pnum! sample-rate) nil] ; Static  rate
             ))
 
-        rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:basic? true} spec))
+        rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
         sig-filter*   (sig-filter kind-filter ns-filter id-filter min-level)
 
         middleware    (as-middleware-fn    middleware) ; Deprecated, kept temporarily for back compatibility
