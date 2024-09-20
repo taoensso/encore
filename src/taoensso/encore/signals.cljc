@@ -977,6 +977,10 @@
       Optional handler priority ∈ℤ.
       Handlers will be called in descending priority order (larger ints first).
 
+    `:track-stats?` (default true)
+      Should handler track statistics (e.g. handling times) for
+      reporting by `get-handlers-stats`?
+
     `:sample-rate` (default nil => no sampling)
       Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
       When present, handle only this (random) proportion of args:
