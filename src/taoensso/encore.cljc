@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 120 0])
+(def encore-version [3 121 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -2511,7 +2511,7 @@
 
 (defn invert-map!
   "Like `invert-map` but throws on non-unique vals."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  {:added "Encore v3.121.0 (2024-09-25)"}
   [m]
   (when-let [im (invert-map m)]
     (if (= (count im) (count m)) ; 1-to-1
