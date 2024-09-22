@@ -7871,7 +7871,7 @@
 
   (defn ^:no-doc rate-limiter*
     "Prefer `rate-limiter`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.120.0 (2024-09-22)"}
     ([     spec] (rate-limiter*            {:with-state? true} spec))
     ([opts spec] (rate-limiter* (assoc opts :with-state? true) spec)))
 
