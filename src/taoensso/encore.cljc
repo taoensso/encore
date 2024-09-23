@@ -2509,6 +2509,17 @@
       (persistent! (reduce-kv (fn [m k v] (assoc! m v k)) (transient {}) m))
       (do          (reduce-kv (fn [m k v] (assoc  m v k))            {}  m)))))
 
+(defn invert-map!
+  "Like `invert-map` but throws on non-unique vals."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+  [m]
+  (when-let [im (invert-map m)]
+    (if (= (count im) (count m)) ; 1-to-1
+      im
+      (throw
+        (ex-info "[encore/invert-map!] Non-unique map vals"
+          {:given (typed-val m)})))))
+
 (defn map-keys
   "Returns given ?map with (key-fn <key>) keys."
   [key-fn m]
