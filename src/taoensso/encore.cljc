@@ -7872,8 +7872,8 @@
   (defn ^:no-doc rate-limiter*
     "Prefer `rate-limiter`."
     {:deprecated "Encore v3.120.0 (2024-09-22)"}
-    ([     spec] (rate-limiter*            {:with-state? true} spec))
-    ([opts spec] (rate-limiter* (assoc opts :with-state? true) spec)))
+    ([     spec] (rate-limiter            {:with-state? true} spec))
+    ([opts spec] (rate-limiter (assoc opts :with-state? true) spec)))
 
   (def* ^:no-doc limiter*          "Prefer `rate-limiter*`." {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter*)
   (def* ^:no-doc limiter           "Prefer `rate-limiter`."  {:deprecated "Encore v3.73.0 (2023-10-30)"} rate-limiter)
