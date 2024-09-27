@@ -2181,20 +2181,21 @@
 
 (comment [(parse-version "40.32.34.8-foo") (parse-version 10.3)])
 
-(defn assert-min-encore-version
-  "Version check for dependency conflicts, etc."
-  [min-version]
-  (let [[^long xc ^long yc ^long zc] encore-version
-        [      xm       ym       zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
-        [^long xm ^long ym ^long zm] (mapv #(or % 0) [xm ym zm])]
+#?(:clj
+   (defmacro assert-min-encore-version
+     "Version check for dependency conflicts, etc."
+     [min-version]
+     (let [[^long xc ^long yc ^long zc] encore-version
+           [      xm       ym       zm] (if (vector? min-version) min-version (:version (parse-version min-version)))
+           [^long xm ^long ym ^long zm] (mapv #(or % 0) [xm ym zm])]
 
-    (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
-      (throw
-        (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see `https://www.taoensso.com/dependency-conflicts` for solutions."
-          {:min-version  (str/join "." [xm ym zm])
-           :your-version (str/join "." [xc yc zc])})))))
+       (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
+         (throw
+           (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see `https://www.taoensso.com/dependency-conflicts` for solutions."
+             {:min-version  (str/join "." [xm ym zm])
+              :your-version (str/join "." [xc yc zc])}))))))
 
-(comment (assert-min-encore-version 3.10))
+(comment (assert-min-encore-version [3 10]))
 
 ;;;; Collections
 
