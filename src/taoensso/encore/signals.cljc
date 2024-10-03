@@ -1495,15 +1495,19 @@
 
   Examples:
 
-    ;; Filter signals by returning nil:
+    ;; Filter all signals by returning nil:
     (t/set-middleware! (fn [signal] (when-not (:skip-me? signal) signal)))
 
-    ;; Remove key/s from signals:
+    ;; Remove key/s from all signals:
     (t/set-middleware! (fn [signal] (dissoc signal :unwanted-key1 ...)))
 
     ;; Remove key/s from signals to specific handler:
     (t/add-handler! ::my-handler my-handler
       {:middleware (fn [signal] (dissoc signal :unwanted-key1 ...))})
+
+    ;; Set middleware for specific signal/s:
+    (binding [*middleware* (fn [signal] ...)]
+      (...))
 
   Tips:
     - Compose multiple middleware fns together with `comp-middleware`.

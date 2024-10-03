@@ -1774,7 +1774,7 @@
     (completing (fn [acc [k v]] (rf acc k v))) init kvs))
 
 (defn reduce-n
-  ;; No longer so interesting with Clojure 1.7+
+  "No longer useful with Clojure 1.7+, just use (reduce f init (range ...))."
   ([rf init       end     ] (reduce rf init (range       end)))
   ([rf init start end     ] (reduce rf init (range start end)))
   ([rf init start end step] (reduce rf init (range start end step))))
