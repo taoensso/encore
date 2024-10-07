@@ -3459,13 +3459,16 @@
     - Returns a formatted human-readable instant string.
 
   Options:
-    `:zone` (Clj only) `java.time.ZoneOffset` (defaults to UTC).
     `:formatter`
-      `java.time.format.DateTimeFormatter` (Clj) or
-      `goog.i18n.DateTimeFormat` (Cljs),
+      Clj:  `java.time.format.DateTimeFormatter`
+      Cljs: `goog.i18n.DateTimeFormat`
 
       Defaults to `ISO8601` formatter (`YYYY-MM-DDTHH:mm:ss.sssZ`),
-      e.g.: \"2011-12-03T10:15:130Z\"."
+      e.g.: \"2011-12-03T10:15:130Z\".
+
+    `:zone` (Clj only) `java.time.ZoneOffset` (defaults to UTC).
+     Note that zone may be ignored by some `DateTimeFormatter`s,
+     including the default (`DateTimeFormatter/ISO_INSTANT`)!"
 
   {:added "Encore v3.98.0 (2024-04-08)"}
   ([] (format-inst-fn nil))
@@ -3499,6 +3502,12 @@
 
         (fn format-instant [^java.time.Instant instant]
           (.format formatter instant))))))
+
+(comment
+  ((format-inst-fn
+     {:formatter (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm:ssXXX")
+      :zone      (.getOffset (java.time.ZonedDateTime/now (java.time.ZoneId/of "Europe/Berlin")))})
+   (.toInstant (java.util.Date.))))
 
 (let [default-fn (format-inst-fn)]
   (defn format-inst
