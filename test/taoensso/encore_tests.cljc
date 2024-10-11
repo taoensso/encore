@@ -985,7 +985,16 @@
      (testing "`xn` short-circuits (skips `x!`)"
        [(is (= ((enc/comp-middleware  inc xn x!)             0) nil))
         (is (= ((enc/comp-middleware [inc xn x!])            0) nil))
-        (is (= ((enc/comp-middleware  inc inc inc inc xn x!) 0) nil))])]))
+        (is (= ((enc/comp-middleware  inc inc inc inc xn x!) 0) nil))])
+
+     (testing "nil fns"
+       [(is (= ((enc/comp-middleware [nil inc nil x2]) 0) 2))
+        (is (= ((enc/comp-middleware nil x2     ) 1) 2))
+        (is (= ((enc/comp-middleware x2  nil    ) 1) 2))
+        (is (= ((enc/comp-middleware x2  nil nil) 1) 2))
+        (is (= ((enc/comp-middleware nil x2  nil) 1) 2))
+        (is (= ((enc/comp-middleware nil nil x2 ) 1) 2))
+        (is (= ((enc/comp-middleware nil x2 nil x2 nil inc) 1) 5))])]))
 
 ;;;; Futures
 
@@ -1981,8 +1990,9 @@
       (is (= (sapi/with-ctx {:a :A1 :b :B1} (sapi/with-ctx+ {:a :A2 :c :C2}            sapi/*ctx*)) {:a :A2 :b :B1 :c :C2}) "map update => merge")])
 
    (testing "Dynamic middleware (`*middleware*`)"
-     [(is (= (binding [sapi/*middleware* identity] sapi/*middleware*) identity) "via `binding`")
-      (is (= (sapi/with-middleware       identity  sapi/*middleware*) identity) "via `with-middleware`")])])
+     [(is (= (binding [sapi/*middleware* identity] sapi/*middleware*) identity)                   "via `binding`")
+      (is (= (sapi/with-middleware       identity  sapi/*middleware*) identity)                   "via `with-middleware`")
+      (is (= (sapi/with-middleware inc (sapi/with-middleware+ #(* 2 %) (sapi/*middleware* 1))) 4) "via `with-middleware+`")])])
 
 ;;;;
 

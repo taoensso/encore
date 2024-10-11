@@ -1487,7 +1487,7 @@
   Useful for dynamically transforming signals and/or filtering signals
   by signal data/content/etc.
 
-  Re/bind dynamic        value using `with-middleware`, `binding`.
+  Re/bind dynamic        value using `with-middleware`, `with-middleware+`, `binding`.
   Modify  root (default) value using `set-middleware!`.
 
   As with all dynamic Clojure vars, \"binding conveyance\" applies when using
@@ -1548,15 +1548,6 @@
           ~'[ctx-val form] `(binding [~'~*ctx* ~~'ctx-val] ~~'form)))))
 
 #?(:clj
-   (defn- api:with-middleware []
-     (let [*middleware* (symbol (str *ns*) "*middleware*")]
-       `(defmacro ~'with-middleware
-          "Evaluates given form with given `*middleware*` value.
-  See `*middleware*` for details."
-          ~'[?middleware-fn form]
-          `(binding [~'~*middleware* ~~'?middleware-fn] ~~'form)))))
-
-#?(:clj
    (defn- api:with-ctx+ []
      (let [*ctx* (symbol (str *ns*) "*ctx*")]
        `(defmacro ~'with-ctx+
@@ -1569,6 +1560,26 @@
   See `*ctx*` for details."
           ~'[update-map-or-fn form]
           `(binding [~'~*ctx* (update-ctx ~'~*ctx* ~~'update-map-or-fn)] ~~'form)))))
+
+#?(:clj
+   (defn- api:with-middleware []
+     (let [*middleware* (symbol (str *ns*) "*middleware*")]
+       `(defmacro ~'with-middleware
+          "Evaluates given form with given `*middleware*` value.
+  See `*middleware*` for details."
+          ~'[?middleware-fn form]
+          `(binding [~'~*middleware* ~~'?middleware-fn] ~~'form)))))
+
+#?(:clj
+   (defn- api:with-middleware+ []
+     (let [*middleware* (symbol (str *ns*) "*middleware*")]
+       `(defmacro ~'with-middleware+
+          "Evaluates given form with composed `*middleware*` value.
+  Same as (with-middleware (comp-middleware *middleware* ?middleware-fn) ...).
+  See `*middleware*` for details."
+          ~'[?middleware-fn form]
+          `(binding [~'~*middleware* (enc/comp-middleware ~'~*middleware* ~~'?middleware-fn)]
+             ~~'form)))))
 
 ;;;;
 
@@ -1635,7 +1646,8 @@
 
           ~(api:with-ctx)
           ~(api:with-ctx+)
-          ~(api:with-middleware)))))
+          ~(api:with-middleware)
+          ~(api:with-middleware+)))))
 
 (comment
   ;; See `taoensso.encore-tests.signal-api` ns

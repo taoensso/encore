@@ -7102,10 +7102,17 @@
 
   Useful for composing Ring-style middleware fns."
   {:added "Encore v3.106.0 (2024-05-01)"}
-  ([fs           ] (fn [x] (reduce (fn [x f] (or (f x) (reduced nil))) x fs)))
-  ([f1 f2        ] (fn [x] (when-let [x (f1 x)                    ] (f2 x))))
-  ([f1 f2 f3     ] (fn [x] (when-let [x (f1 x), x (f2 x)          ] (f3 x))))
-  ([f1 f2 f3 & fs] (fn [x] (when-let [x (f1 x), x (f2 x), x (f3 x)] ((comp-middleware fs) x)))))
+  ([fs   ] (fn [x] (reduce (fn [x f] (if f (or (f x) (reduced nil)) x)) x fs)))
+  ([f1 f2]
+   (fn [x]
+     (if f1
+       (if f2
+         (when-let [x (f1 x)] (f2 x))
+         (do                  (f1 x)))
+       (if f2 (f2 x) x))))
+
+  ([f1 f2 f3     ] (fn [x] (when-let [x (if f1 (f1 x) x), x (if f2 (f2 x) x)                    ] (if f3 (f3 x) x))))
+  ([f1 f2 f3 & fs] (fn [x] (when-let [x (if f1 (f1 x) x), x (if f2 (f2 x) x), x (if f3 (f3 x) x)] ((comp-middleware fs) x)))))
 
 (comment ((comp-middleware inc inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))) 0))
 
