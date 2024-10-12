@@ -2357,7 +2357,7 @@
   (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
-(defn get-subvec
+(defn get-subvec ; get-subvec-by-idx
   "Like `subvec` but never throws (snaps to valid start and end indexes)."
   ([v ^long start]
    (let [start (if (< start 0) 0 start)
@@ -2374,7 +2374,7 @@
        []
        (subvec v start end)))))
 
-(defn get-subvector
+(defn get-subvector ; get-subvec-by-len
   "Like `get-subvec` but:
     - Takes `length` instead of `end` (index).
     - -ive `start` => index from right of vector."
@@ -2475,7 +2475,7 @@
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
 (defn into!
-  "Like `core/into` but assumes `to!` is a transient, and doesn't call
+  "Like `into` but assumes `to!` is a transient, and doesn't call
   `persist!` when done. Useful as a performance optimization in some cases."
   #_([            ]                        [])
   ([to!           ]                        to!)
@@ -6412,13 +6412,16 @@
         (catch InterruptedException _# ~timeout-val))))
 
 #?(:clj
-   (defn- refreshing-cache [f1]
+   (defn ^:no-doc refreshing-cache
+     "Private, don't use.
+     Returns TTL-cached (fn [cache-msecs timeout-msecs timeout-val]) for given
+     (fn [fallback-val]) that will:
+       - Initiate async update of cached value when stale value is encountered.
+       - Continue to deliver stale value until cache is updated."
+     [f1]
      (let [cache_ (latom nil) ; ?[promise udt]
            cache-update-pending?_ (latom false)]
 
-       ;; Note custom cache semantics, unlike standard ttl cache.
-       ;; When cache is stale, continue to deliver pre-existing (stale) cache
-       ;; until a new (fresh) value becomes available.
        (fn [cache-msecs timeout-msecs timeout-val]
          (loop [force-use-cache? false]
 
