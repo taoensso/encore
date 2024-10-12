@@ -6412,13 +6412,16 @@
         (catch InterruptedException _# ~timeout-val))))
 
 #?(:clj
-   (defn- refreshing-cache [f1]
+   (defn ^:no-doc refreshing-cache
+     "Private, don't use.
+     Returns TTL-cached (fn [cache-msecs timeout-msecs timeout-val]) for given
+     (fn [fallback-val]) that will:
+       - Initiate async update of cached value when stale value is encountered.
+       - Continue to deliver stale value until cache is updated."
+     [f1]
      (let [cache_ (latom nil) ; ?[promise udt]
            cache-update-pending?_ (latom false)]
 
-       ;; Note custom cache semantics, unlike standard ttl cache.
-       ;; When cache is stale, continue to deliver pre-existing (stale) cache
-       ;; until a new (fresh) value becomes available.
        (fn [cache-msecs timeout-msecs timeout-val]
          (loop [force-use-cache? false]
 
