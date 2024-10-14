@@ -2474,6 +2474,7 @@
 
 (comment (repeatedly-into [] 100 (partial rand-nth [1 2 3 4 5 6])))
 
+(defn update! [m k f] (assoc! m k (f (get m k))))
 (defn into!
   "Like `core/into` but assumes `to!` is a transient, and doesn't call
   `persist!` when done. Useful as a performance optimization in some cases."
