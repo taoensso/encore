@@ -7144,11 +7144,10 @@
      Useful for defining vars in a shared ns from elsewhere (e.g. a private
      or cyclic ns)."
      [stub-sym]
-     (let [stub-ns (symbol (str *ns*))
-           unstub-sym
-           (with-meta (symbol (str  "unstub-" (name stub-sym)))
-             {:doc "Call with implementation fn to initialize stub"
-              :no-doc true})]
+     (let [unstub-sym  (with-meta (symbol (str "unstub-"  (name stub-sym))) {:no-doc true :doc "Call with implementation fn to initialize stub"})
+           unstub-sym* (with-meta (symbol (str "unstub*-" (name stub-sym))) {:no-doc true})
+           stub-ns                (symbol (str *ns*))
+           qualified-unstub-sym*  (symbol (str *ns*) (name unstub-sym*))]
 
        (if (:ns &env)
          ;; No declare/intern support
@@ -7159,7 +7158,8 @@
                       (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn")
                         {:stub '~stub-sym, :args args#}))))]
 
-            (defn ~unstub-sym [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#)))
+            (defn ~unstub-sym* [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#))) ; For Clj+s case
+            (defn ~unstub-sym  [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#)))
             (defn   ~stub-sym
               ([                  ]       (@stubfn_#         ))
               ([x#                ]       (@stubfn_# x#      ))
@@ -7169,15 +7169,17 @@
 
          `(let [stub-var# (declare ~(with-meta stub-sym {:redef true}))]
             (defmacro ~unstub-sym [~'impl]
-              `(let [~'impl-var# (var ~(-valid-unstub-impl ~'impl))
-                     ~'stub-sym#
-                     (with-meta '~'~stub-sym
-                       (merge
-                         (dissoc      (meta  ~stub-var#) :declared :redef)
-                         (select-keys (meta ~'impl-var#) [:arglists :doc :macro])))]
+              (if (:ns ~'&env) ; For Clj+s case
+                `(~'~qualified-unstub-sym* ~~'impl)
+                `(let [~'impl-var# (var ~(-valid-unstub-impl ~'impl))
+                       ~'stub-sym#
+                       (with-meta '~'~stub-sym
+                         (merge
+                           (dissoc      (meta  ~stub-var#) :declared :redef)
+                           (select-keys (meta ~'impl-var#) [:arglists :doc :macro])))]
 
-                 (intern '~'~stub-ns ~'stub-sym#
-                   (.getRawRoot ~'impl-var#)))))))))
+                   (intern '~'~stub-ns ~'stub-sym#
+                     (.getRawRoot ~'impl-var#))))))))))
 
 ;;;; Name filter
 

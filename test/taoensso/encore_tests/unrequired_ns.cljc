@@ -1,6 +1,6 @@
 (ns taoensso.encore-tests.unrequired-ns
-  "A namespace not required by any of the others,
-  for testing auto-requiring resolves, etc.")
+  "For unit tests that need to check functionality
+  involving foreign namespaces. NOT required by tests ns.")
 
 (def ^:dummy-meta var-cljc
            "foreign.doc:var-cljc"

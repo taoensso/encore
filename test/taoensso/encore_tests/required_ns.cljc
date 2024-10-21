@@ -1,9 +1,13 @@
-(ns taoensso.encore-tests.signals-api
+(ns taoensso.encore-tests.required-ns
+  "For unit tests that need to check functionality
+  involving foreign namespaces. Required by tests ns."
   (:require
    [taoensso.encore         :as enc]
    [taoensso.encore.signals :as sigs]))
 
-(comment (remove-ns 'taoensso.encore-tests.signals-api))
+(comment (remove-ns 'taoensso.encore-tests.required-ns))
+
+;;;; Signal API
 
 (do
   (def            ct-sig-filter  nil)
@@ -40,3 +44,10 @@
 
   (set-middleware! nil)
   (with-middleware identity (do)))
+
+;;;; Stubs
+
+(do     (enc/defstub astub-f1))
+(do     (enc/defstub astub-fn))
+#?(:clj (enc/defstub astub-m1))
+#?(:clj (enc/defstub astub-d1))
