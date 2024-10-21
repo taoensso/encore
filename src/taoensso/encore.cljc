@@ -2357,7 +2357,7 @@
   (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
-(defn get-subvec
+(defn get-subvec ; get-subvec-by-idx
   "Like `subvec` but never throws (snaps to valid start and end indexes)."
   ([v ^long start]
    (let [start (if (< start 0) 0 start)
@@ -2374,7 +2374,7 @@
        []
        (subvec v start end)))))
 
-(defn get-subvector
+(defn get-subvector ; get-subvec-by-len
   "Like `get-subvec` but:
     - Takes `length` instead of `end` (index).
     - -ive `start` => index from right of vector."
