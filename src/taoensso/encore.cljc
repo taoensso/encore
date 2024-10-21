@@ -3357,6 +3357,10 @@
        {:added "Encore v3.66.0 (2023-08-23)"}
        [] (js/Date.))
 
+     (defn now-dt
+       "Returns current system instant as `js/Date`."
+       [] (js/Date.))
+
      (defn now-udt
        "Returns current system insant as milliseconds since Unix epoch."
        [] (js/Date.now))
@@ -7918,7 +7922,6 @@
   #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore v3.115.0 (2024-08-18)"} host-ip))
   #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore v3.115.0 (2024-08-18)"} hostname))
   #?(:cljs (def* ^:no-doc ajax-lite    "Prefer `ajax-call`." {:deprecated "Encore v3.74.0 (2023-11-06)"} ajax-call))
-  #?(:cljs (def* ^:no-doc now-dt       "Prefer `now-inst`."  {:deprecated "Encore v3.98.0 (2024-04-08)"} now-inst))
   #?(:clj
      (do
        (defmacro ^:no-doc ^:deprecated do-nil   [& body] `(do ~@body nil))
