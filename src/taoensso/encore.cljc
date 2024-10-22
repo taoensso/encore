@@ -2146,33 +2146,36 @@
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n))
 
-(defn round*
-  ([               n] (round* :round nil n))
-  ([kind           n] (round* kind   nil n))
+(defn round
+  ([               n] (round :round nil n))
+  ([kind           n] (round kind   nil n))
   ([kind precision n]
-   (let [n        (double n)
-         modifier (when precision (Math/pow 10.0 precision))
-         n*       (if modifier (* n ^double modifier) n)
-         rounded
-         (case kind
-           :round (Math/round n*)
-           :floor (Math/floor n*)
-           :ceil  (Math/ceil  n*)
-           :trunc (long       n*)
-           (throw
-             (ex-info "[encore/round*] Unexpected round kind (expected ∈ #{:round :floor :ceil :trunc})"
-               {:kind (typed-val kind)})))]
+   (if (and (keyword? precision) (number? kind))
+     (round precision n kind) ; [n kind precision] -> [kind precision n] for back compatibility
+     (let [n        (double n)
+           modifier (when precision (Math/pow 10.0 precision))
+           n*       (if modifier (* n ^double modifier) n)
+           rounded
+           (case kind
+             :round (Math/round n*)
+             :floor (Math/floor n*)
+             :ceil  (Math/ceil  n*)
+             :trunc (long       n*)
+             (unexpected-arg! kind
+               {:param       'kind
+                :context  `round
+                :expected #{:round :floor :ceil :trunc}}))]
 
-     (if-not modifier
-       (do (long   rounded))                  ; Returns long
-       (/  (double rounded) ^double modifier) ; Return double
-       ))))
+       (if-not modifier
+         (do (long   rounded))                  ; Return long
+         (/  (double rounded) ^double modifier) ; Return double
+         )))))
 
 (comment
-  [(round* :floor -1.5)
-   (round* :trunc -1.5)
-   (round* :floor 5 1.1234567)
-   (round* :round 5 1.1234567)])
+  [(round :floor -1.5)
+   (round :trunc -1.5)
+   (round :floor 5 1.1234567)
+   (round :round 5 1.1234567)])
 
 (do ; Optimized common cases
   (defn round0   ^long [n]            (Math/round    (double n)))
@@ -7552,7 +7555,6 @@
   (defn ^:no-doc ^:deprecated spaced-str [xs] (str/join " " #?(:clj xs :cljs (mapv undefined->nil xs))))
 
   ;; Arg order changed for easier partials, etc.:
-  (defn ^:no-doc ^:deprecated round [n & [type nplaces]] (round* (or type :round) nplaces n))
   (defn ^:no-doc ^:deprecated approx=
     ([x y      ] (approx==       x y))
     ([x y signf] (approx== signf x y)))
@@ -7778,6 +7780,7 @@
   (def* ^:no-doc -merge-with       "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
   (def* ^:no-doc fast-merge        "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
   (def* ^:no-doc secure-rand-bytes "Prefer `rand-bytes`."    {:deprecated "Encore v3.115.0 (2024-08-18)"} (partial rand-bytes true))
+  (def* ^:no-doc round*            "Prefer `round`."         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}   round)
 
   #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore v3.115.0 (2024-08-18)"} host-ip))
   #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore v3.115.0 (2024-08-18)"} hostname))
