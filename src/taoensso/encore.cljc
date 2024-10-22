@@ -69,7 +69,7 @@
     simple-ident?   qualified-ident?
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
-    format update-in merge merge-with
+    format update-in merge merge-with subvec
     memoize abs ex-message ex-data ex-cause
     newline satisfies? uuid
     pr prn print println])
@@ -623,6 +623,7 @@
 
 (def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
 (def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
+(def ^:private core-subvec    #?(:clj clojure.core/subvec    :cljs cljs.core/subvec))
 (declare merge update-in)
 
 ;;;;
@@ -779,13 +780,81 @@
 
 (defalias get-truss-data taoensso.truss/get-data)
 
-;;;;
+;;;; Sub fns
 
-#?(:clj
-   (defn class-sym
-     "Returns class name symbol of given argument."
-     {:added "Encore v3.98.0 (2024-04-08)"}
-     [x] (when x (symbol (.getName (class x))))))
+(defn- subfn [context by-idx-fn]
+  (fn  subfn*
+    ([c start-idx]
+     (when c
+       (let [max-idx   (count c)
+             start-idx (long start-idx)]
+         (when            (< start-idx    max-idx)
+           (by-idx-fn c (max start-idx 0) max-idx)))))
+
+    ([c start-idx end-idx]
+     (when c
+       (let [start-idx (max (long start-idx) 0)
+             end-idx   (min (long end-idx)   (count c))]
+         (when       (< start-idx end-idx)
+           (by-idx-fn c start-idx end-idx)))))
+
+    ([c kind start end]
+     (when c
+       (let [max-end (count c)
+             end (if (identical-kw? end :max) max-end end)]
+
+         (case kind
+           :by-idx (subfn* c start end)
+           :by-len
+           (cond
+             :let [len (long end)]
+             (<=   len 0) nil
+
+             :let [start-idx (long start)]
+             (<    start-idx 0) ; Index from right
+             (let [start-idx (max (+ start-idx max-end) 0)
+                   end-idx   (min (+ start-idx     len) max-end)]
+               (when       (< start-idx end-idx)
+                 (by-idx-fn c start-idx end-idx)))
+
+             :else
+             (let [end-idx (min (+ start-idx len) max-end)]
+               (when       (< start-idx end-idx)
+                 (by-idx-fn c start-idx end-idx))))
+
+           (unexpected-arg! kind
+             {:param       'kind
+              :context  context
+              :expected #{:by-idx :by-len}})))))))
+
+(def* subvec
+  "Returns a non-empty sub-vector, or nil.
+  Like `core/subvec` but:
+    - Doesn't throw when out-of-bounds.
+    - Returns nil rather than an empty vector.
+    - When given `:by-len` kind (4-arity case):
+      - `start` may be -ive (=> index from right of vector).
+      - `end`   is desired vector length, or `:max`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :arglists '([v start-idx] [v start-idx end-idx] [v kind start end])}
+  (subfn `subvec core-subvec))
+
+(def* substr
+  "Returns a non-empty sub-string, or nil.
+  Like `subs` but:
+    - Doesn't throw when out-of-bounds.
+    - Returns nil rather than an empty string.
+    - When given `:by-len` kind (4-arity case):
+      - `start` may be -ive (=> index from right of string).
+      - `end`   is desired string length, or `:max`."
+  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+   :arglists '([s start-idx] [s start-idx end-idx] [s kind start end])}
+  (subfn `substr (fn [s n1 n2] (.substring #?(:clj ^String s :cljs s) n1 n2))))
+
+(comment
+  (qb 1e6 (subvec [:a :b :c] 1) (core-subvec [:a :b :c] 1)) ; [53.32 51.11]
+  (qb 1e6 (substr "abc" 1) (subs "abc" 1))                  ; [55.75 49.43]
+  )
 
 ;;;; Forms
 ;; Useful for macros, etc.
@@ -1547,6 +1616,12 @@
   (defn #?(:clj as-bool :cljs ^boolean as-bool) [x]
     (let [?b (as-?bool x)] (if-not (nil? ?b) ?b (-as-throw :bool x)))))
 
+#?(:clj
+   (defn class-sym
+     "Returns class name symbol of given argument."
+     {:added "Encore v3.98.0 (2024-04-08)"}
+     [x] (when x (symbol (.getName (class x))))))
+
 ;;;; Validation
 
 ;; #?(:clj
@@ -2070,6 +2145,7 @@
 
 (defn pow [n exp] (Math/pow n exp))
 (defn abs [n]     (if (neg? n) (- n) n))
+
 (defn round*
   ([               n] (round* :round nil n))
   ([kind           n] (round* kind   nil n))
@@ -2357,69 +2433,10 @@
   (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
-(defn get-subvec ; get-subvec-by-idx
-  "Like `subvec` but never throws (snaps to valid start and end indexes)."
-  ([v ^long start]
-   (let [start (if (< start 0) 0 start)
-         vlen  (count v)]
-     (if (>= start vlen)
-       []
-       (subvec v start vlen))))
-
-  ([v ^long start ^long end]
-   (let [start (if (< start 0) 0 start)
-         vlen  (long (count v))
-         end   (if (> end vlen) vlen end)]
-     (if (>= start end)
-       []
-       (subvec v start end)))))
-
-(defn get-subvector ; get-subvec-by-len
-  "Like `get-subvec` but:
-    - Takes `length` instead of `end` (index).
-    - -ive `start` => index from right of vector."
-  ([v ^long start]
-   (let [vlen (count v)]
-     (if (< start 0)
-       (let [start (+ start vlen)
-             start (if (< start 0) 0 start)]
-         (subvec v start vlen))
-       (if (>= start vlen)
-         []
-         (subvec v start vlen)))))
-
-  ([v ^long start ^long length]
-   (if (<= length 0)
-     []
-     (let [vlen (long (count v))]
-       (if (< start 0)
-         (let [start (+ start vlen)
-               start (if (< start 0) 0 start)
-               end   (+ start length)
-               end   (if (> end vlen) vlen end)]
-           (subvec v start end))
-
-         (let [end (+ start length)
-               end (if (> end vlen) vlen end)]
-           (if (>= start end)
-             []
-             (subvec v start end))))))))
-
-(comment
-  [(get-subvec    nil 2)
-   (get-subvector nil 2)]
-
-  (qb 1e6
-    (subvec        [:a :b :c] 1)
-    (get-subvec    [:a :b :c] 1)
-    (get-subvector [:a :b :c] 1))
-  ;; [60.01 63.91 58.6]
-  )
-
-(defn vnext        [v] (when (> (count v) 1) (subvec v 1)))
-(defn vrest        [v] (if   (> (count v) 1) (subvec v 1) []))
+(defn vnext        [v] (when (> (count v) 1) (core-subvec v 1)))
+(defn vrest        [v] (if   (> (count v) 1) (core-subvec v 1) []))
 (defn vsplit-last  [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
-(defn vsplit-first [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (subvec v 1))]))))
+(defn vsplit-first [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (core-subvec v 1))]))))
 
 (comment
   (vsplit-first [:a :b :c])
@@ -2438,7 +2455,7 @@
 
 (comment (let [v [:a :b :c :d]] (qb 1e6 (fsplit-last v vector) [(butlast v) (last v)])))
 
-(defn takev [n coll] (if (vector? coll) (get-subvector coll 0 n) (into [] (take n) coll)))
+(defn takev [n coll] (if (vector? coll) (or (subvec coll :by-len 0 n) []) (into [] (take n) coll)))
 
 (defn distinct-elements?
   #?(:cljs {:tag 'boolean})
@@ -4193,7 +4210,7 @@
               (inc n)
               (do  n)))
           0
-          (subvec ts n-skip0))
+          (core-subvec ts n-skip0))
 
         n-skip1 (- n-total n-window)]
 
@@ -4222,7 +4239,7 @@
            (let [p (promise)]
              (if (-cas!? p_ nil p) ; Latch
                (do
-                 (ts_ #(subvec % n-skip1))
+                 (ts_ #(core-subvec % n-skip1))
                  (reset!  n-skip_ 0)
                  (reset!  p_ nil)
                  (deliver p  nil))))))))
@@ -4239,7 +4256,7 @@
      (-deref [_]
        (rc-deref msecs ts_ n-skip_
          (fn gc [n-skip1]
-           (ts_ #(subvec % n-skip1))
+           (ts_ #(core-subvec % n-skip1))
            (reset! n-skip_ 0))))))
 
 (defn rolling-counter
@@ -4301,8 +4318,8 @@
           (fn swap-fn [acc]
             (let [new (conj acc x)]
               (if (> (count new) nmax)
-                (subvec new 1)
-                (do     new))))))))))
+                (core-subvec new 1)
+                (do          new))))))))))
 
 (comment (let [rv (rolling-vector 3), c (counter)] [(qb 1e6 (rv (c))) (rv)])) ; 189.66
 
@@ -4507,73 +4524,6 @@
 
 (comment (qb 1000 (str-?index "hello there" "there")))
 
-(defn get-substr-by-idx
-  "Returns ?substring from given string.
-
-  Like `subs` but:
-    - Provides consistent Clj/s behaviour.
-    - Never throws (snaps to valid indexes).
-    - Indexes may be -ive (=> indexed from end of string).
-
-  Returns nil when requested substring would be empty."
-
-  ([s start-idx        ] (get-substr-by-idx s start-idx nil))
-  ([s start-idx end-idx]
-   (when s
-     (let [s #?(:clj ^String s :cljs s)
-           full-len #?(:clj (.length s) :cljs (.-length s))
-           ^long start-idx (if (nil? start-idx) 0        start-idx)
-           ^long end-idx   (if (nil? end-idx)   full-len   end-idx)]
-
-       (cond
-         (and (== start-idx 0) (>= end-idx full-len)) s
-         :let
-         [start-idx (if (neg?  start-idx) (+ full-len start-idx) start-idx) ; Idx from right
-          start-idx     (max 0 start-idx) ; Snap left
-
-          end-idx     (if (neg? end-idx) (+ full-len end-idx) end-idx) ; Idx from right
-          end-idx (min full-len end-idx) ; Snap right
-          ]
-
-         (>= start-idx end-idx) nil
-
-         :else
-         (.substring s start-idx end-idx))))))
-
-(comment
-  (qb 1e5
-    (subs              "hello world"   0 11)
-    (get-substr-by-idx "hello world" -10 11)))
-
-(defn get-substr-by-len
-  "Returns ?substring from given string.
-  Like `get-substr-by-idx`, but takes a substring-length 3rd argument."
-  ([s start-idx        ] (get-substr-by-len s start-idx nil))
-  ([s start-idx sub-len]
-   (when s
-     (let [s #?(:clj ^String s :cljs s)
-           full-len #?(:clj (.length s) :cljs (.-length s))
-
-           ^long sub-len (if (nil? sub-len) full-len sub-len)]
-
-       (cond
-         (not (pos? sub-len)) nil
-         :let [^long start-idx (if (nil? start-idx) 0 start-idx)]
-
-         (and (== start-idx 0) (>= sub-len full-len)) s
-
-         :let [start-idx (if (neg? start-idx) (+ full-len start-idx) start-idx) ; Idx from right
-               start-idx (max 0    start-idx) ; Snap left
-
-               end-idx (+ start-idx sub-len)
-               end-idx (min full-len end-idx) ; Snap right
-               ]
-
-         (>= start-idx end-idx) nil
-
-         :else
-         (.substring s start-idx end-idx))))))
-
 (defn case-insensitive-str=
   "Returns true iff given strings are equal, ignoring case."
   ;; Implementation detail: compares normalized chars 1 by 1, so often faster
@@ -4771,7 +4721,7 @@
   Uses strong randomness when possible. See also `uuid`, `nanoid`, `rand-id-fn`."
   {:tag #?(:clj 'String :cljs 'string)}
   ;; 128 bits of entropy with default length (36)
-  ([max-len] (get-substr-by-len (uuid-str) 0 max-len))
+  ([max-len] (or (substr (uuid-str) :by-len 0 max-len) ""))
   ([       ]
    #?(:clj (str (uuid))
       :cljs     (uuid))))
@@ -7538,8 +7488,6 @@
   (def ^:no-doc ^:deprecated as-ufloat       as-nat-float)
   (def ^:no-doc ^:deprecated as-pfloat       as-pos-float)
   (def ^:no-doc ^:deprecated run!*           run!)
-  (def ^:no-doc ^:deprecated ?subvec<idx     (comp not-empty get-subvec))
-  (def ^:no-doc ^:deprecated ?subvec<len     (comp not-empty get-subvector))
   (def ^:no-doc ^:deprecated nano-time       now-nano)
   (def ^:no-doc ^:deprecated -swap-cache!    -swap-val!)
   (def ^:no-doc ^:deprecated -unswapped      swapped-vec)
@@ -7554,65 +7502,6 @@
   (def ^:no-doc ^:deprecated     pval?    pnum?)
   (def ^:no-doc ^:deprecated as-?pval as-?pnum)
   (def ^:no-doc ^:deprecated  as-pval  as-pnum)
-
-  (defn ^:no-doc get-substr
-    {:deprecated "Encore v3.26.0 (2022-10-14)"
-     :doc "Prefer `get-substr-by-idx`."}
-    ([s ^long start]
-     #?(:cljs (.substring s start)
-        :clj
-        (let [start (if (< start 0) 0 start)
-              slen  #?(:clj (.length ^String s) :cljs (.-length s))]
-          (if (>= start slen)
-            ""
-            (.substring ^String s start slen)))))
-
-    ([s ^long start ^long end]
-     #?(:cljs (if (>= start end) "" (.substring s start end))
-        :clj
-        (let [start (if (< start 0) 0 start)
-              slen  #?(:clj (long (.length ^String s)) :cljs (.-length s))
-              end   (if (> end slen) slen end)]
-          (if (>= start end)
-            ""
-            (.substring ^String s start end))))))
-
-  (defn ^:no-doc get-substring
-    {:deprecated "Encore v3.26.0 (2022-10-14)"
-     :doc "Prefer `get-substr-by-len`."}
-    ([s ^long start]
-     #?(:cljs (as-?nempty-str (.substr s start))
-        :clj
-        (let [slen (.length ^String s)]
-          (if (< start 0)
-            (let [start (+ start slen)
-                  start (if (< start 0) 0 start)]
-              (.substring ^String s start) slen)
-            (if (>= start slen)
-              nil
-              (.substring ^String s start slen))))))
-
-    ([s ^long start ^long length]
-     #?(:cljs (as-?nempty-str (.substr s start length))
-        :clj
-        (if (<= length 0)
-          nil
-          (let [slen (long (.length ^String s))]
-            (if (< start 0)
-              (let [start (+ start slen)
-                    start (if (< start 0) 0 start)
-                    end   (+ start length)
-                    end   (if (> end slen) slen end)]
-                (.substring ^String s start end))
-
-              (let [end (+ start length)
-                    end (if (> end slen) slen end)]
-                (if (>= start end)
-                  nil
-                  (.substring ^String s start end)))))))))
-
-  (def ^:no-doc ^:deprecated ?substr<idx (comp as-?nempty-str get-substr))
-  (def ^:no-doc ^:deprecated ?substr<len (comp as-?nempty-str get-substring))
 
   ;; Used by old versions of Timbre, Tufte
   (let [nolist? #(contains? #{nil [] #{}} %)]
@@ -7782,37 +7671,6 @@
       (max 0 (+ signed-idx max-idx))))
 
   (comment (translate-signed-idx -3 5))
-
-  (defn ^:no-doc ^:deprecated sub-indexes
-    [x start-idx & {:keys [^long max-len ^long end-idx]}]
-    (let [start-idx  ^long start-idx
-          xlen       (count x) ; also = max-exclusive-end-idx
-          ^long start-idx* (translate-signed-idx start-idx xlen)
-          end-idx*   (long
-                       (cond
-                         max-len (min* (+ start-idx* max-len) xlen)
-                         end-idx (inc ; Want exclusive
-                                   ^long (translate-signed-idx end-idx xlen))
-                         :else   xlen))]
-      (if (> start-idx* end-idx*)
-        ;; [end-idx* start-idx*] ; Allow wrapping
-        [0 0] ; Disallow wrapping
-        [start-idx* end-idx*])))
-
-  (defn ^:no-doc ^:deprecated substr
-    "Prefer `get-substr-by-idx` or `get-substr-by-len`"
-    [s start-idx & [?max-len]]
-    (let [[start-idx* end-idx*] ^:deprecation-nowarn (sub-indexes s start-idx :max-len ?max-len)]
-      #?(:clj  (.substring ^String s start-idx* end-idx*)
-         :cljs (.substring         s start-idx* end-idx*))))
-
-  (comment (substr "hello" -1 1))
-
-  (defn ^:no-doc ^:deprecated subvec*
-    "Prefer `get-subvec` or `get-subvector`"
-    [v start-idx & [?max-len]]
-    (let [[start-idx* end-idx*] ^:deprecation-nowarn (sub-indexes v start-idx :max-len ?max-len)]
-      (subvec v start-idx* end-idx*)))
 
   (def  ^:no-doc ^:deprecated sentinel (new-object))
   (defn ^:no-doc ^:deprecated sentinel?     [x] (identical? x sentinel))
@@ -8062,3 +7920,46 @@
        "Prefer `throws?`."
        {:deprecated "Encore v3.98.0 (2024-04-08)"}
        [& body] `(try* (do ~@body nil) (catch :all e# (error-data e#))))))
+
+(deprecated
+  (defn ^:no-doc get-subvec "Prefer `subvec`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([v start    ] (or (subvec v start)     []))
+    ([v start end] (or (subvec v start end) [])))
+
+  (defn ^:no-doc get-subvector "Prefer `subvec`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([v start    ] (or (subvec v :by-len start :max) []))
+    ([v start len] (or (subvec v :by-len start  len) [])))
+
+  (defn ^:no-doc get-substr-by-idx "Prefer `substr`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([s start    ] ^:deprecation-nowarn (get-substr-by-idx s start nil))
+    ([s start end]
+     (let [len   (count s)
+           start (long (or start 0))
+           end   (long (or end   len))
+           start (if (< start 0) (+ start len) start)
+           end   (if (< end   0) (+ end   len) end)]
+       (substr s :by-idx start end))))
+
+  (defn ^:no-doc get-substr-by-len "Prefer `substr`."
+    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([s start    ] (substr s :by-len (or start 0)         :max))
+    ([s start len] (substr s :by-len (or start 0) (or len :max))))
+
+  (defn ^:no-doc get-substr "Prefer `substr`."
+    {:deprecated "Encore v3.26.0 (2022-10-14)"}
+    ([s start    ] (or (substr s start)     ""))
+    ([s start end] (or (substr s start end) "")))
+
+  (defn ^:no-doc get-substring "Prefer `substr`."
+    {:deprecated "Encore v3.26.0 (2022-10-14)"}
+    ([s start    ] (substr s :by-len start :max))
+    ([s start len] (substr s :by-len start  len)))
+
+  (def* ^:no-doc ^:deprecated ?subvec<idx "Prefer `subvec`." (comp not-empty      get-subvec))
+  (def* ^:no-doc ^:deprecated ?subvec<len "Prefer `subvec`." (comp not-empty      get-subvector))
+  (def* ^:no-doc ^:deprecated  subvec*    "Prefer `subvec`."                      get-subvector)
+  (def* ^:no-doc ^:deprecated ?substr<idx "Prefer `substr`." (comp as-?nempty-str get-substr))
+  (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring)))

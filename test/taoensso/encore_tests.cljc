@@ -322,6 +322,88 @@
      (is (= (pw nil   {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a  [2 3 4]}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))
      (is (= (pw :seqs {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a '(2 3 4)}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))]))
 
+;;;; Sub fns
+
+(deftest _subvec
+  [(is (nil? (enc/subvec nil nil)))
+   (is (=
+         (vec (for [start (range -1 +3)
+                    end   (range -1 +3)]
+                [start end (enc/subvec [:a :b] :by-idx start end)]))
+
+         [[-1 -1 nil]
+          [-1  0 nil]
+          [-1  1 [:a]]
+          [-1  2 [:a :b]]
+          [ 0 -1 nil]
+          [ 0  0 nil]
+          [ 0  1 [:a]]
+          [ 0  2 [:a :b]]
+          [ 1 -1 nil]
+          [ 1  0 nil]
+          [ 1  1 nil]
+          [ 1  2 [:b]]
+          [ 2 -1 nil]
+          [ 2  0 nil]
+          [ 2  1 nil]
+          [ 2  2 nil]]))
+
+   (is (nil? (enc/substr nil nil)))
+   (is (=
+         (vec (for [start (range -3 +4)
+                    end   (range -3 +4)]
+                [start end (enc/subvec [:a :b] :by-len start end)]))
+
+         [[-3 -3 nil]
+          [-3 -2 nil]
+          [-3 -1 nil]
+          [-3  0 nil]
+          [-3  1 [:a]]
+          [-3  2 [:a :b]]
+          [-3  3 [:a :b]]
+          [-2 -3 nil]
+          [-2 -2 nil]
+          [-2 -1 nil]
+          [-2  0 nil]
+          [-2  1 [:a]]
+          [-2  2 [:a :b]]
+          [-2  3 [:a :b]]
+          [-1 -3 nil]
+          [-1 -2 nil]
+          [-1 -1 nil]
+          [-1  0 nil]
+          [-1  1 [:b]]
+          [-1  2 [:b]]
+          [-1  3 [:b]]
+          [ 0 -3 nil]
+          [ 0 -2 nil]
+          [ 0 -1 nil]
+          [ 0  0 nil]
+          [ 0  1 [:a]]
+          [ 0  2 [:a :b]]
+          [ 0  3 [:a :b]]
+          [ 1 -3 nil]
+          [ 1 -2 nil]
+          [ 1 -1 nil]
+          [ 1  0 nil]
+          [ 1  1 [:b]]
+          [ 1  2 [:b]]
+          [ 1  3 [:b]]
+          [ 2 -3 nil]
+          [ 2 -2 nil]
+          [ 2 -1 nil]
+          [ 2  0 nil]
+          [ 2  1 nil]
+          [ 2  2 nil]
+          [ 2  3 nil]
+          [ 3 -3 nil]
+          [ 3 -2 nil]
+          [ 3 -1 nil]
+          [ 3  0 nil]
+          [ 3  1 nil]
+          [ 3  2 nil]
+          [ 3  3 nil]]))])
+
 ;;;; Collections
 
 (deftest _map-entry
@@ -456,32 +538,6 @@
    (deftest _utf8-byte-strings
      (let [s enc/a-utf8-str]
        (is (= (-> enc/a-utf8-str enc/str->utf8-ba enc/utf8-ba->str) s)))))
-
-(deftest  _get-substr-by-idx
-  [(is (= (enc/get-substr-by-idx nil            nil)         nil))
-   (is (= (enc/get-substr-by-idx "123456789"    nil) "123456789"))
-   (is (= (enc/get-substr-by-idx "123456789"      1)  "23456789"))
-   (is (= (enc/get-substr-by-idx "123456789"     -3)       "789"))
-   (is (= (enc/get-substr-by-idx "123456789"   -100) "123456789"))
-   (is (= (enc/get-substr-by-idx "123456789"  0 100) "123456789"))
-   (is (= (enc/get-substr-by-idx "123456789"  0   0)         nil))
-   (is (= (enc/get-substr-by-idx "123456789"  0   1) "1"        ))
-   (is (= (enc/get-substr-by-idx "123456789"  0  -1) "12345678" ))
-   (is (= (enc/get-substr-by-idx "123456789"  0  -5) "1234"     ))
-   (is (= (enc/get-substr-by-idx "123456789" -5  -3)     "56"   ))
-   (is (= (enc/get-substr-by-idx "123456789"  4   3)         nil))])
-
-(deftest  _get-substr-by-len
-  [(is (= (enc/get-substr-by-len nil            nil)         nil))
-   (is (= (enc/get-substr-by-len "123456789"    nil) "123456789"))
-   (is (= (enc/get-substr-by-len "123456789"      1)  "23456789"))
-   (is (= (enc/get-substr-by-len "123456789"     -3)       "789"))
-   (is (= (enc/get-substr-by-len "123456789"   -100) "123456789"))
-   (is (= (enc/get-substr-by-len "123456789"  0 100) "123456789"))
-   (is (= (enc/get-substr-by-len "123456789"  0   0)         nil))
-   (is (= (enc/get-substr-by-len "123456789"  0   1) "1"        ))
-   (is (= (enc/get-substr-by-len "123456789"  0  -5)         nil))
-   (is (= (enc/get-substr-by-len "123456789" -5   2)     "56"   ))])
 
 #?(:clj
    (deftest _hex-strings
