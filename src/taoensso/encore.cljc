@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 122 0])
+(def encore-version [3 126 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -835,7 +835,7 @@
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of vector).
       - `end`   is desired vector length, or `:max`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.126.0 (2024-10-23)"
    :arglists '([v start-idx] [v start-idx end-idx] [v kind start end])}
   (subfn `subvec core-subvec))
 
@@ -847,7 +847,7 @@
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of string).
       - `end`   is desired string length, or `:max`."
-  {:added "Encore vX.Y.Z (YYYY-MM-DD)"
+  {:added "Encore v3.126.0 (2024-10-23)"
    :arglists '([s start-idx] [s start-idx end-idx] [s kind start end])}
   (subfn `substr (fn [s n1 n2] (.substring #?(:clj ^String s :cljs s) n1 n2))))
 
@@ -7780,7 +7780,7 @@
   (def* ^:no-doc -merge-with       "Prefer `merge-with*`."   {:deprecated "Encore v3.113.0 (2024-07-03)"} merge-with*)
   (def* ^:no-doc fast-merge        "Prefer `merge`."         {:deprecated "Encore v3.113.0 (2024-07-03)"} merge)
   (def* ^:no-doc secure-rand-bytes "Prefer `rand-bytes`."    {:deprecated "Encore v3.115.0 (2024-08-18)"} (partial rand-bytes true))
-  (def* ^:no-doc round*            "Prefer `round`."         {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}   round)
+  (def* ^:no-doc round*            "Prefer `round`."         {:deprecated "Encore v3.126.0 (2024-10-23)"} round)
 
   #?(:clj  (def* ^:no-doc get-host-ip  "Prefer `host-ip`."   {:deprecated "Encore v3.115.0 (2024-08-18)"} host-ip))
   #?(:clj  (def* ^:no-doc get-hostname "Prefer `hostname`."  {:deprecated "Encore v3.115.0 (2024-08-18)"} hostname))
@@ -7926,17 +7926,17 @@
 
 (deprecated
   (defn ^:no-doc get-subvec "Prefer `subvec`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.126.0 (2024-10-23)"}
     ([v start    ] (or (subvec v start)     []))
     ([v start end] (or (subvec v start end) [])))
 
   (defn ^:no-doc get-subvector "Prefer `subvec`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.126.0 (2024-10-23)"}
     ([v start    ] (or (subvec v :by-len start :max) []))
     ([v start len] (or (subvec v :by-len start  len) [])))
 
   (defn ^:no-doc get-substr-by-idx "Prefer `substr`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.126.0 (2024-10-23)"}
     ([s start    ] ^:deprecation-nowarn (get-substr-by-idx s start nil))
     ([s start end]
      (let [len   (count s)
@@ -7947,7 +7947,7 @@
        (substr s :by-idx start end))))
 
   (defn ^:no-doc get-substr-by-len "Prefer `substr`."
-    {:deprecated "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "Encore v3.126.0 (2024-10-23)"}
     ([s start    ] (substr s :by-len (or start 0)         :max))
     ([s start len] (substr s :by-len (or start 0) (or len :max))))
 
