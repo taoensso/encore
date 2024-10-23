@@ -830,7 +830,7 @@
 (def* subvec
   "Returns a non-empty sub-vector, or nil.
   Like `core/subvec` but:
-    - Doesn't throw when out-of-bounds.
+    - Doesn't throw when out-of-bounds (clips to bounds).
     - Returns nil rather than an empty vector.
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of vector).
@@ -842,7 +842,7 @@
 (def* substr
   "Returns a non-empty sub-string, or nil.
   Like `subs` but:
-    - Doesn't throw when out-of-bounds.
+    - Doesn't throw when out-of-bounds (clips to bounds).
     - Returns nil rather than an empty string.
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of string).
