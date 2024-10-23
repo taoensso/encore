@@ -830,7 +830,7 @@
 (def* subvec
   "Returns a non-empty sub-vector, or nil.
   Like `core/subvec` but:
-    - Doesn't throw when out-of-bounds.
+    - Doesn't throw when out-of-bounds (clips to bounds).
     - Returns nil rather than an empty vector.
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of vector).
@@ -842,7 +842,7 @@
 (def* substr
   "Returns a non-empty sub-string, or nil.
   Like `subs` but:
-    - Doesn't throw when out-of-bounds.
+    - Doesn't throw when out-of-bounds (clips to bounds).
     - Returns nil rather than an empty string.
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of string).
@@ -2148,10 +2148,20 @@
 
 (defn round
   ([               n] (round :round nil n))
-  ([kind           n] (round kind   nil n))
+  ([kind           n]
+
+   (if (and (keyword? n) (number? kind))
+     (round )
+     )
+   (round kind   nil n))
   ([kind precision n]
+   #_
+   [(type precision)
+    (type kind)
+    (and (keyword? precision) (number? kind))]
    (if (and (keyword? precision) (number? kind))
-     (round precision n kind) ; [n kind precision] -> [kind precision n] for back compatibility
+     ;;:x
+     #_(round precision n kind) ; [n kind precision] -> [kind precision n] for back compatibility
      (let [n        (double n)
            modifier (when precision (Math/pow 10.0 precision))
            n*       (if modifier (* n ^double modifier) n)
@@ -2170,6 +2180,11 @@
          (do (long   rounded))                  ; Return long
          (/  (double rounded) ^double modifier) ; Return double
          )))))
+
+(defn ^:no-doc ^:deprecated roundx [n & [type nplaces]] (round* (or type :round) nplaces n))
+
+(roundx 10 :floor)
+(round 10 :floor 3)
 
 (comment
   [(round :floor -1.5)
