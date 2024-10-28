@@ -2147,50 +2147,39 @@
 (defn abs [n]     (if (neg? n) (- n) n))
 
 (defn round
-  ([               n] (round :round nil n))
-  ([kind           n]
+  "General purpose rounding util.
+  Returns given number `n` rounded according to given options:
+    - `kind`      - ∈ #{:round :floor :ceil :trunc}     (default `:round`)
+    - `precision` - Number of decimal places to include (default `nil` => none)"
+  {:arglists '([n] [kind n] [kind precision n])}
+  ([n] (round :round nil n))
+  ([a1 a2] ; [kind n]
+   (if (keyword? a2) ; [n kind] back compatibility
+     (round a2 nil a1)
+     (round a1 nil a2)))
 
-   (if (and (keyword? n) (number? kind))
-     (round )
-     )
-   (round kind   nil n))
-  ([kind precision n]
-   #_
-   [(type precision)
-    (type kind)
-    (and (keyword? precision) (number? kind))]
-   (if (and (keyword? precision) (number? kind))
-     ;;:x
-     #_(round precision n kind) ; [n kind precision] -> [kind precision n] for back compatibility
-     (let [n        (double n)
-           modifier (when precision (Math/pow 10.0 precision))
+  ([a1 a2 a3] ; [kind precision n]
+   (if (keyword? a2) ; [n kind precision] back compatibility
+     (round a2 a3 a1)
+     (let [n        (double a3)
+           modifier (when a2 (Math/pow 10.0 a2))
            n*       (if modifier (* n ^double modifier) n)
            rounded
-           (case kind
-             :round (Math/round n*)
-             :floor (Math/floor n*)
-             :ceil  (Math/ceil  n*)
-             :trunc (long       n*)
-             (unexpected-arg! kind
-               {:param       'kind
-                :context  `round
-                :expected #{:round :floor :ceil :trunc}}))]
+           (let [kind a1]
+             (case kind
+               :round (Math/round n*)
+               :floor (Math/floor n*)
+               :ceil  (Math/ceil  n*)
+               :trunc (long       n*)
+               (unexpected-arg! kind
+                 {:param       'kind
+                  :context  `round
+                  :expected #{:round :floor :ceil :trunc}})))]
 
        (if-not modifier
          (do (long   rounded))                  ; Return long
          (/  (double rounded) ^double modifier) ; Return double
          )))))
-
-(defn ^:no-doc ^:deprecated roundx [n & [type nplaces]] (round* (or type :round) nplaces n))
-
-(roundx 10 :floor)
-(round 10 :floor 3)
-
-(comment
-  [(round :floor -1.5)
-   (round :trunc -1.5)
-   (round :floor 5 1.1234567)
-   (round :round 5 1.1234567)])
 
 (do ; Optimized common cases
   (defn round0   ^long [n]            (Math/round    (double n)))

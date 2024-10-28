@@ -771,6 +771,24 @@
   [(is (= (str (let [s+ (enc/sb-appender)] (s+ "x1a" "x1b" nil "x1c") (s+ nil "x2a" "x2c") (enc/sb-append (s+) "\n"))) "x1ax1bx1c x2ax2c\n"))
    (is (= (str (let [s+ (enc/sb-appender)] (s+ "x1a" "x1b" nil "x1c") (s+ nil nil nil)     (enc/sb-append (s+) "\n"))) "x1ax1bx1c\n"))])
 
+;;;; Math
+
+(deftest _round
+  [(is (= (enc/round 1.0) 1) "New/old API (1 arg)")
+   (is (= (enc/round 1.5) 2) "New/old API (1 arg)")
+
+   (is (= (enc/round :floor 1.5) 1) "New API (2 args)")
+   (is (= (enc/round :ceil  1.5) 2) "New API (2 args)")
+
+   (is (= (enc/round 1.5 :floor) 1) "Old API (2 args)")
+   (is (= (enc/round 1.5 :ceil)  2) "Old API (2 args)")
+
+   (is (= (enc/round :floor 1 1.55) 1.5) "New API (3 args)")
+   (is (= (enc/round :ceil  1 1.55) 1.6) "New API (3 args)")
+
+   (is (= (enc/round 1.55 :floor 1) 1.5) "Old API (3 args)")
+   (is (= (enc/round 1.55 :ceil  1) 1.6) "Old API (3 args)")])
+
 ;;;; Callsites, etc.
 
 (defmacro ^:private callsite-inner [] (meta &form))
