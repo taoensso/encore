@@ -1605,9 +1605,9 @@
 ;;;;
 
 (deftest _formatting
-  [(testing "format-nsecs-num-fn (internal)"
-     (let [fmt0 (#'enc/format-nsecs-num-fn 0 0)
-           fmt2 (#'enc/format-nsecs-num-fn 2 2)]
+  [(testing "format-num-fn"
+     (let [fmt0 (enc/format-num-fn 0 0)
+           fmt2 (enc/format-num-fn 2 2)]
        [(is (= (fmt0 123123123.5555) "123,123,124"))
         (is (= (fmt2 123123123.5555) "123,123,123.56"))
         (is (= (fmt2 123123123)      "123,123,123.00"))

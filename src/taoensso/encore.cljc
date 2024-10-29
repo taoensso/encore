@@ -6487,7 +6487,9 @@
 
 ;;;;
 
-(defn- format-nsecs-num-fn [n-min-fd n-max-fd]
+(defn ^:no-doc format-num-fn
+  "Private, don't use."
+  [n-min-fd n-max-fd]
   #?(:clj
      (let [^ThreadLocal nf-proxy
            (thread-local-proxy
@@ -6513,10 +6515,10 @@
 
        (fn [n] (.format nf n)))))
 
-(comment ((format-nsecs-num-fn 2 2) 123123123)) ; "123,123,123.00"
+(comment ((format-num-fn 2 2) 123123123)) ; "123,123,123.00"
 
-(let [fmt0 (format-nsecs-num-fn 0 0)
-      fmt2 (format-nsecs-num-fn 2 2)]
+(let [fmt0 (format-num-fn 0 0)
+      fmt2 (format-num-fn 2 2)]
 
   (defn format-nsecs
     "Returns given nanoseconds (long) as formatted human-readable string.
