@@ -24,8 +24,8 @@
 
 (deftype SortedLongs [^longs a]
   #?@(:clj
-      [Object               (toString [_] (str "taoensso.encore.SortedLongs[len=" (alength a) "]"))
-       clojure.lang.Counted (count    [_]                                         (alength a))
+      [Object               (toString [x] (enc/str-impl "taoensso.encore.stats.SortedLongs" x {:length (alength a)}))
+       clojure.lang.Counted (count    [_] (alength a))
        clojure.lang.Indexed
        (nth [_ idx          ] (aget a idx))
        (nth [_ idx not-found]
@@ -42,8 +42,8 @@
            init (range (alength a))))]
 
       :cljs
-      [Object   (toString [_] (str "taoensso.encore.SortedLongs[len=" (alength a) "]"))
-       ICounted (-count   [_]                                         (alength a))
+      [Object   (toString [x] (enc/str-impl "taoensso.encore.stats.SortedLongs" x {:length (alength a)}))
+       ICounted (-count   [_] (alength a))
        IIndexed
        (-nth [_ idx          ] (aget a idx))
        (-nth [_ idx not-found]
@@ -61,8 +61,8 @@
 
 (deftype SortedDoubles [^doubles a]
   #?@(:clj
-      [Object               (toString [_] (str "taoensso.encore.SortedDoubles[len=" (alength a) "]"))
-       clojure.lang.Counted (count    [_]                                           (alength a))
+      [Object               (toString [x] (enc/str-impl "taoensso.encore.stats.SortedDoubles" x {:length (alength a)}))
+       clojure.lang.Counted (count    [_] (alength a))
        clojure.lang.Indexed
        (nth [_ idx          ] (aget a idx))
        (nth [_ idx not-found]
@@ -79,8 +79,8 @@
            init (range (alength a))))]
 
       :cljs
-      [Object   (toString [_] (str "taoensso.encore.SortedDoubles[len=" (alength a) "]"))
-       ICounted (-count   [_]                                           (alength a))
+      [Object   (toString [x] (enc/str-impl "taoensso.encore.stats.SortedDoubles" x {:length (alength a)}))
+       ICounted (-count   [_] (alength a))
        IIndexed
        (-nth [_ idx          ] (aget a idx))
        (-nth [_ idx not-found]
@@ -247,7 +247,7 @@
    ^double  xvar-sum
    ^double  xmad-sum]
 
-  Object (toString [_] (str "taoensso.encore.SummaryStats[n=" nx "]"))
+  Object (toString [x] (enc/str-impl "taoensso.encore.stats.SummaryStats" x {:n nx}))
   #?@(:clj  [clojure.lang.IDeref ( deref [this] (deref-sstats this))]
       :cljs [             IDeref (-deref [this] (deref-sstats this))]))
 
@@ -446,11 +446,11 @@
 
 (deftype SummaryStatsBuffered [sstats_ buf_ buf-size merge-counter merge-cb]
   Object
-  (toString [_] ; "...SummaryStatsBuffered[n=1, pending=8, merged=0]"
-    (str
-      "taoensso.encore.SummaryStatsBuffered[n=" (get (sstats_) :n 0)
-      ", pending=" (buf-len (buf_))
-      (when-let [mc merge-counter] (str ", merged=" @mc)) "]"))
+  (toString [x]
+    (enc/str-impl "taoensso.encore.stats.SummaryStatsBuffered" x
+      {:n       (get (sstats_) :n 0)
+       :pending (buf-len (buf_))
+       :merged  (if-let [mc merge-counter] @mc 0)}))
 
   #?@(:clj  [clojure.lang.IDeref ( deref [this] (ssb-deref this))]
       :cljs [             IDeref (-deref [this] (ssb-deref this))])

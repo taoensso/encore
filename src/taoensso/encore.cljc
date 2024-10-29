@@ -4999,8 +4999,6 @@
 #?(:clj
    (defmacro ^:no-doc def-print-impl
      "Private, don't use."
-     {:added "Encore v3.98.0 (2024-04-08)"
-      :style/indent 1}
      [[sym type] form]
      (if (:ns &env)
        `(extend-protocol ~'IPrintWithWriter ~type (~'-pr-writer [~sym ~'__w ~'_] (~'-write ~'__w ~form)))
@@ -5012,26 +5010,39 @@
 #?(:clj
    (defmacro ^:no-doc def-print-dup
      "Private, don't use."
-     {:added "Encore v3.98.0 (2024-04-08)"
-      :style/indent 1}
      [[sym type] form]
      `(defmethod print-dup ~type
         [~(with-meta sym  {:tag type})
          ~(with-meta '__w {:tag 'java.io.Writer})]
         (.write ~'__w ~form))))
 
+#?(:clj (declare hex-ident-str))
+(defn ^:no-doc str-impl
+  "Private, don't use."
+  ([class-name x     ] (str class-name          #?@(:clj [  "@" (hex-ident-str x)])))
+  ([class-name x data] (str class-name "[" data #?@(:clj [" 0x" (hex-ident-str x)]) "]")))
+
 (comment
+  (str-impl "#taoensso.foo" :x {})
+
+  (defn as-strings [x]
+    {:str    (str    x)
+     :pr-str (pr-str x)
+     :pr-dup (or (catching (binding [*print-dup* true] (pr-str x))) :not-supported)})
+
   (do
-    (deftype MyType [] Object (toString [x] "MyType[]"))
-    (remove-method print-method MyType)
-    (remove-method print-dup    MyType))
+    (deftype   T2 [x])
+    #_(deftype T2 [x] Object (toString [t] (str-impl "taoensso.encore.T2" t (hex-ident-str t))))
+    (remove-method print-method T2)
+    (remove-method print-dup    T2)
+    (def-print-impl [t T2] (str-impl "#taoensso.encore.T2" t {:x (.-x t)}))
+    (def-print-dup  [t T2] (binding [*print-dup* false] (pr-str t))))
 
-  {:str          (str    (MyType.))
-   :print-method (pr-str (MyType.))
-   :print-dup    (binding [*print-dup* true] (pr-str (MyType.)))}
-
-  (def-print-impl [x MyType] (str x))
-  (def-print-dup  [x MyType] (str x)))
+  (do                    (as-strings (delay)))   ; {:str "clojure.lang.Delay@6d1e93a6", :pr-str "#delay[{:status :pending, :val nil} 0x6d1e93a6]",                        :pr-dup :not-supported}
+  (do (deftype   T1 [x]) (as-strings (T1. :x1))) ; {:str "taoensso.encore.T1@4795e014", :pr-str "#object[taoensso.encore.T1 0x4795e014 \"taoensso.encore.T1@4795e014\"]", :pr-dup :not-supported}
+  (do (defrecord R1 [x]) (as-strings (R1. :x1))) ; {:str "taoensso.encore.R1@1d8fbf",   :pr-str "#taoensso.encore.R1{:x :x1}",                                            :pr-dup "#taoensso.encore.R1[:x1]"}
+  (do                    (as-strings (T2. :x1))) ; {:str "taoensso.encore.T2@5c123fb2", :pr-str "#taoensso.encore.T2[{:x :x1} 0x5c123fb2]",                               :pr-dup "#taoensso.encore.T2[{:x :x1} 0x5c123fb2]"}
+  )
 
 ;;;; Thread locals
 
@@ -5255,10 +5266,10 @@
 ;;;; Hex strings
 
 #?(:clj
-   (defn ident-hex-str
-     "Returns hex string of given Object's `identityHashCode` (e.g. \"0x5eeb49f2\")."
-     {:added "Encore v3.56.0 (2023-03-29)"}
-     ^String [obj] (str "0x" (Integer/toHexString (System/identityHashCode obj)))))
+   (defn hex-ident-str
+     "Returns hex string of given Object's `identityHashCode` (e.g. \"5eeb49f2\")."
+     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     ^String [obj] (Integer/toHexString (System/identityHashCode obj))))
 
 #?(:clj
    (do
@@ -7969,4 +7980,8 @@
   (def* ^:no-doc ^:deprecated ?subvec<len "Prefer `subvec`." (comp not-empty      get-subvector))
   (def* ^:no-doc ^:deprecated  subvec*    "Prefer `subvec`."                      get-subvector)
   (def* ^:no-doc ^:deprecated ?substr<idx "Prefer `substr`." (comp as-?nempty-str get-substr))
-  (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring)))
+  (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring))
+
+  #?(:clj
+     (defn ^:no-doc ^:deprecated ident-hex-str "Prefer `hex-ident-str`."
+       ^String [obj] (str "0x" (hex-ident-str)))))

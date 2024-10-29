@@ -1600,7 +1600,7 @@
    (let [ssb (stats/summary-stats-buffered {:buffer-size 10})]
      (dotimes [n 1e5] (ssb n))
      [(is (enc/submap? @@ssb {:n 100000 :min 0 :max 99999}))
-      (is (= (str ssb) "taoensso.encore.SummaryStatsBuffered[n=0, pending=0, merged=9091]"))])])
+      (is (enc/str-starts-with? (str ssb) "taoensso.encore.stats.SummaryStatsBuffered[{:n 0, :pending 0, :merged 9091}"))])])
 
 ;;;;
 
