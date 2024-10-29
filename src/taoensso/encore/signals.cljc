@@ -372,7 +372,7 @@
         [{:keys
           [elide? allow? expansion-id,
            elidable? location location*,
-           sample-rate kind ns id level filter/when rate-limit rate-limit-by]}])}
+           sample-rate kind ns id level when rate-limit rate-limit-by]}])}
 
      [{:as core-opts :keys [sf-arity ct-sig-filter *rt-sig-filter*]}
       call-opts]
@@ -465,7 +465,7 @@
     {:location*   nil
      :location    {:ns (str *ns*)}
      :line        42
-     :filter      'false
+     :when        'false
      ;; :elide?   true
      ;; :allow?   false
      :level       (do :info)
