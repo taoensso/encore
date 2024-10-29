@@ -1657,3 +1657,75 @@
         :ct-sig-filter    my-ct-sig-filter
         :*rt-sig-filter* *my-rt-sig-filter*
         :*sig-handlers*  *my-sig-handlers*})))
+
+;;;; Utils
+
+(enc/def* upper-qn
+  "`:foo/bar` -> \"FOO/BAR\", etc."
+  {:arglists '([x]), :tag #?(:clj 'String :cljs 'string)}
+  (enc/fmemoize (fn [x] (str/upper-case (enc/as-qname x)))))
+
+(comment (upper-qn :foo/bar))
+
+(enc/def* format-level
+  "`:info` -> \"INFO\",
+       `5` -> \"LEVEL:5\", etc."
+  {:arglists '([x]), :tag #?(:clj 'String :cljs 'string)}
+  (enc/fmemoize
+    (fn [x]
+      (if (keyword?   x)
+        (upper-qn     x)
+        (str "LEVEL:" x)))))
+
+(comment (format-level :info))
+
+(enc/def* format-id
+  "`:foo.bar/baz` -> \"::baz\", etc."
+  {:arglists '([ns x]), :tag #?(:clj 'String :cljs 'string)}
+  (enc/fmemoize
+    (fn [ns x]
+      (if (keyword? x)
+        (if (= (namespace x) ns)
+          (str "::" (name x))
+          (str            x))
+        (str x)))))
+
+(comment
+  (format-id (str *ns*) ::id1)
+  (format-id nil ::id1))
+
+(let [cached
+      (enc/fmemoize
+        (fn [base line column]
+          (if line
+            (if column
+              (str base "(" line "," column ")")
+              (str base "(" line            ")"))
+            base)))]
+
+  (enc/def* format-location
+    "Returns \"<ns/file>(<line>,<column>)\", etc."
+    {:tag #?(:clj 'String :cljs 'string)
+     :arglists '([ns line column file] [signal])}
+    (fn
+      ([ns line column file] (when-let [base (or ns file)] (cached base line column)))
+      ([location]
+       (when-let [base (or (get location :ns) (get location :file))]
+         (let [{:keys [line column]} location]
+           (cached base line column)))))))
+
+(comment
+  (format-location "my-ns" 120 8 nil)
+  (format-location nil     120 8 *file*))
+
+(defn signal-with-combined-sample-rate [handler-sample-rate sig-val]
+  (or
+    (when handler-sample-rate
+      (when (map? sig-val)
+        (assoc sig-val :sample-rate
+          (*
+            (double handler-sample-rate)
+            (double (or (get sig-val :sample-rate) 1.0))))))
+    sig-val))
+
+(comment (signal-with-combined-sample-rate 0.2 {:sample-rate 0.3}))
