@@ -502,6 +502,11 @@
 
       (is (= (enc/merge {:a 1} {:b 2} {:a 3} {:c 4}) {:a 3, :b 2, :c 4}))])
 
+   (testing "nx (preserve existing)"
+     [(is (= (enc/merge-nx {:a 1} {:a 2 :b 2}) {:a 1, :b 2}))
+      (is (= (enc/merge-nx {}     {:a 2 :b 2}) {:a 2, :b 2}))
+      (is (= (enc/merge-nx {} {:a 2} {:a 3} {:b 4} {:a 5} {:c 6}) {:a 2, :b 4, :c 6}))])
+
    (testing "Transient support (currently undocumented)"
      [(is (= (enc/merge (transient {})) {}))
       (is (= (enc/merge nil (transient {})) nil))

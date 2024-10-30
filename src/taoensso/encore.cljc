@@ -2821,8 +2821,8 @@
 
 (defn merge
   "Like `core/merge` but:
-    - Often faster, with much better worst-case performance.
-    - Supports `:merge/dissoc` vals."
+    - Supports `:merge/dissoc` vals.
+    - Often faster, with much better worst-case performance."
   ([               ] nil)
   ([m1             ] (p! m1))
   ([m1 m2          ] (p!                                                     (merge-with* false nil m1 m2)))
@@ -2831,9 +2831,9 @@
 
 (defn nested-merge
   "Like `core/merge` but:
-    - Often faster, with much better worst-case performance.
+    - Recursively merges nested maps.
     - Supports `:merge/dissoc` vals.
-    - Recursively merges nested maps."
+    - Often faster, with much better worst-case performance."
   ([               ] nil)
   ([m1             ] (p! m1))
   ([m1 m2          ] (p!                                                   (merge-with* true nil m1 m2)))
@@ -2842,8 +2842,8 @@
 
 (defn merge-with
   "Like `core/merge-with` but:
-    - Often faster, with much better worst-case performance.
-    - Supports `:merge/dissoc` vals."
+    - Supports `:merge/dissoc` vals.
+    - Often faster, with much better worst-case performance."
   ([f                ] nil)
   ([f m1             ] (p! m1))
   ([f m1 m2          ] (p!                                                 (merge-with* false f m1 m2)))
@@ -2852,14 +2852,27 @@
 
 (defn nested-merge-with
   "Like `core/merge-with` but:
-    - Often faster, with much better worst-case performance.
+    - Recursively merges nested maps.
     - Supports `:merge/dissoc` vals.
-    - Recursively merges nested maps."
+    - Often faster, with much better worst-case performance."
   ([f                ] nil)
   ([f m1             ] (p! m1))
   ([f m1 m2          ] (p!                                               (merge-with* true f m1 m2)))
   ([f m1 m2 m3       ] (p!                           (merge-with* true f (merge-with* true f m1 m2) m3)))
   ([f m1 m2 m3 & more] (p! (merge-with* true f (cons (merge-with* true f (merge-with* true f m1 m2) m3) more)))))
+
+(let [mf (fn [x y] x)]
+  (defn merge-nx
+    "Like `core/merge` but:
+      - Preserves existing values, e.g. (merge-nx <user-opts> <defaults>).
+      - Supports `:merge/dissoc` vals.
+      - Often faster, with much better worst-case performance."
+    {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+    ([               ] nil)
+    ([m1             ] (p! m1))
+    ([m1 m2          ] (p!                                                   (merge-with* false mf m1 m2)))
+    ([m1 m2 m3       ] (p!                             (merge-with* false mf (merge-with* false mf m1 m2) m3)))
+    ([m1 m2 m3 & more] (p! (merge-with* false mf (cons (merge-with* false mf (merge-with* false mf m1 m2) m3) more))))))
 
 (comment
   (qb 1e6 ; [182.63 122.16 167.18]
