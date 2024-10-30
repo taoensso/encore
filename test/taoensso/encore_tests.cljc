@@ -2066,7 +2066,17 @@
    (testing "Dynamic middleware (`*middleware*`)"
      [(is (= (binding [rns/*middleware* identity] rns/*middleware*) identity)                  "via `binding`")
       (is (= (rns/with-middleware       identity  rns/*middleware*) identity)                  "via `with-middleware`")
-      (is (= (rns/with-middleware inc (rns/with-middleware+ #(* 2 %) (rns/*middleware* 1))) 4) "via `with-middleware+`")])])
+      (is (= (rns/with-middleware inc (rns/with-middleware+ #(* 2 %) (rns/*middleware* 1))) 4) "via `with-middleware+`")])
+
+   (testing "Utils"
+     [(is (= (sigs/upper-qn :foo/bar) "FOO/BAR"))
+
+      (is (= (sigs/format-level :info) "INFO"))
+      (is (= (sigs/format-level     8) "LEVEL:8"))
+
+      (is (= (sigs/format-id "foo.bar" :foo.bar/qux) "::qux"))
+      (is (= (sigs/format-id "foo.baz" :foo.bar/qux) ":foo.bar/qux"))
+      (is (= (sigs/format-id nil       :foo.bar/qux) ":foo.bar/qux"))])])
 
 ;;;;
 
