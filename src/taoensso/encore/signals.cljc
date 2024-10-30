@@ -831,8 +831,8 @@
    with-handler with-handler+
    add-handler! remove-handler! stop-handlers!
 
-   *ctx*        set-ctx!        with-ctx
-   *middleware* set-middleware! with-middleware])
+   *ctx*        set-ctx!        with-ctx        with-ctx+
+   *middleware* set-middleware! with-middleware with-middleware+])
 
 ;;;
 
@@ -1590,7 +1590,8 @@
      [{:as opts
        :keys
        [sf-arity lib-dispatch-opts
-        ct-sig-filter *rt-sig-filter* *sig-handlers*]}]
+        ct-sig-filter *rt-sig-filter* *sig-handlers*
+        exclude]}]
 
      (enc/have? [:ks>= #{:sf-arity :ct-sig-filter :*rt-sig-filter* :*sig-handlers*}] opts)
      (enc/have? [:or nil? symbol?]  ct-sig-filter  *rt-sig-filter*  *sig-handlers*)
@@ -1602,7 +1603,8 @@
            sf-arity        (int sf-arity)
            ct-sig-filter   (enc/resolve-sym &env  ct-sig-filter)
            *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)
-           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)]
+           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)
+           incl?           (complement (set exclude))]
 
        `(do
           (enc/defalias level-aliases)
@@ -1638,19 +1640,20 @@
           ~(api:remove-handler! *sig-handlers*)
           ~(api:stop-handlers!  *sig-handlers*)
 
-          ~(api:*ctx*)
-          ~(api:*middleware*)
+          ~@(when (incl? :ctx)
+              [(api:*ctx*)
+               (api:set-ctx!)
+               (api:with-ctx)
+               (api:with-ctx+)])
 
-          ~(api:set-ctx!)
-          ~(api:set-middleware!)
-
-          ~(api:with-ctx)
-          ~(api:with-ctx+)
-          ~(api:with-middleware)
-          ~(api:with-middleware+)))))
+          ~@(when (incl? :middleware)
+              [(api:*middleware*)
+               (api:set-middleware!)
+               (api:with-middleware)
+               (api:with-middleware+)])))))
 
 (comment
-  ;; See `taoensso.encore-tests.signal-api` ns
+  ;; See `taoensso.encore-tests.required-ns` ns
   (macroexpand
     '(def-api
        {:sf-arity 4
