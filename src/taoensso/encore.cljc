@@ -2440,10 +2440,11 @@
   (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
-(defn vnext        [v] (when (> (count v) 1) (core-subvec v 1)))
-(defn vrest        [v] (if   (> (count v) 1) (core-subvec v 1) []))
-(defn vsplit-last  [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
-(defn vsplit-first [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (core-subvec v 1))]))))
+(defn vnext          [v] (when (> (count v) 1) (core-subvec v 1)))
+(defn vrest          [v] (if   (> (count v) 1) (core-subvec v 1) []))
+(defn vsplit-last    [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
+(defn vsplit-first   [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (core-subvec v 1))]))))
+(defn not-empty-coll [x] (when x (if (coll? x) (not-empty x) x)))
 
 (comment
   (vsplit-first [:a :b :c])
