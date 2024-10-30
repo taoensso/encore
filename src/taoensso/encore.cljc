@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 127 0])
+(def encore-version [3 128 0])
 
 (comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
   (set! *unchecked-math* :warn-on-boxed)
@@ -2868,7 +2868,7 @@
       - Preserves existing values, e.g. (merge-nx <user-opts> <defaults>).
       - Supports `:merge/dissoc` vals.
       - Often faster, with much better worst-case performance."
-    {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+    {:added "Encore v3.128.0 (2024-10-30)"}
     ([               ] nil)
     ([m1             ] (p! m1))
     ([m1 m2          ] (p!                                                   (merge-with* false mf m1 m2)))
@@ -5282,7 +5282,7 @@
 #?(:clj
    (defn hex-ident-str
      "Returns hex string of given Object's `identityHashCode` (e.g. \"5eeb49f2\")."
-     {:added "Encore vX.Y.Z (YYYY-MM-DD)"}
+     {:added "Encore v3.128.0 (2024-10-30)"}
      ^String [obj] (Integer/toHexString (System/identityHashCode obj))))
 
 #?(:clj
