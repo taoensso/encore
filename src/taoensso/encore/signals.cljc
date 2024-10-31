@@ -1099,18 +1099,18 @@
       `:back-pressure` - Handler calls that experienced (async) back-pressure
                          (possible noop, depending on back-pressure mode)
 
-       `:sampled`      - Noop  handler calls due to sample rate
-       `:filtered`     - Noop  handler calls due to kind/ns/id/level/when filtering
-       `:rate-limited` - Noop  handler calls due to rate limit
-       `:disallowed`   - Noop  handler calls due to sampling/filtering/rate-limiting
-       `:allowed`      - Other handler calls    (no sampling/filtering/rate-limiting)
+      `:sampled`      - Noop  handler calls due to sample rate
+      `:filtered`     - Noop  handler calls due to kind/ns/id/level/when filtering
+      `:rate-limited` - Noop  handler calls due to rate limit
+      `:disallowed`   - Noop  handler calls due to sampling/filtering/rate-limiting
+      `:allowed`      - Other handler calls    (no sampling/filtering/rate-limiting)
 
-       `:suppressed`   - Noop handler calls due to nil middleware result
-       `:handled`      - Handler calls that completed successfully
-       `:errors`       - Handler calls that threw an error
+      `:suppressed`   - Noop handler calls due to nil middleware result
+      `:handled`      - Handler calls that completed successfully
+      `:errors`       - Handler calls that threw an error
 
-       Note that for performance reasons returned counts are not mutually atomic,
-       e.g. `:sampled` count may be incremented before `:disallowed` count is.
+      Note that for performance reasons returned counts are not mutually atomic,
+      e.g. `:sampled` count may be incremented before `:disallowed` count is.
 
   Useful for understanding/debugging how your handlers behave in practice,
   especially when they're under stress (high-volumes, etc.).
