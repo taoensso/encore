@@ -8000,4 +8000,4 @@
 
   #?(:clj
      (defn ^:no-doc ^:deprecated ident-hex-str "Prefer `hex-ident-str`."
-       ^String [obj] (str "0x" (hex-ident-str)))))
+       ^String [obj] (str "0x" (hex-ident-str obj)))))
