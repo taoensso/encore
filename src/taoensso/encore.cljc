@@ -5586,6 +5586,43 @@
 ;;;;
 
 #?(:clj
+   (defn ^:no-doc read-resource
+     "Private, don't use."
+     [rname]
+     (if-not [res (jio/resource rname)]
+       (throw
+         (ex-info (str "[encore/read-resource] Resource not found on classpath: " rname)
+           {:rname (typed-val rname)}))
+
+       (with-open [reader (java.io.PushbackReader. (jio/reader res))]
+         (loop [forms []]
+           (let [form
+                 (try
+                   (read reader false ::eof)
+                   (catch Throwable t
+                     (throw
+                       (ex-info (str "[encore/read-resource] Error while reading resource: " rname)
+                         {:rname (typed-val rname)
+                          :error t}))))]
+             (if (= form ::eof)
+               forms
+               (recur (conj forms form)))))))))
+
+#?(:clj
+   (defmacro ^:no-doc load-inline
+     "Private, don't use.
+     Flexibly injects Clojure/Script code from named resource on classpath:
+      #?(:clj  (load-inline \"my-code.clj\")
+         :cljs (load-inline \"my-code.cljs\"))"
+     [rname] `(do ~@(read-resource rname))))
+
+(comment
+  (run! eval (read-resource "taoensso/encore/bytes.clj"))
+  (load-inline              "taoensso/encore/bytes.clj"))
+
+;;;;
+
+#?(:clj
    (defn get-pom-version
      "Returns POM version string for given Maven dependency, or nil."
      [dep-sym]

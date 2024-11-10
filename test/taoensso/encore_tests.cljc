@@ -245,6 +245,14 @@
      (is (= (c :=+ 2) 8))
      (is (= @c        10))]))
 
+;;;; Loading
+
+#?(:clj  (enc/load-inline "taoensso/encore_tests/loadme.clj")
+   :cljs (enc/load-inline "taoensso/encore_tests/loadme.cljs"))
+
+(deftest _load-inline
+  [(is (= (get-loaded) #?(:clj :clj, :cljs :cljs)))])
+
 ;;;; Reductions
 
 (deftest _reduce-zip
