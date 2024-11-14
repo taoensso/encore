@@ -292,7 +292,8 @@
 (defprotocol IFilterableSignal
   "Protocol that app/library signal-like types must implement to support signal API."
   (allow-signal? [_ sig-filter]          "Returns true iff given signal is allowed by given `SigFilter`.")
-  (signal-value  [_ handler-sample-rate] "Returns signal's user-facing value as given to handlers, etc."))
+  (signal-value  [_ handler-sample-rate] "Returns public signal value as given to handlers, etc.")
+  (signal-debug  [_]                     "Returns minimal signal representation for debug purposes"))
 
 (let [nil-sf (SigFilter. nil nil nil nil nil)]
   (defn update-sig-filter
@@ -746,7 +747,9 @@
                                 true
                                 (catch :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val* t)))))
                             (catch     :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val  t)))))))
-                    (catch             :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-raw  t))))
+                    (catch             :all t (when track-stats? (cnt-errors)) (when error-fn*
+                                                                                 (let [sig-dbg (or (enc/catching (signal-debug sig-raw)) sig-raw)]
+                                                                                   (error-fn* sig-dbg t)))))
                   false)]
 
             (when track-stats? (ssb (- (enc/now-nano) ^long ns0)))

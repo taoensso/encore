@@ -1779,7 +1779,8 @@
 (deftype MySignal [level cnt]
   sigs/IFilterableSignal
   (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))
-  (signal-value  [_ _] cnt))
+  (signal-value  [_ _] cnt)
+  (signal-debug  [_] {:level level}))
 
 (defn clear-handlers! [] (enc/update-var-root! rns/*rt-sig-filter* (fn [_] nil)))
 
