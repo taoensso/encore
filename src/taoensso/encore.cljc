@@ -5033,29 +5033,13 @@
 #?(:clj (declare hex-ident-str))
 (defn ^:no-doc str-impl
   "Private, don't use."
-  ([class-name x     ] (str class-name          #?@(:clj [  "@" (hex-ident-str x)])))
-  ([class-name x data] (str class-name "[" data #?@(:clj [" 0x" (hex-ident-str x)]) "]")))
+  ([x class-name     ] (str class-name          #?@(:clj [  "@" (hex-ident-str x)])))
+  ([x class-name data] (str class-name "[" data #?@(:clj [" 0x" (hex-ident-str x)]) "]")))
 
-(comment
-  (str-impl "#taoensso.foo" :x {})
-
-  (defn as-strings [x]
-    {:str    (str    x)
-     :pr-str (pr-str x)
-     :pr-dup (or (catching (binding [*print-dup* true] (pr-str x))) :not-supported)})
-
-  (do
-    (deftype   T2 [x])
-    #_(deftype T2 [x] Object (toString [t] (str-impl "taoensso.encore.T2" t (hex-ident-str t))))
-    (remove-method print-method T2)
-    (remove-method print-dup    T2)
-    (def-print-impl [t T2] (str-impl "#taoensso.encore.T2" t {:x (.-x t)}))
-    (def-print-dup  [t T2] (binding [*print-dup* false] (pr-str t))))
-
-  (do                    (as-strings (delay)))   ; {:str "clojure.lang.Delay@6d1e93a6", :pr-str "#delay[{:status :pending, :val nil} 0x6d1e93a6]",                        :pr-dup :not-supported}
-  (do (deftype   T1 [x]) (as-strings (T1. :x1))) ; {:str "taoensso.encore.T1@4795e014", :pr-str "#object[taoensso.encore.T1 0x4795e014 \"taoensso.encore.T1@4795e014\"]", :pr-dup :not-supported}
-  (do (defrecord R1 [x]) (as-strings (R1. :x1))) ; {:str "taoensso.encore.R1@1d8fbf",   :pr-str "#taoensso.encore.R1{:x :x1}",                                            :pr-dup "#taoensso.encore.R1[:x1]"}
-  (do                    (as-strings (T2. :x1))) ; {:str "taoensso.encore.T2@5c123fb2", :pr-str "#taoensso.encore.T2[{:x :x1} 0x5c123fb2]",                               :pr-dup "#taoensso.encore.T2[{:x :x1} 0x5c123fb2]"}
+(comment ; Common pattern (encore.stats, telemere.impl, tempel.keys, tufte.impl, carmine.*, etc.)
+  (toString [x] (str-impl x "taoensso.Foo"))    ;  "taoensso.Foo@629c28a6"           - as       (str (delay))
+  (toString [x] (str-impl x "taoensso.Foo") {}) ;  "taoensso.Foo[{...} 0x629c28a6]"  - based on (pr-str (atom {}))
+  (def-print-impl [x MyType] (str "#" x))       ; "#taoensso.Foo[{...} 0x629c28a6]"  - as       (pr-str (atom {}))
   )
 
 ;;;; Thread locals

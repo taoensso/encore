@@ -24,7 +24,7 @@
 
 (deftype SortedLongs [^longs a]
   #?@(:clj
-      [Object               (toString [x] (enc/str-impl "taoensso.encore.stats.SortedLongs" x {:length (alength a)}))
+      [Object               (toString [x] (enc/str-impl x "taoensso.encore.stats.SortedLongs" {:length (alength a)}))
        clojure.lang.Counted (count    [_] (alength a))
        clojure.lang.Indexed
        (nth [_ idx          ] (aget a idx))
@@ -42,7 +42,7 @@
            init (range (alength a))))]
 
       :cljs
-      [Object   (toString [x] (enc/str-impl "taoensso.encore.stats.SortedLongs" x {:length (alength a)}))
+      [Object   (toString [x] (enc/str-impl x "taoensso.encore.stats.SortedLongs" {:length (alength a)}))
        ICounted (-count   [_] (alength a))
        IIndexed
        (-nth [_ idx          ] (aget a idx))
@@ -61,7 +61,7 @@
 
 (deftype SortedDoubles [^doubles a]
   #?@(:clj
-      [Object               (toString [x] (enc/str-impl "taoensso.encore.stats.SortedDoubles" x {:length (alength a)}))
+      [Object               (toString [x] (enc/str-impl x "taoensso.encore.stats.SortedDoubles" {:length (alength a)}))
        clojure.lang.Counted (count    [_] (alength a))
        clojure.lang.Indexed
        (nth [_ idx          ] (aget a idx))
@@ -79,7 +79,7 @@
            init (range (alength a))))]
 
       :cljs
-      [Object   (toString [x] (enc/str-impl "taoensso.encore.stats.SortedDoubles" x {:length (alength a)}))
+      [Object   (toString [x] (enc/str-impl x "taoensso.encore.stats.SortedDoubles" {:length (alength a)}))
        ICounted (-count   [_] (alength a))
        IIndexed
        (-nth [_ idx          ] (aget a idx))
@@ -247,7 +247,7 @@
    ^double  xvar-sum
    ^double  xmad-sum]
 
-  Object (toString [x] (enc/str-impl "taoensso.encore.stats.SummaryStats" x {:n nx}))
+  Object (toString [x] (enc/str-impl x "taoensso.encore.stats.SummaryStats" {:n nx}))
   #?@(:clj  [clojure.lang.IDeref ( deref [this] (deref-sstats this))]
       :cljs [             IDeref (-deref [this] (deref-sstats this))]))
 
@@ -447,7 +447,7 @@
 (deftype SummaryStatsBuffered [sstats_ buf_ buf-size merge-counter merge-cb]
   Object
   (toString [x]
-    (enc/str-impl "taoensso.encore.stats.SummaryStatsBuffered" x
+    (enc/str-impl x "taoensso.encore.stats.SummaryStatsBuffered"
       {:n       (get (sstats_) :n 0)
        :pending (buf-len (buf_))
        :merged  (if-let [mc merge-counter] @mc 0)}))
