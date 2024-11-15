@@ -955,7 +955,7 @@
 
   All handlers support the same dispatch options, including:
 
-    `:async` (Clj only) options include:
+    `:async` (Clj only) - may be `nil` (synchronous) or map with options:
 
       `:buffer-size` (default 1024)
         Size of request buffer, and the max number of pending requests before
