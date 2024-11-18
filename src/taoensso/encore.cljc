@@ -321,8 +321,8 @@
              (case test
                :if-let  `(if-let  ~expr ~(first more) (-cond ~throw? ~@(next more)))
                :if-some `(if-some ~expr ~(first more) (-cond ~throw? ~@(next more)))
-               :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))) ; Undocumented
-               ))
+               :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))))) ; Undocumented
+
 
            (if (keyword? test)
              (throw ; Undocumented, but throws at compile-time so easy to catch
@@ -853,8 +853,8 @@
 
 (comment
   (qb 1e6 (subvec [:a :b :c] 1) (core-subvec [:a :b :c] 1)) ; [53.32 51.11]
-  (qb 1e6 (substr "abc" 1) (subs "abc" 1))                  ; [55.75 49.43]
-  )
+  (qb 1e6 (substr "abc" 1) (subs "abc" 1)))                  ; [55.75 49.43]
+
 
 ;;;; Forms
 ;; Useful for macros, etc.
@@ -1654,7 +1654,7 @@
    (defmacro check-some
      "Returns first logical false/throwing expression (id/form), or nil."
      ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
-     ([test       ]
+     ([test]
       (let [[error-id test] (if (vector? test) test [nil test])]
         `(let [[test# err#] (try* [~test nil] (catch :all err# [nil err#]))]
            (when-not test# (or ~error-id '~test :check/falsey)))))))
@@ -1980,7 +1980,7 @@
            acc))))))
 
 (do
-  (deftype ^:no-doc Tup2 [x y  ])
+  (deftype ^:no-doc Tup2 [x y])
   (deftype ^:no-doc Tup3 [x y z]))
 
 (defn reduce-multi
@@ -2178,8 +2178,8 @@
 
        (if-not modifier
          (do (long   rounded))                  ; Return long
-         (/  (double rounded) ^double modifier) ; Return double
-         )))))
+         (/  (double rounded) ^double modifier)))))) ; Return double
+
 
 (do ; Optimized common cases
   (defn round0   ^long [n]            (Math/round    (double n)))
@@ -2224,12 +2224,13 @@
 ;; goog/global - Closure's environment-agnostic global object
 
 #?(:cljs (def node-target? (= *target* "nodejs")))
-#?(:cljs (def ^:no-doc js-?window  (when (exists? js/window)  js/window)))  ; Present iff in browser
+#?(:cljs (def react-native-target? (= *target* "react-native")))
+#?(:cljs (def ^:no-doc js-?window  (when (and (not react-native-target?) (exists? js/window))  js/window)))  ; Present iff in browser
 #?(:cljs (def ^:no-doc js-?process (when (exists? js/process) js/process))) ; Present iff in Node.js
 #?(:cljs (def ^:no-doc js-?crypto
-           (or
-             (when (exists? js/crypto) js/crypto)
-             (when (exists? js/window) (gobj/get js/window "crypto")))))
+           (when (and (not react-native-target?)
+                     (when (exists? js/crypto) js/crypto
+                      (when (exists? js/window) (gobj/get js/window "crypto")))))))
 
 ;;;; Misc
 
@@ -2300,7 +2301,7 @@
 (defn queue
   "Returns a new `PersistentQueue`."
   ([coll] (into (queue) coll))
-  ([    ]
+  ([]
    #?(:clj clojure.lang.PersistentQueue/EMPTY
       :cljs   cljs.core.PersistentQueue.EMPTY)))
 
@@ -2437,8 +2438,8 @@
   (assoc-some   {:a :A} {:a false :b :B}) ; => {:a false, :b :B}
   (assoc-when   {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
   (assoc-nx     {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
-  (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
-  )
+  (reassoc-some {:a :A} {:a nil   :b :B})) ; => {:b :B}
+
 
 (defn vnext          [v] (when (> (count v) 1) (core-subvec v 1)))
 (defn vrest          [v] (if   (> (count v) 1) (core-subvec v 1) []))
@@ -2663,7 +2664,7 @@
 (defn contains-in?
   #?(:cljs {:tag 'boolean})
   ([coll ks k] (contains? (get-in coll ks) k))
-  ([coll ks  ]
+  ([coll ks]
    (if (empty? ks)
      false
      (fsplit-last ks (fn [ks lk] (contains-in? coll ks lk))))))
@@ -2707,14 +2708,14 @@
   ([     ] '())
   ([c1   ] (lazy-seq c1))
   ([c1 c2]
-     (lazy-seq
-      (let [s1 (seq c1) s2 (seq c2)]
-        (cond
-         (and s1 s2)
-         (cons (first s1) (cons (first s2)
-                                (interleave-all (rest s1) (rest s2))))
-         s1 s1
-         s2 s2))))
+   (lazy-seq
+    (let [s1 (seq c1) s2 (seq c2)]
+      (cond
+       (and s1 s2)
+       (cons (first s1) (cons (first s2)
+                              (interleave-all (rest s1) (rest s2))))
+       s1 s1
+       s2 s2))))
 
   ([c1 c2 & colls]
    (lazy-seq
@@ -2748,7 +2749,7 @@
 (comment
   (qb 1e5
     (vec (interleave-all [:a :b :c :d] [:a :b :c :d :e]))
-        (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
+    (vinterleave-all [:a :b :c :d] [:a :b :c :d :e])))
 
 #?(:clj (defmacro new-object [] (if (:ns &env) `(cljs.core/js-obj) `(Object.))))
 (defn- p! [m] (if (transient? m) (persistent! m) m))
@@ -3072,8 +3073,8 @@
   {:deref [85.75  83.82  63.23], ; ~25% faster
    :new   [115.45 83.92  94.42], ; ~20% faster
    :swap  [144.15 110.94 99.53], ; ~30% faster
-   :cas   [102.42        67.85]} ; ~35% faster
-  )
+   :cas   [102.42        67.85]}) ; ~35% faster
+
 
 #?(:clj
    (let [cache_ (latom {})]
@@ -3205,7 +3206,7 @@
     "Returns true iff given `Swapped` argument."
     #?(:cljs {:tag 'boolean}
        :clj  {:inline (fn [x] `(instance? taoensso.encore.Swapped ~x))})
-                          [x]  (instance? taoensso.encore.Swapped  x))
+      [x]  (instance? taoensso.encore.Swapped  x))
 
   (comment (qb 1e6 (.-newv (swapped "new" "return"))))) ; 31.69
 
@@ -3965,7 +3966,7 @@
 
     (fn a-rate-limiter-once-per
       ([req-id] (throw (ex-info "[encore/rate-limiter] Basic rate limiters don't support request ids" {})))
-      ([      ]
+      ([]
        (let [t1 (now-udt*)]
          #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
             :cljs (if (> (- t1              @last_)  msecs) (do (vreset! last_ t1) nil) true)))))))
@@ -4249,8 +4250,8 @@
      (invoke [this]
        (when-let [p (p_)] @p) ; Block iff latched
        (let [t1 (now-udt)] (ts_ #(conj % t1)))
-       this ; Return to allow optional deref
-       )
+       this) ; Return to allow optional deref
+
 
      clojure.lang.IDeref
      (deref [_]
@@ -4270,8 +4271,8 @@
      IFn
      (-invoke [this]
        (let [t1 (now-udt)] (ts_ #(conj % t1)))
-       this ; Return to allow optional deref
-       )
+       this) ; Return to allow optional deref
+
 
      IDeref
      (-deref [_]
@@ -4743,7 +4744,7 @@
   {:tag #?(:clj 'String :cljs 'string)}
   ;; 128 bits of entropy with default length (36)
   ([max-len] (or (substr (uuid-str) :by-len 0 max-len) ""))
-  ([       ]
+  ([]
    #?(:clj (str (uuid))
       :cljs     (uuid))))
 
@@ -5039,8 +5040,8 @@
 (comment ; Common pattern (encore.stats, telemere.impl, tempel.keys, tufte.impl, carmine.*, etc.)
   (toString [x] (str-impl x "taoensso.Foo"))    ;  "taoensso.Foo@629c28a6"           - as       (str (delay))
   (toString [x] (str-impl x "taoensso.Foo") {}) ;  "taoensso.Foo[{...} 0x629c28a6]"  - based on (pr-str (atom {}))
-  (def-print-impl [x MyType] (str "#" x))       ; "#taoensso.Foo[{...} 0x629c28a6]"  - as       (pr-str (atom {}))
-  )
+  (def-print-impl [x MyType] (str "#" x)))       ; "#taoensso.Foo[{...} 0x629c28a6]"  - as       (pr-str (atom {}))
+
 
 ;;;; Thread locals
 
@@ -5224,8 +5225,8 @@
   ;; Bits of entropy
   (/ (Math/log (Math/pow 16 32)) (Math/log 2)) ;                uuid:  128
   (/ (Math/log (Math/pow 64 21)) (Math/log 2)) ;          nanoid(21):  126
-  (/ (Math/log (Math/pow 49 23)) (Math/log 2)) ; nanoid-readable(23): ~129
-  )
+  (/ (Math/log (Math/pow 49 23)) (Math/log 2))) ; nanoid-readable(23): ~129
+
 
 (let [chars
       (let [s "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"]
@@ -6445,8 +6446,8 @@
                        (threaded :daemon
                          (if-let [new-val (f1 nil)] ; Take as long as needed
                            (reset! cache_ [((promise) new-val) t1]) ; Update p and t
-                           (reset! cache_ [p                   t1]) ; Update only  t
-                           )
+                           (reset! cache_ [p                   t1])) ; Update only  t
+
                          (reset! cache-update-pending?_ false)))
                      (recur true)))
 
@@ -6670,8 +6671,8 @@
         :host     (.-host     loc) ; "example.org:80"
         :pathname (.-pathname loc) ; "/foo/bar"
         :search   (.-search   loc) ; "?q=baz"
-        :hash     (.-hash     loc) ; "#bang"
-        })))
+        :hash     (.-hash     loc)}))) ; "#bang"
+
 
 #?(:cljs
    (do
@@ -6950,8 +6951,8 @@
                      (if (:add (meta v2)) ; el <- vec
                        (into [v1] v2)
                        (do        v2))
-                     #_[v1 v2] v2))       ; el <- el
-                 ]
+                     #_[v1 v2] v2))]       ; el <- el
+
 
              (assoc m k2 v3))
            (assoc   m k2 v2)))
@@ -6974,7 +6975,7 @@
 
 (comment
   (ring-merge-headers {"BAR" "baz"} {:body "foo"})
-  (ring-merge-headers {"bar" "baz"} "foo"        )
+  (ring-merge-headers {"bar" "baz"} "foo")
   (ring-merge-headers {"bar" ^:add ["baz2"]} {:body "foo" :headers {"bar" "baz1"}}))
 
 #?(:clj
@@ -7000,8 +7001,8 @@
     #?(:clj  (-> (str s)
                (java.net.URLEncoder/encode (str (or encoding "UTF-8")))
                (str/replace "*" "%2A") ; Cautious, <https://stackoverflow.com/a/25149577/1982742>
-               (str/replace "+" "%20") ; Cautious, <https://stackoverflow.com/a/40292770/1982742>
-               )
+               (str/replace "+" "%20")) ; Cautious, <https://stackoverflow.com/a/40292770/1982742>
+
        :cljs (-> (str s)
                (js/encodeURIComponent s)
                (str/replace "*" "%2A")))))
@@ -7033,8 +7034,8 @@
   (format-query-string {})
   (format-query-string {:k1 "v1" :k2 "v2" :k3 nil :k4 "" :k5 ["v4a" "v4b" 7] :k6 []})
   (format-query-string {:a/b :c/d})
-  (format-query-string {:k nil}) ; Nb to allow removing pre-existing params, etc.
-  )
+  (format-query-string {:k nil})) ; Nb to allow removing pre-existing params, etc.
+
 
 (defn- assoc-conj [m k v]
   (assoc m k (if-let [cur (get m k)] (if (vector? cur) (conj cur v) [cur v]) v)))
@@ -7166,9 +7167,9 @@
             (defn ~unstub-sym* [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#))) ; For Clj+s case
             (defn ~unstub-sym  [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#)))
             (defn   ~stub-sym
-              ([                  ]       (@stubfn_#         ))
-              ([x#                ]       (@stubfn_# x#      ))
-              ([x# y#             ]       (@stubfn_# x# y#   ))
+              ([                  ]       (@stubfn_#))
+              ([x#                ]       (@stubfn_# x#))
+              ([x# y#             ]       (@stubfn_# x# y#))
               ([x# y# z#          ]       (@stubfn_# x# y# z#))
               ([x# y# z# ~'& more#] (apply @stubfn_# x# y# z# more#))))
 
@@ -7242,7 +7243,7 @@
                       (let [spec (if (ns? spec) (str spec) (as-qname spec))]
                         (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
                           [      fixed-strs       (conj re-patterns re-pattern)]
-                          [(conj fixed-strs spec)       re-patterns            ])))
+                          [(conj fixed-strs spec)       re-patterns])))
                     [#{} []]
                     spec)
 
@@ -7898,14 +7899,14 @@
        (defmacro ^:no-doc get-sys-bool*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([default spec env res] `(get-env {:as :bool :default ~default :spec ~spec :env ~env :res ~res}))
-         ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env          }))
-         ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec                    })))
+         ([default spec env    ] `(get-env {:as :bool :default ~default :spec ~spec :env ~env}))
+         ([default spec        ] `(get-env {:as :bool :default ~default :spec ~spec})))
 
        (defmacro ^:no-doc read-sys-val*
          {:deprecated "Encore v3.75.0 (2024-01-29)" :doc "Prefer `get-env`."}
          ([spec env res] `(get-env {:as :edn :spec ~spec :env ~env :res ~res}))
-         ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env          }))
-         ([spec        ] `(get-env {:as :edn :spec ~spec                    })))
+         ([spec env    ] `(get-env {:as :edn :spec ~spec :env ~env}))
+         ([spec        ] `(get-env {:as :edn :spec ~spec})))
 
        (defn ^:no-doc get-sys-val
          {:deprecated "Encore v3.66.0 (2023-08-23)" :doc "Prefer `get-env`."}

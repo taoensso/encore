@@ -17,3 +17,5 @@ pom.xml*
 .shadow-cljs/
 public/js/
 out/
+/.clj-kondo/
+/.lsp/
