@@ -2223,13 +2223,15 @@
 ;; js/global   - `global` object: global ns in Node.js, etc.?
 ;; goog/global - Closure's environment-agnostic global object
 
-#?(:cljs (def node-target? (= *target* "nodejs")))
-#?(:cljs (def ^:no-doc js-?window  (when (exists? js/window)  js/window)))  ; Present iff in browser
+#?(:cljs (def ^:no-doc         node-target? (= *target* "nodejs")))
+#?(:cljs (def ^:no-doc react-native-target? (= *target* "react-native")))
+#?(:cljs (def ^:no-doc js-?window  (when (and (not react-native-target?) (exists? js/window)) js/window)))  ; Present iff in browser
 #?(:cljs (def ^:no-doc js-?process (when (exists? js/process) js/process))) ; Present iff in Node.js
 #?(:cljs (def ^:no-doc js-?crypto
-           (or
-             (when (exists? js/crypto) js/crypto)
-             (when (exists? js/window) (gobj/get js/window "crypto")))))
+           (when-not react-native-target?
+             (or
+               (when (exists? js/crypto) js/crypto)
+               (when (exists? js/window) (gobj/get js/window "crypto"))))))
 
 ;;;; Misc
 
