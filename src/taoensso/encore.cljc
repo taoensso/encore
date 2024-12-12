@@ -836,7 +836,7 @@
       - `start` may be -ive (=> index from right of vector).
       - `end`   is desired vector length, or `:max`."
   {:added "Encore v3.126.0 (2024-10-23)"
-   :arglists '([v start-idx] [v start-idx end-idx] [v kind start end])}
+   :arglists '([v start-idx] [v start-idx end-idx] [v :by-len start end])}
   (subfn `subvec core-subvec))
 
 (def* substr
@@ -848,7 +848,7 @@
       - `start` may be -ive (=> index from right of string).
       - `end`   is desired string length, or `:max`."
   {:added "Encore v3.126.0 (2024-10-23)"
-   :arglists '([s start-idx] [s start-idx end-idx] [s kind start end])}
+   :arglists '([s start-idx] [s start-idx end-idx] [s :by-len start end])}
   (subfn `substr (fn [s n1 n2] (.substring #?(:clj ^String s :cljs s) n1 n2))))
 
 (comment
