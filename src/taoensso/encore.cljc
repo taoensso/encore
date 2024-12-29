@@ -4722,7 +4722,7 @@
   #?(:clj          (^java.util.UUID []  (java.util.UUID/randomUUID))
      :cljs
      ([]
-      (if-let [f (oget js-?crypto "randomUUID")]
+      (if-let [f (catching (oget js-?crypto "randomUUID"))]
         (.call f js-?crypto)
         (let [^string quad-hex
               (fn []
