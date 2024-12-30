@@ -4400,7 +4400,7 @@
 (defn sb-length
   "Returns given string builder's current length (character count)."
   {:added "Encore v3.107.0 (2024-05-05)"}
-  #?(:clj ^long [^StringBuilder sb] :cljs [sb])
+  #?(:clj ^long [^StringBuilder sb] :cljs [^goog.string.StringBuffer sb])
   #?(:clj  (.length    sb)
      :cljs (.getLength sb)))
 
