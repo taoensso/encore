@@ -2344,9 +2344,9 @@
 
 #?(:cljs
    (defn oget "Like `get` for JS objects."
-     ([  k          ] (gobj/get js-?window (name k)))
-     ([o k          ] (gobj/get o          (name k) nil))
-     ([o k not-found] (gobj/get o          (name k) not-found))))
+     ([  k          ] (when-let [o js-?window] (gobj/get o (name k))))
+     ([o k          ] (when      o             (gobj/get o (name k) nil)))
+     ([o k not-found] (if        o             (gobj/get o (name k) not-found) not-found))))
 
 #?(:cljs
    (let [sentinel (js-obj)]
@@ -2355,13 +2355,15 @@
        ([  ks          ] (oget-in js-?window ks nil))
        ([o ks          ] (oget-in o          ks nil))
        ([o ks not-found]
-        (loop [o o, ks (seq ks)]
-          (if ks
-            (let [o (gobj/get o (name (first ks)) sentinel)]
-              (if (identical? o sentinel)
-                not-found
-                (recur o (next ks))))
-            o))))))
+        (if o
+          (loop [o o, ks (seq ks)]
+            (if ks
+              (let [o (gobj/get o (name (first ks)) sentinel)]
+                (if (identical? o sentinel)
+                  not-found
+                  (recur o (next ks))))
+              o))
+          not-found)))))
 
 (defn get1
   "Like `get` but returns val for first key that exists in map.
