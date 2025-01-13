@@ -122,19 +122,19 @@
 
 (def encore-version [3 133 0])
 
-(comment "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
-  (set! *unchecked-math* :warn-on-boxed)
-  (set! *unchecked-math* false))
-
-#?(:clj
-   (do ; Bootstrap Truss aliases
-     (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args))
-     (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args))))
-
 (comment
   (remove-ns 'taoensso.encore)
   (:api (interns-overview))
-  (test/run-tests))
+  (test/run-tests)
+
+  "∴ ∵ ℕ ℤ ℝ ∞ ≠ ∈ ∉ ⇒⇔ → × ⊃⊂ ⊇⊆ ≡ ¬ ∀ ∃ ∝"
+  (set! *unchecked-math* :warn-on-boxed)
+  (set! *unchecked-math* false))
+
+;;;;
+
+#?(:clj (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args)))
+#?(:clj (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args)))
 
 #?(:clj
    (defn ^:no-doc have-resource? "Private, don't use."
@@ -151,11 +151,7 @@
 
 (comment (have-class? "org.slf4j.Logger"))
 
-(defn ^:no-doc list-form?
-  "Private, don't use.
-  Returns true if given a list or Cons (=> possible call form)."
-  {:added "Encore v3.105.0 (2024-04-29)"}
-  [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
+(declare println)
 
 ;;;; Core macros
 
@@ -291,6 +287,12 @@
   (if-some  [a :a b (= a :b)] [a b] "else")
   (when-let [a :a b nil] "true")
   (when-let [:let [a :a b :b] c (str a b)] c))
+
+(defn ^:no-doc list-form?
+  "Private, don't use.
+  Returns true if given a list or Cons (=> possible call form)."
+  {:added "Encore v3.105.0 (2024-04-29)"}
+  [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
 #?(:clj
    (defmacro -cond [throw? & clauses]
