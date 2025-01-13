@@ -1208,6 +1208,7 @@
 
 ;;;; Vars, etc.
 
+#?(:clj (defn- require-sym-ns [sym] (when-let [ns (namespace sym)] (require (symbol ns)) true)))
 #?(:clj
    (let [qualified-sym
          (fn [macro-env sym]
@@ -1229,9 +1230,8 @@
             (qualified-sym macro-env sym)
             (or
               (qualified-sym macro-env sym)
-              (when-let [ns (namespace sym)]
-                (when (catching (do (require (symbol ns)) true))
-                  (qualified-sym macro-env sym))))))))))
+              (when (catching (require-sym-ns sym))
+                (qualified-sym macro-env sym)))))))))
 
 (comment (resolve-sym nil 'string?))
 
@@ -5708,10 +5708,7 @@
              {:spec  opts-or-spec}))]
 
      (defn ^:no-doc get-env*
-       "Private, don't use.
-       Function version of `get-env`:
-         - Doesn't embed, or eval symbols.
-         - Supports runtime args."
+       "Private, don't use. Runtime fn version of `get-env`."
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
         '([{:keys [as default return]
@@ -5787,17 +5784,11 @@
 
                       (if-not (and (symbol? x) (get opts :eval-sym? (= platform :clj)))
                         [source x]
-                        (do
-                          (when (get opts :require-sym-ns? true)
-                            ;; Allow `get-env` in ns1 (e.g. library) to eval lone sym
-                            ;; from unrequired ns2 (e.g. user ns).
-                            ;;
-                            ;; Kept for back-compatibility (Timbre, etc.), but better
-                            ;; to avoid this pattern since Cljs can't support it.
-                            (when-let [clj-ns (namespace x)]
-                              (catching (require (symbol clj-ns)))))
-
-                          [source (eval x)]))))
+                        (if-let [sym (resolve-sym nil x true)]
+                          [source (eval sym)] ; Eval sym at runtime
+                          (throw
+                            (ex-info (str "[encore/get-env] Failed to resolve symbol: " x)
+                              {:edn edn, :source source, :platform platform}))))))
 
                   (throw
                     (ex-info "[encore/get-env] Unexpected `:as` option"
@@ -5820,63 +5811,42 @@
                      :expected #{:value :map :explain}}))))))))
 
      (defmacro get-env
-       "Flexible cross-platform util to return an environmental config value.
+       "Flexible cross-platform environmental value util.
 
-       Given an id (const keyword/string) or vector of desc-priority alternative
-       ids, parse and return the first of the following that exists:
-         - JVM         property value   for id
-         - Environment variable value   for id
-         - Classpath   resource content for id
+       Given a compile-time id (keyword/string) or vector of desc-priority
+       ids, parse and return the first of the following that exists, or nil:
+         1. JVM         property value   for id
+         2. Environment variable value   for id
+         3. Classpath   resource content for id
 
-       Ids may include optional segment in `<>` tag (e.g. `<.edn>`).
-       Ids may include `<.?platform.?>` tag for auto replacement:
-         `<.platform>` => \".clj\" / \".cljs\"
-         `<platform->` => \"clj-\" / \"cljs-\", etc.
+       Ids may include optional platform tag for auto replacement, e.g.:
+         `<.platform>` -> \".clj\", \".cljs\", or nil
 
-       Search order: desc by combined [alt-index platform(y/n) optional(y/n)].
-
-       So (get-env {:as :edn} [:my-app/alt1<.platform><.edn> :my-app/alt2])
-       will parse and return the first of the following that exists:
-
-         1. Alt1 +platform +optional (optional .edn suffix)
-           1a. `my-app.alt1.clj.edn` JVM         property value
-           1b. `MY_APP_ALT1_CLJ_EDN` environment variable value
-           1c. `my-app.alt1.clj.edn` classpath   resource content
-
-         2. Alt1 +platform -optional (optional .edn suffix)
-           2a. `my-app.alt1.clj`     JVM         property value
-           2b. `MY_APP_ALT1_CLJ`     environment variable value
-           2c. `my-app.alt1.clj`     classpath   resource content
-
-         3. Alt1 -platform +optional (optional .edn suffix)
-           3a. `my-app.alt1.edn`     JVM         property value
-           3b. `MY_APP_ALT1_EDN`     environment variable value
-           3c. `my-app.alt1.edn`     classpath   resource content
-
-         4. Alt1 -platform -optional (optional .edn suffix)
-           4a. `my-app.alt1`         JVM         property value
-           4b. `MY_APP_ALT1`         environment variable value
-           4c. `my-app.alt1`         classpath   resource content
-
-         5. Alt2
-           5a. `my-app.alt2`         JVM         property value
-           5b. `MY_APP_ALT2`         environment variable value
-           5c. `my-app.alt2`         classpath   resource content
+       Clj/s: if resulting value is a single symbol, it will be evaluated.
+       Cljs:     resulting value will be embedded in code during macro expansion!
 
        Options:
-         `:as`      - Parse found value as given type ∈ #{:str :bool :edn} (default `:str`).
+         `:as`      - Parse encountered value as given type ∈ #{:str :bool :edn}  (default `:str`).
          `:default` - Fallback to return unparsed if no value found during search (default `nil`).
          `:return`  - Return type ∈ #{:value :map :explain} (default `:value`).
+                      Use `:explain` to verify/debug, handy for tests/REPL!
 
-       For Cljs: resulting config value must be something that can be safely
-                 embedded in code during macro expansion!
+       Example:
+         (get-env {:as :edn} [:my-app/id1<.platform> :my-app/id2]) will parse
+         and return the first of the following that exists, or nil:
 
-       Advanced: if resulting config value is a single top-level symbol, it will
-                 be evaluated during macro expansion.
+           id1 with platform:
+             `my-app.id1.clj` JVM         property value
+             `MY_APP_id1_CLJ` environment variable value
+             `my-app.id1.clj` classpath   resource content
 
-       TIP!: Use the {:return :explain} option in tests or at the REPL to
-             verify/inspect resulting config value, config source, and specific
-             search order of prop/env/res ids."
+           id1 without platform:
+             `my-app.id1`     JVM         property value
+             `MY_APP_id1`     environment variable value
+             `my-app.id1`     classpath   resource content
+
+           id2 with    platform: ...
+           id2 without platform: ..."
 
        {:added "Encore v3.75.0 (2024-01-29)"
         :arglists
@@ -5884,21 +5854,18 @@
             :or   {as     :str
                    return :value}} spec])}
 
-       ([            ] `(get-locals)) ; Back compatibility
+       ([            ] `(get-locals)) ; Back compatibility for unrelated util with same name
        ([opts    spec] (have? const-form? opts    spec) `(get-env ~(assoc opts :spec spec)))
        ([opts-or-spec] (have? const-form? opts-or-spec)
         (let [opts (parse-opts opts-or-spec)]
           (if (:ns &env)
-             (get-env*  (assoc opts :platform* :cljs)) ; Embed
+             (get-env*  (assoc opts :platform* :cljs)) ; Embed compile-time value
             `(get-env* ~(assoc opts :platform* :clj))))))))
 
 (comment
-  (def myvar "myvar")
-  (do           (get-env {:as :edn, :return :explain} [:a.b/c<.platform><.edn>]))
-  (macroexpand '(get-env {:as :edn, :return :explain, :default "my-default"}                                     ::nx))
-  (macroexpand '(get-env {:as :edn, :return :explain, :debug/match [:debug/source "{:x taoensso.encore/myvar}"]} ::nx))
-  (macroexpand '(get-env {:as :edn, :return :explain, :debug/match [:debug/source "{:x taoensso.encore/nx}"]}    ::nx))
-  (defn foo [x] (get-env {:spec [:const x]})))
+  (defn f1 [x] (* x x))
+  (do           ((get-env {:as :edn, :debug/match [:debug/source "f1"]}) 5))
+  (macroexpand '((get-env {:as :edn, :debug/match [:debug/source "f1"]}) 5)))
 
 ;;;; Async
 
