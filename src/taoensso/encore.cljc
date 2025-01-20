@@ -2277,10 +2277,15 @@
            [^long xm ^long ym ^long zm] (mapv #(or % 0) [xm ym zm])]
 
        (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
-         (throw
-           (ex-info "Insufficient `com.taoensso/encore` version, you may have a dependency conflict: see `https://www.taoensso.com/dependency-conflicts` for solutions."
-             {:min-version  (str/join "." [xm ym zm])
-              :your-version (str/join "." [xc yc zc])}))))))
+         (let [min-version  (str/join "." [xm ym zm])
+               your-version (str/join "." [xc yc zc])]
+           (throw
+             (ex-info
+               (str
+                 "Insufficient `com.taoensso/encore` version (v" your-version " < v" min-version "), "
+                 "you may have a dependency conflict. Please see `https://www.taoensso.com/dependency-conflicts` for solutions!")
+               {:min-version  min-version
+                :your-version your-version})))))))
 
 (comment (assert-min-encore-version [3 10]))
 
