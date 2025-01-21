@@ -120,7 +120,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version [3 133 0])
+(def encore-version [3 134 0])
 
 (comment
   (remove-ns 'taoensso.encore)
