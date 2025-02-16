@@ -62,9 +62,9 @@
     :dependencies
     [[org.clojure/test.check "1.1.1"]
      [org.clojure/core.async "1.7.701"]
-     [thheller/shadow-cljs   "2.28.20"]
-     [nrepl                  "1.3.0"]
-     [cider/cider-nrepl      "0.50.3"]
+     [thheller/shadow-cljs   "2.28.21"]
+     [nrepl                  "1.3.1"]
+     [cider/cider-nrepl      "0.52.1"]
      [com.google.javascript/closure-compiler-unshaded "v20240317"]]
 
     :plugins
