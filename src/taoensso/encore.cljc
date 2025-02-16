@@ -295,49 +295,52 @@
   [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
 #?(:clj
-   (defmacro -cond [throw? & clauses]
-     (if-let [[test expr & more]  (seq clauses)]
+   (defmacro ^:no-doc -cond [throw? & clauses]
+     (if-let [[c1 c2 & more] (seq clauses)]
        (if-not (next clauses)
-         test ; Implicit else
-         (case test
-           (true :else :default :always) expr                           ; Faster than (if <truthy> ...)
-           (false nil)                         `(-cond ~throw? ~@more)  ; Faster than (if <falsey> ...)
-           :do          `(do          ~expr     (-cond ~throw? ~@more))
-           :let         `(let         ~expr     (-cond ~throw? ~@more))
-           :binding     `(binding     ~expr     (-cond ~throw? ~@more))
+         c1 ; Implicit else
+         (case c1
+           (true :else :default :always :then) c2                          ; Avoid unnecessary (if <truthy> ...)
+           (false nil)                            `(-cond ~throw? ~@more)  ; Avoid unnecessary (if <falsey> ...)
+           :do               `(do          ~c2     (-cond ~throw? ~@more))
+           :let              `(let         ~c2     (-cond ~throw? ~@more))
 
-           :with-redefs `(with-redefs ~expr     (-cond ~throw? ~@more)) ; Undocumented
-           :return-when `(if-let  [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
-           :return-some `(if-some [x# ~expr] x# (-cond ~throw? ~@more)) ; ''
-           :when        `(when        ~expr     (-cond ~throw? ~@more)) ; ''
-           :when-not    `(when-not    ~expr     (-cond ~throw? ~@more)) ; ''
-           :when-some   `(when-some   ~expr     (-cond ~throw? ~@more)) ; ''
+           :binding          `(binding     ~c2     (-cond ~throw? ~@more))
+           :with-redefs      `(with-redefs ~c2     (-cond ~throw? ~@more))  ; Undocumented
+           :wrap              (concat       c2   [`(-cond ~throw? ~@more)]) ; '', arb wrap like (binding [] ...), etc.
+
+           :return-when      `(if-let  [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
+           :return-some      `(if-some [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
+           (:when :when-let) `(when        ~c2     (-cond ~throw? ~@more))  ; ''
+           :when-not         `(when-not    ~c2     (-cond ~throw? ~@more))  ; ''
+           :when-some        `(when-some   ~c2     (-cond ~throw? ~@more))  ; ''
 
            ;;; 3-clause cases
            (:if-let :if-some :if-not)
            (if (empty? more) ; Missing 3rd clause
              (throw
-               (ex-info (str "[encore/cond] Missing `then` clause for special test keyword: " test)
-                 {:test-form test :expr-form expr}))
+               (ex-info (str "[encore/cond] Missing 3rd clause after special keyword: " c1)
+                 {:form `(cond ~c1 ~c2 '<missing>)}))
 
-             (case test
-               :if-let  `(if-let  ~expr ~(first more) (-cond ~throw? ~@(next more)))
-               :if-some `(if-some ~expr ~(first more) (-cond ~throw? ~@(next more)))
-               :if-not  `(if-not  ~expr ~(first more) (-cond ~throw? ~@(next more))) ; Undocumented
-               ))
+             (let [[c3 & more] more]
+               (case c1
+                 :if-let  `(if-let  ~c2 ~c3 (-cond ~throw? ~@more))
+                 :if-some `(if-some ~c2 ~c3 (-cond ~throw? ~@more))
+                 :if-not  `(if-not  ~c2 ~c3 (-cond ~throw? ~@more)) ; Undocumented
+                 )))
 
-           (if (keyword? test)
+           (if (keyword? c1)
              (throw ; Undocumented, but throws at compile-time so easy to catch
-               (ex-info (str "[encore/cond] Unrecognized special test keyword: " test)
-                 {:test-form test :expr-form expr}))
+               (ex-info (str "[encore/cond] Unrecognized special keyword: " c1)
+                 {:form `(cond ~c1 ~c2)}))
 
-             (if (vector? test) ; Undocumented
-               `(if-let ~test ~expr (-cond ~throw? ~@more))
+             (if (vector? c1) ; Undocumented, deprecated
+               `(if-let ~c1 ~c2 (-cond ~throw? ~@more))
 
                ;; Experimental, assumes `not` = `core/not`:
-               (if (and (list-form? test) (= (first test) 'not))
-                 `(if ~(second test) (-cond ~throw? ~@more) ~expr)
-                 `(if ~test ~expr    (-cond ~throw? ~@more)))))))
+               (if (and (list-form? c1) (= (first c1) 'not))
+                 `(if ~(second c1)     (-cond ~throw? ~@more) ~c2)
+                 `(if          ~c1 ~c2 (-cond ~throw? ~@more)))))))
 
        (when throw?
          `(throw
@@ -352,19 +355,12 @@
        :let     [x   \"x\"] ; Establish let     binding/s for remaining forms
        :binding [*x* \"x\"] ; Establish dynamic binding/s for remaining forms
        :do      (println (str \"x value: \" x)) ; Eval expr for side-effects
-
-       :if-let [y \"y\"
-                z nil]
-       \"y and z were both truthy\"
-
-       :if-some [y \"y\"
-                 z nil]
-       \"y and z were both non-nil\")
+       :if-let  [y \"y\", z nil] \"y and z were both truthy\"
+       :if-some [y \"y\", z nil] \"y and z were both non-nil\"
+       :else    \"fallback value\")
 
      `:let` support inspired by <https://github.com/Engelberg/better-cond>.
      Simple, flexible way to eliminate deeply-nested control flow code."
-
-     ;; Also avoids unnecessary `(if :else ...)`, etc.
      [& clauses] `(-cond false ~@clauses)))
 
 #?(:clj

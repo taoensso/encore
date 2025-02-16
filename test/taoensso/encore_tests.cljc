@@ -87,6 +87,52 @@
   [(is (true?  (enc/satisfies? IMyProtocol (MyType.))))
    (is (false? (enc/satisfies? IMyProtocol "String")))])
 
+;;;; Cond
+
+(def ^:dynamic *dynamic-var* nil)
+
+(deftest _cond
+  [(is (= nil       (enc/cond)))
+   (is (= "default" (enc/cond         "default")))
+   (is (= "default" (enc/cond :always "default")))
+   (is (= nil       (enc/cond false "false")))
+   (is (= "default" (enc/cond :let    [a "a"] "default")))
+   (is (= "a"       (enc/cond :let    [a "a"] a)))
+   (is (= "a"       (enc/cond :if-let [a "a"] a "default")))
+   (is (= "default" (enc/cond :when true, :when      [a "a"],   "default")))
+   (is (= nil       (enc/cond :when true, :when      [a nil],   "default")))
+   (is (= "default" (enc/cond :when true, :when-not  [a false], "default")))
+   (is (= "default" (enc/cond :when true, :when-some [a false], "default")))
+
+   (is (= "truthy"  (enc/cond :return-when "truthy", "default")))
+   (is (= false     (enc/cond :return-some false,    "default")))
+   (is (= "default" (enc/cond :return-some nil,      "default")))
+
+   (is (= "b"       (enc/cond false "a", (not false) "b", "default")))
+
+   (is (= "dv2"     (enc/cond :binding       [*dynamic-var* "dv1"],  :binding       [*dynamic-var* "dv2"],  :else *dynamic-var*)))
+   (is (= "dv2"     (enc/cond :wrap (binding [*dynamic-var* "dv1"]), :wrap (binding [*dynamic-var* "dv2"]), :else *dynamic-var*)))
+
+   (is (=
+         {:r "r3", :a "a1", :b "b2", :dv "dv2"}
+         (let [r_ (atom nil)]
+           (enc/cond
+             :let         [a "a1", b "b1"]
+             :do          (reset! r_ "r1")
+             :when        @r_
+             :binding     [*dynamic-var* "dv1"]
+             :when-let    [c *dynamic-var*]
+             :wrap        (binding [*dynamic-var* "dv2"] (reset! r_ "r2"))
+             :wrap        (do  (reset! r_ "r3"))
+             :wrap        (let [b "b2"])
+             :let         [c {:r @r_, :a a, :b b, :dv *dynamic-var*}]
+             :do          (reset! r_ nil)
+             :return-some @r_
+             (not true)   "branch 1"
+             :if-let      [d "d1", e false] "branch 2"
+             :if-not      [d "d1", e false] c
+             "default"))))])
+
 ;;;; Submap/s
 
 (deftest _submap?
@@ -968,8 +1014,6 @@
   (enc/get-env {} nil)
   (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
   (enc/get-env {:as :edn :return :explain} [:p1]))
-
-(def ^:dynamic *dynamic-var* nil)
 
 (deftest _binding
   (is (= :foo (enc/binding [*dynamic-var* :foo] *dynamic-var*))))
