@@ -211,8 +211,8 @@
   #?(:clj clojure.lang.IDeref :cljs IDeref)
   (#?(:clj deref :cljs -deref) [_]
     (enc/assoc-some nil
-      :kind-filter kind-filter :ns-filter ns-filter
-      :id-filter     id-filter :min-level min-level))
+      {:kind-filter kind-filter :ns-filter ns-filter
+       :id-filter     id-filter :min-level min-level}))
 
   #?(:clj clojure.lang.IFn :cljs IFn)
   (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns id level))
@@ -348,8 +348,8 @@
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
      (enc/unexpected-arg! sf-arity
-       {:context  context
-        :param    'sf-arity
+       {:param           'sf-arity
+        :context  context
         :expected #{2 3 4}})))
 
 #?(:clj
@@ -395,10 +395,10 @@
                  location-sym  (when (symbol? location-form) location-form)]
 
              (enc/assoc-some nil
-               :ns     (get opts :ns     (get location-map :ns     (when location-sym `(get ~location-sym :ns))))      ;   Documented override
-               :line   (get opts :line   (get location-map :line   (when location-sym `(get ~location-sym :line))))    ; Undocumented override
-               :column (get opts :column (get location-map :column (when location-sym `(get ~location-sym :column))))  ; ''
-               :file   (get opts :file   (get location-map :file   (when location-sym `(get ~location-sym :file))))))  ; ''
+               {:ns     (get opts :ns     (get location-map :ns     (when location-sym `(get ~location-sym :ns))))      ;   Documented override
+                :line   (get opts :line   (get location-map :line   (when location-sym `(get ~location-sym :line))))    ; Undocumented override
+                :column (get opts :column (get location-map :column (when location-sym `(get ~location-sym :column))))  ; ''
+                :file   (get opts :file   (get location-map :file   (when location-sym `(get ~location-sym :file))))})) ; ''
 
            kind-form*  (get opts     :kind)
            ns-form*    (get location :ns)
@@ -1034,8 +1034,8 @@
         "Returns current ?{:keys [compile-time runtime]} filter config."
         []
         (enc/assoc-some nil
-          :compile-time (enc/force-ref  ~ct-sig-filter)
-          :runtime      (enc/force-ref ~*rt-sig-filter*)))))
+          {:compile-time (enc/force-ref  ~ct-sig-filter)
+           :runtime      (enc/force-ref ~*rt-sig-filter*)}))))
 
 (comment (api:get-filters `my-ct-sig-filter `*my-rt-sig-filter*))
 
@@ -1049,8 +1049,8 @@
           (~'[kind   ] (~'get-min-levels ~'kind (str *ns*)))
           (~'[kind ns]
            (enc/assoc-some nil
-             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
-             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns))))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns)})))
 
        (2 3)
        `(defn ~'get-min-levels
@@ -1058,8 +1058,8 @@
           (~'[  ] (~'get-min-levels nil (str *ns*)))
           (~'[ns]
            (enc/assoc-some nil
-             :runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
-             :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)))))))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)}))))))
 
 (comment (api:get-min-levels 4 `*my-rt-sig-filter* `my-ct-sig-filter))
 
@@ -1526,8 +1526,8 @@
     (ifn? update-map-or-fn) (update-map-or-fn old-ctx)
     :else
     (enc/unexpected-arg! update-map-or-fn
-      {:context  `update-ctx
-       :param    'update-map-or-fn
+      {:param           'update-map-or-fn
+       :context  `update-ctx
        :expected '#{nil map fn}})))
 
 #?(:clj
