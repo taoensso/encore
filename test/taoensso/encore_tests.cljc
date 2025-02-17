@@ -146,10 +146,10 @@
    (is (not (enc/submap? {:a {:b :B1}}        {:a {:c :submap/ex}})))
    (is      (enc/submap? {:a {:b :B1}}        {:a {:b :submap/some}}))
    (is (not (enc/submap? {:a {:b nil}}        {:a {:b :submap/some}})))
-   (is      (enc/submap? {:a 1 :b 2}          {:a (enc/pred odd?)
-                                               :b (enc/pred even?)}))
-   (is (not (enc/submap? {:a 1 :b 2}          {:a (enc/pred neg?)
-                                               :b (enc/pred even?)})))])
+   (is      (enc/submap? {:a 1 :b 2}          {:a odd?
+                                               :b even?}))
+   (is (not (enc/submap? {:a 1 :b 2}          {:a neg?
+                                               :b even?})))])
 
 (deftest _submaps?
   [(is      (enc/submaps? nil  nil))
@@ -183,7 +183,8 @@
      (is (enc/submap? (enc/ex-map ex2)
            (assoc ex1-map
              :chain [ex2-map ex1-map]
-             :trace (enc/pred #?(:clj #(vector? (force %)) :cljs string?)))))]))
+             :trace #?(:clj #(vector? (force %))
+                       :cljs string?))))]))
 
 (deftest _try*
   [(is (= (enc/try*        ) nil) "No body or catch")
@@ -1882,21 +1883,21 @@
          (is (nil? (cnt :set 0)))
 
          (is (=           (rns/get-handlers) nil))
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+         (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
 
          (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
          (is (= @cnt 0))
 
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
-         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
+         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
 
          (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
          (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
          (is (= @cnt 2))
 
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn (enc/pred fn?)}}))
+         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn fn?}}))
          (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
          (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
          (is (= @cnt 3))
@@ -2001,7 +2002,7 @@
           (clear-handlers!)
           (rns/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
           (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))
-          (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error (enc/pred enc/error?)}))))
+          (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error enc/error?}))))
 
       #?(:clj
          (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
@@ -2074,14 +2075,14 @@
 
    (testing "Filterable expansion"
      [(is (enc/submap? (rns/sig-exp {:level :info})
-            {:expansion-id (enc/pred nat-int?)
-             :allow?       (enc/pred enc/list-form?) ; (*rt-sig-filter* nil nil nil :info), etc.
+            {:expansion-id nat-int?
+             :allow?       enc/list-form? ; (*rt-sig-filter* nil nil nil :info), etc.
              :elide?       :submap/nx
              :location
-             {:ns     (enc/pred string?)
-              :line   (enc/pred nat-int?)
-              :column (enc/pred nat-int?)
-              :file   (enc/pred string?)}}) "Basic expansion")
+             {:ns     string?
+              :line   nat-int?
+              :column nat-int?
+              :file   string?}}) "Basic expansion")
 
       (is (enc/submap? (rns/sig-exp {:level :info, :ns "my-ns"}) {:location {:ns "my-ns"}}) "opts/ns can override location/ns")
 

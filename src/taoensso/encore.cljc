@@ -293,7 +293,7 @@
 (defn ^:no-doc list-form?
   "Private, don't use.
   Returns true if given a list or Cons (=> possible call form)."
-  {:added "Encore v3.105.0 (2024-04-29)"}
+  #?(:cljs {:tag 'boolean})
   [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
 #?(:clj
@@ -553,17 +553,16 @@
         :read  (do <...>)
         :write (do <...>)
         (unexpected-arg! mode
-          {:context  `my-function
-           :param    'mode
+          {:param       'mode
+           :context  `my-function
            :expected #{:read :write}}))) =>
 
     Unexpected argument: :unexpected
-    {:arg {:value :unexpected, :type clojure.lang.Keyword},
-     :context 'taoensso.encore/my-function
-     :param 'mode
-     :expected #{:read :write}}
+    {:param 'mode,
+     :arg {:value :unexpected, :type clojure.lang.Keyword},
+     :context 'taoensso.encore/my-function,
+     :expected #{:read :write}}"
 
-  See also `bad-arg!`."
   {:added "Encore v3.51.0 (2023-03-13)"
    :arglists
    '([arg]
@@ -970,12 +969,12 @@
           root-map (peek maps)]
 
       (assoc-some root-map
-        :chain maps
-        :trace
-        #?(:cljs (as-?nempty-str (.-stack root))
-           :clj
-           (when-let [st (not-empty (.getStackTrace ^Throwable root))] ; Don't delay
-             (delay (mapv st-element->map st))))))))
+        {:chain maps
+         :trace
+         #?(:cljs (as-?nempty-str (.-stack root))
+            :clj
+            (when-let [st (not-empty (.getStackTrace ^Throwable root))] ; Don't delay
+              (delay (mapv st-element->map st))))}))))
 
 (comment
   (ex-map  (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"})))
@@ -999,10 +998,11 @@
 #?(:clj
    (defmacro try*
      "Like `try`, but `catch` clause class may be:
-       `:ex-info`          - Catches only `ExceptionInfo`
-       `:common`           - Catches `js/Error` (Cljs), `Exception` (Clj)
-       `:all`              - Catches `:default` (Cljs), `Throwable` (Clj)
-       `:all-but-critical` - Catches `:default` (Cljs), `Exception` and `AssertionError` (Clj)
+       `:ex-info` -- Catches only `ExceptionInfo`
+       `:common` --- Catches `js/Error` (Cljs), `Exception` (Clj)
+       `:all` ------ Catches `:default` (Cljs), `Throwable` (Clj)
+       `:default` -- Catches `:default` (Cljs), `Exception`, and `AssertionError` (Clj)
+                     but NOT other (usually critical) `Error`s
 
      Addresses CLJ-1293 and the fact that `AssertionError`s are typically NON-critical
      (so desirable to catch, in contrast to other `Error` classes)."
@@ -1024,10 +1024,9 @@
                  :else
                  (let [[rethrow-critical? s2]
                        (case s2
-                         ;; Note unfortunate naming of `:default` in Cljs to refer to any error type
-                         (:common  :default) (if cljs? [false 'js/Error] [false `Exception])
-                         (:all     :any    ) (if cljs? [false  :default] [false `Throwable])
-                         (:all-but-critical) (if cljs? [false  :default] [true  `Throwable])
+                         (:all     :any)              (if cljs? [false  :default] [false `Throwable])
+                         (:default :all-but-critical) (if cljs? [false  :default] [true  `Throwable])
+                         (:common)                    (if cljs? [false 'js/Error] [false `Exception])
                          (:ex-info)
                          (if cljs?
                            [false    'cljs.core.ExceptionInfo]
@@ -1036,7 +1035,7 @@
                          (throw
                            (ex-info "[encore/try*] Unexpected catch clause keyword"
                              {:given    (typed-val s2)
-                              :expected '#{:common :all :all-but-critical :ex-info}})))]
+                              :expected '#{:ex-info :common :all :default}})))]
 
                    (if rethrow-critical?
                      `(catch ~s2 ~s3 (throw-critical ~s3) ~@more)
@@ -1046,16 +1045,16 @@
        `(try ~@forms))))
 
 (comment
-  (macroexpand '(try*         (catch :all              t t 1 2 3) (finally 1 2 3)))
-  (macroexpand '(try* (/ 1 0) (catch :all              t t 1 2 3) (finally 1 2 3)))
-  (macroexpand '(try* (/ 1 0) (catch :all-but-critical t t 1 2 3) (finally 1 2 3))))
+  (macroexpand '(try*         (catch :all     t t 1 2 3) (finally 1 2 3)))
+  (macroexpand '(try* (/ 1 0) (catch :all     t t 1 2 3) (finally 1 2 3)))
+  (macroexpand '(try* (/ 1 0) (catch :default t t 1 2 3) (finally 1 2 3))))
 
 #?(:clj
    (defmacro catching
-     "Terse, cross-platform (try* expr (catch :all _)).
-     See also `try*` for more flexibility."
-     ([           expr] `(try* ~expr (catch :all        ~'_)))
-     ([error-type expr] `(try* ~expr (catch ~error-type ~'_)))))
+     "Terse cross-platform util to swallow exceptions in `expr`.
+     Like (try* expr (catch :default _ nil)). See also `try*`."
+     ([            expr] `(try* ~expr (catch :default     ~'_)))
+     ([catch-class expr] `(try* ~expr (catch ~catch-class ~'_)))))
 
 (comment (catching (zero? "9")))
 
@@ -1066,12 +1065,10 @@
   all criteria. Otherwise returns nil.
 
   `kind` may be:
+    - A class (`ArithmeticException`, `AssertionError`, etc.)
+    - A special keyword as given to `try*` (`:default`, `:common`, `:ex-info`, `:all`)
+    - A set of `kind`s  as above, at least one of which must match
     - A predicate function, (fn match? [x]) -> bool
-    - A class (e.g. `ArithmeticException`, `AssertionError`, etc.)
-    - `:all`     => any    platform error (Throwable or js/Error, etc.)
-    - `:common`  => common platform error (Exception or js/Error)
-    - `:ex-info` => an `IExceptionInfo` as created by `ex-info`
-    - A set of `kind`s as above, at least one of which must match
 
   `pattern` may be:
     - A string or Regex against which `ex-message` must match
@@ -1083,39 +1080,46 @@
 
   Low-level util, see also `throws`, `throws?`."
   {:added "Encore v3.70.0 (2023-10-17)"}
-  ([     err] err)
-  ([kind err]
+  ([     error] error)
+  ([kind error]
    (when-let [match?
               (cond
-                (error? kind) (= kind err) ; Exact match
-                (fn?    kind)   (kind err)                         ; pred kind
-                (set?   kind) (rsome #(matching-error % err) kind) ; set  kind
-                :else
-                (case kind
-                  (:common :default)  #?(:clj (instance? Exception                   err) :cljs (instance? js/Error      err))
-                  (:all    :any)      #?(:clj (instance? Throwable                   err) :cljs (some?                   err))
-                  (:all-but-critical) #?(:clj (non-critical-throwable?               err) :cljs (some?                   err))
-                  :ex-info            #?(:clj (instance? clojure.lang.IExceptionInfo err) :cljs (instance? ExceptionInfo err))
-                  (do                         (instance? kind                        err))))]
-     err))
+                (keyword? kind)
+                (case     kind
+                  (:default :all-but-critical) #?(:clj (non-critical-throwable?               error) :cljs (some?                   error))
+                  (:common)                    #?(:clj (instance? Exception                   error) :cljs (instance? js/Error      error))
+                  (:ex-info)                   #?(:clj (instance? clojure.lang.IExceptionInfo error) :cljs (instance? ExceptionInfo error))
+                  (:all :any)                  #?(:clj (instance? Throwable                   error) :cljs (some?                   error))
+                  (throw
+                    (ex-info "[encore/matching-error] Unexpected `kind` keyword"
+                      {:given    (typed-val kind)
+                       :expected '#{:default :common :ex-info :all}})))
 
-  ([kind pattern err]
+                (error? kind) (= kind error) ; Exact match
+                (fn?    kind) (kind error)   ; Pred
+                (set?   kind) (rsome #(matching-error % error) kind)
+                :else (instance? kind error))]
+     error))
+
+  ([kind pattern error]
    (if-let [match?
             (and
-              (matching-error kind err)
+              (matching-error kind error)
               (cond
                 (nil?        pattern) true
-                (set?        pattern) (rsome #(matching-error kind % err) pattern)
-                (string?     pattern) (str-contains?   (ex-message   err) pattern)
-                (re-pattern? pattern) (re-find pattern (ex-message   err))
-                (map?        pattern) (when-let [data (ex-data err)] (submap? data pattern))
+                (set?        pattern) (rsome #(matching-error kind % error) pattern)
+                (string?     pattern) (str-contains?   (ex-message   error) pattern)
+                (re-pattern? pattern) (re-find pattern (ex-message   error))
+                (map?        pattern) (when-let [data  (ex-data      error)]
+                                        (submap? data pattern))
                 :else
                 (unexpected-arg! pattern
-                  {:context  `matching-error
+                  {:param       'pattern
+                   :context  `matching-error
                    :expected '#{nil set string re-pattern map}})))]
-     err
+     error
      ;; Try match cause
-     (when-let [cause (ex-cause err)]
+     (when-let [cause (ex-cause error)]
        (matching-error kind pattern cause)))))
 
 #?(:clj
@@ -1237,8 +1241,6 @@
      {:added "Encore v3.61.0 (2023-07-07)"}
      [form] `(with-meta ~form (meta ~'&form))))
 
-(declare assoc-some)
-
 #?(:clj
    (defn get-source
      "Returns {:keys [ns line column file]} source location given a macro's
@@ -1261,12 +1263,12 @@
 
        (assoc-some
          {:ns (str *ns*)}
-         :line   line
-         :column column
-         :file
-         (when (string? file)
-           (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
-             file))))))
+         {:line   line
+          :column column
+          :file
+          (when (string? file)
+            (when-not (contains? #{"NO_SOURCE_PATH" "NO_SOURCE_FILE" ""} file)
+              file))}))))
 
 (comment (jio/resource "taoensso/encore.cljc"))
 
@@ -1893,12 +1895,14 @@
 
   (let [rf (fn [pred] (fn [_acc in] (if (pred in) true (reduced false))))]
     (defn revery?
+      #?(:cljs {:tag 'boolean})
       ([      pred coll] (reduce                      (rf pred)  true coll))
       ([xform pred coll] (transduce xform (completing (rf pred)) true coll))))
 
   (let [rf (fn [pred] (fn [_acc  k v]  (if (pred k v) true (reduced false))))
         tf (fn [pred] (fn [_acc [k v]] (if (pred k v) true (reduced false))))]
     (defn revery-kv?
+      #?(:cljs {:tag 'boolean})
         ([      pred coll] (reduce-kv                   (rf pred)  true coll))
       #_([xform pred coll] (transduce xform (completing (tf pred)) true coll)))))
 
@@ -2621,7 +2625,7 @@
 
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
-(do
+(let [ensure-set ensure-set]
   (defn ks=      #?(:cljs {:tag 'boolean}) [ks m] (=             (set (keys m)) (ensure-set ks)))
   (defn ks<=     #?(:cljs {:tag 'boolean}) [ks m] (set/subset?   (set (keys m)) (ensure-set ks)))
   (defn ks>=     #?(:cljs {:tag 'boolean}) [ks m] (set/superset? (set (keys m)) (ensure-set ks)))
@@ -2888,54 +2892,39 @@
       (core/merge m1 m2 m3)
       (merge      m1 m2 m3))))
 
-(deftype Pred [pred-fn]) ; Note: can support any arity (unary, kv, etc.)
-(defn pred
-  "Experimental, subject to change without notice.
-  Wraps given predicate fn to return `Pred` for use with `submap?`, etc.
-  Arity of predicate fn depends on context in which it'll be used.
-  See also `pred-fn`."
-  {:added "Encore v3.75.0 (2024-01-29)"}
-  ^Pred [pred-fn] (Pred. pred-fn))
-
-(defn pred-fn
-  "Experimental, subject to change without notice.
-  Returns unwrapped predicate fn when given `Pred`, otherwise returns nil.
-  See also `pred`."
-  {:added "Encore v3.75.0 (2024-01-29)"}
-  [pred]
-  (when (instance? Pred pred)
-    (.-pred-fn ^Pred pred)))
-
 (defn submap?
-  "Returns true iff `sub` is a (possibly nested) submap of `m`,
-  i.e. iff every (nested) value in `sub` has the same (nested) value in `m`.
+  "Returns true iff `sub-map` is a (possibly nested) submap of `super-map`,
+  i.e. iff every (nested) value in `sub-map` has the same (nested) value in `super-map`.
+
+  `sub-map` may contain special values:
+    `:submap/nx`     - Matches iff `super-map` does not contain key
+    `:submap/ex`     - Matches iff `super-map` does     contain key (any     val)
+    `:submap/some`   - Matches iff `super-map` does     contain key (non-nil val)
+    (fn [super-val]) - Matches iff given unary predicate returns truthy
+
   Uses stack recursion so supports only limited nesting."
-  [m sub]
+  [super-map sub-map]
   (reduce-kv
-    (fn [_ k v]
-      (if (map? v)
-        (let [sub* v
-              m* (get m k)]
-          (if-let [match? (and (map? m*) (submap? m* sub*))]
+    (fn [_ sub-key sub-val]
+      (if (map?    sub-val)
+        (let [super-val (get super-map sub-key)]
+          (if-let [match? (and (map? super-val) (submap? super-val sub-val))]
             true
             (reduced false)))
 
-        (let [sval v
-              mval (get m k ::nx)]
-
+        (let [super-val (get super-map sub-key ::nx)]
           (if-let [match?
-                   (if-let [pf (pred-fn sval)]
-                     (pf mval) ; Arb pred
-                     (case sval
-                       ;; Special svals currently undocumented
-                       :submap/nx      (identical-kw? mval ::nx)
-                       :submap/ex (not (identical-kw? mval ::nx))
-                       :submap/some            (some? mval)
-                       (= sval mval)))]
+                   (if-let [pred-fn (when (fn? sub-val) sub-val)]
+                     (pred-fn super-val)
+                     (case sub-val
+                       :submap/nx      (identical-kw? super-val ::nx)
+                       :submap/ex (not (identical-kw? super-val ::nx))
+                       :submap/some            (some? super-val)
+                       (= sub-val super-val)))]
             true
             (reduced false)))))
     true
-    sub))
+    sub-map))
 
 (defn submaps?
   "Experimental, subject to change without notice.
@@ -5796,8 +5785,8 @@
               (case return
                 :value                        value
                 :legacy              {:config value, :source source} ; Back compatibility
-                :map     (assoc-some {:value  value, :source source} :platform platform)
-                :explain (assoc-some {:value  value, :source source} :platform platform, :search (vinterleave-all to-search))
+                :map     (assoc-some {:value  value, :source source}  :platform platform)
+                :explain (assoc-some {:value  value, :source source} {:platform platform, :search (vinterleave-all to-search)})
                 (throw
                   (ex-info "[encore/get-env] Unexpected `:return` option"
                     {:given (typed-val return)
@@ -6009,7 +5998,7 @@
      the same dynamic bindings in place as when the delay was created."
      [& body]
      (if (:ns &env)
-       `(delay                             ~@body)
+       `(delay ~@body) ; No need (single threaded)
        `(clojure.lang.Delay. (rebinding-fn ~@body)))))
 
 (comment
@@ -7987,4 +7976,7 @@
 
   #?(:clj
      (defn ^:no-doc ^:deprecated ident-hex-str "Prefer `hex-ident-str`."
-       ^String [obj] (str "0x" (hex-ident-str obj)))))
+       ^String [obj] (str "0x" (hex-ident-str obj))))
+
+  (defn ^:no-doc ^:deprecated pred    [pred-fn] pred-fn)
+  (defn ^:no-doc ^:deprecated pred-fn [x] (when (fn? x) x)))
