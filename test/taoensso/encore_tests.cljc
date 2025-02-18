@@ -1016,8 +1016,8 @@
   (enc/get-env {:as :edn :debug/match [:debug/source "taoensso.encore/foo"]} nil)
   (enc/get-env {:as :edn :return :explain} [:p1]))
 
-(deftest _binding
-  (is (= :foo (enc/binding [*dynamic-var* :foo] *dynamic-var*))))
+(deftest _binding*
+  (is (= :foo (enc/binding* [*dynamic-var* :foo] *dynamic-var*))))
 
 ;;;; Misc
 

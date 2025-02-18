@@ -63,7 +63,7 @@
   {:author "Peter Taoussanis (@ptaoussanis)"}
 
   (:refer-clojure :exclude
-   [if-let if-some if-not when when-not when-some when-let cond defonce binding
+   [if-let if-some if-not when when-not when-some when-let cond defonce
     run! some? ident? float? boolean? uri? indexed? bytes?
     int? pos-int? neg-int? nat-int? inst?
     simple-ident?   qualified-ident?
@@ -116,7 +116,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        or-some and* def* defonce try* catching binding
+        or-some and* def* defonce try* catching
         -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?
@@ -304,18 +304,18 @@
          (case c1
            (true :else :default :always :then) c2                          ; Avoid unnecessary (if <truthy> ...)
            (false nil)                            `(-cond ~throw? ~@more)  ; Avoid unnecessary (if <falsey> ...)
-           :do               `(do          ~c2     (-cond ~throw? ~@more))
-           :let              `(let         ~c2     (-cond ~throw? ~@more))
+           :do               `(do           ~c2     (-cond ~throw? ~@more))
+           :let              `(let          ~c2     (-cond ~throw? ~@more))
 
-           :binding          `(binding     ~c2     (-cond ~throw? ~@more))
-           :with-redefs      `(with-redefs ~c2     (-cond ~throw? ~@more))  ; Undocumented
-           :wrap              (concat       c2   [`(-cond ~throw? ~@more)]) ; '', arb wrap like (binding [] ...), etc.
+           :binding          `(core/binding ~c2     (-cond ~throw? ~@more))
+           :with-redefs      `(with-redefs  ~c2     (-cond ~throw? ~@more))  ; Undocumented
+           :wrap              (concat        c2   [`(-cond ~throw? ~@more)]) ; '', arb wrap like (binding [] ...), etc.
 
-           :return-when      `(if-let  [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
-           :return-some      `(if-some [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
-           (:when :when-let) `(when        ~c2     (-cond ~throw? ~@more))  ; ''
-           :when-not         `(when-not    ~c2     (-cond ~throw? ~@more))  ; ''
-           :when-some        `(when-some   ~c2     (-cond ~throw? ~@more))  ; ''
+           :return-when      `(if-let   [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
+           :return-some      `(if-some  [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
+           (:when :when-let) `(when         ~c2     (-cond ~throw? ~@more))  ; ''
+           :when-not         `(when-not     ~c2     (-cond ~throw? ~@more))  ; ''
+           :when-some        `(when-some    ~c2     (-cond ~throw? ~@more))  ; ''
 
            ;;; 3-clause cases
            (:if-let :if-some :if-not)
@@ -454,11 +454,11 @@
 ;;;;
 
 #?(:clj
-   (defmacro binding
+   (defmacro binding*
      "For Clj: faster version of `core/binding`.
-     For Cljs: identical to `core/binding`."
-     {:added "Encore v3.98.0 (2024-04-08)"
-      :style/indent 1}
+     For Cljs: identical to `core/binding`.
+     Can interfere with deep-walking macros."
+     {:style/indent 1}
      [bindings & body]
      (if (:ns &env)
        `(cljs.core/binding ~bindings ~@body)
@@ -474,9 +474,9 @@
   (do
     (def ^:dynamic *d1* nil)
     (def ^:dynamic *d2* nil)
-    (qb 1e6 ; [409.01 302.93]
-      (clojure.core/binding [*d1* :d1, *d2* :d2] [*d1* *d2*])
-      (binding              [*d1* :d1, *d2* :d2] [*d1* *d2*]))))
+    (qb 1e6 ; [354.32 308.58]
+      (core/binding [*d1* :d1, *d2* :d2] [*d1* *d2*])
+      (binding*     [*d1* :d1, *d2* :d2] [*d1* *d2*]))))
 
 (defn name-with-attrs
   "Given a symbol and args, returns [<name-with-attrs-meta> <args> <attrs>]
@@ -4836,7 +4836,7 @@
      [form]
      `(if (and (nil? *print-level*) (nil? *print-length*) *print-readably*)
         ~form ; Optimization, don't pay for unnecessary binding
-        (binding [*print-level* nil, *print-length* nil, *print-readably* true]
+        (core/binding [*print-level* nil, *print-length* nil, *print-readably* true]
           ~form))))
 
 (defn ^:no-doc x->str
@@ -4863,7 +4863,7 @@
        (if (string? x)
          (if add-newline? (str x newline) x)
          (let [w (java.io.StringWriter.)]
-           (binding [*print-readably* nil] (print-method x w))
+           (core/binding [*print-readably* nil] (print-method x w))
            (when add-newline? (.write w newline))
            (.toString w))))))
 
@@ -4891,7 +4891,7 @@
                  (print-method x w)))
              nil xs))
 
-         (binding [*print-readably* nil]
+         (core/binding [*print-readably* nil]
            (reduce
              (fn [_ x]
                (if (.deref started?_) (.write w " ") (vreset! started?_ true))
@@ -7979,4 +7979,9 @@
        ^String [obj] (str "0x" (hex-ident-str obj))))
 
   (defn ^:no-doc ^:deprecated pred    [pred-fn] pred-fn)
-  (defn ^:no-doc ^:deprecated pred-fn [x] (when (fn? x) x)))
+  (defn ^:no-doc ^:deprecated pred-fn [x] (when (fn? x) x))
+  #?(:clj
+     (defmacro ^:deprecated binding [bindings & body]
+       (if (:ns &env)
+         `(cljs.core/binding    ~bindings ~@body)
+         `(clojure.core/binding ~bindings ~@body)))))
