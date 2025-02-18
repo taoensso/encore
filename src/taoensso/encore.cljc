@@ -76,6 +76,7 @@
 
   #?(:clj
      (:require
+      [clojure.core    :as core]
       [clojure.string  :as str]
       [clojure.set     :as set]
       [clojure.java.io :as jio]
@@ -84,6 +85,7 @@
 
      :cljs
      (:require
+      [cljs.core           :as core]
       [clojure.string      :as str]
       [clojure.set         :as set]
       [cljs.reader]
@@ -617,14 +619,7 @@
           ~@(map pstep (partition 2 clauses))
           ~g))))
 
-;;;;
-
-(def ^:private core-merge     #?(:clj clojure.core/merge     :cljs cljs.core/merge))
-(def ^:private core-update-in #?(:clj clojure.core/update-in :cljs cljs.core/update-in))
-(def ^:private core-subvec    #?(:clj clojure.core/subvec    :cljs cljs.core/subvec))
 (declare merge update-in)
-
-;;;;
 
 #?(:clj
    (defmacro declare-remote
@@ -652,7 +647,7 @@
            (future
              (.join t 100)
              (reset-meta! dst-var
-               (core-merge (meta src-var) dst-attrs))))))))
+               (core/merge (meta src-var) dst-attrs))))))))
 
 #?(:clj
    (defn- var-info
@@ -706,7 +701,7 @@
             alias-attrs (dissoc alias-attrs :link?)
 
             final-attrs
-            (select-keys (core-merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
+            (select-keys (core/merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
               [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
 
             alias-sym   (with-meta alias-sym final-attrs)
@@ -838,7 +833,7 @@
       - `end`   is desired vector length, or `:max`."
   {:added "Encore v3.126.0 (2024-10-23)"
    :arglists '([v start-idx] [v start-idx end-idx] [v :by-len start end])}
-  (subfn `subvec core-subvec))
+  (subfn `subvec core/subvec))
 
 (def* substr
   "Returns a non-empty sub-string, or nil.
@@ -853,7 +848,7 @@
   (subfn `substr (fn [s n1 n2] (.substring #?(:clj ^String s :cljs s) n1 n2))))
 
 (comment
-  (qb 1e6 (subvec [:a :b :c] 1) (core-subvec [:a :b :c] 1)) ; [53.32 51.11]
+  (qb 1e6 (subvec [:a :b :c] 1) (core/subvec [:a :b :c] 1)) ; [53.32 51.11]
   (qb 1e6 (substr "abc" 1) (subs "abc" 1))                  ; [55.75 49.43]
   )
 
@@ -2444,10 +2439,10 @@
   (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
-(defn vnext          [v] (when (> (count v) 1) (core-subvec v 1)))
-(defn vrest          [v] (if   (> (count v) 1) (core-subvec v 1) []))
+(defn vnext          [v] (when (> (count v) 1) (core/subvec v 1)))
+(defn vrest          [v] (if   (> (count v) 1) (core/subvec v 1) []))
 (defn vsplit-last    [v] (let [c (count v)] (when (> c 0) [(when (> c 1) (pop v)) (peek v)])))
-(defn vsplit-first   [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (core-subvec v 1))]))))
+(defn vsplit-first   [v] (let [c (count v)] (when (> c 0) (let [[v1] v] [v1 (when (> c 1) (core/subvec v 1))]))))
 (defn not-empty-coll [x] (when x (if (coll? x) (not-empty x) x)))
 
 (comment
@@ -2881,16 +2876,16 @@
 
 (comment
   (qb 1e6 ; [182.63 122.16 167.18]
-    (core-merge   {:a 1} {:a {:b 1}} {:a {:c 1}})
-    (merge        {:a 1} {:a {:b 1}} {:a {:c 1}})
-    (nested-merge {:a 1} {:a {:b 1}} {:a {:c 1}}))
+    (core/merge      {:a 1} {:a {:b 1}} {:a {:c 1}})
+    (merge           {:a 1} {:a {:b 1}} {:a {:c 1}})
+    (nested-merge    {:a 1} {:a {:b 1}} {:a {:c 1}}))
 
   (let [m1 (zipmap (range  32) (range  32))
         m2 (zipmap (range   8) (range   8))
         m3 (zipmap (range 512) (range 512))]
 
     (qb 1e4 ; [449.24 11.25]
-      (core-merge m1 m2 m3)
+      (core/merge m1 m2 m3)
       (merge      m1 m2 m3))))
 
 (deftype Pred [pred-fn]) ; Note: can support any arity (unary, kv, etc.)
@@ -4235,7 +4230,7 @@
               (inc n)
               (do  n)))
           0
-          (core-subvec ts n-skip0))
+          (core/subvec ts n-skip0))
 
         n-skip1 (- n-total n-window)]
 
@@ -4264,7 +4259,7 @@
            (let [p (promise)]
              (if (-cas!? p_ nil p) ; Latch
                (do
-                 (ts_ #(core-subvec % n-skip1))
+                 (ts_ #(core/subvec % n-skip1))
                  (reset!  n-skip_ 0)
                  (reset!  p_ nil)
                  (deliver p  nil))))))))
@@ -4281,7 +4276,7 @@
      (-deref [_]
        (rc-deref msecs ts_ n-skip_
          (fn gc [n-skip1]
-           (ts_ #(core-subvec % n-skip1))
+           (ts_ #(core/subvec % n-skip1))
            (reset! n-skip_ 0))))))
 
 (defn rolling-counter
@@ -4343,7 +4338,7 @@
           (fn swap-fn [acc]
             (let [new (conj acc x)]
               (if (> (count new) nmax)
-                (core-subvec new 1)
+                (core/subvec new 1)
                 (do          new))))))))))
 
 (comment (let [rv (rolling-vector 3), c (counter)] [(qb 1e6 (rv (c))) (rv)])) ; 189.66
