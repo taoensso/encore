@@ -1,5 +1,5 @@
 <a href="https://www.taoensso.com/clojure" title="More stuff by @ptaoussanis at www.taoensso.com"><img src="https://www.taoensso.com/open-source.png" alt="Taoensso open source" width="340"/></a>  
-[**API**][cljdoc docs] | [**Wiki**][GitHub wiki] | [Latest releases](#latest-releases) | [Slack channel][] or [Get support][GitHub issues]
+[**API**][cljdoc] | [**Wiki**][GitHub wiki] | [Latest releases](#latest-releases) | [Slack channel][] or [Get support][GitHub issues]
 
 <!-- ../../ from README to get to base of GitHub project -->
 <!-- ../ from wiki to get to base of GitHub project -->
@@ -46,8 +46,8 @@ See for  intro and usage:
 ## Documentation
 
 - [Wiki][GitHub wiki] (getting started, usage, etc.)
-- API reference: [cljdoc][cljdoc docs] or [Codox][Codox docs]
-- Support: [Slack channel][] or [GitHub issues][]
+- API reference via [cljdoc][cljdoc]
+- Support via [Slack channel][] or [GitHub issues][]
 
 ## Funding
 
@@ -70,8 +70,7 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
 <!-- Project -->
 
-[Codox docs]:   https://taoensso.github.io/TODO/
-[cljdoc docs]: https://cljdoc.org/d/com.taoensso/TODO/
+[cljdoc]: https://cljdoc.org/d/com.taoensso/TODO/
 
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/TODO.svg
 [Clojars URL]: https://clojars.org/com.taoensso/TODO
