@@ -851,6 +851,8 @@
 (deftest _resolve
   [(is (= (resolve-sym __nx)     nil))
    (is (= (resolve-sym __nx/foo) nil))
+   (is (= (resolve-sym str)      #?(:clj :clojure.core/str, :cljs :cljs.core/str)))
+   (is (= (let [x "x"] (resolve-sym x)) nil))
 
    (is (= (resolve-sym                                     var-cljc) :taoensso.encore-tests/var-cljc))
    (is (= (resolve-sym taoensso.encore-tests.unrequired-ns/var-cljc) :taoensso.encore-tests.unrequired-ns/var-cljc))])
