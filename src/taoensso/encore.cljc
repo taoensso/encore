@@ -660,26 +660,27 @@
 
 #?(:clj
    (defn- var-info
-     "Returns ?{:keys [var meta ns name ...]} for given symbol."
+     "Returns ?{:keys [var sym ns name meta ...]} for given symbol."
      [macro-env sym]
      (when (symbol? sym)
        (if (:ns macro-env)
-         (let [ns (-have (find-ns 'cljs.analyzer.api))
-               v  (-have (ns-resolve ns 'resolve)) ; Don't cache!
-               m  (@v macro-env sym) ; ?{:keys [meta ns name ...]}
-               ]
-           (when (:ns m) m))
+         (let [ns (find-ns 'cljs.analyzer.api)
+               v  (ns-resolve ns 'resolve)] ; Don't cache!
+           (when-let [{:as m, var-ns :ns, var-name :name} ; ?{:keys [meta ns name ...]}
+                      (@v macro-env sym)]
+             (when var-ns ; Skip locals
+               (assoc m :sym (symbol (str var-ns) (name var-name))))))
 
          (when-let [v (resolve macro-env sym)]
-           (let [m (meta v)]
-             {:var v
+           (let [{:as m, var-ns :ns, var-name :name} (meta v)]
+             {:var  v
+              :sym  (symbol (str var-ns) (name var-name))
+              :ns   var-ns
+              :name var-name
               :meta
               (if-let [x (get m :arglists)]
                 (assoc m :arglists `'~x) ; Quote
-                (do    m))
-
-              :ns   (get m :ns)
-              :name (get m :name)}))))))
+                (do    m))}))))))
 
 #?(:clj
    (defmacro defalias
@@ -1212,28 +1213,22 @@
 
 #?(:clj (defn- require-sym-ns [sym] (when-let [ns (namespace sym)] (require (symbol ns)) true)))
 #?(:clj
-   (let [qualified-sym
-         (fn [macro-env sym]
-           (when-let [{var-ns :ns, var-name :name} (var-info macro-env sym)]
-             (symbol (str var-ns) (name var-name))))]
-
-     ;; Note a couple fundamental limitations:
-     ;;   - Macros targeting Cljs cannot expand to a Cljs symbol in an unrequired namespace.
-     ;;   - Macros targeting Cljs cannot eval      a Cljs symbol for its value at macro time.
-
-     (defn resolve-sym
-       "Returns resolved qualified Clj/s symbol, or nil."
-       {:added "Encore v3.63.0 (2023-07-31)"}
-       ([          sym                ] (resolve-sym nil       sym false)) ; Clj only
-       ([macro-env sym                ] (resolve-sym macro-env sym false))
-       ([macro-env sym may-require-ns?]
-        (when (symbol? sym)
-          (if-not may-require-ns?
-            (qualified-sym macro-env sym)
-            (or
-              (qualified-sym macro-env sym)
-              (when (catching (require-sym-ns sym))
-                (qualified-sym macro-env sym)))))))))
+   (defn resolve-sym
+     "Returns resolved qualified Clj/s symbol, or nil."
+     ;; Fundamental limitations:
+     ;;   1. Macros targeting Cljs cannot expand to a Cljs symbol in an unrequired namespace.
+     ;;   2. Macros targeting Cljs cannot eval      a Cljs symbol for its value at macro time.
+     {:added "Encore v3.63.0 (2023-07-31)"}
+     ([          sym                ] (resolve-sym nil       sym false)) ; Clj only
+     ([macro-env sym                ] (resolve-sym macro-env sym false))
+     ([macro-env sym may-require-ns?]
+      (when (symbol? sym)
+        (if-not may-require-ns?
+          (get (var-info macro-env sym) :sym)
+          (or
+            (get (var-info macro-env sym) :sym)
+            (when (catching (require-sym-ns sym))
+              (get (var-info macro-env sym) :sym))))))))
 
 (comment (resolve-sym nil 'string?))
 
