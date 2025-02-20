@@ -665,8 +665,10 @@
      (when (symbol? sym)
        (if (:ns macro-env)
          (let [ns (-have (find-ns 'cljs.analyzer.api))
-               v  (-have (ns-resolve ns 'resolve))] ; Don't cache!
-           (@v macro-env sym)) ; ?{:keys [meta ns name ...]}
+               v  (-have (ns-resolve ns 'resolve)) ; Don't cache!
+               m  (@v macro-env sym) ; ?{:keys [meta ns name ...]}
+               ]
+           (when (:ns m) m))
 
          (when-let [v (resolve macro-env sym)]
            (let [m (meta v)]
