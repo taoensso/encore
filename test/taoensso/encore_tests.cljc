@@ -8,6 +8,7 @@
    ;; [clojure.test.check.generators :as tc-gens]
    ;; [clojure.test.check.properties :as tc-props]
    [clojure.string  :as str]
+   [taoensso.truss  :as truss]
    [taoensso.encore :as enc]
    #?(:clj [taoensso.encore.bytes     :as bytes])
    [taoensso.encore.stats             :as stats]
@@ -30,9 +31,9 @@
 ;; (deftest pass (is (= 1 1)))
 ;; (deftest fail (is (= 1 0)))
 
-(def  ex1 (ex-info "Ex1" {}))
+(def  ex1 (truss/ex-info "Ex1" {}))
 (defn ex1!   [   ] (throw ex1))
-(defn throw! [arg] (throw (ex-info "TestEx" {:arg {:value arg :type (type arg)}})))
+(defn throw! [arg] (throw (truss/ex-info "TestEx" {:arg {:value arg :type (type arg)}})))
 
 ;;;; Core
 
@@ -69,19 +70,6 @@
    #?(:cljs (is (= var-cljs-alias                 "val:var-cljs")))
    #?(:cljs (is (= (:doc (meta #'var-cljs))       "doc:var-cljs")))
    #?(:cljs (is (= (:doc (meta #'var-cljs-alias)) "doc:var-cljs")))])
-
-(deftest _truss-invariants
-  ;; Tested properly in Truss, just confirm successful imports here
-  [(is (= (enc/have  string? "foo") "foo"))
-   (is (= (enc/have! string? "foo") "foo"))
-   (is (= (enc/have? string? "foo")  true))
-   (is (= (enc/have?         "foo")  true))
-   (is (enc/throws? (enc/have string? 5)))
-   (is (enc/throws? :all
-         {:data {:dynamic :dynamic-data
-                 :arg     :arg-data}}
-         (enc/with-truss-data :dynamic-data
-           (enc/have? string? 5 :data :arg-data))))])
 
 (defprotocol       IMyProtocol (my-protocol-fn [_]))
 (deftype MyType [] IMyProtocol (my-protocol-fn [_]))
@@ -167,133 +155,6 @@
    (is      (enc/submaps? [{} {:a {:b :B1}}] []))
    (is      (enc/submaps? [{} {:a {:b :B1}}] [{} {:a {:b :submap/ex}}]))
    (is (not (enc/submaps? [{} {:a {:b :B1}}] [{} {:a {:b :submap/nx}}])))])
-
-;;;; Errors
-
-(deftest _error-basics
-  (let [ex1 (ex-info "Ex1" {:k1 "v1"})
-        ex2 (ex-info "Ex2" {:k2 "v2"} ex1)
-        ex-type
-        #?(:clj  'clojure.lang.ExceptionInfo
-           :cljs    'cljs.core/ExceptionInfo)
-
-        ex1-map {:type ex-type :msg "Ex1" :data {:k1 "v1"}}
-        ex2-map {:type ex-type :msg "Ex2" :data {:k2 "v2"}}]
-
-    [(is (= (enc/ex-root          ex2)          ex1))
-     (is (= (enc/ex-chain         ex2) [ex2     ex1]))
-     (is (= (enc/ex-chain :as-map ex2) [ex2-map ex1-map]))
-     (is (enc/submap? (enc/ex-map ex2)
-           (assoc ex1-map
-             :chain [ex2-map ex1-map]
-             :trace #?(:clj #(vector? (force %))
-                       :cljs string?))))]))
-
-(deftest _try*
-  [(is (= (enc/try*        ) nil) "No body or catch")
-   (is (= (enc/try* (+ 0 1)) 1)   "No catch")
-   (is (= (let [a (atom false)] (enc/try* (finally (reset! a true))) @a) true) "Lone finally")
-   (is (= (enc/try* (ex1!) (catch :all     _ :caught)) :caught))
-   (is (= (enc/try* (ex1!) (catch :all     _ :caught)) :caught))
-   (is (= (enc/try* (ex1!) (catch :common  _ :caught)) :caught))
-   (is (= (enc/try* (ex1!) (catch :ex-info _ :caught)) :caught))
-   (is (enc/throws?
-         (let [err #?(:clj (Exception. "Ex1") :cljs (js/Error. "Err1"))]
-           (enc/try* (throw err) (catch :ex-info _ :caught)))))
-
-   #?(:clj
-      [(is           (= (enc/try* (throw (Exception.))      (catch :all              _ :caught)) :caught))
-       (is           (= (enc/try* (throw (Throwable.))      (catch :all              _ :caught)) :caught))
-       (is           (= (enc/try* (throw (Error.))          (catch :all              _ :caught)) :caught))
-
-       (is           (= (enc/try* (throw (Exception.))      (catch :all-but-critical _ :caught)) :caught))
-       (is           (= (enc/try* (throw (Throwable.))      (catch :all-but-critical _ :caught)) :caught))
-       (is           (= (enc/try* (throw (AssertionError.)) (catch :all-but-critical _ :caught)) :caught))
-       (is (enc/throws? (enc/try* (throw (Error.))          (catch :all-but-critical _ :caught))))])])
-
-(deftest _matching-error
-  [(is (enc/error? (enc/matching-error                     (enc/try* ("") (catch :all t t)))))
-   (is (enc/error? (enc/matching-error            :common  (enc/try* ("") (catch :all t t)))))
-   (is (nil?       (enc/matching-error   :ex-info          (enc/try* ("") (catch :all t t)))))
-   (is (enc/error? (enc/matching-error #{:ex-info :common} (enc/try* ("") (catch :all t t)))))
-
-   (is (enc/error? (enc/matching-error :common  "Foo"   (enc/try* (throw (ex-info "Foo"   {})) (catch :all t t)))))
-   (is (nil?       (enc/matching-error :common  "Foo"   (enc/try* (throw (ex-info "Bar"   {})) (catch :all t t)))))
-   (is (enc/error? (enc/matching-error :common  {:a :b}                  (ex-info "Test"  {:a :b :c :d}))))
-   (is (enc/error? (enc/matching-error :ex-info {:a :b}                  (ex-info "Dummy" {} (ex-info "Test" {:a :b})))))
-
-   (is (enc/error? (enc/matching-error #{:ex-info :common} #{"foobar" "not a function" "cannot be cast"}
-                     (enc/try* ("") (catch :all t t)))))])
-
-(deftest _throws?
-  (let [throw-common   (fn [] (throw (ex-info "Shenanigans" {:a :a1 :b :b1})))
-        throw-uncommon (fn [] (throw #?(:clj (Error.) :cljs "Error")))]
-
-    [(is      (enc/throws?                            (throw-common)))
-     (is      (enc/throws? :common                    (throw-common)))
-     (is      (enc/throws? :all                       (throw-common)))
-     (is (not (enc/throws? :common                    (throw-uncommon))))
-     (is      (enc/throws? :all                       (throw-uncommon)))
-     (is      (enc/throws? #{:common :all}            (throw-uncommon)))
-
-     (is      (enc/throws? :default #"Shenanigans"    (throw-common)))
-     (is (not (enc/throws? :default #"Brouhaha"       (throw-common))))
-
-     (is      (enc/throws? :default {:a :a1}          (throw-common)))
-     (is (not (enc/throws? :default {:a :a1 :b :b2}   (throw-common))))
-
-     (is      (enc/throws? :default {:a :a1} (throw (ex-info "Test" {:a :a1 :b :b1}))))
-     (is (not (enc/throws? :default {:a :a1} (throw (ex-info "Test" {:a :a2 :b :b1})))))
-
-     (is (= (ex-data (enc/throws :ex-info     {:a :a3}
-                       (throw
-                         (ex-info       "ex1" {:a :a1}
-                           (ex-info     "ex2" {:a :a2}
-                             (ex-info   "ex3" {:a :a3} ; <- Match this
-                               (ex-info "ex4" {:a :a4})))))))
-           {:a :a3})
-       "Check nested causes for match")
-
-     ;; Form must throw error, not return it
-    #?(:clj
-       [(is      (enc/throws? Exception (throw (Exception.))))
-        (is (not (enc/throws? Exception        (Exception.))))]
-
-       :cljs
-       [(is      (enc/throws? js/Error (throw (js/Error.))))
-        (is (not (enc/throws? js/Error        (js/Error.))))])]))
-
-(deftest _catching-rf
-  [(is (=   (reduce (enc/catching-rf            (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
-   (is (=   (reduce (enc/catching-rf {:id :foo} (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
-   (is (->> (reduce (enc/catching-rf {:id :foo} (fn [acc in] (conj acc (throw! in)))) [] [:a :b])
-         (enc/throws? :common {:id :foo :call '(rf acc in) :args {:in {:value :a}}})))
-
-   (is (=   (reduce-kv (enc/catching-rf (fn [acc k v] (assoc acc k         v)))  {} {:a :A}) {:a :A}))
-   (is (->> (reduce-kv (enc/catching-rf (fn [acc k v] (assoc acc k (throw! v)))) {} {:a :A})
-         (enc/throws? :common {:call '(rf acc k v) :args {:k {:value :a} :v {:value :A}}})))])
-
-(deftest _catching-xform
-  [(is (=   (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc in))) [] [:a :b]) [:a :b]))
-   (is (->> (transduce (enc/catching-xform (map ex1!))     (completing (fn [acc in] (conj acc in))) [] [:a :b])
-         (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
-     "Error in xform")
-
-   (is (=   (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc         in)))  [] [:a :b]) [:a :b]))
-   (is (->> (transduce (enc/catching-xform (map identity)) (completing (fn [acc in] (conj acc (throw! in)))) [] [:a :b])
-         (enc/throws? :common {:call '(rf acc in) :args {:in {:value :a}}}))
-     "Error in rf")])
-
-(deftest _counters
-  (let [c (enc/counter)]
-    [(is (= @c        0))
-     (is (= (c)       0))
-     (is (= @c        1))
-     (is (= (c 5)     1))
-     (is (= @c        6))
-     (is (= (c :+= 2) 8))
-     (is (= (c :=+ 2) 8))
-     (is (= @c        10))]))
 
 ;;;; Loading
 
@@ -529,7 +390,7 @@
    (is (= (enc/update-in {:a {:b :B} } [:a :b ]     (fn [_] :swap/dissoc))  {:a {}}))
    (is (= (enc/update-in {:a {:b :B} } [:a :nx]     (fn [_] :swap/dissoc))  {:a {:b :B}}))
 
-   (is (enc/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
+   (is (truss/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
      "Non-associative val")])
 
 (deftest _contains-in?
@@ -547,7 +408,7 @@
    (is (= (enc/dissoc-in {:a :A                } [:a :b :c])    {:a :A}))
    (is (= (enc/dissoc-in {                     } [:a :b] :c :d) {}))
    (is (= (enc/dissoc-in {:a :A                } [:a :b] :c :d) {:a :A}))
-   (is (enc/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
+   (is (truss/throws? #?(:clj ClassCastException) (enc/dissoc-in {:a :A} [:a :b])))])
 
 (deftest _merging
   [(testing "Basics"
@@ -800,7 +661,7 @@
          (is (= (enc/swap-in! a [:a] (fn [_] :swap/dissoc)) :swap/dissoc))
          (is (= @a {:b :B}))
 
-         (is (enc/throws? #?(:clj ClassCastException) (enc/swap-in! a [:b :c] (fn [_] :x)))
+         (is (truss/throws? #?(:clj ClassCastException) (enc/swap-in! a [:b :c] (fn [_] :x)))
            "Non-associative val")
 
          (is (= (enc/swap-in! a [:b] (fn [v] (enc/swapped :swap/dissoc v))) :B))
@@ -832,7 +693,7 @@
          (is (= (enc/swap-in! a [:a :b1] (fn [_] :swap/dissoc)) :swap/dissoc))
          (is (= @a {:a {:b2 :x2}}))
 
-         (is (enc/throws? #?(:clj ClassCastException) (enc/swap-in! a [:a :b2 :c] (fn [_] :x)))
+         (is (truss/throws? #?(:clj ClassCastException) (enc/swap-in! a [:a :b2 :c] (fn [_] :x)))
            "Non-associative val")
 
          (is (= (enc/swap-in! a [:a :b2] (fn [v] (enc/swapped :swap/dissoc v))) :x2))
@@ -1037,6 +898,17 @@
 
 ;;;; Misc
 
+(deftest _counters
+  (let [c (enc/counter)]
+    [(is (= @c        0))
+     (is (= (c)       0))
+     (is (= @c        1))
+     (is (= (c 5)     1))
+     (is (= @c        6))
+     (is (= (c :+= 2) 8))
+     (is (= (c :=+ 2) 8))
+     (is (= @c        10))]))
+
 #?(:clj
    (deftest _java-version
      [(is (= 2  (enc/java-version "1.2")))
@@ -1233,7 +1105,7 @@
 ;;;; Name filter
 
 (deftest _name-filter
-  [(is (enc/throws? (enc/name-filter  nil)))
+  [(is (truss/throws? (enc/name-filter  nil)))
 
    (is (true? ((enc/name-filter :any) "foo")))
 
@@ -1371,7 +1243,7 @@
 
       (testing "ba-lengths"
         [(is (=  (vec (bytes/ba->len    5 (bytes/as-ba [1 2 3]))) [1 2 3 0 0]))
-         (is (-> (vec (bytes/ba->sublen 5 (bytes/as-ba [1 2 3]))) enc/throws?))])
+         (is (-> (vec (bytes/ba->sublen 5 (bytes/as-ba [1 2 3]))) truss/throws?))])
 
       (testing "ba-join" (is (= (vec (bytes/ba-join nil (bytes/as-ba [0]) (bytes/as-ba [1 2]) nil (bytes/as-ba [3 4 5]) nil nil (bytes/as-ba [6]))) [0 1 2 3 4 5 6])))
       (testing "ba-parts"
@@ -1499,10 +1371,10 @@
            (is (= (bytes/thaw-set st (bytes/freeze-set sf #{:el0          })) #{:el0}))
            (is (= (bytes/thaw-set st (bytes/freeze-set sf  [:el0          ])) #{:el0}))
            (is (= (bytes/thaw-set st (bytes/freeze-set sf  [:el0 :el1 :el0])) #{:el0 :el1}))
-           (is (->                   (bytes/freeze-set sf  [:el1 :el3     ])  enc/throws?))
+           (is (->                   (bytes/freeze-set sf  [:el1 :el3     ])  truss/throws?))
 
            (let [sf (assoc sf :freeze/skip-unknown? true)] (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))
-           (let [sf (assoc sf :el3 3)]                     (is (-> (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) enc/throws?)))
+           (let [sf (assoc sf :el3 3)]                     (is (-> (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) truss/throws?)))
            (let [sf (assoc sf :el3 3)
                  st (assoc st :thaw/skip-unknown? true)]   (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))]))]))
 
@@ -1712,10 +1584,10 @@
   [(testing "Levels"
      [(is (=               (sigs/valid-level-int      -10) -10))
       (is (=               (sigs/valid-level-int    :info)  50))
-      ;; (is (->>          (sigs/valid-level-int      nil) (enc/throws? :common "Invalid level"))) ; Macro-time error
-      ;; (is (->>          (sigs/valid-level-int     :bad) (enc/throws? :common "Invalid level"))) ; Macro-time error
-      (is    (->> ((fn [x] (sigs/valid-level-int x))  nil) (enc/throws? :common "Invalid level")))
-      (is    (->> ((fn [x] (sigs/valid-level-int x)) :bad) (enc/throws? :common "Invalid level")))
+      ;; (is (->>          (sigs/valid-level-int      nil) (truss/throws? :common "Invalid level"))) ; Macro-time error
+      ;; (is (->>          (sigs/valid-level-int     :bad) (truss/throws? :common "Invalid level"))) ; Macro-time error
+      (is    (->> ((fn [x] (sigs/valid-level-int x))  nil) (truss/throws? :common "Invalid level")))
+      (is    (->> ((fn [x] (sigs/valid-level-int x)) :bad) (truss/throws? :common "Invalid level")))
 
       (is      (sigs/level>= :error  :info))
       (is      (sigs/level>= :error  :error))
@@ -1726,14 +1598,14 @@
      [(is (=   (sigs/update-min-level nil   nil nil    nil)    nil))
       (is (=   (sigs/update-min-level nil   nil nil  :info)  :info))
       (is (=   (sigs/update-min-level :info nil nil :error) :error))
-      (is (->> (sigs/update-min-level nil   nil nil  :__nx) (enc/throws? :common "Invalid level")))
+      (is (->> (sigs/update-min-level nil   nil nil  :__nx) (truss/throws? :common "Invalid level")))
 
       (is (=   (sigs/update-min-level nil nil nil   [["ns1" :info]]) [["ns1" :info]]))
       (is (=   (sigs/update-min-level nil nil "ns1" :info)           [["ns1" :info]]))
 
-      (is (->> (sigs/update-min-level nil nil "ns1" [["ns1" :info]]) (enc/throws? :common "Invalid level")))
-      (is (->> (sigs/update-min-level nil nil nil   [["ns1" :__nx]]) (enc/throws? :common "Invalid level")))
-      (is (->> (sigs/update-min-level nil nil -1    :info)           (enc/throws? :common "Invalid name filter")))
+      (is (->> (sigs/update-min-level nil nil "ns1" [["ns1" :info]]) (truss/throws? :common "Invalid level")))
+      (is (->> (sigs/update-min-level nil nil nil   [["ns1" :__nx]]) (truss/throws? :common "Invalid level")))
+      (is (->> (sigs/update-min-level nil nil -1    :info)           (truss/throws? :common "Invalid name filter")))
 
       (is (=   (sigs/update-min-level :debug nil "ns1" :info) [["ns1" :info] ["*" :debug]]))
       (is (=   (->
@@ -1790,7 +1662,7 @@
       (is (false? (sf-allow? [{:allow :any :disallow :any} "ns1"] [nil :info])) "Disallow > allow")
 
       (is (false? (sf-allow? ["ns1" nil] [nil :info]))                                          "ns spec without ns")
-      (is (->>    (sf-allow? [nil   nil] [:info nil]) (enc/throws? :common "Invalid level")) "level spec without level")])
+      (is (->>    (sf-allow? [nil   nil] [:info nil]) (truss/throws? :common "Invalid level")) "level spec without level")])
 
    (testing "[ns level] filter with ns-specific min-levels"
      [(is (true?  (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :info])))
@@ -1801,8 +1673,8 @@
       (is (true?  (sf-allow? [nil   "ns.public.foo"] [[["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] :info])))
       (is (false? (sf-allow? [nil "ns.internal.foo"] [[["ns.internal.*" :warn] ["ns.public.*" :info] ["*" :warn]] :info])))
 
-      (is (->>    (sf-allow? [nil "ns1"] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))
-      (is (->>    (sf-allow? [nil   nil] [[["*" :info]] nil]) (enc/throws? :common "Invalid level")))])
+      (is (->>    (sf-allow? [nil "ns1"] [[["*" :info]] nil]) (truss/throws? :common "Invalid level")))
+      (is (->>    (sf-allow? [nil   nil] [[["*" :info]] nil]) (truss/throws? :common "Invalid level")))])
 
    (testing "[kind ns id level] filter basics"
      [(is (true?  (sf-allow? [nil nil] [nil   nil] [nil   nil] [nil nil])))
@@ -2076,7 +1948,7 @@
        (clear-handlers!)
        (rns/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
        (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))
-       (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error enc/error?}))))
+       (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error truss/error?}))))
 
    #?(:clj
       (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"

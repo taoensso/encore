@@ -70,7 +70,7 @@
     simple-symbol?  qualified-symbol?
     simple-keyword? qualified-keyword?
     format update-in merge merge-with subvec
-    memoize abs ex-message ex-data ex-cause
+    memoize abs ex-message ex-data ex-cause ex-info
     newline satisfies? uuid
     pr prn print println])
 
@@ -81,7 +81,7 @@
       [clojure.set     :as set]
       [clojure.java.io :as jio]
       [clojure.tools.reader.edn :as edn]
-      [taoensso.truss :as truss])
+      [taoensso.truss :as truss :refer [ex-info]])
 
      :cljs
      (:require
@@ -101,7 +101,7 @@
       [goog.Uri.QueryData  :as gquery-data]
       [goog.net.EventType]
       [goog.net.ErrorCode]
-      [taoensso.truss :as truss]))
+      [taoensso.truss :as truss :refer [ex-info]]))
 
   #?(:clj
      (:import
@@ -116,9 +116,9 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        or-some and? or? def* defonce try* catching
+        or-some and? or? def* defonce
         -cas!? now-udt* now-nano* min* max*
-        name-with-attrs deprecated new-object defalias throws throws?
+        name-with-attrs deprecated new-object defalias
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
@@ -134,9 +134,6 @@
   (set! *unchecked-math* false))
 
 ;;;;
-
-#?(:clj (defmacro ^:private -have  [& args] `(taoensso.truss/have  ~@args)))
-#?(:clj (defmacro ^:private -have? [& args] `(taoensso.truss/have? ~@args)))
 
 #?(:clj
    (defn ^:no-doc have-resource? "Private, don't use."
@@ -534,43 +531,6 @@
      Expands to `{:value ~x, :type (type ~x)}."
      [x] `{:value ~x, :type (type ~x)}))
 
-(defn unexpected-arg!
-  "Throws runtime `ExceptionInfo` to indicate an unexpected argument.
-  Takes optional kvs for merging into exception's data map.
-
-    (let [mode :unexpected]
-      (case mode
-        :read  (do <...>)
-        :write (do <...>)
-        (unexpected-arg! mode
-          {:param       'mode
-           :context  `my-function
-           :expected #{:read :write}}))) =>
-
-    Unexpected argument: :unexpected
-    {:param 'mode,
-     :arg {:value :unexpected, :type clojure.lang.Keyword},
-     :context 'taoensso.encore/my-function,
-     :expected #{:read :write}}"
-
-  {:arglists
-   '([arg]
-     [arg   {:keys [msg context param expected ...]}]
-     [arg & {:keys [msg context param expected ...]}])}
-
-  ([arg     ] (unexpected-arg! arg nil))
-  ([arg opts]
-   (throw
-     (ex-info (or (get opts :msg) (str "Unexpected argument: " (if (nil? arg) "<nil>" arg)))
-       (conj {:arg (typed-val arg)} (dissoc opts :msg)))))
-
-  ([arg k1 v1                  ] (unexpected-arg! arg {k1 v1}))
-  ([arg k1 v1 k2 v2            ] (unexpected-arg! arg {k1 v1, k2 v2}))
-  ([arg k1 v1 k2 v2 k3 v3      ] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3}))
-  ([arg k1 v1 k2 v2 k3 v3 k4 v4] (unexpected-arg! arg {k1 v1, k2 v2, k3 v3, k4 v4})))
-
-(comment (unexpected-arg! :arg :expected '#{string?}))
-
 #?(:clj
    (defmacro identical-kw?
      "Returns true iff two keywords are identical.
@@ -673,8 +633,8 @@
      ([alias src alias-attrs           ] `(defalias ~alias ~src ~alias-attrs nil))
      ([alias src alias-attrs alias-body]
       (let [cljs?     (some? (:ns &env))
-            src-sym   (-have symbol? src)
-            alias-sym (-have symbol? (or alias (symbol (name src-sym))))
+            src-sym   (truss/have symbol? src)
+            alias-sym (truss/have symbol? (or alias (symbol (name src-sym))))
 
             src-var-info (var-info &env src-sym)
             {src-var, :var src-attrs :meta} src-var-info
@@ -731,7 +691,7 @@
                   `(defalias ~alias ~src ~attrs ~body))
 
                 :else
-                (unexpected-arg! x
+                (truss/unexpected-arg! x
                   {:context  `defaliases
                    :param    'alias-clause
                    :expected '#{symbol map}})))
@@ -803,8 +763,8 @@
                (when       (< start-idx end-idx)
                  (by-idx-fn c start-idx end-idx))))
 
-           (unexpected-arg! kind
-             {:param       'kind
+           (truss/unexpected-arg! kind
+             {:param             'kind
               :context  context
               :expected #{:by-idx :by-len}})))))))
 
@@ -850,12 +810,23 @@
 
 ;;;; Errors
 
-(defn error?
-  "Returns true iff given platform error (`Throwable` or `js/Error`)."
-  #?(:cljs {:tag 'boolean})
-  [x]
-  #?(:clj  (instance? Throwable x)
-     :cljs (instance? js/Error  x)))
+(do
+  (defalias truss/error?)
+  (defalias truss/ex-root)
+  (defalias truss/ex-type)
+  (defalias truss/ex-map*)
+  (defalias truss/ex-map)
+  (defalias truss/ex-chain)
+  (defalias truss/matching-error)
+  (defalias truss/catching-rf)
+  (defalias truss/catching-xform)
+  #?(:clj
+     (do
+       (defalias truss/try*)
+       (defalias truss/catching)
+       (defalias truss/throws)
+       (defalias truss/throws?)
+       (defalias truss/critical-error?))))
 
 (defn ex-message
   "Same as `core/ex-message` (added in Clojure v1.10)."
@@ -875,302 +846,7 @@
   #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
      :cljs (when (instance? ExceptionInfo x) (.-cause              x))))
 
-(defn ex-root
-  "Returns root cause of given platform error."
-  [x]
-  (when (error? x)
-    (loop [error x]
-      (if-let [cause (ex-cause error)]
-        (recur cause)
-        error))))
-
-(comment (ex-root (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
-
-(defn ^:no-doc ex-type
-  "Private, don't use.
-   Returns class symbol of given platform error."
-  [x]
-  #?(:clj (symbol (.getName (class x)))
-     :cljs
-     (cond
-       (instance? ExceptionInfo x) `ExceptionInfo ; Note namespaced
-       (instance? js/Error      x) (symbol "js" (.-name x)))))
-
-(defn ^:no-doc ex-map*
-  "Private, don't use.
-   Returns ?{:keys [type msg data]} for given platform error."
-  [x]
-  (when-let [msg             (ex-message x)]
-    (if-let [data (not-empty (ex-data    x))]
-      {:type (ex-type x), :msg msg, :data data}
-      {:type (ex-type x), :msg msg})))
-
-(comment (ex-map* (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
-
-(defn ^:no-doc ex-chain
-  "Private, don't use.
-  Returns vector cause chain of given platform error."
-  ([         x] (ex-chain false x))
-  ([as-maps? x]
-   (when (error? x)
-     (let [xf (if as-maps? ex-map* identity)]
-       (loop [acc [(xf x)], error x]
-         (if-let [cause (ex-cause error)]
-           (recur (conj acc (xf cause)) cause)
-           (do          acc)))))))
-
-(comment (ex-chain :as-maps (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))))
-
-#?(:clj
-   (defn- st-element->map [^StackTraceElement ste]
-     {:class  (symbol (.getClassName  ste))
-      :method (symbol (.getMethodName ste))
-      :file           (.getFileName   ste)
-      :line           (.getLineNumber ste)}))
-
-;; #?(:clj
-;;    (defn- st-element->str ^String [^StackTraceElement ste]
-;;      (str
-;;        "`" (.getClassName ste) "/" (.getMethodName ste) "`"
-;;        " at " (.getFileName ste) ":" (.getLineNumber ste))))
-
-(declare assoc-some as-?nempty-str)
-(defn ^:no-doc ex-map
-  "Private, don't use.
-  Returns ?{:keys [type msg data chain trace]} for given platform error."
-  [x]
-  (when-let [chain (ex-chain x)]
-    (let [maps     (mapv ex-map* chain)
-          root     (peek chain)
-          root-map (peek maps)]
-
-      (assoc-some root-map
-        {:chain maps
-         :trace
-         #?(:cljs (as-?nempty-str (.-stack root))
-            :clj
-            (when-let [st (not-empty (.getStackTrace ^Throwable root))] ; Don't delay
-              (delay (mapv st-element->map st))))}))))
-
-(comment
-  (ex-map  (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"})))
-  (ex-map  (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"})))
-  (let [ex (ex-info "Ex2" {:k2 "v2"} (ex-info "Ex1" {:k1 "v1"}))]
-    (qb 1e5 ; [34.01 435.45]
-      (ex-map         ex)
-      (Throwable->map ex))))
-
-#?(:clj (defn ^:no-doc critical-error?     [x] (and (instance? Error     x) (not (instance? AssertionError x)))))
-#?(:clj (defn-     non-critical-throwable? [x] (and (instance? Throwable x) (not (critical-error? x)))))
-#?(:clj
-   (defn ^:no-doc throw-critical
-     "Private, don't use.
-     If given any `Error` besides `AssertionError`, (re)throw it.
-     Useful as a hack to allow easily catching both `Exception` and `AssertionError`:
-       (try <body> (catch Throwable t (throw-critical t) <body>)), etc."
-     [x] (when (critical-error? x) (throw x))))
-
-#?(:clj
-   (defmacro try*
-     "Like `try`, but `catch` clause class may be:
-       `:ex-info` -- Catches only `ExceptionInfo`
-       `:common` --- Catches `js/Error` (Cljs), `Exception` (Clj)
-       `:all` ------ Catches `:default` (Cljs), `Throwable` (Clj)
-       `:default` -- Catches `:default` (Cljs), `Exception`, and `AssertionError` (Clj)
-                     but NOT other (usually critical) `Error`s
-
-     Addresses CLJ-1293 and the fact that `AssertionError`s are typically NON-critical
-     (so desirable to catch, in contrast to other `Error` classes)."
-     {:arglists '([expr* catch-clauses* ?finally-clause])}
-     [& forms]
-     (let [cljs? (some? (:ns &env))
-           forms
-           (mapv
-             (fn [in]
-               (cond
-                 (not (list-form? in))   in
-                 :let [[s1 s2 s3 & more] in]
-
-                 (not= s1 'catch)    in
-                 (not (keyword? s2)) in
-
-                 :else
-                 (let [[rethrow-critical? s2]
-                       (case s2
-                         (:all     :any)              (if cljs? [false  :default] [false `Throwable])
-                         (:default :all-but-critical) (if cljs? [false  :default] [true  `Throwable])
-                         (:common)                    (if cljs? [false 'js/Error] [false `Exception])
-                         (:ex-info)
-                         (if cljs?
-                           [false    'cljs.core.ExceptionInfo]
-                           [false 'clojure.lang.ExceptionInfo])
-
-                         (throw
-                           (ex-info "[encore/try*] Unexpected catch clause keyword"
-                             {:given    (typed-val s2)
-                              :expected '#{:ex-info :common :all :default}})))]
-
-                   (if rethrow-critical?
-                     `(catch ~s2 ~s3 (throw-critical ~s3) ~@more)
-                     `(catch ~s2 ~s3                      ~@more)))))
-             forms)]
-
-       `(try ~@forms))))
-
-(comment
-  (macroexpand '(try*         (catch :all     t t 1 2 3) (finally 1 2 3)))
-  (macroexpand '(try* (/ 1 0) (catch :all     t t 1 2 3) (finally 1 2 3)))
-  (macroexpand '(try* (/ 1 0) (catch :default t t 1 2 3) (finally 1 2 3))))
-
-#?(:clj
-   (defmacro catching
-     "Terse cross-platform util to swallow exceptions in `expr`.
-     Like (try* expr (catch :default _ nil)). See also `try*`."
-     ([            expr] `(try* ~expr (catch :default     ~'_)))
-     ([catch-class expr] `(try* ~expr (catch ~catch-class ~'_)))))
-
-(comment (catching (zero? "9")))
-
-(declare submap? str-contains? re-pattern?)
-
-(defn matching-error
-  "Given a platform error and criteria, returns the error if it matches
-  all criteria. Otherwise returns nil.
-
-  `kind` may be:
-    - A class (`ArithmeticException`, `AssertionError`, etc.)
-    - A special keyword as given to `try*` (`:default`, `:common`, `:ex-info`, `:all`)
-    - A set of `kind`s  as above, at least one of which must match
-    - A predicate function, (fn match? [x]) -> bool
-
-  `pattern` may be:
-    - A string or Regex against which `ex-message` must match
-    - A map             against which `ex-data`    must match using `submap?`
-    - A set of `pattern`s as above, at least one of which must match
-
-  When an error with (nested) causes doesn't match, a match will be attempted
-  against its (nested) causes.
-
-  Low-level util, see also `throws`, `throws?`."
-  ([     error] error)
-  ([kind error]
-   (when-let [match?
-              (cond
-                (keyword? kind)
-                (case     kind
-                  (:default :all-but-critical) #?(:clj (non-critical-throwable?               error) :cljs (some?                   error))
-                  (:common)                    #?(:clj (instance? Exception                   error) :cljs (instance? js/Error      error))
-                  (:ex-info)                   #?(:clj (instance? clojure.lang.IExceptionInfo error) :cljs (instance? ExceptionInfo error))
-                  (:all :any)                  #?(:clj (instance? Throwable                   error) :cljs (some?                   error))
-                  (throw
-                    (ex-info "[encore/matching-error] Unexpected `kind` keyword"
-                      {:given    (typed-val kind)
-                       :expected '#{:default :common :ex-info :all}})))
-
-                (error? kind) (= kind error) ; Exact match
-                (fn?    kind) (kind error)   ; Pred
-                (set?   kind) (rsome #(matching-error % error) kind)
-                :else (instance? kind error))]
-     error))
-
-  ([kind pattern error]
-   (if-let [match?
-            (and
-              (matching-error kind error)
-              (cond
-                (nil?        pattern) true
-                (set?        pattern) (rsome #(matching-error kind % error) pattern)
-                (string?     pattern) (str-contains?   (ex-message   error) pattern)
-                (re-pattern? pattern) (re-find pattern (ex-message   error))
-                (map?        pattern) (when-let [data  (ex-data      error)]
-                                        (submap? data pattern))
-                :else
-                (unexpected-arg! pattern
-                  {:param       'pattern
-                   :context  `matching-error
-                   :expected '#{nil set string re-pattern map}})))]
-     error
-     ;; Try match cause
-     (when-let [cause (ex-cause error)]
-       (matching-error kind pattern cause)))))
-
-#?(:clj
-   (defmacro throws
-     "Evals `form` and if it throws an error that matches given criteria using
-     `matching-error`, returns the matching error. Otherwise returns nil.
-
-     See also `matching-error`, `throws?`."
-     ([             form] `                               (try* ~form nil (catch :all ~'t ~'t)))
-     ([kind         form] `(matching-error ~kind          (try* ~form nil (catch :all ~'t ~'t))))
-     ([kind pattern form] `(matching-error ~kind ~pattern (try* ~form nil (catch :all ~'t ~'t))))))
-
-#?(:clj
-   (defmacro throws?
-     "Evals `form` and if it throws an error that matches given criteria using
-     `matching-error`, returns true. Otherwise returns false.
-
-     Useful for unit tests, e.g.:
-       (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
-
-     See also `matching-error`, `throws`."
-     ([             form] `(boolean (throws                ~form)))
-     ([kind         form] `(boolean (throws ~kind          ~form)))
-     ([kind pattern form] `(boolean (throws ~kind ~pattern ~form)))))
-
-(let [get-default-error-fn
-      (fn [base-data]
-        (let [msg       (get    base-data :error/msg "Error thrown during reduction")
-              base-data (dissoc base-data :error/msg)]
-
-          (fn default-error-fn [data cause] ; == (partial ex-info <msg>)
-            (throw (ex-info msg (conj base-data data) cause)))))]
-
-  (defn catching-rf
-    "Returns wrapper around given reducing function `rf` so that if `rf`
-    throws, (error-fn <thrown-error> <contextual-data>) will be called.
-
-    The default `error-fn` will rethrow the original error, wrapped in
-    extra contextual information to aid debugging.
-
-    See also `catching-xform`."
-    ([         rf] (catching-rf (get-default-error-fn {:rf rf}) rf))
-    ([error-fn rf]
-     (let [error-fn
-           (if (map? error-fn) ; Undocumented convenience
-             (get-default-error-fn error-fn)
-             (do                   error-fn))]
-
-       (fn catching-rf
-         ([       ] (try* (rf)        (catch :all t (error-fn {:rf rf :call '(rf)} t))))
-         ([acc    ] (try* (rf acc)    (catch :all t (error-fn {:rf rf :call '(rf acc)    :args {:acc (typed-val acc)}} t))))
-         ([acc in ] (try* (rf acc in) (catch :all t (error-fn {:rf rf :call '(rf acc in) :args {:acc (typed-val acc)
-                                                                                                :in  (typed-val in)}} t))))
-         ([acc k v]
-          (try* (rf acc k v)
-            (catch :all t
-              (error-fn
-                {:rf     rf
-                 :call '(rf acc k v)
-                 :args
-                 {:acc (typed-val acc)
-                  :k   (typed-val k)
-                  :v   (typed-val v)}}
-                t)))))))))
-
-(defn catching-xform
-  "Like `catching-rf`, but applies to a transducer (`xform`).
-
-  Makes debugging transductions much easier by greatly improving
-  the information provided in any errors thrown by `xform` or the
-  reducing fn:
-
-    (transduce
-      (catching-xform (comp (filter even?) (map inc))) ; Modified xform
-      <reducing-fn>
-      <...>)"
-
-  ([error-fn xform] (comp (fn [rf] (catching-rf error-fn rf)) xform))
-  ([         xform] (comp           catching-rf               xform)))
+(declare assoc-some)
 
 ;;;; Vars, etc.
 
@@ -1189,7 +865,7 @@
           (get (var-info macro-env sym) :sym)
           (or
             (get (var-info macro-env sym) :sym)
-            (when (catching (require-sym-ns sym))
+            (when (truss/catching (require-sym-ns sym))
               (get (var-info macro-env sym) :sym))))))))
 
 (comment (resolve-sym nil 'string?))
@@ -1229,9 +905,9 @@
            (if-not (:ns macro-env)
              *file* ; Compiling Clj
              (or    ; Compiling Cljs
-               (when-let [url (and file (catching (jio/resource file)))]
-                 (catching (.getPath (jio/file url)))
-                 (do                 (str      url)))
+               (when-let [url (and file (truss/catching (jio/resource file)))]
+                 (truss/catching (.getPath (jio/file url)))
+                 (do                       (str      url)))
                file))]
 
        (assoc-some
@@ -1278,8 +954,8 @@
          (cljs.test/use-fixtures :once f))"
 
   [fixtures-map]
-  (have? map?                         fixtures-map)
-  ;; (have? [:ks<= #{:before :after}] fixtures-map)
+  (truss/have? map?                         fixtures-map)
+  ;; (truss/have? [:ks<= #{:before :after}] fixtures-map)
 
   #?(:cljs fixtures-map ; Cljs supports a map with {:keys [before after]}
      :clj ; Clj wants a fn
@@ -1484,14 +1160,14 @@
          (try
            (Long/parseLong x)
            (catch NumberFormatException _
-             (catching (long (Float/parseFloat x))))))))
+             (truss/catching (long (Float/parseFloat x))))))))
 
   (defn as-?float [x]
     (cond
       (number? x) (double x)
       (string? x)
       #?(:cljs (parse-js-float x)
-         :clj  (catching (Double/parseDouble x)))))
+         :clj  (truss/catching (Double/parseDouble x)))))
 
   (defn as-?nat-int   [x] (when-let [n (as-?int   x)] (when-not (neg? ^long   n) n)))
   (defn as-?pos-int   [x] (when-let [n (as-?int   x)] (when     (pos? ^long   n) n)))
@@ -1592,15 +1268,15 @@
 ;;        (when-let [n-records (is pos? (count remaining))] ...), etc."
 ;;      [pred x]
 ;;      (if (list-form? x)
-;;        `(let [x# ~x] (when (catching (~pred x#)) x#))
-;;        (do          `(when (catching (~pred ~x)) ~x)))))
+;;        `(let [x# ~x] (when (truss/catching (~pred x#)) x#))
+;;        (do          `(when (truss/catching (~pred ~x)) ~x)))))
 
 (defn is!
   "Lightweight `have!` that provides less diagnostic info."
   ([     x     ] (is! some? x nil)) ; Nb different to single-arg `have`
   ([pred x     ] (is! pred  x nil))
   ([pred x data]
-   (if (catching (pred x))
+   (if (truss/catching (pred x))
      x
      (throw
        (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
@@ -1617,7 +1293,7 @@
      ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
      ([test       ]
       (let [[error-id test] (if (vector? test) test [nil test])]
-        `(let [[test# err#] (try* [~test nil] (catch :all err# [nil err#]))]
+        `(let [[test# err#] (truss/try* [~test nil] (catch :all err# [nil err#]))]
            (when-not test# (or ~error-id '~test :check/falsey)))))))
 
 #?(:clj
@@ -1649,8 +1325,7 @@
 #?(:clj
    (defmacro satisfies!
      "If (satisfies? protocol arg) is true, returns arg.
-     Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
-     See `unexpected-arg!` for more info."
+     Otherwise throws runtime `ex-info`."
      {:arglists
       '([protocol arg]
         [protocol arg   {:keys [msg context param ...]}]
@@ -1663,15 +1338,14 @@
         `(let [arg# ~arg]
            (if (satisfies? ~protocol arg#)
              arg#
-             (unexpected-arg! arg# ~opts)))))))
+             (truss/unexpected-arg! arg# ~opts)))))))
 
 (comment (macroexpand '(satisfies! my-protocol arg :k1 :v1 :k2 :v2)))
 
 #?(:clj
    (defmacro instance!
      "If (instance? class arg) is true, returns arg.
-     Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
-     See `unexpected-arg!` for more info."
+     Otherwise throws runtime `ex-info`."
      {:arglists
       '([class arg]
         [class arg   {:keys [msg context param ...]}]
@@ -1684,7 +1358,7 @@
         `(let [arg# ~arg]
            (if (instance? ~class arg#)
              arg#
-             (unexpected-arg! arg# ~opts)))))))
+             (truss/unexpected-arg! arg# ~opts)))))))
 
 (comment (macroexpand '(instance! String 5 :k1 :v1 :k2 :v2)))
 
@@ -2124,8 +1798,8 @@
                :floor (Math/floor n*)
                :ceil  (Math/ceil  n*)
                :trunc (long       n*)
-               (unexpected-arg! kind
-                 {:param       'kind
+               (truss/unexpected-arg! kind
+                 {:param             'kind
                   :context  `round
                   :expected #{:round :floor :ceil :trunc}})))]
 
@@ -2842,39 +2516,7 @@
       (core/merge m1 m2 m3)
       (merge      m1 m2 m3))))
 
-(defn submap?
-  "Returns true iff `sub-map` is a (possibly nested) submap of `super-map`,
-  i.e. iff every (nested) value in `sub-map` has the same (nested) value in `super-map`.
-
-  `sub-map` may contain special values:
-    `:submap/nx`     - Matches iff `super-map` does not contain key
-    `:submap/ex`     - Matches iff `super-map` does     contain key (any     val)
-    `:submap/some`   - Matches iff `super-map` does     contain key (non-nil val)
-    (fn [super-val]) - Matches iff given unary predicate returns truthy
-
-  Uses stack recursion so supports only limited nesting."
-  [super-map sub-map]
-  (reduce-kv
-    (fn [_ sub-key sub-val]
-      (if (map?    sub-val)
-        (let [super-val (get super-map sub-key)]
-          (if-let [match? (and (map? super-val) (submap? super-val sub-val))]
-            true
-            (reduced false)))
-
-        (let [super-val (get super-map sub-key ::nx)]
-          (if-let [match?
-                   (if-let [pred-fn (when (fn? sub-val) sub-val)]
-                     (pred-fn super-val)
-                     (case sub-val
-                       :submap/nx      (identical-kw? super-val ::nx)
-                       :submap/ex (not (identical-kw? super-val ::nx))
-                       :submap/some            (some? super-val)
-                       (= sub-val super-val)))]
-            true
-            (reduced false)))))
-    true
-    sub-map))
+(defalias truss/submap?)
 
 (defn submaps?
   "Experimental, subject to change without notice.
@@ -3360,7 +3002,7 @@
        (instance? java.time.Instant x) x
        (instance? java.util.Date    x) (.toInstant ^java.util.Date x)
        (int?                        x) (java.time.Instant/ofEpochMilli x)
-       (string?                     x) (catching (java.time.Instant/parse ^String x)))
+       (string?                     x) (truss/catching (java.time.Instant/parse ^String x)))
 
      :cljs
      (cond
@@ -3380,7 +3022,7 @@
        (instance? java.util.Date    x) x
        (int?                        x) (java.util.Date. ^long x)
        (string?                     x)
-       (catching
+       (truss/catching
          (java.util.Date/from
            (java.time.Instant/parse ^String x))))))
 
@@ -3394,8 +3036,8 @@
        (instance? java.util.Date    x) (.getTime      ^java.util.Date    x)
        (string?                     x)
        (or
-         (catching (Long/parseLong x))
-         (catching
+         (truss/catching (Long/parseLong x))
+         (truss/catching
            (.toEpochMilli
              (java.time.Instant/parse ^String x)))))
 
@@ -3662,8 +3304,8 @@
 
   ([{:keys [size ttl-ms gc-every] :as opts} f]
 
-   (have? [:ks<= #{:size :ttl-ms :gc-every}] opts)
-   (have? [:or nil? pos-num?] size ttl-ms gc-every)
+   (truss/have? [:ks<= #{:size :ttl-ms :gc-every}] opts)
+   (truss/have? [:or nil? pos-num?] size ttl-ms gc-every)
 
    (cond
      size ; De-raced, commands, ttl, gc, max-size
@@ -3865,8 +3507,8 @@
            (name-with-attrs sym body
              {:arglists `'~arglists})]
 
-       (have? map?                               cache-opts)
-       (have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
+       (truss/have? map?                               cache-opts)
+       (truss/have? [:ks<= #{:ttl-ms :size :gc-every}] cache-opts)
 
        `(def ~sym (cache ~cache-opts (fn ~@body))))))
 
@@ -3894,7 +3536,7 @@
 (deftype LimitEntry [^long n ^long udt0])
 (deftype LimitHits  [m worst-lid ^long worst-ms])
 
-(let [limit-spec (fn [n ms] (have? pos-int? n ms) (LimitSpec. n ms))]
+(let [limit-spec (fn [n ms] (truss/have? pos-int? n ms) (LimitSpec. n ms))]
   (defn- coerce-limit-spec [x]
     (cond
       (map?    x) (reduce-kv (fn [acc lid [n ms]] (assoc acc lid (limit-spec n ms))) {} x)
@@ -3906,7 +3548,7 @@
             (limit-spec n ms)))
         {} x)
 
-      (unexpected-arg! x
+      (truss/unexpected-arg! x
         {:context  `rate-limiter
          :param    'rate-limiter-spec
          :expected '#{map vector}}))))
@@ -4066,7 +3708,7 @@
 
            (:rl/peek :limiter/peek) (f1 req-id true)
 
-           (unexpected-arg! cmd
+           (truss/unexpected-arg! cmd
              {:context  `rate-limiter
               :param    'rate-limiter-command
               :expected #{:rl/reset :rl/peek}
@@ -4207,7 +3849,7 @@
     - Deref  to return    count in last `msecs` window."
   [msecs]
   (RollingCounter.
-    (long (have pos-int? msecs))
+    (long (truss/have pos-int? msecs))
     (latom [])
     (latom 0)
     #?(:clj (latom nil))))
@@ -4714,7 +4356,7 @@
     (abbreviate-ns 2 \"foo.bar/baz\") => \"foo.bar/baz\""
   ([       x] (abbreviate-ns 1 x))
   ([n-full x]
-   (let [n-full (long (have nat-int? n-full))
+   (let [n-full (long (truss/have nat-int? n-full))
          [p1 p2] (str/split (as-qname x) #"/")]
      (if-not p2
        x
@@ -5072,7 +4714,7 @@
           :alpha-uppercase "ABCDEFGHIJKLMNOPQRSTUVWXYZ"                                       ; 26 chars
           :hex-lowercase   "0123456789abcdef"                                                 ; 16 chars
           :hex-uppercase   "0123456789ABCDEF"                                                 ; 16 chars
-          (have string? chars))
+          (truss/have string? chars))
 
         nchars       (count chars)
         max-char-idx (dec  nchars)
@@ -5347,7 +4989,7 @@
      {:arglists '([opts] [& {:as opts :keys [years months weeks days hours mins secs msecs ms]}])}
      ([k1 v1 & more] `(msecs ~(reduce-kvs assoc {k1 v1} (vec more))))
      ([{:keys [years months weeks days hours mins secs msecs ms] :as opts}]
-      (have? [:ks<= #{:years :months :weeks :days :hours :mins :secs :msecs :ms}] opts)
+      (truss/have? [:ks<= #{:years :months :weeks :days :hours :mins :secs :msecs :ms}] opts)
       (taoensso.encore/ms opts))))
 
 (comment (macroexpand '(msecs :weeks 3)))
@@ -5525,7 +5167,7 @@
        (^long [version-string]
         (or
           (when-let [^String s version-string]
-            (catching
+            (truss/catching
               (Integer/parseInt
                 (or ; Ref. <https://stackoverflow.com/a/2591122>
                   (when     (.startsWith s "1.")                  (.substring s 2 3))    ; "1.6.0_23", etc.
@@ -5739,8 +5381,8 @@
                    return :value}} spec])}
 
        ([            ] `(get-locals)) ; Back compatibility for unrelated util with same name
-       ([opts    spec] (have? const-form? opts    spec) `(get-env ~(assoc opts :spec spec)))
-       ([opts-or-spec] (have? const-form? opts-or-spec)
+       ([opts    spec] (truss/have? const-form? opts    spec) `(get-env ~(assoc opts :spec spec)))
+       ([opts-or-spec] (truss/have? const-form? opts-or-spec)
         (let [opts (parse-opts opts-or-spec)]
           (if (:ns &env)
              (get-env*  (assoc opts :platform* :cljs)) ; Embed compile-time value
@@ -5760,7 +5402,8 @@
      (case kind
        :daemon (doto (Thread. ^Runnable nullary-fn) (.setDaemon true) (.start))
        :user   (doto (Thread. ^Runnable nullary-fn)                   (.start))
-       (unexpected-arg! kind {:context `threaded*, :param kind, :expected #{:daemon :user}}))))
+       (truss/unexpected-arg! kind
+         {:context `threaded*, :param kind, :expected #{:daemon :user}}))))
 
 #?(:clj
    (defmacro ^:no-doc threaded
@@ -5800,14 +5443,14 @@
        (if (vector? n-threads)
          (let [[kind n] n-threads]
            (case kind
-             :num   (long (have pos-int? n))
-             :perc  (long (perc          n))
-             :ratio (long (ratio         n))
-             (unexpected-arg! kind
+             :num   (long (truss/have pos-int? n))
+             :perc  (long (perc                n))
+             :ratio (long (ratio               n))
+             (truss/unexpected-arg! kind
                {:context  `get-num-threads
                 :param        'num-threads
                 :expected '#{<pos-int> [:perc <percent>] [:ratio <ratio>]}})))
-         (long (have pos-int? n-threads))))))
+         (long (truss/have pos-int? n-threads))))))
 
 (comment
   (get-num-threads [:perc   90])
@@ -5837,7 +5480,7 @@
              (if queue-size
                (java.util.concurrent.LinkedBlockingQueue. (int queue-size))
                (java.util.concurrent.LinkedBlockingQueue.))
-             (unexpected-arg! queue-type
+             (truss/unexpected-arg! queue-type
                {:expected #{:array :linked}
                 :context `thread-pool}))
 
@@ -6131,7 +5774,7 @@
            clojure.lang.IDeref (deref [_] ((promise) :drained))
            clojure.lang.IFn
            (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
-           (invoke [_ f] (when-not (stopped?_) (try* (f) (catch :all _)) true)))
+           (invoke [_ f] (when-not (stopped?_) (truss/try* (f) (catch :all _)) true)))
 
          (let [cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
                abq           (java.util.concurrent.ArrayBlockingQueue.
@@ -6162,7 +5805,7 @@
                              (if-let [f (.poll abq 200 java.util.concurrent.TimeUnit/MILLISECONDS)]
                                (do
                                  (.incrementAndGet cnt-executing)
-                                 (try*
+                                 (truss/try*
                                    (f)
                                    (catch :all _)
                                    (finally (.decrementAndGet cnt-executing)))
@@ -6202,7 +5845,7 @@
                          false ; Successfully took new f, but drop/s occurred
                          (recur)))))
 
-                 (unexpected-arg! mode
+                 (truss/unexpected-arg! mode
                    {:context  `runner
                     :expected #{:sync :blocking :dropping :sliding}}))]
 
@@ -6445,7 +6088,7 @@
       `(let [spec# ~spec
              ;; Default 3 warmup + 3 working sets:
              [num-sets# num-laps#] (if (vector? spec#) spec# [6 spec#])]
-         (have? pos-num? num-sets# num-laps#)
+         (truss/have? pos-num? num-sets# num-laps#)
          (round2
            (/ (double
                 (reduce min
@@ -6533,7 +6176,7 @@
              (fn [uri params]
                (cond
                  (js-form-data? params) [uri params]
-                 :do (have? map? params)
+                 :do (truss/have? map? params)
 
                  (and    (exists? js/FormData) (rsome js-file? (vals params)))
                  (let [form-data (js/FormData.)]
@@ -6545,7 +6188,7 @@
                  :else [uri (url-encode params)]))]
 
          (fn [uri method params]
-           (have? [:or nil? map? js-form-data?] params)
+           (truss/have? [:or nil? map? js-form-data?] params)
            (case method
              :get  (url-encode      uri params)
              :post (adaptive-encode uri params)
@@ -6592,19 +6235,19 @@
 
       callback-fn]
 
-     (have? [:or nil? nat-int?] timeout-ms)
+     (truss/have? [:or nil? nat-int?] timeout-ms)
 
      (let [^goog.net.XhrIoPool xhr-pool (force xhr-pool)
            with-xhr
            (fn [^goog.net.XhrIo xhr]
-             (try*
+             (truss/try*
                (let [timeout-ms (or (get opts :timeout) timeout-ms) ; Deprecated opt
                      xhr-method
                      (case method
                        :get  "GET"
                        :post "POST"
                        :put  "PUT"
-                       (unexpected-arg! method
+                       (truss/unexpected-arg! method
                          {:context  `ajax-call
                           :param    'method
                           :expected #{:get :post :put}}))
@@ -6664,13 +6307,13 @@
                                                  ;; (match? "/html") :text
                                                  :else               :text)))]
 
-                                       (try*
+                                       (truss/try*
                                          (case resp-type
                                            :edn  (read-edn (.getResponseText xhr))
                                            :json           (.getResponseJson xhr)
                                            :xml            (.getResponseXml  xhr)
                                            :text           (.getResponseText xhr)
-                                           (unexpected-arg! resp-type
+                                           (truss/unexpected-arg! resp-type
                                              {:context  `ajax-call
                                               :param    'resp-type
                                               :expected #{:auto :edn :json :xml :text}}))
@@ -6712,7 +6355,7 @@
 
                  (.send xhr xhr-url xhr-method xhr-?data xhr-headers)
 
-                 (when-let [cb xhr-cb-fn] (catching (cb xhr)))
+                 (when-let [cb xhr-cb-fn] (truss/catching (cb xhr)))
                  xhr)
 
                (catch :all e
@@ -7035,7 +6678,7 @@
             (nil? x) ""
             (ns?  x) (str x)
             :else
-            (unexpected-arg! x
+            (truss/unexpected-arg! x
               {:context  `name-filter
                :param    'filter-input-arg
                :expected '#{string keyword symbol namespace nil}}))))
@@ -7098,7 +6741,7 @@
                 re-match (fn match? [in] (re-match (input-str! in))))))
 
           :else
-          (unexpected-arg! spec
+          (truss/unexpected-arg! spec
             {:context  `name-filter
              :param    'filter-spec
              :expected '#{string keyword symbol set regex namespace
@@ -7208,7 +6851,7 @@
       #?(:cljs (js/setTimeout f msecs)
          :clj
          (let [tt (proxy [java.util.TimerTask] []
-                    (run [] (catching (f))))]
+                    (run [] (truss/catching (f))))]
            (.schedule timer tt (long msecs))))))
 
   (defonce default-timeout-impl_
@@ -7423,7 +7066,7 @@
        (defmacro ^:no-doc ^:deprecated use-fixtures* [& args]  `(taoensso.encore/use-fixtures  ~@args))
        (defmacro ^:no-doc ^:deprecated nano-time*    [& args]  `(taoensso.encore/now-nano*     ~@args))
        (defmacro ^:no-doc ^:deprecated qbench        [& args]  `(taoensso.encore/quick-bench   ~@args))
-       (defmacro ^:no-doc ^:deprecated catch-errors  [& body]  `(try* [(do ~@body) nil] (catch :all e# [nil e#])))
+       (defmacro ^:no-doc ^:deprecated catch-errors  [& body]  `(truss/try* [(do ~@body) nil] (catch :all e# [nil e#])))
 
        (defmacro ^:no-doc ^:deprecated -vol!       [val]           `(volatile!     ~val))
        (defmacro ^:no-doc ^:deprecated -vol-reset! [vol_ val]      `(vreset! ~vol_ ~val))
@@ -7432,7 +7075,7 @@
        (defmacro ^:no-doc thrown
          {:deprecated "Encore v3.31.0 (2022-10-27)"
           :doc "Prefer `throws`."}
-         [& args] `(throws ~@args))))
+         [& args] `(truss/throws ~@args))))
 
   ;;; Prefer `str-join` when possible (needs Clojure 1.7+)
   #?(:cljs (defn ^:no-doc ^:deprecated undefined->nil [x] (if (undefined? x) nil x)))
@@ -7639,17 +7282,17 @@
   (defn ^:no-doc -unexpected-arg!
     "Prefer `unexpected-arg!`"
     {:deprecated "Encore v3.68.0 (2023-09-25)"}
-    ([arg        ] (unexpected-arg! arg nil))
-    ([arg details] (unexpected-arg! arg details)))
+    ([arg        ] (truss/unexpected-arg! arg nil))
+    ([arg details] (truss/unexpected-arg! arg details)))
 
   (defn ^:no-doc when?
     "Prefer `is`." {:deprecated "Encore v3.98.0 (2024-04-08)"}
-    [pred x] (when (catching (pred x)) x))
+    [pred x] (when (truss/catching (pred x)) x))
 
   (def* ^:no-doc -matching-error
     "Prefer `matching-error`."
     {:deprecated "Encore v3.70.0 (2023-10-17)"}
-    matching-error)
+    truss/matching-error)
 
   (defn ^:no-doc rate-limiter*
     "Prefer `rate-limiter`."
@@ -7689,13 +7332,13 @@
      (defmacro catching
        "Terse, cross-platform (try* expr (catch :all _)).
        Arities besides #{1 2} are deprecated, prefer `try*` in these cases."
-       ([           expr] `(try* ~expr (catch :all        ~'_)))
-       ([error-type expr] `(try* ~expr (catch ~error-type ~'_)))
+       ([           expr] `(truss/try* ~expr (catch :all        ~'_)))
+       ([error-type expr] `(truss/try* ~expr (catch ~error-type ~'_)))
 
        ;;; Deprecated arities:
-       ([try-expr            error-sym catch-expr             ] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
-       ([try-expr            error-sym catch-expr finally-expr] `(try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
-       ([try-expr error-type error-sym catch-expr finally-expr] `(try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
+       ([try-expr            error-sym catch-expr             ] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
+       ([try-expr            error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
+       ([try-expr error-type error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
   #?(:default (defn ^:no-doc call-form? "Prefer `list-form`." {:deprecated "Encore v3.105.0 (2024-04-29)"} [x] (list-form? x)))
   #?(:clj
@@ -7760,13 +7403,13 @@
          (let [{:keys [error-data validator default]} opts
                have-default? (contains? opts :default)]
            (try
-             (when (and validator have-default?) (have? validator default))
+             (when (and validator have-default?) (truss/have? validator default))
              (when-let [{:keys [config] :as m} (get-env* (get-config-opts opts))]
                (let [config
                      (if (and (map? config) (map? default))
                        (nested-merge default config)
                        (do                   config))]
-                 (when validator (have? validator config))
+                 (when validator (truss/have? validator config))
                  (assoc m :config config)))
 
              (catch Throwable t
@@ -7808,7 +7451,7 @@
      (defmacro ^:no-doc caught-error-data
        "Prefer `throws?`."
        {:deprecated "Encore v3.98.0 (2024-04-08)"}
-       [& body] `(try* (do ~@body nil) (catch :all e# (error-data e#))))))
+       [& body] `(truss/try* (do ~@body nil) (catch :all e# (error-data e#))))))
 
 (deprecated
   (defn ^:no-doc get-subvec "Prefer `subvec`."

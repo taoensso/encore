@@ -2,7 +2,8 @@
   {:deprecated "Encore v3.31.0 (2022-10-27)"}
   (:require
    [clojure.test    :as test]
-   [taoensso.encore :as enc  :refer [have? if-cljs]]))
+   [taoensso.truss  :as truss]
+   [taoensso.encore :as enc]))
 
 (enc/deprecated
   #?(:clj
@@ -25,9 +26,9 @@
        {:deprecated "_Encore v3.31.0 (2022-10-27)"
         :doc "Prefer `encore/test-fixtures`"}
        [fixture-type & fixtures]
-       (have? [:el #{:each :once}] fixture-type)
-       (have? map? :in fixtures)
-       `(if-cljs
+       (truss/have? [:el #{:each :once}] fixture-type)
+       (truss/have? map? :in fixtures)
+       `(enc/if-cljs
           (test/use-fixtures ~fixture-type ~@fixtures)
           (test/use-fixtures ~fixture-type ~@(map fixture-map->fn fixtures)))))
 

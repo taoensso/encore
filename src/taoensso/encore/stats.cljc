@@ -3,9 +3,8 @@
   Experimental, subject to change without notice!"
   (:require
    [clojure.string  :as str]
-   [taoensso.encore :as enc  :refer [have have? have!]]
+   [taoensso.encore :as enc]
    #?(:cljs [goog.array]))
-
   #?(:clj (:import [java.util LinkedList])))
 
 (comment

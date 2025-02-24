@@ -2,7 +2,9 @@
   "Experimental, subject to change without notice!
   Private byte[] utils."
   (:refer-clojure :exclude [bytes?])
-  (:require [taoensso.encore :as enc :refer [have have?]])
+  (:require
+   [taoensso.truss  :as truss]
+   [taoensso.encore :as enc])
   (:import
    [java.nio.charset StandardCharsets]
    [java.util BitSet]
@@ -26,7 +28,7 @@
   (let [fail!
         (fn [n target-type target-min target-max]
           (throw
-            (ex-info "Failed to cast number to typed int (exceeds type range)"
+            (truss/ex-info "Failed to cast number to typed int (exceeds type range)"
               {:given  (enc/typed-val n)
                :target {:type target-type :min target-min :max target-max}})))]
 
@@ -193,7 +195,7 @@
       (<  target-len actual-len) (java.util.Arrays/copyOf ba target-len)
       :else
       (throw
-        (ex-info "Given byte[] too short"
+        (truss/ex-info "Given byte[] too short"
           {:length {:actual actual-len, :target target-len}})))))
 
 (defn nempty-ba?
@@ -236,7 +238,7 @@
      (enc/int? x) (byte-array   x)
      (seqable? x) (byte-array   x)
      :else
-     (enc/unexpected-arg! x
+     (truss/unexpected-arg! x
        {:context  `as-ba
         :expected '#{byte-array string char-array int seqable}}))))
 
@@ -269,7 +271,7 @@
     (string? x) (.toCharArray ^String               x)
     (bytes?  x) (.toCharArray ^String (utf8-ba->str x))
     :else
-    (enc/unexpected-arg! x
+    (truss/unexpected-arg! x
       {:context  `as-ca
        :expected '#{char-array string byte-array}})))
 
@@ -335,7 +337,7 @@
       (<= n   range-uint) (do (.writeByte out 127) (.writeInt   out (from-uint   n)) 5) ; 1+4=5 bytes for [0,4294967295]
       :else
       (throw
-        (ex-info "Dynamic unsigned int exceeds max"
+        (truss/ex-info "Dynamic unsigned int exceeds max"
           {:value n, :max range-uint})))))
 
 (defn read-dynamic-uint
@@ -424,7 +426,7 @@
             (if skip-unknown?
               nil
               (throw
-                (ex-info "Failed to freeze set (encountered element not in bit schema)"
+                (truss/ex-info "Failed to freeze set (encountered element not in bit schema)"
                   {:element    (enc/typed-val el)
                    :bit-schema bit-schema})))))
         els)
@@ -449,7 +451,7 @@
                 (if skip-unknown?
                   els
                   (throw
-                    (ex-info "Failed to thaw set (encountered bit index not in bit schema)"
+                    (truss/ex-info "Failed to thaw set (encountered bit index not in bit schema)"
                       {:bit-index  bit-idx
                        :bit-schema bit-schema})))))
             (transient #{}) bs))))))

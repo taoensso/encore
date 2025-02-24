@@ -10,7 +10,8 @@
 
   (:require
    [clojure.string  :as str]
-   [taoensso.encore :as enc :refer [have have?]]
+   [taoensso.truss  :as truss]
+   [taoensso.encore :as enc]
    [taoensso.encore.stats :as stats])
 
   #?(:cljs
@@ -36,7 +37,7 @@
     "Throws an `ex-info` for given invalid level."
     [x]
     (throw
-      (ex-info "[encore/signals] Invalid level"
+      (truss/ex-info "[encore/signals] Invalid level"
         {:level    (enc/typed-val x)
          :expected expected}))))
 
@@ -92,9 +93,9 @@
   (defn valid-nf-spec
     "Returns valid `encore/name-filter` spec, or throws."
     [x]
-    (if-let [t (enc/try* (do (nf-compile x) nil) (catch :all t t))]
+    (if-let [t (truss/try* (do (nf-compile x) nil) (catch :all t t))]
       (throw
-        (ex-info
+        (truss/ex-info
           (if (fn? x)
             "[encore/signals] Invalid name filter (fn filters no longer supported)"
             "[encore/signals] Invalid name filter")
@@ -335,8 +336,8 @@
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
-     (enc/unexpected-arg! sf-arity
-       {:param           'sf-arity
+     (truss/unexpected-arg! sf-arity
+       {:param             'sf-arity
         :context  context
         :expected #{2 3 4}})))
 
@@ -345,7 +346,7 @@
      (if (enc/const-form? form)
        (do                form)
        (throw
-         (ex-info "[encore/signals] `filter-call` arg must be a const (compile-time) value"
+         (truss/ex-info "[encore/signals] `filter-call` arg must be a const (compile-time) value"
            {:param param, :form form})))))
 
 #?(:clj
@@ -362,11 +363,11 @@
      [{:as core-opts :keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}
       call-opts]
 
-     (enc/have? [:ks>= #{:ct-call-filter :*rt-call-filter*}] core-opts)
-     (enc/have? [:or nil? spec-filter?] ct-call-filter)
-     (enc/have? qualified-symbol?      *rt-call-filter*)
+     (truss/have? [:ks>= #{:ct-call-filter :*rt-call-filter*}] core-opts)
+     (truss/have? [:or nil? spec-filter?] ct-call-filter)
+     (truss/have? qualified-symbol?      *rt-call-filter*)
 
-     (enc/have? [:or nil? map?]   call-opts)
+     (truss/have? [:or nil? map?]   call-opts)
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
@@ -559,7 +560,7 @@
       (if (fn? fn-or-fns)
         (do    fn-or-fns)
         (throw
-          (ex-info "[encore/signals] Unexpected middleware value"
+          (truss/ex-info "[encore/signals] Unexpected middleware value"
             {:given    (enc/typed-val fn-or-fns)
              :expected '#{nil fn [f1 f2 ...]}}))))))
 
@@ -608,8 +609,8 @@
         rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
         spec-filter*  (spec-filter kind-filter ns-filter id-filter min-level)
 
-        middleware    (as-middleware-fn    middleware) ; Deprecated, kept temporarily for back compatibility
-        ;; middleware (have [:or nil? fn?] middleware) ; (fn [signal-value]) => ?modified-signal-value
+        middleware    (as-middleware-fn          middleware) ; Deprecated, kept temporarily for back compatibility
+        ;; middleware (truss/have [:or nil? fn?] middleware) ; (fn [signal-value]) => ?modified-signal-value
 
         rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
         rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
@@ -618,7 +619,7 @@
         error-fn*
         (when error-fn
           (fn [signal error]
-            (enc/catching
+            (truss/catching
               (if (and rl-error (rl-error)) ; error-fn rate-limited
                 nil ; noop
                 (when-let [error-fn
@@ -634,7 +635,7 @@
            :clj
            (when async
              (enc/runner
-               (assoc (have map? async)
+               (assoc (truss/have map? async)
                  :auto-stop?  false
                  :drain-msecs 0))))
 
@@ -658,7 +659,7 @@
                              (deref drained_))))))
 
                   handler-result
-                  (enc/try*
+                  (truss/try*
                     (handler-fn) ; Give hander-fn opportunity to finalize, etc.
                     {:okay :stopped}
 
@@ -686,7 +687,7 @@
           (let [ns0 (when track-stats? (enc/now-nano))
                 result
                 (or
-                  (enc/try* ; Non-specific (global) trap
+                  (truss/try* ; Non-specific (global) trap
                     (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
                           allow?
                           (if track-stats?
@@ -708,7 +709,7 @@
 
                       (when allow?
                         (when-let [sig-val (signal-value sig-raw sample-rate)]
-                          (enc/try*
+                          (truss/try*
                             (enc/if-not
                                 [sig-val*
                                  (if middleware
@@ -716,14 +717,14 @@
                                    (do         sig-val))]
 
                               (do (when track-stats? (cnt-suppressed)) nil)
-                              (enc/try*
+                              (truss/try*
                                 (handler-fn sig-val*)
                                 (when track-stats? (cnt-handled))
                                 true
                                 (catch :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val* t)))))
                             (catch     :all t (when track-stats? (cnt-errors)) (when error-fn* (error-fn* sig-val  t)))))))
                     (catch             :all t (when track-stats? (cnt-errors)) (when error-fn*
-                                                                                 (let [sig-dbg (or (enc/catching (signal-debug sig-raw)) sig-raw)]
+                                                                                 (let [sig-dbg (or (truss/catching (signal-debug sig-raw)) sig-raw)]
                                                                                    (error-fn* sig-dbg t)))))
                   false)]
 
@@ -743,7 +744,7 @@
                     (when-let [back-pressure? (false? (runner (fn [] (handle-signal! sig-raw))))]
                       (when track-stats? (cnt-backp))
                       (when backp-fn
-                        (enc/catching
+                        (truss/catching
                           (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
                             nil                         ; noop
                             (let [backp-fn
@@ -762,7 +763,7 @@
         stats-fn
         (when track-stats?
           (fn
-            ([action] (throw (ex-info "Not currently implemented" {})))
+            ([action] (throw (truss/ex-info "Not currently implemented" {})))
             ([]
              {:handling-nsecs (when-let [sstats @ssb] @sstats)
               :counts ; Chronologically
@@ -1321,7 +1322,7 @@
           (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
           (~'[handler-id handler-fn dispatch-opts form]
            `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~lib-dispatch-opts ~~'dispatch-opts)]
-              (enc/try*
+              (truss/try*
                 (binding [~'~*sig-handlers* (add-handler {} ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
                 (finally (~'wrapped-handler-fn#)))))))))
 
@@ -1339,7 +1340,7 @@
           (~'[handler-id handler-fn               form] (list '~self ~'handler-id ~'handler-fn nil ~'form))
           (~'[handler-id handler-fn dispatch-opts form]
            `(let [~'wrapped-handler-fn# (wrap-handler ~~'handler-id ~~'handler-fn ~~lib-dispatch-opts ~~'dispatch-opts)]
-              (enc/try*
+              (truss/try*
                 (binding [~'~*sig-handlers* (add-handler ~'~*sig-handlers* ~~'handler-id ~'wrapped-handler-fn#)] ~~'form)
                 (finally (~'wrapped-handler-fn#)))))))))
 
@@ -1495,8 +1496,8 @@
     (map? update-map-or-fn) (enc/merge   old-ctx update-map-or-fn) ; Before ifn
     (ifn? update-map-or-fn) (update-map-or-fn old-ctx)
     :else
-    (enc/unexpected-arg! update-map-or-fn
-      {:param           'update-map-or-fn
+    (truss/unexpected-arg! update-map-or-fn
+      {:param             'update-map-or-fn
        :context  `update-ctx
        :expected '#{nil map fn}})))
 
@@ -1566,8 +1567,8 @@
         ct-call-filter *rt-call-filter* *sig-handlers*
         exclude]}]
 
-     (enc/have? [:ks>= #{:sf-arity :ct-call-filter :*rt-call-filter* :*sig-handlers*}] opts)
-     (enc/have? [:or nil? symbol?]  ct-call-filter  *rt-call-filter*  *sig-handlers*)
+     (truss/have? [:ks>= #{:sf-arity :ct-call-filter :*rt-call-filter* :*sig-handlers*}] opts)
+     (truss/have? [:or nil? symbol?]  ct-call-filter  *rt-call-filter*  *sig-handlers*)
 
      (when-not (contains? #{2 3 4} sf-arity)
        (unexpected-sf-artity! sf-arity `def-api))
