@@ -2625,18 +2625,15 @@
 
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
-(let [ensure-set ensure-set]
-  (defn ks=      #?(:cljs {:tag 'boolean}) [ks m] (=             (set (keys m)) (ensure-set ks)))
-  (defn ks<=     #?(:cljs {:tag 'boolean}) [ks m] (set/subset?   (set (keys m)) (ensure-set ks)))
-  (defn ks>=     #?(:cljs {:tag 'boolean}) [ks m] (set/superset? (set (keys m)) (ensure-set ks)))
-  (defn ks-nnil? #?(:cljs {:tag 'boolean}) [ks m] (revery?    #(some? (get  m %))           ks)))
-
-(comment
-  (ks=      #{:a :b} {:a :A :b :B  :c :C})
-  (ks<=     #{:a :b} {:a :A :b :B  :c :C})
-  (ks>=     #{:a :b} {:a :A :b :B  :c :C})
-  (ks-nnil? #{:a :b} {:a :A :b :B  :c nil})
-  (ks-nnil? #{:a :b} {:a :A :b nil :c nil}))
+(defn ks-nnil? #?(:cljs {:tag 'boolean}) [ks m] (revery? #(some? (get m %)) ks))
+(defn ks=      #?(:cljs {:tag 'boolean}) [ks m] (and (== (count m) (count ks)) (revery? #(contains? m %) ks)))
+(defn ks>=     #?(:cljs {:tag 'boolean}) [ks m] (and (>= (count m) (count ks)) (revery? #(contains? m %) ks)))
+(defn ks<=     #?(:cljs {:tag 'boolean}) [ks m]
+  (let [counted-ks (if (counted? ks) ks (set ks))]
+    (and
+      (<= (count m)     (count counted-ks))
+      (let [ks-set (ensure-set counted-ks)]
+        (reduce-kv (fn [_ k v] (if (contains? ks-set k) true (reduced false))) true m)))))
 
 (declare dissoc-in)
 (defn update-in
