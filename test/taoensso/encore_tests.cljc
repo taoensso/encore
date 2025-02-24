@@ -74,9 +74,9 @@
    (is (= (enc/have? string? "foo")  true))
    (is (= (enc/have?         "foo")  true))
    (is (enc/throws? (enc/have string? 5)))
-   (is (enc/throws? :all
-         {:data {:dynamic :dynamic-data
-                 :arg     :arg-data}}
+   (is (enc/throws? :ex-info
+         {:data      :arg-data
+          :truss/ctx :dynamic-data}
          (enc/with-truss-data :dynamic-data
            (enc/have? string? 5 :data :arg-data))))])
 
