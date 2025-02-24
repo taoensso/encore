@@ -592,6 +592,19 @@
                nil)
             {:a1 :A1, :b1 :B1* :c1 {:a2 :A2 :b2 {:a3 :A3, :b3 :B3* :d1 nil}}}))])])
 
+(deftest _key-sets
+  [(is (true?  (enc/ks=      #{}         {})))
+   (is (true?  (enc/ks<=     #{}         {})))
+   (is (true?  (enc/ks>=     #{}         {})))
+   (is (true?  (enc/ks=      #{:a :b}    {:a :A :b :B})))
+   (is (false? (enc/ks=      #{:a :b}    {:a :A :b :B :c :C})))
+   (is (true?  (enc/ks<=     #{:a :b}    {:a :A :b :B})))
+   (is (false? (enc/ks<=     #{:a :b}    {:a :A :b :B :c :C})))
+   (is (true?  (enc/ks>=     #{:a :b}    {:a :A :b :B :c :C})))
+   (is (false? (enc/ks>=     #{:a :b :c} {:a :A :b :B})))
+   (is (true?  (enc/ks-nnil? #{:a :b}    {:a :A :b :B :c nil})))
+   (is (false? (enc/ks-nnil? #{:a :b :c} {:a :A :b :B :c nil})))])
+
 ;;;; Strings
 
 #?(:clj
