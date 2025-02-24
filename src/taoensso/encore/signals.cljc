@@ -316,7 +316,7 @@
 
 ;;;; Filterable expansions
 
-#?(:clj (enc/defonce expansion-counter (enc/counter)))
+#?(:clj (enc/defonce expansion-counter (enc/counter 1)))
 
 (let [basic-rate-limiters_ (enc/latom {})
       full-rate-limiters_  (enc/latom {})]
@@ -361,99 +361,86 @@
 
 #?(:clj
    (defn filterable-expansion
-     "Low-level util for writing macros with compile-time and runtime filtering.
-     Returns {:keys [expansion-id location elide? allow?]}.
+     "Low-level util for writing macros with callsite expansion filtering.
+     Supports compile-time and runtime filters.
 
+     Returns {:keys [expansion-id elide? allow?]}.
      Caller is responsible for protecting against possible multiple eval of
      forms in `opts`."
 
      {:arglists
-      '([{:keys [sf-arity ct-sig-filter *rt-sig-filter*]}]
+      '([{:keys [cljs? sf-arity ct-sig-filter *rt-sig-filter*]}]
         [{:keys
-          [elide? allow? expansion-id,
-           elidable? location location*,
+          [elidable? elide? allow? expansion-id,
            sample-rate kind ns id level when rate-limit rate-limit-by]}])}
 
-     [{:as core-opts :keys [sf-arity ct-sig-filter *rt-sig-filter*]}
+     [{:as core-opts :keys [cljs? sf-arity ct-sig-filter *rt-sig-filter*]}
       call-opts]
 
-     (const-form! 'call-opts      call-opts) ; Must be const map, though vals may be arb forms
+     (enc/have? [:ks>= #{:ct-sig-filter :*rt-sig-filter*}] core-opts)
+     (enc/have? [:or nil? sig-filter?] ct-sig-filter)
+     (enc/have? qualified-symbol?     *rt-sig-filter*)
+
      (enc/have? [:or nil? map?]   call-opts)
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
-     (enc/have? #(contains? core-opts %) :ct-sig-filter :*rt-sig-filter*)
-     (enc/have? #(contains? call-opts %) :location*)
-     (enc/have? [:or nil? sig-filter?] ct-sig-filter)
-     (enc/have? qualified-symbol?     *rt-sig-filter*)
-
-     (let [opts call-opts
-           location ; {:keys [ns line column file]} forms
-           (let [location-form (get opts :location (get opts :location*))
-                 location-map  (when (map?    location-form) location-form) ; At least keys const
-                 location-sym  (when (symbol? location-form) location-form)]
-
-             (enc/assoc-some nil
-               {:ns     (get opts :ns     (get location-map :ns     (when location-sym `(get ~location-sym :ns))))      ;   Documented override
-                :line   (get opts :line   (get location-map :line   (when location-sym `(get ~location-sym :line))))    ; Undocumented override
-                :column (get opts :column (get location-map :column (when location-sym `(get ~location-sym :column))))  ; ''
-                :file   (get opts :file   (get location-map :file   (when location-sym `(get ~location-sym :file))))})) ; ''
-
-           kind-form*  (get opts     :kind)
-           ns-form*    (get location :ns)
-           id-form*    (get opts     :id)
-           level-form* (get opts     :level)
-
-           bound-forms (get opts :bound-forms) ; {:kind '__kind, etc.}
-           kind-form   (or (get bound-forms :kind)  kind-form*)
-           ns-form     (or (get bound-forms :ns)    ns-form*)
-           id-form     (or (get bound-forms :id)    id-form*)
-           level-form  (or (get bound-forms :level) level-form*)
+     (let [opts        call-opts
+           kind-form   (get opts :kind)
+           ns-form     (get opts :ns (str *ns*))
+           id-form     (get opts :id)
+           level-form  (get opts :level)
            _
-           (when (enc/const-form? level-form*)
-             (valid-level         level-form*))
+           (when (enc/const-form? level-form)
+             (valid-level         level-form))
 
            elide?
            (and
              (get opts :elidable? true)
              (get opts :elide?
                (when-let [sf ct-sig-filter]
-                 (not (sf {:kind  (enc/const-form  kind-form*)
-                           :ns    (enc/const-form    ns-form*)
-                           :id    (enc/const-form    id-form*)
-                           :level (enc/const-form level-form*)})))))
+                 (not (sf {:kind  (enc/const-form  kind-form)
+                           :ns    (enc/const-form    ns-form)
+                           :id    (enc/const-form    id-form)
+                           :level (enc/const-form level-form)})))))
+
+           local-forms (get opts :local-forms) ; {:kind '__kind, etc.}
+           kind-form*  (or (get local-forms :kind)  kind-form)
+           ns-form*    (or (get local-forms :ns)    ns-form)
+           id-form*    (or (get local-forms :id)    id-form)
+           level-form* (or (get local-forms :level) level-form)
 
            ;; Unique id for this expansion, changes on every eval.
            ;; So rate limiter will get reset on eval during REPL work, etc.
            expansion-id (get opts :expansion-id (expansion-counter))
-           base-rv {:expansion-id  expansion-id, :location location}]
+           base-rv {:expansion-id  expansion-id}]
 
        (if elide?
          (assoc base-rv :elide? true)
          (let [allow?-form
                (get opts :allow?
+                 ;; Try keep expansion minimal, and avoid resolving to core since
+                 ;; these backticks will always resolve to Clj only (never Cljs)
                  (let [sample-rate-form
                        (when-let [sr-form (get opts :sample-rate)]
                          (if (enc/const-form? sr-form)
-                           (do                     `(< ~'(Math/random) ~(enc/as-pnum! sr-form)))
-                           `(if-let [~'sr ~sr-form] (< ~'(Math/random)  (double     ~'sr)) true)))
+                           (do                       `(~'< ~'(Math/random) ~(enc/as-pnum! sr-form)))
+                           `(~'if-let [~'sr ~sr-form] (~'< ~'(Math/random)  (~'double   ~'sr)) true)))
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form          ~level-form) true))
-                         3 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form ~id-form ~level-form) true))
-                         4 `(let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf ~kind-form ~ns-form ~id-form ~level-form) true))
+                         2 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form*           ~level-form*) true))
+                         3 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form* ~id-form* ~level-form*) true))
+                         4 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf ~kind-form ~ns-form* ~id-form* ~level-form*) true))
                          (unexpected-sf-artity! sf-arity `expansion-filter))
 
-                       when-form
-                       (when-let [when-form (get opts :when)]
-                         `(let [~'this-expansion-id ~expansion-id] ~when-form))
+                       when-form (get opts :when)
 
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form     (get opts :rate-limit)]
                          (if-let [limit-by-form (get opts :rate-limit-by)]
-                           `(if (expansion-limited!? ~expansion-id ~spec-form ~limit-by-form) false true)
-                           `(if (expansion-limited!? ~expansion-id ~spec-form               ) false true)))]
+                           `(expansion-limited!? ~expansion-id ~spec-form ~limit-by-form)
+                           `(expansion-limited!? ~expansion-id ~spec-form               )))]
 
                    `(enc/and? ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
@@ -461,15 +448,13 @@
 
 (comment
   (filterable-expansion
-    {:sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*}
-    {:location*   nil
-     :location    {:ns (str *ns*)}
-     :line        42
-     :when        'false
+    {:sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*, :cljs? true}
+    {;; :ns       (str *ns*)
+     :level       (do :info)
      ;; :elide?   true
      ;; :allow?   false
-     :level       (do :info)
      :sample-rate 0.3
+     :when        false
      :rate-limit  [[1 1000]]}))
 
 ;;;; Signal handling
@@ -1698,30 +1683,6 @@
 (comment
   (format-id (str *ns*) ::id1)
   (format-id nil ::id1))
-
-(let [cached
-      (enc/fmemoize
-        (fn [base line column]
-          (if line
-            (if column
-              (str base "(" line "," column ")")
-              (str base "(" line            ")"))
-            base)))]
-
-  (enc/def* format-location
-    "Returns \"<ns/file>(<line>,<column>)\", etc."
-    {:tag #?(:clj 'String :cljs 'string)
-     :arglists '([ns line column file] [signal])}
-    (fn
-      ([ns line column file] (when-let [base (or ns file)] (cached base line column)))
-      ([location]
-       (when-let [base (or (get location :ns) (get location :file))]
-         (let [{:keys [line column]} location]
-           (cached base line column)))))))
-
-(comment
-  (format-location "my-ns" 120 8 nil)
-  (format-location nil     120 8 *file*))
 
 (defn signal-with-combined-sample-rate [handler-sample-rate sig-val]
   (or
