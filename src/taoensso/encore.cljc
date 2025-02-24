@@ -116,7 +116,7 @@
       [taoensso.encore :as enc-macros :refer
        [have have! have? compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        or-some and* def* defonce try* catching
+        or-some and? or? def* defonce try* catching
         -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias throws throws?
         identical-kw? satisfies? satisfies! instance! use-transient?
@@ -157,13 +157,8 @@
 
 ;;;; Core macros
 
-#?(:clj
-   (defmacro ^:no-doc and*
-     "Private, don't use. Like `and` but avoids `let` and returns
-     truthy or false (never nil)."
-     ([        ] true)
-     ([x       ] x)
-     ([x & next] `(if ~x (and* ~@next) false))))
+#?(:clj (defmacro ^:no-doc and? "Private, don't use." ([] true)  ([x] x) ([x & next] `(if ~x (and? ~@next) false))))
+#?(:clj (defmacro ^:no-doc or?  "Private, don't use." ([] false) ([x] x) ([x & next] `(if ~x true (or? ~@next)))))
 
 #?(:clj
    (defmacro if-let
@@ -7895,6 +7890,8 @@
                    (assoc error-data :opts opts) t)))))))))
 
 (deprecated
+  #?(:clj (def ^:no-doc ^:deprecated ^:macro and* @#'and?)) ; 2025-02-24
+
   (defn ^:no-doc error-data
     "Prefer `ex-map`."
     {:deprecated "Encore v3.98.0 (2024-04-08)"}
