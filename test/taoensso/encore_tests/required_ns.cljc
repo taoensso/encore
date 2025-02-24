@@ -22,16 +22,16 @@
 
 #?(:clj
    (defmacro sig-exp
-     "Macro wrapper around `sigs/filterable-expansion`."
-     {:arglists (:arglists (meta #'sigs/filterable-expansion))}
+     "Example macro wrapper around `sigs/filterable-expansion`."
+     {:arglists  (:arglists (meta #'sigs/filterable-expansion))}
      [opts]
-     `(quote
-        ~(sigs/filterable-expansion
-           {:sf-arity   4
-            :ct-sig-filter     ct-sig-filter
-            :*rt-sig-filter* `*rt-sig-filter*}
-           (assoc opts
-             :location* (enc/get-source &form &env))))))
+     (let [result
+           (sigs/filterable-expansion
+             {:cljs? (boolean (:ns &env))
+              :sf-arity   4
+              :ct-sig-filter     ct-sig-filter
+              :*rt-sig-filter* `*rt-sig-filter*} opts)]
+       `'~result)))
 
 (comment
   (add-handler!    :hid1 (fn [x]) {})

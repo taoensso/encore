@@ -1223,6 +1223,14 @@
 (comment (resolve-sym nil 'string?))
 
 #?(:clj
+   (defn callsite-coords
+     "Returns [line column] from meta on given macro `&form`.
+     See also `keep-callsite`."
+     [macro-form]
+     (when-let [{:keys [line column]} (meta macro-form)]
+       (when line (if column [line column] [line])))))
+
+#?(:clj
    (defmacro keep-callsite
      "The long-standing CLJ-865 means that it's not possible for an inner
      macro to access the `&form` metadata of a wrapping outer macro. This

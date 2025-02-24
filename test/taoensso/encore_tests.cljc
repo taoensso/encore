@@ -1,5 +1,8 @@
 (ns taoensso.encore-tests
   (:require
+   #?(:clj  [clojure.core :as core]
+      :cljs [cljs.core    :as core])
+
    [clojure.test                     :as test :refer [deftest testing is]]
    ;; [clojure.test.check            :as tc]
    ;; [clojure.test.check.generators :as tc-gens]
@@ -2087,43 +2090,34 @@
          (is (not (contains? (get  (rns/get-handlers) :hid3) :handler-stats_)))])])
 
    (testing "Filterable expansion"
-     [(is (enc/submap? (rns/sig-exp {:level :info})
-            {:expansion-id nat-int?
-             :allow?       enc/list-form? ; (*rt-sig-filter* nil nil nil :info), etc.
-             :elide?       :submap/nx
-             :location
-             {:ns     string?
-              :line   nat-int?
-              :column nat-int?
-              :file   string?}}) "Basic expansion")
-
-      (is (enc/submap? (rns/sig-exp {:level :info, :ns "my-ns"}) {:location {:ns "my-ns"}}) "opts/ns can override location/ns")
-
+     [(is (enc/submap? (rns/sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
       (testing "Can override `allow?`"
         [(is (enc/submap? (rns/sig-exp {:level :info, :allow?             true}) {:allow? true}))
          (is (enc/submap? (rns/sig-exp {:level :info, :allow?            false}) {:allow? false}))
          (is (enc/submap? (rns/sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
-      (is (enc/submap? (rns/sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
-      (is (enc/submap? (rns/sig-exp {:level :info, :location a-sym, :file "my-file"})
-            '{:location
-              {:ns     (clojure.core/get a-sym :ns)
-               :line   (clojure.core/get a-sym :line)
-               :column (clojure.core/get a-sym :column)
-               :file   "my-file"}})
-        "Support runtime `:location`")
-
-      (is (enc/submap? (rns/sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id -1
-                                      :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]]})
-            {:expansion-id -1
-             :location {:ns "my-ns"}
+      (is (enc/submap? (rns/sig-exp {:level :info})
+            {:expansion-id nat-int?
+             :elide? :submap/nx
              :allow?
-             '(taoensso.encore/and*
-               (clojure.core/< (Math/random) 0.5)
-               (clojure.core/let [sf taoensso.encore-tests.required-ns/*rt-sig-filter*] (if sf (sf :my-sig-kind "my-ns" :my-sig-id :info) true))
-               (clojure.core/let [this-expansion-id -1] (> 1 0))
-               (if (taoensso.encore.signals/expansion-limited!? -1 [[1 1000]]) false true))})
-        "Full `allow?` expansion")])
+             '(taoensso.encore/and?
+                (let [sf taoensso.encore-tests.required-ns/*rt-sig-filter*]
+                  (if sf (sf nil "taoensso.encore-tests" nil :info) true)))})
+        "With basic filtering")
+
+      (is (enc/submap? (rns/sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id 1234
+                                     :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]],
+                                     :local-forms {:ns __ns}})
+            {:expansion-id 1234
+             :elide? :submap/nx
+             :allow?
+             '(taoensso.encore/and?
+                (< (Math/random) 0.5)
+                (let [sf taoensso.encore-tests.required-ns/*rt-sig-filter*]
+                  (if sf (sf :my-sig-kind __ns :my-sig-id :info) true))
+                (> 1 0)
+                (taoensso.encore.signals/expansion-limited!? 1234 [[1 1000]]))})
+        "With rich filtering")])
 
    (testing "Dynamic context (`*ctx*`)"
      [(is (= (binding [rns/*ctx* "my-ctx"] rns/*ctx*) "my-ctx") "Supports manual `binding`")
