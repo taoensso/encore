@@ -455,7 +455,7 @@
                            `(if (expansion-limited!? ~expansion-id ~spec-form ~limit-by-form) false true)
                            `(if (expansion-limited!? ~expansion-id ~spec-form               ) false true)))]
 
-                   `(enc/and* ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
+                   `(enc/and? ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
@@ -714,14 +714,14 @@
                     (let [sample-rate (or sample-rate (when-let [f sample-rate-fn] (f)))
                           allow?
                           (if track-stats?
-                            (enc/and*
+                            (enc/and?
                               (if sample-rate (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
                               (if sig-filter* (if (allow-signal? sig-raw sig-filter*)    true (do (cnt-filtered) false)) true)
                               (if when-fn     (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
                               (if rl-handler  (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
                               )
 
-                            (enc/and*
+                            (enc/and?
                               (if sample-rate (< (Math/random) (double sample-rate))  true)
                               (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
                               (if when-fn     (when-fn #_sig-raw)                     true)
