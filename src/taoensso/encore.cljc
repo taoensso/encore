@@ -114,7 +114,7 @@
      :cljs
      (:require-macros
       [taoensso.encore :as enc-macros :refer
-       [have have! have? compile-if try-eval qb
+       [compile-if try-eval qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
         or-some and? or? def* defonce
         -cas!? now-udt* now-nano* min* max*
@@ -709,18 +709,6 @@
   (defaliases {:alias myfn2 :src myfn :body (fmemoize myfn)})
   (myfn2 1 1))
 
-;;;; Truss aliases (for back compatibility, convenience)
-
-#?(:clj
-   (do
-     (defalias                 taoensso.truss/have)
-     (defalias                 taoensso.truss/have!)
-     (defalias                 taoensso.truss/have?)
-     (defalias                 taoensso.truss/have!?)
-     (defalias with-truss-data taoensso.truss/with-data)))
-
-(defalias get-truss-data taoensso.truss/get-data)
-
 ;;;; Sub fns
 
 (defn- subfn [context by-idx-fn]
@@ -808,46 +796,6 @@
      (defn ^:no-doc const-forms?  "Private, don't use." [& forms] (revery? const-form?   forms))
      (defn ^:no-doc const-forms   "Private, don't use." [& forms] (mapv    const-form    forms))))
 
-;;;; Errors
-
-(do
-  (defalias truss/error?)
-  (defalias truss/ex-root)
-  (defalias truss/ex-type)
-  (defalias truss/ex-map*)
-  (defalias truss/ex-map)
-  (defalias truss/ex-chain)
-  (defalias truss/matching-error)
-  (defalias truss/catching-rf)
-  (defalias truss/catching-xform)
-  #?(:clj
-     (do
-       (defalias truss/try*)
-       (defalias truss/catching)
-       (defalias truss/throws)
-       (defalias truss/throws?)
-       (defalias truss/critical-error?))))
-
-(defn ex-message
-  "Same as `core/ex-message` (added in Clojure v1.10)."
-  [x]
-  #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
-     :cljs (when (instance? js/Error  x) (.-message              x))))
-
-(defn ex-data
-  "Same as `core/ex-data` (added in Clojure v1.4)."
-  [x]
-  #?(:clj  (when (instance? clojure.lang.IExceptionInfo x) (.getData ^clojure.lang.IExceptionInfo x))
-     :cljs (when (instance?               ExceptionInfo x) (.-data                                x))))
-
-(defn ex-cause
-  "Same as `core/ex-cause` (added in Clojure v1.10)."
-  [x]
-  #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
-     :cljs (when (instance? ExceptionInfo x) (.-cause              x))))
-
-(declare assoc-some)
-
 ;;;; Vars, etc.
 
 #?(:clj (defn- require-sym-ns [sym] (when-let [ns (namespace sym)] (require (symbol ns)) true)))
@@ -890,6 +838,8 @@
        (outer) => {:keys [line column ...]}"
 
      [form] `(with-meta ~form (meta ~'&form))))
+
+(declare assoc-some)
 
 #?(:clj
    (defn get-source
@@ -7507,3 +7457,38 @@
        (if (:ns &env)
          `(cljs.core/binding    ~bindings ~@body)
          `(clojure.core/binding ~bindings ~@body)))))
+
+(deprecated "2025-02 Truss v2"
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-root)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-type)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-map*)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-map)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-chain)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/matching-error)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/catching-rf)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/catching-xform)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/unexpected-arg!)
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} get-truss-data taoensso.truss/get-data)
+  #?(:clj
+     (do
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/try*)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/throws)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/throws?)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/critical-error?)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have!)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have?)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have!?)
+       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} with-truss-data taoensso.truss/with-data)))
+
+  (defn ^:no-doc ex-message {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+    #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
+       :cljs (when (instance? js/Error  x) (.-message              x))))
+
+  (defn ^:no-doc ex-data {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+    #?(:clj  (when (instance? clojure.lang.IExceptionInfo x) (.getData ^clojure.lang.IExceptionInfo x))
+       :cljs (when (instance?               ExceptionInfo x) (.-data                                x))))
+
+  (defn ^:no-doc ex-cause {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+    #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
+       :cljs (when (instance? ExceptionInfo x) (.-cause              x)))))
