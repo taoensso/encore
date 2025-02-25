@@ -6839,10 +6839,7 @@
      (let [elide? (get-env {:as :bool} :taoensso.elide-deprecated<.platform>)]
        (when-not elide? `(do ~@body)))))
 
-(do ; Not currently eliding
-  #?(:cljs (def ^:no-doc ^:deprecated js-?win js-?window)))
-
-(deprecated
+(deprecated "Older misc"
   (defn ^:no-doc -swap-val!
     "Prefer `latom`."
     {:deprecated "Encore v3.67.0 (2023-09-08)"}
@@ -6855,6 +6852,7 @@
           v1
           (recur)))))
 
+  #?(:cljs (def ^:no-doc ^:deprecated js-?win             js-?window))
   #?(:cljs (def ^:no-doc ^:deprecated regular-num?        finite-num?))
   #?(:cljs (def ^:no-doc ^:deprecated get-window-location get-win-loc))
   #?(:clj  (def ^:no-doc ^:deprecated srng                secure-rng))
@@ -6923,6 +6921,18 @@
             (when-let [ns (find-ns 'cljs.analyzer)]
               (when-let [v (ns-resolve ns '*cljs-file*)]
                 (boolean @v)))))
+
+  #?(:clj
+     (defmacro catching
+       "Terse, cross-platform (try* expr (catch :all _)).
+       Arities besides #{1 2} are deprecated, prefer `try*` in these cases."
+       ([           expr] `(truss/try* ~expr (catch :all        ~'_)))
+       ([error-type expr] `(truss/try* ~expr (catch ~error-type ~'_)))
+
+       ;;; Deprecated arities:
+       ([try-expr            error-sym catch-expr             ] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
+       ([try-expr            error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
+       ([try-expr error-type error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
 
   #?(:clj
      (do
@@ -7157,10 +7167,6 @@
     ([arg        ] (truss/unexpected-arg! arg nil))
     ([arg details] (truss/unexpected-arg! arg details)))
 
-  (defn ^:no-doc when?
-    "Prefer `is`." {:deprecated "Encore v3.98.0 (2024-04-08)"}
-    [pred x] (when (truss/catching (pred x)) x))
-
   (def* ^:no-doc -matching-error
     "Prefer `matching-error`."
     {:deprecated "Encore v3.70.0 (2023-10-17)"}
@@ -7200,17 +7206,46 @@
                 `(defmethod print-method ~type [~'x ~(with-meta 'w {:tag 'java.io.Writer})]
                    (.write ~'w (str ~(str "#" *ns* ".") ~'x)))) types))))
 
-  #?(:clj
-     (defmacro catching
-       "Terse, cross-platform (try* expr (catch :all _)).
-       Arities besides #{1 2} are deprecated, prefer `try*` in these cases."
-       ([           expr] `(truss/try* ~expr (catch :all        ~'_)))
-       ([error-type expr] `(truss/try* ~expr (catch ~error-type ~'_)))
+  (defn ^:no-doc error-data
+    "Prefer `ex-map`."
+    {:deprecated "Encore v3.98.0 (2024-04-08)"}
+    [x]
+    (when-let [data-map
+               (and x
+                 (or
+                   (core/ex-data x) ; ExceptionInfo
+                   #?(:clj  (when (instance? Throwable x) {})
+                      :cljs                               {})))]
 
-       ;;; Deprecated arities:
-       ([try-expr            error-sym catch-expr             ] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr)))
-       ([try-expr            error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch :all        ~error-sym ~catch-expr) (finally ~finally-expr)))
-       ([try-expr error-type error-sym catch-expr finally-expr] `(truss/try* ~try-expr (catch ~error-type ~error-sym ~catch-expr) (finally ~finally-expr)))))
+      (let [base-map
+            #?(:clj
+               (let [^Throwable t x] ; (catch Throwable t <...>)
+                 {:err-type   (type                 t)
+                  :err-msg    (.getLocalizedMessage t)
+                  :err-cause  (.getCause            t)})
+
+               :cljs
+               (let [err x] ; (catch :default t <...)
+                 {:err-type  (type      err)
+                  :err-msg   (.-message err)
+                  :err-cause (.-cause   err)}))]
+
+        #_(assoc base-map :err-data data-map)
+        (conj    base-map           data-map))))
+
+  #?(:clj
+     (defmacro ^:no-doc caught-error-data
+       "Prefer `throws?`."
+       {:deprecated "Encore v3.98.0 (2024-04-08)"}
+       [& body] `(truss/try* (do ~@body nil) (catch :all e# (error-data e#)))))
+
+  #?(:clj
+     (defn ^:no-doc ^:deprecated ident-hex-str "Prefer `hex-ident-str`."
+       ^String [obj] (str "0x" (hex-ident-str obj))))
+
+  (defn ^:no-doc when?
+    "Prefer `is`." {:deprecated "Encore v3.98.0 (2024-04-08)"}
+    [pred x] (when (truss/catching (pred x)) x))
 
   #?(:default (defn ^:no-doc call-form? "Prefer `list-form`." {:deprecated "Encore v3.105.0 (2024-04-29)"} [x] (list-form? x)))
   #?(:clj
@@ -7223,7 +7258,7 @@
            (coll?      x) (if (rsome call-in-form? x) true false)
            :else          false)))))
 
-(deprecated
+(deprecated "2024-01 New env config API"
   #?(:clj
      (do
        (defn- get-config-opts [opts]
@@ -7289,43 +7324,7 @@
                  (ex-info "[encore/load-edn-config] Error loading edn config"
                    (assoc error-data :opts opts) t)))))))))
 
-(deprecated
-  #?(:clj (def ^:no-doc ^:deprecated ^:macro and* @#'and?)) ; 2025-02-24
-
-  (defn ^:no-doc error-data
-    "Prefer `ex-map`."
-    {:deprecated "Encore v3.98.0 (2024-04-08)"}
-    [x]
-    (when-let [data-map
-               (and x
-                 (or
-                   (ex-data x) ; ExceptionInfo
-                   #?(:clj  (when (instance? Throwable x) {})
-                      :cljs                               {})))]
-
-      (let [base-map
-            #?(:clj
-               (let [^Throwable t x] ; (catch Throwable t <...>)
-                 {:err-type   (type                 t)
-                  :err-msg    (.getLocalizedMessage t)
-                  :err-cause  (.getCause            t)})
-
-               :cljs
-               (let [err x] ; (catch :default t <...)
-                 {:err-type  (type      err)
-                  :err-msg   (.-message err)
-                  :err-cause (.-cause   err)}))]
-
-        #_(assoc base-map :err-data data-map)
-        (conj    base-map           data-map))))
-
-  #?(:clj
-     (defmacro ^:no-doc caught-error-data
-       "Prefer `throws?`."
-       {:deprecated "Encore v3.98.0 (2024-04-08)"}
-       [& body] `(truss/try* (do ~@body nil) (catch :all e# (error-data e#))))))
-
-(deprecated
+(deprecated "2024-10 New sub API"
   (defn ^:no-doc get-subvec "Prefer `subvec`."
     {:deprecated "Encore v3.126.0 (2024-10-23)"}
     ([v start    ] (or (subvec v start)     []))
@@ -7366,19 +7365,7 @@
   (def* ^:no-doc ^:deprecated ?subvec<len "Prefer `subvec`." (comp not-empty      get-subvector))
   (def* ^:no-doc ^:deprecated  subvec*    "Prefer `subvec`."                      get-subvector)
   (def* ^:no-doc ^:deprecated ?substr<idx "Prefer `substr`." (comp as-?nempty-str get-substr))
-  (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring))
-
-  #?(:clj
-     (defn ^:no-doc ^:deprecated ident-hex-str "Prefer `hex-ident-str`."
-       ^String [obj] (str "0x" (hex-ident-str obj))))
-
-  (defn ^:no-doc ^:deprecated pred    [pred-fn] pred-fn)
-  (defn ^:no-doc ^:deprecated pred-fn [x] (when (fn? x) x))
-  #?(:clj
-     (defmacro ^:deprecated binding [bindings & body]
-       (if (:ns &env)
-         `(cljs.core/binding    ~bindings ~@body)
-         `(clojure.core/binding ~bindings ~@body)))))
+  (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring)))
 
 (deprecated "2025-02 Truss v2"
   (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-root)
@@ -7415,7 +7402,8 @@
     #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
        :cljs (when (instance? ExceptionInfo x) (.-cause              x)))))
 
-(deprecated "2025-02 Housekeeping"
+(deprecated "2025-02 Misc"
+  #?(:clj (defalias ^:no-doc ^:deprecated and* and?))
   (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} core/some?)
   #?(:clj (defmacro ^:no-doc try-eval {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [form] `(compile-if ~form ~form nil)))
   #?(:clj
@@ -7427,8 +7415,8 @@
 
   (defn ^:no-doc is!
     {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
-    ([     x     ] (is! core/some? x nil)) ; Nb different to single-arg `have`
-    ([pred x     ] (is! pred       x nil))
+    ([     x     ] ^:deprecation-nowarn (is! core/some? x nil)) ; Nb different to single-arg `have`
+    ([pred x     ] ^:deprecation-nowarn (is! pred       x nil))
     ([pred x data]
      (if (truss/catching (pred x))
        x
@@ -7451,4 +7439,12 @@
        ([test       ] `(check-some ~test))
        ([test & more]
         `(let [errors# (filterv identity [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
-           (not-empty errors#))))))
+           (not-empty errors#)))))
+
+    (defn ^:no-doc ^:deprecated pred    [pred-fn] pred-fn)
+    (defn ^:no-doc ^:deprecated pred-fn [x] (when (fn? x) x))
+    #?(:clj
+       (defmacro ^:deprecated binding [bindings & body]
+         (if (:ns &env)
+           `(cljs.core/binding    ~bindings ~@body)
+           `(clojure.core/binding ~bindings ~@body)))))
