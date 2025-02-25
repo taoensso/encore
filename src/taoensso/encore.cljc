@@ -414,7 +414,6 @@
    (defmacro ^:no-doc try-eval
      "If `form` can be successfully evaluated at macro-expansion time, expands to `form`.
      Otherwise expands to `nil`."
-     {:added "Encore v3.50.0 (2023-03-07)"}
      [form] `(compile-if ~form ~form nil)))
 
 (comment (macroexpand '(try-eval (com.google.common.io.BaseEncoding/base16))))
@@ -433,7 +432,6 @@
        (defmacro foo []  (target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))
        (defmacro foo [] `(target-case :clj  \"->Clojure\" :cljs \"->ClojureScript\" :cljd \"->ClojureDart\"))"
 
-     {:added "Encore v3.118.0 (2024-09-06)"}
      [& {:keys [clj cljs cljd]}]
      (cond
        (contains? &env '&env)
@@ -491,8 +489,7 @@
 #?(:clj
    (defmacro def*
      "Like `core/def` but supports attrs map."
-     {:added "Encore v3.67.0 (2023-09-08)"
-      :style/indent 1}
+     {:style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
@@ -525,7 +522,6 @@
 #?(:clj
    (defmacro or-some
      "Like `or`, but returns the first non-nil form (may be falsey)."
-     {:added "Encore v3.67.0 (2023-09-08)"}
      ([        ] nil)
      ([x       ] x)
      ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
@@ -536,7 +532,6 @@
    (defmacro ^:no-doc typed-val
      "Private, don't use.
      Expands to `{:value ~x, :type (type ~x)}."
-     {:added "Encore v3.105.0 (2024-04-29)"}
      [x] `{:value ~x, :type (type ~x)}))
 
 (defn unexpected-arg!
@@ -558,8 +553,7 @@
      :context 'taoensso.encore/my-function,
      :expected #{:read :write}}"
 
-  {:added "Encore v3.51.0 (2023-03-13)"
-   :arglists
+  {:arglists
    '([arg]
      [arg   {:keys [msg context param expected ...]}]
      [arg & {:keys [msg context param expected ...]}])}
@@ -583,7 +577,6 @@
      Portable and maximally fast.
        For Clj  this expands to: `(identical?         x y)`
        For Cljs this expands to: `(keyword-identical? x y)`"
-     {:added "Encore v3.67.0 (2023-09-08)"}
      [x y]
      (if (:ns &env)
        `(cljs.core/keyword-identical? ~x ~y)
@@ -725,9 +718,7 @@
          {:alias my-map, :src map, :attrs {:doc \"My `map` alias\"}}
          {:alias my-vec, :src vec, :attrs {:doc \"My `vec` alias\"}})"
 
-     {:added "Encore v3.58.0 (2023-04-09)"
-      :arglists '([{:keys [alias src attrs body]} ...])}
-
+     {:arglists '([{:keys [alias src attrs body]} ...])}
      [& clauses]
      `(do
         ~@(map
@@ -825,8 +816,7 @@
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of vector).
       - `end`   is desired vector length, or `:max`."
-  {:added "Encore v3.126.0 (2024-10-23)"
-   :arglists '([v start-idx] [v start-idx end-idx] [v :by-len start end])}
+  {:arglists '([v start-idx] [v start-idx end-idx] [v :by-len start end])}
   (subfn `subvec core/subvec))
 
 (def* substr
@@ -837,8 +827,7 @@
     - When given `:by-len` kind (4-arity case):
       - `start` may be -ive (=> index from right of string).
       - `end`   is desired string length, or `:max`."
-  {:added "Encore v3.126.0 (2024-10-23)"
-   :arglists '([s start-idx] [s start-idx end-idx] [s :by-len start end])}
+  {:arglists '([s start-idx] [s start-idx end-idx] [s :by-len start end])}
   (subfn `substr (fn [s n1 n2] (.substring #?(:clj ^String s :cljs s) n1 n2))))
 
 (comment
@@ -853,11 +842,11 @@
 
 #?(:clj
    (do
-     (defn ^:no-doc runtime-form? "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (or (symbol? form) (list-form? form)))
-     (defn ^:no-doc const-form?   "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (not    (runtime-form? form)))
-     (defn ^:no-doc const-form    "Private, don't use." {:added "Encore v3.67.0 (2023-09-08)"} [form]    (when   (const-form?   form) form))
-     (defn ^:no-doc const-forms?  "Private, don't use." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (revery? const-form?   forms))
-     (defn ^:no-doc const-forms   "Private, don't use." {:added "Encore v3.68.0 (2023-09-25)"} [& forms] (mapv    const-form    forms))))
+     (defn ^:no-doc runtime-form? "Private, don't use." [form]    (or (symbol? form) (list-form? form)))
+     (defn ^:no-doc const-form?   "Private, don't use." [form]    (not    (runtime-form? form)))
+     (defn ^:no-doc const-form    "Private, don't use." [form]    (when   (const-form?   form) form))
+     (defn ^:no-doc const-forms?  "Private, don't use." [& forms] (revery? const-form?   forms))
+     (defn ^:no-doc const-forms   "Private, don't use." [& forms] (mapv    const-form    forms))))
 
 ;;;; Errors
 
@@ -870,28 +859,24 @@
 
 (defn ex-message
   "Same as `core/ex-message` (added in Clojure v1.10)."
-  {:added "Encore v3.41.0 (2022-12-03)"}
   [x]
   #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
      :cljs (when (instance? js/Error  x) (.-message              x))))
 
 (defn ex-data
   "Same as `core/ex-data` (added in Clojure v1.4)."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   #?(:clj  (when (instance? clojure.lang.IExceptionInfo x) (.getData ^clojure.lang.IExceptionInfo x))
      :cljs (when (instance?               ExceptionInfo x) (.-data                                x))))
 
 (defn ex-cause
   "Same as `core/ex-cause` (added in Clojure v1.10)."
-  {:added "Encore v3.41.0 (2022-12-03)"}
   [x]
   #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
      :cljs (when (instance? ExceptionInfo x) (.-cause              x))))
 
 (defn ex-root
   "Returns root cause of given platform error."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   (when (error? x)
     (loop [error x]
@@ -904,7 +889,6 @@
 (defn ^:no-doc ex-type
   "Private, don't use.
    Returns class symbol of given platform error."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   #?(:clj (symbol (.getName (class x)))
      :cljs
@@ -915,7 +899,6 @@
 (defn ^:no-doc ex-map*
   "Private, don't use.
    Returns ?{:keys [type msg data]} for given platform error."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   (when-let [msg             (ex-message x)]
     (if-let [data (not-empty (ex-data    x))]
@@ -927,7 +910,6 @@
 (defn ^:no-doc ex-chain
   "Private, don't use.
   Returns vector cause chain of given platform error."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   ([         x] (ex-chain false x))
   ([as-maps? x]
    (when (error? x)
@@ -956,7 +938,6 @@
 (defn ^:no-doc ex-map
   "Private, don't use.
   Returns ?{:keys [type msg data chain trace]} for given platform error."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   (when-let [chain (ex-chain x)]
     (let [maps     (mapv ex-map* chain)
@@ -987,7 +968,6 @@
      If given any `Error` besides `AssertionError`, (re)throw it.
      Useful as a hack to allow easily catching both `Exception` and `AssertionError`:
        (try <body> (catch Throwable t (throw-critical t) <body>)), etc."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      [x] (when (critical-error? x) (throw x))))
 
 #?(:clj
@@ -1001,9 +981,7 @@
 
      Addresses CLJ-1293 and the fact that `AssertionError`s are typically NON-critical
      (so desirable to catch, in contrast to other `Error` classes)."
-     {:added "Encore v3.67.0 (2023-09-08)"
-      :arglists '([expr* catch-clauses* ?finally-clause])}
-
+     {:arglists '([expr* catch-clauses* ?finally-clause])}
      [& forms]
      (let [cljs? (some? (:ns &env))
            forms
@@ -1074,7 +1052,6 @@
   against its (nested) causes.
 
   Low-level util, see also `throws`, `throws?`."
-  {:added "Encore v3.70.0 (2023-10-17)"}
   ([     error] error)
   ([kind error]
    (when-let [match?
@@ -1123,7 +1100,6 @@
      `matching-error`, returns the matching error. Otherwise returns nil.
 
      See also `matching-error`, `throws?`."
-     {:added "Encore v3.31.0 (2022-10-27)"}
      ([             form] `                               (try* ~form nil (catch :all ~'t ~'t)))
      ([kind         form] `(matching-error ~kind          (try* ~form nil (catch :all ~'t ~'t))))
      ([kind pattern form] `(matching-error ~kind ~pattern (try* ~form nil (catch :all ~'t ~'t))))))
@@ -1137,7 +1113,6 @@
        (is (throws? {:a :b} (throw (ex-info \"Test\" {:a :b :c :d}))))
 
      See also `matching-error`, `throws`."
-     {:added "Encore v3.31.0 (2022-10-27)"}
      ([             form] `(boolean (throws                ~form)))
      ([kind         form] `(boolean (throws ~kind          ~form)))
      ([kind pattern form] `(boolean (throws ~kind ~pattern ~form)))))
@@ -1158,7 +1133,6 @@
     extra contextual information to aid debugging.
 
     See also `catching-xform`."
-    {:added "Encore v3.32.0 (2022-11-07)"}
     ([         rf] (catching-rf (get-default-error-fn {:rf rf}) rf))
     ([error-fn rf]
      (let [error-fn
@@ -1195,7 +1169,6 @@
       <reducing-fn>
       <...>)"
 
-  {:added "Encore v3.32.0 (2022-11-07)"}
   ([error-fn xform] (comp (fn [rf] (catching-rf error-fn rf)) xform))
   ([         xform] (comp           catching-rf               xform)))
 
@@ -1208,7 +1181,6 @@
      ;; Fundamental limitations:
      ;;   1. Macros targeting Cljs cannot expand to a Cljs symbol in an unrequired namespace.
      ;;   2. Macros targeting Cljs cannot eval      a Cljs symbol for its value at macro time.
-     {:added "Encore v3.63.0 (2023-07-31)"}
      ([          sym                ] (resolve-sym nil       sym false)) ; Clj only
      ([macro-env sym                ] (resolve-sym macro-env sym false))
      ([macro-env sym may-require-ns?]
@@ -1241,14 +1213,12 @@
        (defmacro outer [] (keep-callsite `(inner)))
        (outer) => {:keys [line column ...]}"
 
-     {:added "Encore v3.61.0 (2023-07-07)"}
      [form] `(with-meta ~form (meta ~'&form))))
 
 #?(:clj
    (defn get-source
      "Returns {:keys [ns line column file]} source location given a macro's
      compile-time `&form` and `&env` vals. See also `keep-callsite`."
-     {:added "Encore v3.61.0 (2023-07-07)"}
      [macro-form-or-meta macro-env]
      (let [{:keys [line column file]}
            (if (map? macro-form-or-meta)
@@ -1283,7 +1253,6 @@
 
      Similar to `alter-var-root` but cross-platform and takes a symbol rather than a var.
      See also `set-var-root!`."
-     {:added "Encore v3.68.0 (2023-09-25)"}
      [var-sym update-fn]
      (if (:ns &env)
        `(set!                ~var-sym (~update-fn ~var-sym))
@@ -1293,7 +1262,6 @@
    (defmacro set-var-root!
      "Sets root binding (value) of the var identified by given symbol, and returns
      the new value. Cross-platform. See also `update-var-root!`."
-     {:added "Encore v3.75.0 (2024-01-29)"}
      [var-sym root-val]
      (if (:ns &env)
        `(set!                ~var-sym           ~root-val)
@@ -1309,7 +1277,6 @@
       (clojure.test/use-fixtures :once f)
          (cljs.test/use-fixtures :once f))"
 
-  {:added "Encore v3.31.0 (2022-10-27)"}
   [fixtures-map]
   (have? map?                         fixtures-map)
   ;; (have? [:ks<= #{:before :after}] fixtures-map)
@@ -1614,7 +1581,6 @@
 #?(:clj
    (defn class-sym
      "Returns class name symbol of given argument."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      [x] (when x (symbol (.getName (class x))))))
 
 ;;;; Validation
@@ -1674,7 +1640,6 @@
    (defmacro satisfies?
      "Faster `satisfies?` to work around CLJ-1814 until a proper upstream fix.
      May cache, so possibly inappropriate for dynamic work."
-     {:added "Encore v3.75.0 (2024-01-29)"}
      [protocol x]
      (if (:ns &env)
        ;; `(cljs.core/implements? ~protocol ~x)
@@ -1686,8 +1651,7 @@
      "If (satisfies? protocol arg) is true, returns arg.
      Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
      See `unexpected-arg!` for more info."
-     {:added "Encore v3.51.0 (2023-03-13)"
-      :arglists
+     {:arglists
       '([protocol arg]
         [protocol arg   {:keys [msg context param ...]}]
         [protocol arg & {:keys [msg context param ...]}])}
@@ -1708,8 +1672,7 @@
      "If (instance? class arg) is true, returns arg.
      Otherwise throws runtime `ExceptionInfo` with `unexpected-arg!`.
      See `unexpected-arg!` for more info."
-     {:added "Encore v3.51.0 (2023-03-13)"
-      :arglists
+     {:arglists
       '([class arg]
         [class arg   {:keys [msg context param ...]}]
         [class arg & {:keys [msg context param ...]}])}
@@ -1771,14 +1734,12 @@
 
      (defn utf8-ba->str
        "Returns String by decoding given UTF-8 byte[]."
-       {:added "Encore v3.53.0 (2023-03-22)"
-        :inline   (fn [ba] `(let [^"[B" ba# ~ba] (String. ba# java.nio.charset.StandardCharsets/UTF_8)))}
+       {:inline   (fn [ba] `(let [^"[B" ba# ~ba] (String. ba# java.nio.charset.StandardCharsets/UTF_8)))}
        ^String [^bytes ba]                       (String. ba  java.nio.charset.StandardCharsets/UTF_8))
 
      (defn str->utf8-ba
        "Returns given String encoded as a UTF-8 byte[]."
-       {:added "Encore v3.53.0 (2023-03-22)"
-        :inline   (fn [s] `(let [^String s# ~s] (.getBytes s# java.nio.charset.StandardCharsets/UTF_8)))}
+       {:inline   (fn [s] `(let [^String s# ~s] (.getBytes s# java.nio.charset.StandardCharsets/UTF_8)))}
        ^bytes [^String s]                       (.getBytes s  java.nio.charset.StandardCharsets/UTF_8))
 
      (defn ba-concat ^bytes [^bytes ba1 ^bytes ba2]
@@ -1921,7 +1882,6 @@
    (defn reduce-iterator!
      "Reduces given `java.util.Iterator`, mutating it. Note that most colls
      providing iterators implement `java.lang.Iterable`, so support `seq` directly."
-     {:added "Encore v3.87.0 (2024-02-29)"}
      [rf init iterator]
      (if-let [^java.util.Iterator it iterator]
        (loop [acc init]
@@ -1938,7 +1898,6 @@
   Calls (rf acc x y) for each sequential pair.
 
   Useful, among other things, as a more flexible version of `zipmap`."
-  {:added "Encore v3.33.0 (2022-11-15)"}
   ([rf init xs ys          ] (reduce-zip rf init xs ys ::skip))
   ([rf init xs ys not-found] ; Experimental, undocumented
    (if (and
@@ -1985,7 +1944,6 @@
   as a micro-optimization when reducing a large collection multiple
   times."
   ;; Faster than using volatiles
-  {:added "Encore v3.66.0 (2023-08-23)"}
   ([rf  init            coll] (reduce rf init coll))
   ([rf1 init1 rf2 init2 coll]
    (let [^Tup2 tuple
@@ -2034,7 +1992,6 @@
 (defn reduce-interleave-all
   "Reduces sequence of elements interleaved from given `colls`.
   (reduce-interleave-all conj [] [[:a :b] [1 2 3]]) => [:a 1 :b 2 3]"
-  {:added "Encore v3.66.0 (2023-08-23)"}
   [rf init colls]
   (if (empty? colls)
     init
@@ -2069,7 +2026,6 @@
   (defn ^:no-doc postwalk
     "Private, don't use.
     Simpler, faster `clojure.walk/postwalk`."
-    {:added "Encore v3.98.0 (2024-04-08)"}
     ([               x f] (postwalk false x f))
     ([preserve-seqs? x f]
      (let [ps (if preserve-seqs? seq identity)
@@ -2288,8 +2244,7 @@
 
 (defn map-entry
   "Returns a `MapEntry` with given key and value."
-  {:added  "Encore v3.75.0 (2024-01-29)"
-   :inline #?(:clj (fn [k v] `(clojure.lang.MapEntry/create ~k ~v)) :default nil)}
+  {:inline #?(:clj (fn [k v] `(clojure.lang.MapEntry/create ~k ~v)) :default nil)}
   [k v]
   #?(:clj  (clojure.lang.MapEntry/create k v)
      :cljs              (MapEntry.       k v nil)))
@@ -2370,7 +2325,6 @@
 (defn get1
   "Like `get` but returns val for first key that exists in map.
   Useful for key aliases or fallbacks. See also `get*`."
-  {:added "Encore v3.67.0 (2023-09-08)"}
   ([m k                 ] (get m k))
   ([m k        not-found] (get m k not-found))
   ([m k1 k2    not-found] (if-let [e (and m (or (find m k1) (find m k2)))            ] (val e) not-found))
@@ -2394,7 +2348,6 @@
         ...
         :else            not-found)"
 
-     {:added "Encore v3.82.0 (2024-02-23)"}
      ([m k                 ]                                      `(get  ~m ~k))
      ([m k        not-found]              `(if-let [e#             (find ~m ~k)                               ] (val e#) ~not-found))
      ([m k1 k2    not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2)))              ] (val e#) ~not-found)))
@@ -2544,7 +2497,6 @@
 
 (defn invert-map!
   "Like `invert-map` but throws on non-unique vals."
-  {:added "Encore v3.121.0 (2024-09-25)"}
   [m]
   (when-let [im (invert-map m)]
     (if (= (count im) (count m)) ; 1-to-1
@@ -2734,7 +2686,6 @@
       shortest coll has been consumed).
 
   Single-arity version takes a coll of colls."
-  {:added "Encore v3.66.0 (2023-08-23) for !=2 arities"}
   ([colls] (if (empty? colls) [] (persistent! (reduce-interleave-all conj! (transient []) colls))))
   ([c1 c2] ; Optimized common case
    (loop [v (transient []) s1 (seq c1) s2 (seq c2)]
@@ -2871,7 +2822,6 @@
       - Preserves existing values, e.g. (merge-nx <user-opts> <defaults>).
       - Supports `:merge/dissoc` vals.
       - Often faster, with much better worst-case performance."
-    {:added "Encore v3.128.0 (2024-10-30)"}
     ([               ] nil)
     ([m1             ] (p! m1))
     ([m1 m2          ] (p!                                                   (merge-with* false mf m1 m2)))
@@ -2930,7 +2880,6 @@
   "Experimental, subject to change without notice.
   Returns true iff `sub_i` is a (possibly nested) submap of `m_i`.
   Uses `submap?`."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [maps subs]
   (if (> (count subs) (count maps))
     false
@@ -2952,8 +2901,6 @@
 
   Has the same behaviour as `select-keys` when `key-spec` is a
   simple vector of keys."
-
-  {:added "Encore v3.34.0 (2022-11-16)"}
   [src-map key-spec]
   (if (or (empty? src-map) (empty? key-spec))
     {} ; Retain `select-keys` nil->{} semantics
@@ -3032,7 +2979,6 @@
 (defn ^:no-doc ^LightAtom latom
   "Private, don't use. Micro-optimized lightweight `atom`.
   Up to 30% faster than standard atoms, with the same atomicity guarantees."
-  {:added "Encore v3.67.0 (2023-09-08)"}
   [init-state]
   (LightAtom.
     #?(:clj (AtomicReference. init-state)
@@ -3042,7 +2988,6 @@
    (let [atom-tag (compile-if clojure.lang.IAtom 'clojure.lang.IAtom 'clojure.lang.Atom)]
      (defmacro ^:no-doc -cas!?
        "Private, don't use. Micro-optimized `compare-and-set!`."
-       {:added "Encore v3.67.0 (2023-09-08)"}
        [atom_ old-val new-val]
        (if (:ns &env)
          `(compare-and-set!          ~atom_                  ~old-val ~new-val)
@@ -3345,8 +3290,7 @@
    (do
      (defn now-inst
        "Returns current system instant as `java.time.Instant`."
-       {:added "Encore v3.66.0 (2023-08-23)"
-        :inline       (fn [] `(java.time.Instant/now))}
+       {:inline       (fn [] `(java.time.Instant/now))}
        ^java.time.Instant []  (java.time.Instant/now))
 
      (defn now-dt
@@ -3366,21 +3310,18 @@
 
      (defn inst->udt
        "Returns given `java.time.Instant` as milliseconds since Unix epoch."
-       {:added "Encore v3.98.0 (2024-04-08)"
-        :inline             (fn [inst] `(.toEpochMilli ~(with-meta inst {:tag 'java.time.Instant})))}
+       {:inline             (fn [inst] `(.toEpochMilli ~(with-meta inst {:tag 'java.time.Instant})))}
        ^long [^java.time.Instant inst]  (.toEpochMilli             inst))
 
      (defn udt->inst
        "Returns given milliseconds since Unix epoch as `java.time.Instant`."
-       {:added "Encore v3.98.0 (2024-04-08)"
-        :inline       (fn [msecs-since-epoch] `(java.time.Instant/ofEpochMilli ~msecs-since-epoch))}
+       {:inline       (fn [msecs-since-epoch] `(java.time.Instant/ofEpochMilli ~msecs-since-epoch))}
        ^java.time.Instant [msecs-since-epoch]  (java.time.Instant/ofEpochMilli  msecs-since-epoch)))
 
    :cljs
    (do
      (defn now-inst
        "Returns current system instant as `js/Date`."
-       {:added "Encore v3.66.0 (2023-08-23)"}
        [] (js/Date.))
 
      (defn now-dt
@@ -3403,19 +3344,16 @@
 
      (defn inst->udt
        "Returns given `js/Date` as milliseconds since Unix epoch."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [inst] (.getTime inst))
 
      (defn udt->inst
        "Returns given milliseconds since Unix epoch as `js/Date`."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [msecs-since-epoch] (js/Date. msecs-since-epoch))))
 
 (defn udt? #?(:cljs {:tag 'boolean}) [x] (int? x))
 
 (defn as-?inst
   "Returns given ?arg as platform instant (`java.time.Instant` or `js/Date`), or nil."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [x]
   #?(:clj
      (cond
@@ -3436,7 +3374,6 @@
 #?(:clj
    (defn as-?dt
      "Returns given ?arg as `java.util.Date`, or nil."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      [x]
      (cond
        (instance? java.time.Instant x) (java.util.Date/from ^java.time.Instant x)
@@ -3501,7 +3438,6 @@
      Note that zone may be ignored by some `DateTimeFormatter`s,
      including the default (`DateTimeFormatter/ISO_INSTANT`)!"
 
-  {:added "Encore v3.98.0 (2024-04-08)"}
   ([] (format-inst-fn nil))
   #?(:cljs
      ([{:keys [formatter]}]
@@ -3545,8 +3481,7 @@
     "Takes a platform instant (`java.time.Instant` or `js/Date`) and
     returns a formatted human-readable string in `ISO8601` format
     (`YYYY-MM-DDTHH:mm:ss.sssZ`), e.g. \"2011-12-03T10:15:130Z\"."
-    {:added "Encore v3.98.0 (2024-04-08)"
-     :tag #?(:clj 'String :cljs 'string)}
+    {:tag #?(:clj 'String :cljs 'string)}
     [inst] (default-fn inst)))
 
 (comment (format-inst (now-inst)))
@@ -3668,7 +3603,6 @@
 
   See also `defn-cached`, `fmemoize`, `memoize-last`."
 
-  {:added "Encore v3.36.0 (2022-11-18)"}
   ([f] ; De-raced, commands
    #?(:cljs
       (let [cache_ (volatile! {})
@@ -3920,7 +3854,6 @@
          [n]
          (rand-int n))"
 
-     {:added "Encore v3.36.0 (2022-11-18)"}
      [sym cache-opts & body]
      (let [arglists ; e.g. '([x] [x y])
            (let [[_ sigs] (name-with-attrs sym body)]
@@ -3946,7 +3879,6 @@
 
   Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run.
   Doesn't support request ids!"
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [msecs]
   (let [last_ (volatile! 0) ; No specific atomicity needs
         msecs (long msecs)]
@@ -4295,8 +4227,6 @@
 
   Useful for maintaining limited-length histories, etc.
   See also `rolling-list` (Clj only)."
-
-  {:added "Encore v3.45.0 (2022-12-13)"}
   ([nmax                          ] (rolling-vector nmax nil))
   ([nmax {:keys [gc-every init-val]
           :or   {gc-every 16e3}}]
@@ -4341,8 +4271,6 @@
 
      Useful for maintaining limited-length histories, etc.
      See also `rolling-vector`."
-
-     {:added "Encore v3.45.0 (2022-12-13)"}
      ([nmax                   ] (rolling-list nmax nil))
      ([nmax {:keys [init-val]}]
       (let [nmax (long nmax)
@@ -4385,7 +4313,6 @@
 
 (defn sb-length
   "Returns given string builder's current length (character count)."
-  {:added "Encore v3.107.0 (2024-05-05)"}
   #?(:clj ^long [^StringBuilder sb] :cljs [^goog.string.StringBuffer sb])
   #?(:clj  (.length    sb)
      :cljs (.getLength sb)))
@@ -4414,7 +4341,6 @@
     - Appends non-nil xs to a string builder, starting with a separator IFF
       string building has started and at least one x is non-nil.
     - Returns the underlying string builder."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   ([            ] (sb-appender (str-builder) " "))
   ([   separator] (sb-appender (str-builder) separator))
   ([sb separator]
@@ -4537,8 +4463,7 @@
   "Returns true iff given strings are equal, ignoring case."
   ;; Implementation detail: compares normalized chars 1 by 1, so often faster
   ;; than naive comparison of normalized strings.
-  {:tag #?(:cljs 'boolean :default nil)
-   :added "Encore v3.25.0 (2022-10-13)"}
+  {:tag #?(:cljs 'boolean :default nil)}
   [s1 s2]
   #?(:clj (.equalsIgnoreCase ^String s1 ^String s2)
      :cljs
@@ -4703,8 +4628,7 @@
 
   Uses strong randomness when possible.
   See also `uuid-str`, `nanoid`, `rand-id-fn`."
-  {:added "Encore v3.75.0 (2024-01-29)"
-   :inline #?(:default nil :clj (fn [] `(java.util.UUID/randomUUID)))}
+  {:inline #?(:default nil :clj (fn [] `(java.util.UUID/randomUUID)))}
   #?(:clj          (^java.util.UUID []  (java.util.UUID/randomUUID))
      :cljs
      ([]
@@ -4788,8 +4712,6 @@
     (abbreviate-ns 0  :foo.bar/baz)   => :f.b/baz
     (abbreviate-ns 1  'foo.bar/baz)   => 'f.bar/baz
     (abbreviate-ns 2 \"foo.bar/baz\") => \"foo.bar/baz\""
-
-  {:added "Encore v3.68.0 (2023-09-25)"}
   ([       x] (abbreviate-ns 1 x))
   ([n-full x]
    (let [n-full (long (have nat-int? n-full))
@@ -4826,13 +4748,12 @@
 
 (comment (for [x ["s" {:k "s"}], f [pr-str print-str str]] (f x))) ; ("\"s\"" "s" "s" "{:k \"s\"}" "{:k s}" "{:k \"s\"}")
 
-(def* ^:const newline  "Single system newline" {:added "Encore v3.68.0 (2023-09-25)"} #?(:cljs "\n" :clj (System/getProperty "line.separator")))
-(def* ^:const newlines "Double system newline" {:added "Encore v3.68.0 (2023-09-25)"} (str newline newline))
+(def* ^:const newline  "Single system newline" #?(:cljs "\n" :clj (System/getProperty "line.separator")))
+(def* ^:const newlines "Double system newline" (str newline newline))
 
 #?(:clj
    (defmacro ^:no-doc with-default-print-opts
      "Private, don't use."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      [form]
      `(if (and (nil? *print-level*) (nil? *print-length*) *print-readably*)
         ~form ; Optimization, don't pay for unnecessary binding
@@ -4841,8 +4762,7 @@
 
 (defn ^:no-doc x->str
   "Private, don't use."
-  {:added "Encore v3.98.0 (2024-04-08)"
-   :tag #?(:clj 'String :cljs 'string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [allow-readably? allow-dup? add-newline? x]
   #?(:cljs
      (if allow-readably?
@@ -4869,8 +4789,7 @@
 
 (defn ^:no-doc xs->str
   "Private, don't use."
-  {:added "Encore v3.98.0 (2024-04-08)"
-   :tag #?(:clj 'String :cljs 'string)}
+  {:tag #?(:clj 'String :cljs 'string)}
   [allow-readably? allow-dup? add-newline? xs]
   #?(:cljs
      (if allow-readably?
@@ -4903,21 +4822,19 @@
 
 #?(:cljs
    (do
-     (def* pr      "Identical to `core/pr`."      {:added "Encore v3.98.0 (2024-04-08)"} cljs.core/pr)
-     (def* prn     "Identical to `core/prn`."     {:added "Encore v3.98.0 (2024-04-08)"} cljs.core/prn)
-     (def* print   "Identical to `core/print`."   {:added "Encore v3.98.0 (2024-04-08)"} cljs.core/print)
-     (def* println "Identical to `core/println`." {:added "Encore v3.98.0 (2024-04-08)"} cljs.core/println))
+     (def* pr      "Identical to `core/pr`."      cljs.core/pr)
+     (def* prn     "Identical to `core/prn`."     cljs.core/prn)
+     (def* print   "Identical to `core/print`."   cljs.core/print)
+     (def* println "Identical to `core/println`." cljs.core/println))
 
    :clj
    (do
      (defn pr
        "Like `core/pr` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [& args] (.write *out* (xs->str true true false args)))
 
      (defn prn
        "Like `core/prn` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [& args]
        (let [w *out*]
          (.write w (xs->str true true true args))
@@ -4925,12 +4842,10 @@
 
      (defn print
        "Like `core/print` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [& args] (.write *out* (xs->str false false false args)))
 
      (defn println
        "Like `core/println` but faster, and atomic (avoids interleaved content from different threads)."
-       {:added "Encore v3.98.0 (2024-04-08)"}
        [& args]
        (let [w *out*]
          (.write w (xs->str false false true args))
@@ -5039,7 +4954,6 @@
 #?(:clj
    (defn thread-local*
      "Low-level, see `thread-local` instead."
-     {:added "Encore v3.48.0 (2023-01-25)"}
      [init-val-fn]
      (let [p (proxy [ThreadLocal] [] (initialValue [] (init-val-fn)))]
        (reify clojure.lang.IDeref (deref [this] (.get p))))))
@@ -5062,7 +4976,6 @@
        (.format @thread-local-simple-date-format_ (Date.)) => \"2023-01-24\"
 
      NB: don't pass the derefed value to other threads!"
-     {:added "Encore v3.48.0 (2023-01-25)"}
      [& body] `(thread-local* (fn [] ~@body))))
 
 (comment
@@ -5093,7 +5006,6 @@
 
      (defn ^:no-doc reseeding-srng
        "Private, don't use. Returns a new stateful `ReseedingSRNG`."
-       {:added "Encore v3.75.0 (2024-01-29)"}
        ^ReseedingSRNG []
        (compile-if        (java.security.SecureRandom/getInstanceStrong) ; Java 8+, blocking
          (ReseedingSRNG. (java.security.SecureRandom/getInstanceStrong)      0)
@@ -5109,7 +5021,6 @@
      (defn secure-rng-mock!!!
        "Returns **INSECURE** `java.security.SecureRandom` mock instance backed by
        a seeded deterministic `java.util.Random`. Useful for testing, etc."
-       {:added "Encore v3.53.0 (2023-03-22)"}
        ^java.security.SecureRandom [long-seed]
        (let [long-seed    (long              long-seed)
              insecure-rng (java.util.Random. long-seed)]
@@ -5120,7 +5031,6 @@
 
 (defn rand-bytes
   "Returns a random byte array of given size."
-  {:added "Encore v3.115.0 (2024-08-18)"}
   #?(:clj ^bytes [secure? size] :cljs [prefer-secure? size])
   #?(:clj
      (let [ba (byte-array size)]
@@ -5146,7 +5056,6 @@
     `:rand-bytes-fn` - Optional (fn [size]) to return random byte array of given size
 
   See also `uuid-str`, `nano-id`."
-  {:added "Encore v3.75.0 (2024-01-29)"}
   [{:keys [chars ^long len rand-bytes-fn]
     :or
     {chars         :nanoid
@@ -5254,7 +5163,6 @@
 #?(:clj
    (defn hex-ident-str
      "Returns hex string of given Object's `identityHashCode` (e.g. \"5eeb49f2\")."
-     {:added "Encore v3.128.0 (2024-10-30)"}
      ^String [obj] (Integer/toHexString (System/identityHashCode obj))))
 
 #?(:clj
@@ -5268,7 +5176,6 @@
 
        (defn ba->hex-str
          "Returns byte[] for given hex string."
-         {:added "Encore v3.53.0 (2023-03-22)"}
          ^String [^bytes ba]
          (str (reduce (fn [sb b] (byte->char-pair sb b)) (StringBuilder.) ba))))
 
@@ -5280,7 +5187,6 @@
 
        (defn hex-str->ba
          "Returns hex string for given byte[]."
-         {:added "Encore v3.53.0 (2023-03-22)"}
          ^bytes [^String s]
          (if (even? (count s))
            (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
@@ -5615,7 +5521,6 @@
    (let [cache_ (atom nil)] ; Impln detail
      (defn java-version
        "Returns Java's major version integer (8, 17, etc.)."
-       {:added "Encore v3.75.0 (2024-01-29)"}
        (^long [              ] (or @cache_ (reset! cache_ (java-version (System/getProperty "java.version")))))
        (^long [version-string]
         (or
@@ -5635,7 +5540,6 @@
    (defn java-version>=
      "Returns true iff Java's major version integer is >= given integer:
        (if (java-version>= 21) <then> <else>)"
-     {:added "Encore v3.75.0 (2024-01-29)"}
      [n] (>= (java-version) (long n))))
 
 (comment (java-version>= 21))
@@ -5691,8 +5595,7 @@
 
      (defn ^:no-doc get-env*
        "Private, don't use. Runtime fn version of `get-env`."
-       {:added "Encore v3.75.0 (2024-01-29)"
-        :arglists
+       {:arglists
         '([{:keys [as default return]
             :or   {as     :str
                    return :value}} spec])}
@@ -5830,8 +5733,7 @@
            id2 with    platform: ...
            id2 without platform: ..."
 
-       {:added "Encore v3.75.0 (2024-01-29)"
-        :arglists
+       {:arglists
         '([{:keys [as default return]
             :or   {as     :str
                    return :value}} spec])}
@@ -5854,7 +5756,6 @@
 #?(:clj
    (defn ^:no-doc threaded*
      "Private, don't use. Returns a new #{:daemon :user} thread to execute given fn."
-     {:added "Encore v3.112.0 (2024-05-23)"}
      ^Thread [kind nullary-fn]
      (case kind
        :daemon (doto (Thread. ^Runnable nullary-fn) (.setDaemon true) (.start))
@@ -5864,7 +5765,6 @@
 #?(:clj
    (defmacro ^:no-doc threaded
      "Private, don't use. Returns a new #{:daemon :user} thread to execute body."
-     {:added "Encore v3.104.0 (2024-04-24)"}
      [kind & body] `(threaded* ~kind (fn [] ~@body))))
 
 (comment (.getName (threaded :daemon (println "Runs on daemon thread"))))
@@ -5874,7 +5774,6 @@
      "Private, don't use.
      Executes body on #{:daemon :user} thread and delivers result to a promise.
      Returns the promise."
-     {:added "Encore v3.110.0 (2024-05-14)"}
      [kind & body]
      `(let [p# (promise)]
         (threaded ~kind (p# (do ~@body)))
@@ -5887,7 +5786,6 @@
      "Experimental, subject to change without notice!
      Returns new virtual `java.util.concurrent.ThreadPerTaskExecutor` when
      possible (JVM 21+), otherwise returns nil."
-     {:added "Encore v3.72.0 (2023-10-24)"}
      []
      (compile-if (Thread/ofVirtual)
        (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)
@@ -5919,7 +5817,6 @@
    (defn pool-executor
      "Experimental, subject to change without notice!
      Returns new `java.util.concurrent.ThreadPoolExecutor` with given opts."
-     {:added "Encore v3.72.0 (2023-10-24)"}
      ^java.util.concurrent.ThreadPoolExecutor
      [{:keys [n-threads n-min-threads n-max-threads thread-name-prefix
               daemon-threads? keep-alive-msecs queue-type queue-size]
@@ -5967,7 +5864,6 @@
 #?(:clj
    (def* ^:no-doc ^:private default-executor_
      "Default `java.util.concurrent.ExecutorService`."
-     {:added "Encore v3.72.0 (2023-10-24)"}
      (delay (or (virtual-executor) (pool-executor {})))))
 
 #?(:clj
@@ -6020,7 +5916,6 @@
      otherwise an unbounded fixed daemon thread pool.
 
      See also `future`, `virtual-executor`, `pool-executor`."
-     {:added "Encore v3.72.0 (2023-10-24)"}
      ([                 f] (future-call* (deref! default-executor_) f))
      ([executor-service f]
       (let [f   (binding-fn (f))
@@ -6053,7 +5948,6 @@
      otherwise an unbounded fixed daemon thread pool.
 
      See also `future-call`, `virtual-executor`, `pool-executor`."
-     {:added "Encore v3.72.0 (2023-10-24)"}
      ([                 form] `(future-call*                   (^:once fn* [] ~form)))
      ([executor-service form] `(future-call* ~executor-service (^:once fn* [] ~form)))))
 
@@ -6119,8 +6013,6 @@
 
      Useful when `f` is expensive & may be called in a spikey fashion,
      e.g. ideal for cryptographic key generators."
-
-     {:added "Encore v3.49.0 (2023-02-01)"}
      ([n-capacity                 f] (pre-cache n-capacity 1 f))
      ([n-capacity fp-or-n-threads f]
       (let [queue (java.util.concurrent.ArrayBlockingQueue. n-capacity)
@@ -6162,7 +6054,6 @@
      "Registers given nullary fn as a JVM shutdown hook.
      (f) will be called sometime during shutdown. While running, it will
      attempt to block shutdown."
-     {:added "Encore v3.114.0 (2024-08-07)"}
      [f]
      (.addShutdownHook (Runtime/getRuntime)
        (Thread. ^Runnable f))))
@@ -6217,7 +6108,6 @@
         Maximum time (in milliseconds) to try allow pending execution requests to
         complete when stopping runner. nil => no maximum."
 
-     {:added "Encore v3.68.0 (2023-09-25)"}
      [{:as opts
        :keys
        [mode buffer-size n-threads thread-name drain-msecs,
@@ -6340,7 +6230,6 @@
   For Cljs: hot loops until given number of msecs have elapsed.
 
   Useful for certain synchronous unit tests, etc."
-  {:added "Encore v3.98.0 (2024-04-08)"}
   [msecs]
   #?(:clj  (Thread/sleep (int msecs))
      :cljs (let [t0 (now-udt*)] (loop [] (when (< (- (now-udt*) t0) msecs) (recur))))))
@@ -6349,12 +6238,11 @@
 
 ;;;; Thread info
 
-#?(:clj (defn thread-name "Returns string name of current `Thread`." {:added "Encore v3.115.0 (2024-08-18)"} ^String [] (.getName (Thread/currentThread))))
-#?(:clj (defn thread-id   "Returns long id of current `Thread`."     {:added "Encore v3.115.0 (2024-08-18)"}   ^long [] (.getId   (Thread/currentThread))))
+#?(:clj (defn thread-name "Returns string name of current `Thread`." ^String [] (.getName (Thread/currentThread))))
+#?(:clj (defn thread-id   "Returns long id of current `Thread`."       ^long [] (.getId   (Thread/currentThread))))
 #?(:clj
    (defn thread-info
      "Returns {:keys [group name id]} for current `Thread`."
-     {:added "Encore v3.115.0 (2024-08-18)"}
      []
      (let [t (Thread/currentThread)]
        {:group (when-let [g (.getThreadGroup t)] (.getName g))
@@ -6426,7 +6314,6 @@
        "Returns ?{:keys [ip name]} with string vals or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -6445,7 +6332,6 @@
        "Returns local host IP string or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -6464,7 +6350,6 @@
        "Returns local hostname string or `fallback-val` (default nil).
        Arities 0 and 3 are   cached, prefer these!
        Arities 1 and 2 are uncached and intended for advanced users only."
-       {:added "Encore v3.115.0 (2024-08-18)"}
        ([                                      ] (f3 (msecs :mins 1) 5000          nil))
        ([cache-msecs timeout-msecs fallback-val] (f3 cache-msecs     timeout-msecs fallback-val))
        ([              fallback-val] (f1 fallback-val))
@@ -6513,8 +6398,7 @@
   (defn format-nsecs
     "Returns given nanoseconds (long) as formatted human-readable string.
     Example outputs: \"1.00m\", \"4.20s\", \"340ms\", \"822μs\", etc."
-    {:added "Encore v3.98.0 (2024-04-08)"
-     :tag #?(:clj 'String :cljs 'string)}
+    {:tag #?(:clj 'String :cljs 'string)}
     [nanosecs]
     (let [ns (double nanosecs)]
       (cond
@@ -6696,8 +6580,6 @@
              ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
                               :abort :http-error :exception :xhr-pool-depleted}
              (js/alert (str \"Ajax response: \" resp-map)))))"
-
-     {:added "Encore v3.74.0 (2023-11-06)"}
      [url
       {:keys [method params headers timeout-ms resp-type with-credentials?
               xhr-pool xhr-cb-fn xhr-timeout-ms] :as opts
@@ -7039,13 +6921,11 @@
 #?(:cljs
    (defn ^string pr-json
      "Returns given Cljs argument as JSON string."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      [x] (.stringify js/JSON (clj->js x :keyword-fn as-qname))))
 
 #?(:cljs
    (defn read-json
      "Reads given JSON string to return a Cljs value."
-     {:added "Encore v3.98.0 (2024-04-08)"}
      ([         s] (read-json false s))
      ([kw-keys? s]
       (cond
@@ -7069,7 +6949,6 @@
     ((comp-middleware inc (fn [_] nil) (fn [_] (throw (Exception. \"Never thrown!\")))) 1) => nil
 
   Useful for composing Ring-style middleware fns."
-  {:added "Encore v3.106.0 (2024-05-01)"}
   ([fs   ] (fn [x] (reduce (fn [x f] (if f (or (f x) (reduced nil)) x)) x fs)))
   ([f1 f2]
    (fn [x]
@@ -7250,7 +7129,6 @@
       #{\"foo\" \"bar.*\"}, #\"(foo1|foo2)\\.bar\",
       {:allow #{\"foo\" \"bar.*\"} :disallow #{\"foo.*.bar.*\"}}."
 
-    {:added "Encore v3.67.0 (2023-09-08)"}
     [spec]
     (if-not (map? spec)
       (recur {:allow spec :disallow nil})
@@ -7760,8 +7638,7 @@
 
   (defn ^:no-doc -unexpected-arg!
     "Prefer `unexpected-arg!`"
-    {:added      "Encore v3.66.0 (2023-08-23)"
-     :deprecated "Encore v3.68.0 (2023-09-25)"}
+    {:deprecated "Encore v3.68.0 (2023-09-25)"}
     ([arg        ] (unexpected-arg! arg nil))
     ([arg details] (unexpected-arg! arg details)))
 

@@ -1,7 +1,6 @@
 (ns ^:no-doc taoensso.encore.stats
   "Private stats utils.
   Experimental, subject to change without notice!"
-  {:added "Encore v3.98.0 (2024-04-08)"}
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc  :refer [have have? have!]]

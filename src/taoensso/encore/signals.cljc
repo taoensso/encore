@@ -8,7 +8,6 @@
     - May have a kind (type/taxonomy/etc.)
     - May have an identifier"
 
-  {:added "Encore v3.68.0 (2023-09-25)"}
   (:require
    [clojure.string  :as str]
    [taoensso.encore :as enc :refer [have have?]]
