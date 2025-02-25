@@ -114,9 +114,9 @@
      :cljs
      (:require-macros
       [taoensso.encore :as enc-macros :refer
-       [compile-if try-eval qb
+       [compile-if qb
         if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        or-some and? or? def* defonce
+        and? or? def* defonce
         -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias
         identical-kw? satisfies? satisfies! instance! use-transient?
@@ -407,14 +407,6 @@
 
 #?(:clj (defmacro compile-when {:style/indent 1} [test & body] `(compile-if ~test (do ~@body) nil)))
 
-#?(:clj
-   (defmacro ^:no-doc try-eval
-     "If `form` can be successfully evaluated at macro-expansion time, expands to `form`.
-     Otherwise expands to `nil`."
-     [form] `(compile-if ~form ~form nil)))
-
-(comment (macroexpand '(try-eval (com.google.common.io.BaseEncoding/base16))))
-
 ;; (:ns &env) is nnil iff compiling for Cljs. This gives macros a way to produce
 ;; different code depending on target (Clj/s), something reader conditionals cannot do.
 #?(:clj (defmacro if-clj  [then & [else]] (if (:ns &env) else then)))
@@ -504,26 +496,6 @@
          `(clojure.core/defonce ~sym ~@body)))))
 
 ;;;;
-
-#?(:cljs
-   (defn ^boolean some?
-     "Same as `core/some?` (added in Clojure v1.6)."
-     [x] (if (nil? x) false true))
-
-   :clj
-   (defn some?
-     "Same as `core/some?` (added in Clojure v1.6)."
-     {:inline (fn [x] `(if (identical? ~x nil) false true))}
-     [x]               (if (identical?  x nil) false true)))
-
-#?(:clj
-   (defmacro or-some
-     "Like `or`, but returns the first non-nil form (may be falsey)."
-     ([        ] nil)
-     ([x       ] x)
-     ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
-
-(comment (or-some nil nil false true))
 
 #?(:clj
    (defmacro ^:no-doc typed-val
@@ -632,7 +604,7 @@
      ([alias src                       ] `(defalias ~alias ~src nil          nil))
      ([alias src alias-attrs           ] `(defalias ~alias ~src ~alias-attrs nil))
      ([alias src alias-attrs alias-body]
-      (let [cljs?     (some? (:ns &env))
+      (let [cljs?     (core/some? (:ns &env))
             src-sym   (truss/have symbol? src)
             alias-sym (truss/have symbol? (or alias (symbol (name src-sym))))
 
@@ -1209,56 +1181,6 @@
      "Returns class name symbol of given argument."
      [x] (when x (symbol (.getName (class x))))))
 
-;;;; Validation
-
-;; #?(:clj
-;;    (defmacro is
-;;      "Experimental, subject to change.
-;;      Returns x if (pred x) is truthy, otherwise returns nil:
-;;        (when-let [n-records (is pos? (count remaining))] ...), etc."
-;;      [pred x]
-;;      (if (list-form? x)
-;;        `(let [x# ~x] (when (truss/catching (~pred x#)) x#))
-;;        (do          `(when (truss/catching (~pred ~x)) ~x)))))
-
-(defn is!
-  "Lightweight `have!` that provides less diagnostic info."
-  ([     x     ] (is! some? x nil)) ; Nb different to single-arg `have`
-  ([pred x     ] (is! pred  x nil))
-  ([pred x data]
-   (if (truss/catching (pred x))
-     x
-     (throw
-       (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
-         (assoc-some
-           {:pred pred
-            :arg  (typed-val x)}
-           :data data))))))
-
-(comment [(is! false) (is! nil) (is! string? 5) (is string? "foo")])
-
-#?(:clj
-   (defmacro check-some
-     "Returns first logical false/throwing expression (id/form), or nil."
-     ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
-     ([test       ]
-      (let [[error-id test] (if (vector? test) test [nil test])]
-        `(let [[test# err#] (truss/try* [~test nil] (catch :all err# [nil err#]))]
-           (when-not test# (or ~error-id '~test :check/falsey)))))))
-
-#?(:clj
-   (defmacro check-all
-     "Returns all logical false/throwing expressions (ids/forms), or nil."
-     ([test       ] `(check-some ~test))
-     ([test & more]
-      `(let [errors# (filterv identity
-                       [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
-         (not-empty errors#)))))
-
-(comment
-  (check-some false [:bad-type (string? 0)] nil [:blank (str/blank? 0)])
-  (check-all  false [:bad-type (string? 0)] nil [:blank (str/blank? 0)]))
-
 ;;;;
 
 #?(:clj (declare caching-satisfies?))
@@ -1819,8 +1741,8 @@
 
 (defn some=
   #?(:cljs {:tag 'boolean})
-  ([x y]        (and (some? x) (= x y)))
-  ([x y & more] (and (some? x) (= x y) (revery? #(= % x) more))))
+  ([x y]        (and (core/some? x) (= x y)))
+  ([x y & more] (and (core/some? x) (= x y) (revery? #(= % x) more))))
 
 (comment (some= :foo :foo nil))
 
@@ -1829,7 +1751,7 @@
   ([x           ] x)
   ([x y         ] (if (nil? x) y x))
   ([x y z       ] (if (nil? x) (if (nil? y) z y) x))
-  ([x y z & more] (if (nil? x) (if (nil? y) (if (nil? z) (rfirst some? more) z) y) x)))
+  ([x y z & more] (if (nil? x) (if (nil? y) (if (nil? z) (rfirst core/some? more) z) y) x)))
 
 (comment
   (qb 1e6
@@ -2204,7 +2126,7 @@
 
 (comment (keys-by :foo [{:foo 1} {:foo 2}]))
 
-(defn ks-nnil? #?(:cljs {:tag 'boolean}) [ks m] (revery? #(some? (get m %)) ks))
+(defn ks-nnil? #?(:cljs {:tag 'boolean}) [ks m] (revery? #(core/some? (get m %)) ks))
 (defn ks=      #?(:cljs {:tag 'boolean}) [ks m] (and (== (count m) (count ks)) (revery? #(contains? m %) ks)))
 (defn ks>=     #?(:cljs {:tag 'boolean}) [ks m] (and (>= (count m) (count ks)) (revery? #(contains? m %) ks)))
 (defn ks<=     #?(:cljs {:tag 'boolean}) [ks m]
@@ -6454,7 +6376,7 @@
     (if (empty? m)
       ""
       (join
-        (for [[k v] m :when (some? v)]
+        (for [[k v] m :when (core/some? v)]
           (if (sequential? v)
             (join (mapv (partial param k) (or (seq v) [""])))
             (param k v)))))))
@@ -6953,7 +6875,7 @@
   (def ^:no-doc ^:deprecated memoize1        memoize-last)
   (def ^:no-doc ^:deprecated memoize*        memoize)
   (def ^:no-doc ^:deprecated memoize_        memoize)
-  (def ^:no-doc ^:deprecated nnil?           some?)
+  (def ^:no-doc ^:deprecated nnil?           core/some?)
   (def ^:no-doc ^:deprecated nneg-num?       nat-num?)
   (def ^:no-doc ^:deprecated nneg-int?       nat-int?)
   (def ^:no-doc ^:deprecated nneg-float?     nat-float?)
@@ -7492,3 +7414,41 @@
   (defn ^:no-doc ex-cause {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
     #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
        :cljs (when (instance? ExceptionInfo x) (.-cause              x)))))
+
+(deprecated "2025-02 Housekeeping"
+  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} core/some?)
+  #?(:clj (defmacro ^:no-doc try-eval {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [form] `(compile-if ~form ~form nil)))
+  #?(:clj
+     (defmacro ^:no-doc or-some
+       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       ([        ] nil)
+       ([x       ] x)
+       ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
+
+  (defn ^:no-doc is!
+    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    ([     x     ] (is! core/some? x nil)) ; Nb different to single-arg `have`
+    ([pred x     ] (is! pred       x nil))
+    ([pred x data]
+     (if (truss/catching (pred x))
+       x
+       (throw
+         (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
+           (assoc-some {:pred pred, :arg (typed-val x)} :data data))))))
+
+  #?(:clj
+     (defmacro ^:no-doc check-some
+       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
+       ([test       ]
+        (let [[error-id test] (if (vector? test) test [nil test])]
+          `(let [[test# err#] (truss/try* [~test nil] (catch :all err# [nil err#]))]
+             (when-not test# (or ~error-id '~test :check/falsey)))))))
+
+  #?(:clj
+     (defmacro ^:no-doc check-all
+       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       ([test       ] `(check-some ~test))
+       ([test & more]
+        `(let [errors# (filterv identity [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
+           (not-empty errors#))))))
