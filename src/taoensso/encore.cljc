@@ -710,7 +710,7 @@
             alias-attrs (dissoc alias-attrs :link?)
 
             final-attrs
-            (select-keys (core-merge src-attrs (meta alias-sym) alias-attrs)
+            (select-keys (core-merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
               [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
 
             alias-sym   (with-meta alias-sym final-attrs)
