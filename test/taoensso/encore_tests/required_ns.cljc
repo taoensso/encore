@@ -10,27 +10,27 @@
 ;;;; Signal API
 
 (do
-  (def            ct-sig-filter  nil)
-  (def ^:dynamic *rt-sig-filter* nil)
-  (def ^:dynamic *sig-handlers*  nil))
+  (def            ct-call-filter  nil)
+  (def ^:dynamic *rt-call-filter* nil)
+  (def ^:dynamic *sig-handlers*   nil))
 
 (sigs/def-api
   {:sf-arity 4
-   :ct-sig-filter    ct-sig-filter
-   :*rt-sig-filter* *rt-sig-filter*
-   :*sig-handlers*  *sig-handlers*})
+   :ct-call-filter    ct-call-filter
+   :*rt-call-filter* *rt-call-filter*
+   :*sig-handlers*   *sig-handlers*})
 
 #?(:clj
-   (defmacro sig-exp
-     "Example macro wrapper around `sigs/filterable-expansion`."
-     {:arglists  (:arglists (meta #'sigs/filterable-expansion))}
+   (defmacro filter-call
+     "Example macro wrapper around `sigs/filter-call`."
+     {:arglists  (:arglists (meta #'sigs/filter-call))}
      [opts]
      (let [result
-           (sigs/filterable-expansion
+           (sigs/filter-call
              {:cljs? (boolean (:ns &env))
-              :sf-arity   4
-              :ct-sig-filter     ct-sig-filter
-              :*rt-sig-filter* `*rt-sig-filter*} opts)]
+              :sf-arity 4
+              :ct-call-filter     ct-call-filter
+              :*rt-call-filter* `*rt-call-filter*} opts)]
        `'~result)))
 
 (comment

@@ -5,19 +5,18 @@
    [taoensso.encore.signals :as sigs]))
 
 (do
-  (def            ct-sig-filter        nil)
-  (def ^:dynamic *rt-sig-filter*       nil)
-  (def ^:dynamic *sig-handlers*        nil)
+  (def            ct-call-filter  nil)
+  (def ^:dynamic *rt-call-filter* nil)
+  (def ^:dynamic *sig-handlers*   nil)
 
   (sigs/def-api
-    {:purpose "testing"
-     :sf-arity 4
-     :ct-sig-filter    ct-sig-filter
-     :*rt-sig-filter* *rt-sig-filter*
-     :*sig-handlers*  *sig-handlers*})
+    {:sf-arity 4
+     :ct-call-filter    ct-call-filter
+     :*rt-call-filter* *rt-call-filter*
+     :*sig-handlers*   *sig-handlers*})
 
   (deftype MySignal []
-    sigs/IFilterableSignal
+    sigs/ISignalHandling
     (allow-signal? [_ _] true)
     (signal-value  [_ _] ::dummy-signal-value)))
 

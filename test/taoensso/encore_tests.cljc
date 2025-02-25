@@ -1699,14 +1699,16 @@
       (is (= (enc/format-nsecs 1.5e9)  "1.50s"))
       (is (= (enc/format-nsecs 6.0e10) "1.00m"))])])
 
-;;;; Signal filtering
+;;;; Signals API
+
+;;; Spec filters
 
 (defn- sf-allow?
-  ([[kind-spec kind] [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter kind-spec ns-spec id-spec min-level-spec)] (sf kind ns id level) true))
-  ([                 [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/sig-filter nil       ns-spec id-spec min-level-spec)] (sf      ns id level) true))
-  ([                 [ns-spec ns]              [min-level-spec level]] (if-let [sf (sigs/sig-filter nil       ns-spec nil     min-level-spec)] (sf      ns    level) true)))
+  ([[kind-spec kind] [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/spec-filter kind-spec ns-spec id-spec min-level-spec)] (sf kind ns id level) true))
+  ([                 [ns-spec ns] [id-spec id] [min-level-spec level]] (if-let [sf (sigs/spec-filter nil       ns-spec id-spec min-level-spec)] (sf      ns id level) true))
+  ([                 [ns-spec ns]              [min-level-spec level]] (if-let [sf (sigs/spec-filter nil       ns-spec nil     min-level-spec)] (sf      ns    level) true)))
 
-(deftest _sig-filter
+(deftest _spec-filters
   [(testing "Levels"
      [(is (=               (sigs/valid-level-int      -10) -10))
       (is (=               (sigs/valid-level-int    :info)  50))
@@ -1820,55 +1822,42 @@
       (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])
 
    (testing "Compile-time arity (1), allow nils!"
-     [(is (true?  ((sigs/sig-filter {:kind-filter :k1}) {:kind :k1})))
-      (is (false? ((sigs/sig-filter {:kind-filter :k1}) {:kind :k2})))
-      (is (true?  ((sigs/sig-filter {:kind-filter :k1}) {:kind nil})) "Allow nil")
+     [(is (true?  ((sigs/spec-filter {:kind-filter :k1}) {:kind :k1})))
+      (is (false? ((sigs/spec-filter {:kind-filter :k1}) {:kind :k2})))
+      (is (true?  ((sigs/spec-filter {:kind-filter :k1}) {:kind nil})) "Allow nil")
 
-      (is (true?  ((sigs/sig-filter {:ns-filter :ns1}) {:ns :ns1})))
-      (is (false? ((sigs/sig-filter {:ns-filter :ns1}) {:ns :ns2})))
-      (is (true?  ((sigs/sig-filter {:ns-filter :ns1}) {:ns  nil})) "Allow nil")
+      (is (true?  ((sigs/spec-filter {:ns-filter :ns1}) {:ns :ns1})))
+      (is (false? ((sigs/spec-filter {:ns-filter :ns1}) {:ns :ns2})))
+      (is (true?  ((sigs/spec-filter {:ns-filter :ns1}) {:ns  nil})) "Allow nil")
 
-      (is (true?  ((sigs/sig-filter {:id-filter :id1}) {:id :id1})))
-      (is (false? ((sigs/sig-filter {:id-filter :id1}) {:id :id2}))) ;X
-      (is (true?  ((sigs/sig-filter {:id-filter :id3}) {:id  nil})) "Allow nil")
+      (is (true?  ((sigs/spec-filter {:id-filter :id1}) {:id :id1})))
+      (is (false? ((sigs/spec-filter {:id-filter :id1}) {:id :id2}))) ;X
+      (is (true?  ((sigs/spec-filter {:id-filter :id3}) {:id  nil})) "Allow nil")
 
-      (is (true?  ((sigs/sig-filter {:min-level :info}) {:level  :info})))
-      (is (false? ((sigs/sig-filter {:min-level :info}) {:level :debug})))
-      (is (true?  ((sigs/sig-filter {:min-level :info}) {:level    nil})) "Allow nil")])])
+      (is (true?  ((sigs/spec-filter {:min-level :info}) {:level  :info})))
+      (is (false? ((sigs/spec-filter {:min-level :info}) {:level :debug})))
+      (is (true?  ((sigs/spec-filter {:min-level :info}) {:level    nil})) "Allow nil")])
 
-;;;; Signal API
-
-(def cnt (enc/counter 0))
-
-(deftype MySignal [level cnt]
-  sigs/IFilterableSignal
-  (allow-signal? [_ sig-filter] (sig-filter 'taoensso.encore-tests :my-id level))
-  (signal-value  [_ _] cnt)
-  (signal-debug  [_] {:level level}))
-
-(defn clear-handlers! [] (enc/update-var-root! rns/*rt-sig-filter* (fn [_] nil)))
-
-(deftest _signal-api
-  [(testing "Signal filtering"
-     [(is (nil? (clear-handlers!)))
+   (testing "Local API"
+     [(is (nil? (enc/set-var-root! rns/*rt-call-filter* nil)))
       (is (= (rns/get-filters)              nil))
       (is (= (rns/set-kind-filter!     "*") {:kind-filter "*"                                                  }))
       (is (= (rns/set-ns-filter!       "*") {:kind-filter "*", :ns-filter "*"                                  }))
       (is (= (rns/set-id-filter!       "*") {:kind-filter "*", :ns-filter "*", :id-filter "*"                  }))
       (is (= (rns/set-min-level! nil :info) {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
-      (is (= @rns/*rt-sig-filter*           {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
+      (is (= @rns/*rt-call-filter*          {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}))
       (is (= (rns/get-filters)    {:runtime {:kind-filter "*", :ns-filter "*", :id-filter "*", :min-level :info}}))
       (is (= (rns/get-min-levels) {:runtime                                                               :info}))
 
       (is (= (rns/without-filters (rns/get-filters))    nil))
       (is (= (rns/without-filters (rns/get-min-levels)) nil))
 
-      (is (enc/submap? (rns/with-kind-filter "-" @rns/*rt-sig-filter*) {:kind-filter "-"}))
-      (is (enc/submap? (rns/with-ns-filter   "-" @rns/*rt-sig-filter*) {:ns-filter   "-"}))
-      (is (enc/submap? (rns/with-id-filter   "-" @rns/*rt-sig-filter*) {:id-filter   "-"}))
+      (is (enc/submap? (rns/with-kind-filter "-" @rns/*rt-call-filter*) {:kind-filter "-"}))
+      (is (enc/submap? (rns/with-ns-filter   "-" @rns/*rt-call-filter*) {:ns-filter   "-"}))
+      (is (enc/submap? (rns/with-id-filter   "-" @rns/*rt-call-filter*) {:id-filter   "-"}))
 
-      (is (enc/submap? (rns/with-min-level :kind1       100 @rns/*rt-sig-filter*) {:min-level {:default :info, :kind1         100  }}))
-      (is (enc/submap? (rns/with-min-level :kind1 "ns1" 100 @rns/*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
+      (is (enc/submap? (rns/with-min-level :kind1       100 @rns/*rt-call-filter*) {:min-level {:default :info, :kind1         100  }}))
+      (is (enc/submap? (rns/with-min-level :kind1 "ns1" 100 @rns/*rt-call-filter*) {:min-level {:default :info, :kind1 [["ns1" 100]]}}))
       (is (enc/submap?
             (rns/with-min-level :kind1 "ns1" :warn
               {:l1 (rns/get-min-levels)
@@ -1877,249 +1866,58 @@
 
             {:l1 {:runtime :info}, :l2 {:runtime :info}, :l3 {:runtime :warn}}))
 
-      (is (false?  (rns/with-ns-filter "-"          (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (rns/with-ns-filter "ns1"        (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false? (rns/with-ns-filter "-"          (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?  (rns/with-ns-filter "ns1"        (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (rns/with-kind-filter "-"        (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (rns/with-kind-filter "kind1"    (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false? (rns/with-kind-filter "-"        (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?  (rns/with-kind-filter "kind1"    (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (rns/with-id-filter "-"          (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (rns/with-id-filter "id1"        (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false? (rns/with-id-filter "-"          (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?  (rns/with-id-filter "id1"        (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (false?  (rns/with-min-level :kind1 :warn (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
-      (is (true?   (rns/with-min-level :kind2 :warn (rns/*rt-sig-filter* :kind1 "ns1" :id1 :info))))
+      (is (false? (rns/with-min-level :kind1 :warn (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
+      (is (true?  (rns/with-min-level :kind2 :warn (rns/*rt-call-filter* :kind1 "ns1" :id1 :info))))
 
-      (is (enc/submap? (rns/with-min-level :kind1 "ns2" 100 @rns/*rt-sig-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
-      (is (true?       (rns/with-min-level :kind1 "ns2" 100 (rns/*rt-sig-filter* :kind1 "ns1" :id 50))) "Fall back to :default kind on unmatched ns")
-      (is (false?      (rns/with-min-level :kind1 "ns2" 100 (rns/*rt-sig-filter* :kind1 "ns2" :id 50))))])
+      (is (enc/submap? (rns/with-min-level :kind1 "ns2" 100 @rns/*rt-call-filter*) {:min-level {:default :info, :kind1 [["ns2" 100]]}}))
+      (is (true?       (rns/with-min-level :kind1 "ns2" 100 (rns/*rt-call-filter* :kind1 "ns1" :id 50))) "Fall back to :default kind on unmatched ns")
+      (is (false?      (rns/with-min-level :kind1 "ns2" 100 (rns/*rt-call-filter* :kind1 "ns2" :id 50))))
 
-   (testing "Signal handlers"
-     [(testing "Basics"
-        [(is (nil? (clear-handlers!)))
-         (is (nil? (cnt :set 0)))
+      (is (nil? (enc/set-var-root! rns/*rt-call-filter* nil)))
 
-         (is (=           (rns/get-handlers) nil))
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
-         (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
-         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+      (testing "Call filtering"
+        [(is (enc/submap? (rns/filter-call {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
+         (testing "Can override `allow?`"
+           [(is (enc/submap? (rns/filter-call {:level :info, :allow?             true}) {:allow? true}))
+            (is (enc/submap? (rns/filter-call {:level :info, :allow?            false}) {:allow? false}))
+            (is (enc/submap? (rns/filter-call {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
 
-         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
-         (is (= @cnt 0))
+         (is (enc/submap? (rns/filter-call {:level :info})
+               {:callsite-id nat-int?
+                :elide? :submap/nx
+                :allow?
+                '(taoensso.encore/and?
+                   (let [sf taoensso.encore-tests.required-ns/*rt-call-filter*]
+                     (if sf (sf nil "taoensso.encore-tests" nil :info) true)))})
+           "With basic filtering")
 
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
-         (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
+         (is (enc/submap? (rns/filter-call {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :callsite-id 1234
+                                            :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]],
+                                            :local-forms {:ns __ns}})
+               {:callsite-id 1234
+                :elide? :submap/nx
+                :allow?
+                '(taoensso.encore/and?
+                   (< (Math/random) 0.5)
+                   (let [sf taoensso.encore-tests.required-ns/*rt-call-filter*]
+                     (if sf (sf :my-sig-kind __ns :my-sig-id :info) true))
+                   (> 1 0)
+                   (taoensso.encore.signals/call-limited!? 1234 [[1 1000]]))})
+           "With rich filtering")])])])
 
-         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
-         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
-         (is (= @cnt 2))
+;;; Misc
 
-         (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn fn?}}))
-         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
-         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
-         (is (= @cnt 3))
-
-         (is (nil? (rns/remove-handler! :hid1)))
-         (is (nil? rns/*sig-handlers*) "Removal yields non-empty map")
-
-         (let [a (atom nil)
-               handlers
-               [(sigs/wrap-handler :hid1 (fn [x] (reset! a *dynamic-var*))
-                  nil #?(:clj {:async {:mode :dropping}} :cljs nil))]]
-
-            (binding [*dynamic-var* "bound"]
-              (sigs/call-handlers! handlers (MySignal. :info "foo"))
-              #?(:clj (Thread/sleep 500))
-              (is (= @a "bound") "Handler binding conveyance")))
-
-         (testing "with-handler/+"
-           (let [sleep! (fn [] (enc/hot-sleep 1000))
-                 sig1_  (atom ::nx)
-                 sig2_  (atom ::nx)
-                 sig3_  (atom ::nx)
-                 st1?_  (atom false)
-                 st2?_  (atom false)
-                 st3?_  (atom false)]
-
-             (rns/with-handler      :hid1 (fn ([x] (sleep!) (reset! sig1_ (str x ".1")))          ([] (sleep!) (reset! st1?_ true)))        {}
-               (rns/with-handler+   :hid2 (fn ([x] (sleep!) (reset! sig2_ (str x ".2")))          ([] (sleep!) (reset! st2?_ true) (ex1!))) {}
-                 (rns/with-handler+ :hid3 (fn ([x] (sleep!) (reset! sig3_ (str x ".3"))) #?(:cljs ([])))                                    {}
-                   (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo")))))
-
-             [(is (= [@sig1_ @sig2_ @sig3_] ["foo.1" "foo.2" "foo.3"]) "Drained all")
-              (is (= [@st1?_ @st2?_ @st3?_] [true true false])         "Stopped all")]))])
-
-      (testing "Handler priorities"
-        (let [handler-order
-              (fn [p1 p2 p3 p4]
-                (let [log_ (atom [])
-                      log! (fn [hid] (swap! log_ conj hid))
-                      handlers
-                      (-> []
-                        (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
-                        (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
-                        (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
-                        (sigs/add-handler :hid4 (fn [_] (log! 4)) nil {:async nil, :priority p4}))]
-
-                  (sigs/call-handlers! handlers (MySignal. :info "foo"))
-                  @log_))]
-
-          [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
-           (is (= (handler-order 1 2 3 4) [4 3 2 1]))
-           (is (= (handler-order 2 1 4 3) [3 4 1 2]))]))
-
-      (testing "Handler sampling"
-        (let [n-sampled
-              (fn [sample-rate]
-                (let [c (enc/counter)
-                      handlers
-                      [(sigs/wrap-handler :hid1 (fn [x] (c) x) nil
-                         {:sample-rate sample-rate, :async {:mode :sync}})]]
-
-                  (dotimes [_ 1000]
-                    (sigs/call-handlers! handlers (MySignal. :info "foo")))
-
-                  @c))]
-
-          [(is (=  1000 (n-sampled        nil))        "No sampling (const)")
-           (is (=  1000 (n-sampled (fn [] nil)))       "No sampling (fn)")
-           (is (=  1000 (n-sampled        1.0))      "100% sampling (const)")
-           (is (=  1000 (n-sampled (fn [] 1.0)))     "100% sampling (fn)")
-           (is (=  0    (n-sampled        0.0))        "0% sampling (const)")
-           (is (=  0    (n-sampled (fn [] 0.0)))       "0% sampling (fn)")
-           (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
-           (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
-
-      (testing "Handler middleware"
-        (let [v1 (atom ::nx)
-              v2 (atom ::nx)
-              v3 (atom ::nx)
-              cm enc/comp-middleware]
-
-          [(is (nil? (clear-handlers!)))
-           (is (nil? (cnt :set 0)))
-           (is (enc/submap? (rns/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                                  }) {:hid1 :submap/ex}))
-           (is (enc/submap? (rns/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware (cm #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
-           (is (enc/submap? (rns/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware (fn [_] nil)})                         {:hid3 :submap/ex}))
-           (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
-
-           #?(:clj (do (Thread/sleep 4000) :sleep))
-
-           (is (= @v1 [0 "foo"]))
-           (is (= @v2 [1 "foo.mw1.mw2"]))
-           (is (= @v3 ::nx))
-           (is (= @cnt 2) "hf3 never called")
-
-           (is (map? (rns/remove-handler! :hid1)))
-           (is (map? (rns/remove-handler! :hid2)))
-           (is (nil? (rns/remove-handler! :hid3)))]))
-
-      (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
-        (let [fn-arg_ (atom nil)]
-          (clear-handlers!)
-          (rns/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
-          (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))
-          (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error enc/error?}))))
-
-      #?(:clj
-         (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
-           (let [fn-arg_ (atom nil)]
-             (clear-handlers!)
-             (rns/add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
-             (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "1"))
-             (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
-             (Thread/sleep 4000) ; Wait for second signal to enqueue
-             (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
-
-      (testing "Handler stopping"
-        [(is (= (sigs/stop-handlers! []) nil))
-         (let [st?_ (atom false)]
-           (clear-handlers!)
-           (rns/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
-           (rns/remove-handler! :hid1)
-           (is (true? @st?_) "Removing handler stops it"))
-
-         (let [st?_ (atom false)]
-           (clear-handlers!)
-           (rns/add-handler! :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
-           (rns/add-handler! :hid1 (fn ([_]) ([])))
-           (is (true? @st?_) "Replacing handler stops old handler"))
-
-         (is (nil? (clear-handlers!)))
-         (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
-                      handlers
-                      (-> []
-                        (sigs/add-handler :hid1 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {})
-                        (sigs/add-handler :hid2 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs nil}})
-                        (sigs/add-handler :hid3 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 1000}})
-                        (sigs/add-handler :hid4 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 100}})
-                        (sigs/add-handler :hid5 (fn ([_] (sleep!))          ([]))        {} {})
-                        (sigs/add-handler :hid6 (fn ([_] (sleep!))          ([] (ex1!))) {} {}))]
-
-                  (sigs/call-handlers!  handlers (MySignal. :info "foo"))
-                  [(sigs/stop-handlers! handlers)
-                   (sigs/stop-handlers! handlers)])
-
-               [{:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid4 {:okay :stopped, #?@(:clj [:drained? false])},
-                 :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid6 {:error ex1,     #?@(:clj [:drained? true])}}
-
-                {:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid4 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
-                 :hid6 {:okay :stopped, #?@(:clj [:drained? true])}}]))])
-
-      (testing "Handler stats"
-        (clear-handlers!)
-        (rns/add-handler! :hid1 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
-        (rns/add-handler! :hid2 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
-        (rns/add-handler! :hid3 (fn [_]) {:async nil             :track-stats? false})
-        (dotimes [_ 1e3] (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo")))
-
-        [(is (enc/submap? (rns/get-handlers-stats)
-               {:hid1 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
-                :hid2 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
-                :hid3 :submap/nx}))
-
-         (is (enc/submap? @(get-in (rns/get-handlers) [:hid1 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
-         (is (enc/submap? @(get-in (rns/get-handlers) [:hid2 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
-         (is (not (contains? (get  (rns/get-handlers) :hid3) :handler-stats_)))])])
-
-   (testing "Filterable expansion"
-     [(is (enc/submap? (rns/sig-exp {:level :info, :elide? true}) {:elide? true}) "Can override `elide?`")
-      (testing "Can override `allow?`"
-        [(is (enc/submap? (rns/sig-exp {:level :info, :allow?             true}) {:allow? true}))
-         (is (enc/submap? (rns/sig-exp {:level :info, :allow?            false}) {:allow? false}))
-         (is (enc/submap? (rns/sig-exp {:level :info, :allow? (enc/chance 0.5)}) {:allow? '(enc/chance 0.5)}) "Runtime forms allowed")])
-
-      (is (enc/submap? (rns/sig-exp {:level :info})
-            {:expansion-id nat-int?
-             :elide? :submap/nx
-             :allow?
-             '(taoensso.encore/and?
-                (let [sf taoensso.encore-tests.required-ns/*rt-sig-filter*]
-                  (if sf (sf nil "taoensso.encore-tests" nil :info) true)))})
-        "With basic filtering")
-
-      (is (enc/submap? (rns/sig-exp {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :expansion-id 1234
-                                     :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]],
-                                     :local-forms {:ns __ns}})
-            {:expansion-id 1234
-             :elide? :submap/nx
-             :allow?
-             '(taoensso.encore/and?
-                (< (Math/random) 0.5)
-                (let [sf taoensso.encore-tests.required-ns/*rt-sig-filter*]
-                  (if sf (sf :my-sig-kind __ns :my-sig-id :info) true))
-                (> 1 0)
-                (taoensso.encore.signals/expansion-limited!? 1234 [[1 1000]]))})
-        "With rich filtering")])
-
-   (testing "Dynamic context (`*ctx*`)"
+(deftest _signal-misc
+  [(testing "Dynamic context (`*ctx*`)"
      [(is (= (binding [rns/*ctx* "my-ctx"] rns/*ctx*) "my-ctx") "Supports manual `binding`")
       (is (= (rns/with-ctx       "my-ctx"  rns/*ctx*) "my-ctx") "Supports any data type")
 
@@ -2141,6 +1939,213 @@
       (is (= (sigs/format-id "foo.bar" :foo.bar/qux) "::qux"))
       (is (= (sigs/format-id "foo.baz" :foo.bar/qux) ":foo.bar/qux"))
       (is (= (sigs/format-id nil       :foo.bar/qux) ":foo.bar/qux"))])])
+
+;;; Handling
+
+(def cnt (enc/counter 0))
+(defn clear-handlers! [] (enc/update-var-root! rns/*sig-handlers* (fn [_] nil)))
+
+(deftype MySignal [level cnt]
+  sigs/ISignalHandling
+  (allow-signal? [_ spec-filter] (spec-filter 'taoensso.encore-tests :my-id level))
+  (signal-value  [_ _] cnt)
+  (signal-debug  [_] {:level level}))
+
+(deftest _signal-handling
+  [(testing "Basics"
+     [(is (nil? (clear-handlers!)))
+      (is (nil? (cnt :set 0)))
+
+      (is (=           (rns/get-handlers) nil))
+      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+
+      (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
+      (is (= @cnt 0))
+
+      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
+
+      (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
+      (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
+      (is (= @cnt 2))
+
+      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :min-level :info}) {:hid1 {:dispatch-opts {:async nil, :min-level :info}, :handler-fn fn?}}))
+      (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))) "Signal level >= handler's min level")
+      (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :debug "foo"))) "Signal level <  handler's min level")
+      (is (= @cnt 3))
+
+      (is (nil? (rns/remove-handler! :hid1)))
+      (is (nil? rns/*sig-handlers*) "Removal yields non-empty map")
+
+      (let [a (atom nil)
+            handlers
+            [(sigs/wrap-handler :hid1 (fn [x] (reset! a *dynamic-var*))
+               nil #?(:clj {:async {:mode :dropping}} :cljs nil))]]
+
+        (binding [*dynamic-var* "bound"]
+          (sigs/call-handlers! handlers (MySignal. :info "foo"))
+          #?(:clj (Thread/sleep 500))
+          (is (= @a "bound") "Handler binding conveyance")))
+
+      (testing "with-handler/+"
+        (let [sleep! (fn [] (enc/hot-sleep 1000))
+              sig1_  (atom ::nx)
+              sig2_  (atom ::nx)
+              sig3_  (atom ::nx)
+              st1?_  (atom false)
+              st2?_  (atom false)
+              st3?_  (atom false)]
+
+          (rns/with-handler      :hid1 (fn ([x] (sleep!) (reset! sig1_ (str x ".1")))          ([] (sleep!) (reset! st1?_ true)))        {}
+            (rns/with-handler+   :hid2 (fn ([x] (sleep!) (reset! sig2_ (str x ".2")))          ([] (sleep!) (reset! st2?_ true) (ex1!))) {}
+              (rns/with-handler+ :hid3 (fn ([x] (sleep!) (reset! sig3_ (str x ".3"))) #?(:cljs ([])))                                    {}
+                (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo")))))
+
+          [(is (= [@sig1_ @sig2_ @sig3_] ["foo.1" "foo.2" "foo.3"]) "Drained all")
+           (is (= [@st1?_ @st2?_ @st3?_] [true true false])         "Stopped all")]))])
+
+   (testing "Handler priorities"
+     (let [handler-order
+           (fn [p1 p2 p3 p4]
+             (let [log_ (atom [])
+                   log! (fn [hid] (swap! log_ conj hid))
+                   handlers
+                   (-> []
+                     (sigs/add-handler :hid1 (fn [_] (log! 1)) nil {:async nil, :priority p1})
+                     (sigs/add-handler :hid2 (fn [_] (log! 2)) nil {:async nil, :priority p2})
+                     (sigs/add-handler :hid3 (fn [_] (log! 3)) nil {:async nil, :priority p3})
+                     (sigs/add-handler :hid4 (fn [_] (log! 4)) nil {:async nil, :priority p4}))]
+
+               (sigs/call-handlers! handlers (MySignal. :info "foo"))
+               @log_))]
+
+       [(is (= (handler-order 4 3 2 1) [1 2 3 4]))
+        (is (= (handler-order 1 2 3 4) [4 3 2 1]))
+        (is (= (handler-order 2 1 4 3) [3 4 1 2]))]))
+
+   (testing "Handler sampling"
+     (let [n-sampled
+           (fn [sample-rate]
+             (let [c (enc/counter)
+                   handlers
+                   [(sigs/wrap-handler :hid1 (fn [x] (c) x) nil
+                      {:sample-rate sample-rate, :async {:mode :sync}})]]
+
+               (dotimes [_ 1000]
+                 (sigs/call-handlers! handlers (MySignal. :info "foo")))
+
+               @c))]
+
+       [(is (=  1000 (n-sampled        nil))        "No sampling (const)")
+        (is (=  1000 (n-sampled (fn [] nil)))       "No sampling (fn)")
+        (is (=  1000 (n-sampled        1.0))      "100% sampling (const)")
+        (is (=  1000 (n-sampled (fn [] 1.0)))     "100% sampling (fn)")
+        (is (=  0    (n-sampled        0.0))        "0% sampling (const)")
+        (is (=  0    (n-sampled (fn [] 0.0)))       "0% sampling (fn)")
+        (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
+        (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
+
+   (testing "Handler middleware"
+     (let [v1 (atom ::nx)
+           v2 (atom ::nx)
+           v3 (atom ::nx)
+           cm enc/comp-middleware]
+
+       [(is (nil? (clear-handlers!)))
+        (is (nil? (cnt :set 0)))
+        (is (enc/submap? (rns/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                                  }) {:hid1 :submap/ex}))
+        (is (enc/submap? (rns/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware (cm #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
+        (is (enc/submap? (rns/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware (fn [_] nil)})                         {:hid3 :submap/ex}))
+        (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
+
+        #?(:clj (do (Thread/sleep 4000) :sleep))
+
+        (is (= @v1 [0 "foo"]))
+        (is (= @v2 [1 "foo.mw1.mw2"]))
+        (is (= @v3 ::nx))
+        (is (= @cnt 2) "hf3 never called")
+
+        (is (map? (rns/remove-handler! :hid1)))
+        (is (map? (rns/remove-handler! :hid2)))
+        (is (nil? (rns/remove-handler! :hid3)))]))
+
+   (testing "Handler error-fn (wrapped handlers trap exceptions, send to `error-fn`)"
+     (let [fn-arg_ (atom nil)]
+       (clear-handlers!)
+       (rns/add-handler! :hid1 (fn [_] (ex1!)) {:error-fn (fn [x] (reset! fn-arg_ x)), :async nil})
+       (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))
+       (is (enc/submap? @fn-arg_ {:handler-id :hid1, :error enc/error?}))))
+
+   #?(:clj
+      (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
+        (let [fn-arg_ (atom nil)]
+          (clear-handlers!)
+          (rns/add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
+          (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "1"))
+          (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
+          (Thread/sleep 4000) ; Wait for second signal to enqueue
+          (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
+
+   (testing "Handler stopping"
+     [(is (= (sigs/stop-handlers! []) nil))
+      (let [st?_ (atom false)]
+        (clear-handlers!)
+        (rns/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
+        (rns/remove-handler! :hid1)
+        (is (true? @st?_) "Removing handler stops it"))
+
+      (let [st?_ (atom false)]
+        (clear-handlers!)
+        (rns/add-handler! :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
+        (rns/add-handler! :hid1 (fn ([_]) ([])))
+        (is (true? @st?_) "Replacing handler stops old handler"))
+
+      (is (nil? (clear-handlers!)))
+      (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
+                   handlers
+                   (-> []
+                     (sigs/add-handler :hid1 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {})
+                     (sigs/add-handler :hid2 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs nil}})
+                     (sigs/add-handler :hid3 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 1000}})
+                     (sigs/add-handler :hid4 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 100}})
+                     (sigs/add-handler :hid5 (fn ([_] (sleep!))          ([]))        {} {})
+                     (sigs/add-handler :hid6 (fn ([_] (sleep!))          ([] (ex1!))) {} {}))]
+
+               (sigs/call-handlers!  handlers (MySignal. :info "foo"))
+               [(sigs/stop-handlers! handlers)
+                (sigs/stop-handlers! handlers)])
+
+            [{:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid4 {:okay :stopped, #?@(:clj [:drained? false])},
+              :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid6 {:error ex1,     #?@(:clj [:drained? true])}}
+
+             {:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid3 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid4 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid5 {:okay :stopped, #?@(:clj [:drained? true])},
+              :hid6 {:okay :stopped, #?@(:clj [:drained? true])}}]))])
+
+   (testing "Handler stats"
+     (clear-handlers!)
+     (rns/add-handler! :hid1 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
+     (rns/add-handler! :hid2 (fn [_]) {:async nil, #?@(:cljs [:track-stats? true])})
+     (rns/add-handler! :hid3 (fn [_]) {:async nil             :track-stats? false})
+     (dotimes [_ 1e3] (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo")))
+
+     [(is (enc/submap? (rns/get-handlers-stats)
+            {:hid1 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
+             :hid2 {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}
+             :hid3 :submap/nx}))
+
+      (is (enc/submap? @(get-in (rns/get-handlers) [:hid1 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
+      (is (enc/submap? @(get-in (rns/get-handlers) [:hid2 :handler-stats_]) {:handling-nsecs {:n 1000}, :counts {:handled 1000, :allowed 1000, :errors 0}}))
+      (is (not (contains? (get  (rns/get-handlers) :hid3) :handler-stats_)))])])
 
 ;;;;
 

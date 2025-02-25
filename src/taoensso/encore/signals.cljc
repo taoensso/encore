@@ -75,7 +75,7 @@
 
 (comment (macroexpand '(level>= :info x)))
 
-;;;; Basic filtering
+;;;; Low-level filtering
 
 (let [nf-compile (fn [nf-spec  ] (enc/name-filter (or nf-spec :any)))
       nf-match?  (fn [nf-spec n] ((nf-compile nf-spec) n))
@@ -202,11 +202,9 @@
         simplified
         new-vec))))
 
-;;;; Signal filtering
+;;;; Spec filters (used for rt+ct call filtering, and rt handler filtering)
 
-(comment (enc/defonce ^:dynamic *rt-sig-filter* "`SigFilter`, or nil." nil))
-
-(deftype SigFilter [kind-filter ns-filter id-filter min-level filter-fn]
+(deftype SpecFilter [kind-filter ns-filter id-filter min-level filter-fn]
   #?(:clj clojure.lang.IDeref :cljs IDeref)
   (#?(:clj deref :cljs -deref) [_]
     (enc/assoc-some nil
@@ -219,20 +217,20 @@
   (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level))
   (#?(:clj invoke :cljs -invoke) [_           ct-map] (filter-fn ct-map)))
 
-(defn sig-filter?
-  "Returns true iff given a `SigFilter`."
+(defn spec-filter?
+  "Returns true iff given a `SpecFilter`."
   #?(:cljs {:tag 'boolean})
-  [x] (instance? SigFilter x))
+  [x] (instance? SpecFilter x))
 
-(enc/def* sig-filter
-  "Returns nil, or a stateful (caching) `SigFilter` with the given specs."
+(enc/def* spec-filter
+  "Returns nil, or a stateful (caching) `SpecFilter` with the given specs."
   {:arglists
    '([{:keys [kind-filter ns-filter id-filter min-level]}]
              [kind-filter ns-filter id-filter min-level])}
 
   (let [get-cached
         (enc/fmemoize ; Same specs -> share cache (ref. transparent)
-          (fn sig-filter
+          (fn spec-filter
             [         kind-filter ns-filter id-filter min-level]
             (when (or kind-filter ns-filter id-filter min-level)
               (do ; Validation
@@ -247,10 +245,9 @@
 
                     (valid-min-level min-level))))
 
-              (SigFilter. kind-filter ns-filter id-filter min-level
+              (SpecFilter. kind-filter ns-filter id-filter min-level
                 (enc/fmemoize
-                  (fn allow-signal?
-
+                  (fn allow-spec?
                     ([{:keys [kind ns id level]}]
                      ;; Used for compile-time filtering (not perf sensitive, ignore nils)
                      (and
@@ -277,32 +274,26 @@
                        (if ns-filter (allow-name?  ns-filter ns)       true)
                        (if min-level (allow-level? min-level ns level) true)))))))))]
 
-    (fn sig-filter
+    (fn spec-filter
       ([        kind-filter ns-filter id-filter min-level]             (get-cached kind-filter ns-filter id-filter min-level))
       ([{:keys [kind-filter ns-filter id-filter min-level :as specs]}] (get-cached kind-filter ns-filter id-filter min-level)))))
 
-(comment ; [188.41 189.56 188.09]
-  (let [sf (sig-filter nil "*" nil nil)]
-    (enc/qb 3e6
+(comment 
+  (let [sf (spec-filter nil "*" nil nil)]
+    (enc/qb 3e6 ; [181.14 181.21 181.44]
       (sf :kind :ns     :info)
       (sf       :ns :id :info)
       (sf       :ns :id :info))))
 
-(defprotocol IFilterableSignal
-  "Protocol that app/library signal-like types must implement to support signal API."
-  (allow-signal? [_ sig-filter]          "Returns true iff given signal is allowed by given `SigFilter`.")
-  (signal-value  [_ handler-sample-rate] "Returns public signal value as given to handlers, etc.")
-  (signal-debug  [_]                     "Returns minimal signal representation for debug purposes"))
-
-(let [nil-sf (SigFilter. nil nil nil nil nil)]
-  (defn update-sig-filter
-    "Returns nil, or updated stateful (caching) `SigFilter`."
-    {:arglists '([old-sig-filter {:keys [kind-filter ns-filter id-filter min-level min-level-fn]}])}
+(let [nil-sf (SpecFilter. nil nil nil nil nil)]
+  (defn update-spec-filter
+    "Returns nil, or updated stateful (caching) `SpecFilter`."
+    {:arglists '([old-spec-filter {:keys [kind-filter ns-filter id-filter min-level min-level-fn]}])}
     [old specs]
-    (let [^SigFilter base (or old nil-sf)]
+    (let [^SpecFilter base (or old nil-sf)]
       (if (empty? specs)
         old
-        (sig-filter
+        (spec-filter
           (get specs :kind-filter (.-kind-filter base))
           (get specs   :ns-filter   (.-ns-filter base))
           (get specs   :id-filter   (.-id-filter base))
@@ -312,37 +303,36 @@
               :if-let [f (get  specs :min-level-fn)] (f                old-min-level)
               :else                                                    old-min-level)))))))
 
-(comment (update-sig-filter nil {}))
+(comment (update-spec-filter nil {}))
 
-;;;; Filterable expansions
+;;;; Call filters
 
-#?(:clj (enc/defonce expansion-counter (enc/counter 1)))
+#?(:clj (enc/defonce callsite-counter (enc/counter 1)))
 
 (let [basic-rate-limiters_ (enc/latom {})
       full-rate-limiters_  (enc/latom {})]
 
-  (defn expansion-limited!?
+  (defn call-limited!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
     #?(:cljs {:tag 'boolean})
-
-    ([exp-id spec] ; Common case (no request ids)
+    ([cs-id spec] ; Common case (no request ids)
      (let [rl
            (or
-             (get (basic-rate-limiters_) exp-id) ; Common case
-             (basic-rate-limiters_       exp-id #(or % (enc/rate-limiter {:allow-basic? true} spec))))]
+             (get (basic-rate-limiters_) cs-id) ; Common case
+             (basic-rate-limiters_       cs-id #(or % (enc/rate-limiter {:allow-basic? true} spec))))]
        (if (rl) true false)))
 
-    ([exp-id spec req-id]
+    ([cs-id spec req-id]
      (let [rl
            (or
-             (get (full-rate-limiters_) exp-id) ; Common case
-             (full-rate-limiters_       exp-id #(or % (enc/rate-limiter {:allow-basic? false} spec))))]
+             (get (full-rate-limiters_) cs-id) ; Common case
+             (full-rate-limiters_       cs-id #(or % (enc/rate-limiter {:allow-basic? false} spec))))]
        (if (rl req-id) true false)))))
 
 (comment
   (enc/qb 1e6 ; [56.45 104.38]
-    (expansion-limited!? :expansion1 [[1 4000]])
-    (expansion-limited!? :expansion1 [[1 4000]] :req-id1)))
+    (call-limited!? :callsite1 [[1 4000]])
+    (call-limited!? :callsite1 [[1 4000]] :req-id1)))
 
 #?(:clj
    (defn unexpected-sf-artity! [sf-arity context]
@@ -356,30 +346,26 @@
      (if (enc/const-form? form)
        (do                form)
        (throw
-         (ex-info "[encore/signals] `filterable-expansion` arg must be a const (compile-time) value"
+         (ex-info "[encore/signals] `filter-call` arg must be a const (compile-time) value"
            {:param param, :form form})))))
 
 #?(:clj
-   (defn filterable-expansion
-     "Low-level util for writing macros with callsite expansion filtering.
-     Supports compile-time and runtime filters.
-
-     Returns {:keys [expansion-id elide? allow?]}.
-     Caller is responsible for protecting against possible multiple eval of
-     forms in `opts`."
+   (defn filter-call
+     "Low-level util for writing macros with call filtering.
+     Returns {:keys [callsite-id elide? allow?]}."
 
      {:arglists
-      '([{:keys [cljs? sf-arity ct-sig-filter *rt-sig-filter*]}]
+      '([{:keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}]
         [{:keys
-          [elidable? elide? allow? expansion-id,
+          [elidable? elide? allow? callsite-id,
            sample-rate kind ns id level when rate-limit rate-limit-by]}])}
 
-     [{:as core-opts :keys [cljs? sf-arity ct-sig-filter *rt-sig-filter*]}
+     [{:as core-opts :keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}
       call-opts]
 
-     (enc/have? [:ks>= #{:ct-sig-filter :*rt-sig-filter*}] core-opts)
-     (enc/have? [:or nil? sig-filter?] ct-sig-filter)
-     (enc/have? qualified-symbol?     *rt-sig-filter*)
+     (enc/have? [:ks>= #{:ct-call-filter :*rt-call-filter*}] core-opts)
+     (enc/have? [:or nil? spec-filter?] ct-call-filter)
+     (enc/have? qualified-symbol?      *rt-call-filter*)
 
      (enc/have? [:or nil? map?]   call-opts)
      (const-form! 'elide?    (get call-opts :elide?))
@@ -398,7 +384,7 @@
            (and
              (get opts :elidable? true)
              (get opts :elide?
-               (when-let [sf ct-sig-filter]
+               (when-let [sf ct-call-filter]
                  (not (sf {:kind  (enc/const-form  kind-form)
                            :ns    (enc/const-form    ns-form)
                            :id    (enc/const-form    id-form)
@@ -410,10 +396,10 @@
            id-form*    (or (get local-forms :id)    id-form)
            level-form* (or (get local-forms :level) level-form)
 
-           ;; Unique id for this expansion, changes on every eval.
+           ;; Unique id for this callsite expansion, changes on every eval.
            ;; So rate limiter will get reset on eval during REPL work, etc.
-           expansion-id (get opts :expansion-id (expansion-counter))
-           base-rv {:expansion-id  expansion-id}]
+           callsite-id (get opts :callsite-id (callsite-counter))
+           base-rv {:callsite-id  callsite-id}]
 
        (if elide?
          (assoc base-rv :elide? true)
@@ -429,26 +415,26 @@
 
                        sf-form
                        (case (int (or sf-arity -1))
-                         2 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form*           ~level-form*) true))
-                         3 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf            ~ns-form* ~id-form* ~level-form*) true))
-                         4 `(~'let [~'sf ~*rt-sig-filter*] (if ~'sf (~'sf ~kind-form ~ns-form* ~id-form* ~level-form*) true))
-                         (unexpected-sf-artity! sf-arity `expansion-filter))
+                         2 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf            ~ns-form*           ~level-form*) true))
+                         3 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf            ~ns-form* ~id-form* ~level-form*) true))
+                         4 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf ~kind-form ~ns-form* ~id-form* ~level-form*) true))
+                         (unexpected-sf-artity! sf-arity `filter-call))
 
                        when-form (get opts :when)
 
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form     (get opts :rate-limit)]
                          (if-let [limit-by-form (get opts :rate-limit-by)]
-                           `(expansion-limited!? ~expansion-id ~spec-form ~limit-by-form)
-                           `(expansion-limited!? ~expansion-id ~spec-form               )))]
+                           `(call-limited!? ~callsite-id ~spec-form ~limit-by-form)
+                           `(call-limited!? ~callsite-id ~spec-form               )))]
 
                    `(enc/and? ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
 (comment
-  (filterable-expansion
-    {:sf-arity 2, :ct-sig-filter nil, :*rt-sig-filter* `*rt-sf*, :cljs? true}
+  (filter-call
+    {:sf-arity 2, :ct-call-filter nil, :*rt-call-filter* `*rt-sf*, :cljs? true}
     {;; :ns       (str *ns*)
      :level       (do :info)
      ;; :elide?   true
@@ -461,13 +447,19 @@
 
 (comment (enc/defonce ^:dynamic *sig-handlers* "?[<wrapped-handler-fn>]" nil))
 
+(defprotocol ISignalHandling
+  "Protocol that app/library signal types must implement to support signal handling."
+  (allow-signal? [_ spec-filter]         "Returns true iff given signal is allowed by given `SpecFilter`.")
+  (signal-value  [_ handler-sample-rate] "Returns public signal value as given to handlers, etc.")
+  (signal-debug  [_]                     "Returns minimal signal representation for debug purposes."))
+
 (defn get-handlers-map
   "Returns non-empty ?{<handler-id> {:keys [dispatch-opts handler-fn ...]}}."
   ([handlers-vec     ] (get-handlers-map handlers-vec false))
   ([handlers-vec raw?]
    (when handlers-vec
      (reduce
-       (fn [m wrapped-handler-fn]
+       (fn [m            wrapped-handler-fn]
          (let [whm (meta wrapped-handler-fn)]
            (assoc m (get whm :handler-id)
              (if raw?
@@ -491,7 +483,7 @@
 
 (defn call-handlers!
   "Calls given handlers with the given signal.
-  Signal's type must implement `IFilterableSignal`."
+  Signal's type must implement `ISignalHandling`."
   [handlers-vec signal]
   (run! (fn [wrapped-handler-fn] (wrapped-handler-fn signal)) handlers-vec))
 
@@ -615,7 +607,7 @@
             ))
 
         rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
-        sig-filter*   (sig-filter kind-filter ns-filter id-filter min-level)
+        spec-filter*  (spec-filter kind-filter ns-filter id-filter min-level)
 
         middleware    (as-middleware-fn    middleware) ; Deprecated, kept temporarily for back compatibility
         ;; middleware (have [:or nil? fn?] middleware) ; (fn [signal-value]) => ?modified-signal-value
@@ -700,17 +692,17 @@
                           allow?
                           (if track-stats?
                             (enc/and?
-                              (if sample-rate (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
-                              (if sig-filter* (if (allow-signal? sig-raw sig-filter*)    true (do (cnt-filtered) false)) true)
-                              (if when-fn     (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
-                              (if rl-handler  (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
+                              (if sample-rate  (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
+                              (if spec-filter* (if (allow-signal? sig-raw spec-filter*)   true (do (cnt-filtered) false)) true)
+                              (if when-fn      (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
+                              (if rl-handler   (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
                               )
 
                             (enc/and?
-                              (if sample-rate (< (Math/random) (double sample-rate))  true)
-                              (if sig-filter* (allow-signal? sig-raw sig-filter*)     true)
-                              (if when-fn     (when-fn #_sig-raw)                     true)
-                              (if rl-handler  (if (rl-handler) false true)            true) ; Nb last (increments count)
+                              (if sample-rate  (< (Math/random) (double sample-rate))  true)
+                              (if spec-filter* (allow-signal? sig-raw spec-filter*)    true)
+                              (if when-fn      (when-fn #_sig-raw)                     true)
+                              (if rl-handler   (if (rl-handler) false true)            true) ; Nb last (increments count)
                               ))]
 
                       (when track-stats? (if allow? (cnt-allowed) (cnt-disallowed)))
@@ -828,72 +820,67 @@
      `(def  ~'help:filters
         "A signal will be provided to a handler iff ALL of the following are true:
 
-    1. Signal creation is allowed by \"signal filters\":
+    1. Call filters pass:
       a. Compile-time: sample rate, kind, ns, id, level, when form, rate limit
       b. Runtime:      sample rate, kind, ns, id, level, when form, rate limit
 
-    2. Signal handling is allowed by \"handler filters\":
+    2. Handler filters pass:
       a. Compile-time: not applicable
       b. Runtime:      sample rate, kind, ns, id, level, when fn, rate limit
 
-    3. Signal  middleware (fn [signal]) => ?modified-signal does not return nil
-    4. Handler middleware (fn [signal]) => ?modified-signal does not return nil
+    3. Call    middleware (fn [signal]) => ?modified-signal returns non-nil
+    4. Handler middleware (fn [signal]) => ?modified-signal returns non-nil
 
-  Note that middleware provides a flexible way to filter signals by arbitrary
-  signal data/content conditions (return nil to filter signal).
+  Middleware provides a flexible way to modify and/or filter signals by arbitrary
+  signal data/content conditions (return nil to skip).
 
   Config:
 
-    To set signal filters (1a, 1b):
+    To set call filters (1a, 1b):
 
       Use:
         `set-kind-filter!`, `with-kind-filter`
         `set-ns-filter!`,   `with-ns-filter`
         `set-id-filter!`,   `with-id-filter`
         `set-min-level!`,   `with-min-level`
-        or see `help:environmental-config`.
 
-    To set handler filters (2b) or handler middleware (4):
+      or see `help:environmental-config`.
+
+    To set handler filters (2b) or middleware (4):
 
       Provide relevant opts when calling `add-handler!` or `with-handler/+`.
       See `help:handler-dispatch-options` for details.
 
-      Note: signal filters (1a, 1b) should generally be AT LEAST as permissive as
-      handler filters (2b), otherwise signals will be filtered before even
-      reaching handlers.
+      Note: call filters (1a, 1b) should generally be AT LEAST as permissive
+      as handler filters (2b) since they're always applied first.
 
-    To set signal middleware (3): use `set-middleware!`, `with-middleware`
+    To set call middleware (3): use `set-middleware!`, `with-middleware`.
 
-  Compile-time vs runtime filters:
+  Compile-time vs runtime filtering:
 
     Compile-time filters are an advanced feature that can be tricky to set
     and use correctly. Most folks will want ONLY runtime filters.
 
     Compile-time filters works by eliding (completely removing the code for)
-    disallowed signals. This means zero performance cost for these signals,
-    but also means that compile-time filters are PERMANENT once applied.
+    disallowed calls. This means zero performance cost for these calls, but
+    also means that compile-time filters are PERMANENT once applied.
 
     So if you set `:info` as the compile-time minimum level, that'll REMOVE
-    CODE for every signal below `:info` level. To decrease that minimum level,
-    you'll need to rebuild.
+    CODE for every signal call below `:info` level. To decrease that minimum
+    level, you'll need to rebuild.
 
     Compile-time filters can be set ONLY with environmental config
     (see `help:environmental-config` for details).
 
   Signal and handler sampling is multiplicative:
 
-    Both signals and handlers can have independent sample rates, and these
+    Both calls and handlers can have independent sample rates, and these
     MULTIPLY! If a signal is created with 20% sampling and a handler
     handles 50% of received signals, then 10% of possible signals will be
     handled (50% of 20%).
 
     The final (multiplicative) rate is helpfully reflected in each signal's
     `:sample-rate` value.
-
-  For more info:
-
-    - On signal  filters, see: `help:filters`
-    - On handler filters, see: `help:handler-dispatch-options`
 
   If anything is unclear, please ping me (@ptaoussanis) so that I can
   improve these docs!"
@@ -981,11 +968,11 @@
     `:min-level`   - Minimum   level  as in `set-min-level!`
 
     `:when-fn` (default nil => always allow)
-      Optional nullary (fn allow? []) that must return truthy for handler to be
+      Optional NULLARY (fn allow? []) that must return truthy for handler to be
       called. When present, called *after* sampling and other filters, but before
       rate limiting. Useful for filtering based on external state/context.
 
-      See `:middleware` for an alternative that takes a signal argument.
+      See `:middleware` for an alternative that takes a signal argument!
 
     `:rate-limit` (default nil => no rate limit)
       Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
@@ -1013,39 +1000,39 @@
 ;;;
 
 #?(:clj
-   (defn- api:get-filters [*rt-sig-filter* ct-sig-filter]
+   (defn- api:get-filters [*rt-call-filter* ct-call-filter]
      `(defn ~'get-filters
         "Returns current ?{:keys [compile-time runtime]} filter config."
         []
         (enc/assoc-some nil
-          {:compile-time (enc/force-ref  ~ct-sig-filter)
-           :runtime      (enc/force-ref ~*rt-sig-filter*)}))))
+          {:compile-time (enc/force-ref  ~ct-call-filter)
+           :runtime      (enc/force-ref ~*rt-call-filter*)}))))
 
-(comment (api:get-filters `my-ct-sig-filter `*my-rt-sig-filter*))
+(comment (api:get-filters `my-ct-call-filter `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:get-min-levels [sf-arity *rt-sig-filter* ct-sig-filter]
+   (defn- api:get-min-levels [sf-arity *rt-call-filter* ct-call-filter]
      (case (int sf-arity)
        (4)
        `(defn ~'get-min-levels
-          "Returns current ?{:keys [compile-time runtime]} minimum signal levels."
+          "Returns current ?{:keys [compile-time runtime]} minimum call levels."
           (~'[       ] (~'get-min-levels nil    (str *ns*)))
           (~'[kind   ] (~'get-min-levels ~'kind (str *ns*)))
           (~'[kind ns]
            (enc/assoc-some nil
-             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) ~'kind ~'ns)
-              :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) ~'kind ~'ns)})))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) ~'kind ~'ns)
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) ~'kind ~'ns)})))
 
        (2 3)
        `(defn ~'get-min-levels
-          "Returns current ?{:keys [compile-time runtime]} minimum signal levels."
+          "Returns current ?{:keys [compile-time runtime]} minimum call levels."
           (~'[  ] (~'get-min-levels nil (str *ns*)))
           (~'[ns]
            (enc/assoc-some nil
-             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-sig-filter*) :min-level) nil ~'ns)
-              :compile-time (parse-min-level (get (enc/force-ref  ~ct-sig-filter)  :min-level) nil ~'ns)}))))))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) nil ~'ns)
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) nil ~'ns)}))))))
 
-(comment (api:get-min-levels 4 `*my-rt-sig-filter* `my-ct-sig-filter))
+(comment (api:get-min-levels 4 `*my-rt-call-filter* `my-ct-call-filter))
 
 ;;;
 
@@ -1111,28 +1098,28 @@
 ;;;
 
 #?(:clj
-   (defn-     api:without-filters [*rt-sig-filter*]
+   (defn-     api:without-filters [*rt-call-filter*]
      `(defmacro ~'without-filters
-        "Executes form without any runtime signal filters."
-        ~'[form] `(binding [~'~*rt-sig-filter* nil] ~~'form))))
+        "Executes form without any runtime call filters."
+        ~'[form] `(binding [~'~*rt-call-filter* nil] ~~'form))))
 
-(comment (api:without-filters `*my-rt-sig-filter*))
+(comment (api:without-filters `*my-rt-call-filter*))
 
 #?(:clj
-   (defn-     api:with-kind-filter [*rt-sig-filter*]
+   (defn-     api:with-kind-filter [*rt-call-filter*]
      `(defmacro ~'with-kind-filter
-        "Executes form with given signal kind filter in effect.
+        "Executes form with given call kind filter in effect.
   See `set-kind-filter!` for details."
         ~'[kind-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:kind-filter ~~'kind-filter})]
+        `(binding [~'~*rt-call-filter* (update-spec-filter ~'~*rt-call-filter* {:kind-filter ~~'kind-filter})]
            ~~'form))))
 
-(comment (api:with-kind-filter `*my-rt-sig-filter*))
+(comment (api:with-kind-filter `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:set-kind-filter! [*rt-sig-filter*]
+   (defn- api:set-kind-filter! [*rt-call-filter*]
      `(defn ~'set-kind-filter!
-        "Sets signal kind filter based on given `kind-filter` spec.
+        "Sets call kind filter based on given `kind-filter` spec.
   `kind-filter` may be:
 
     - A regex pattern of kind/s to allow
@@ -1146,26 +1133,26 @@
       If present, `:disallow` spec MUST NOT match."
         ~'[kind-filter]
         (enc/force-ref
-          (enc/update-var-root! ~*rt-sig-filter*
-            (fn [old#] (update-sig-filter old# {:kind-filter ~'kind-filter})))))))
+          (enc/update-var-root! ~*rt-call-filter*
+            (fn [old#] (update-spec-filter old# {:kind-filter ~'kind-filter})))))))
 
-(comment (api:set-ns-filter! `*my-rt-sig-filter*))
+(comment (api:set-ns-filter! `*my-rt-call-filter*))
 
 #?(:clj
-   (defn-     api:with-ns-filter [*rt-sig-filter*]
+   (defn-     api:with-ns-filter [*rt-call-filter*]
      `(defmacro ~'with-ns-filter
-        "Executes form with given signal namespace filter in effect.
+        "Executes form with given call namespace filter in effect.
   See `set-ns-filter!` for details."
         ~'[ns-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:ns-filter ~~'ns-filter})]
+        `(binding [~'~*rt-call-filter* (update-spec-filter ~'~*rt-call-filter* {:ns-filter ~~'ns-filter})]
            ~~'form))))
 
-(comment (api:with-ns-filter `*my-rt-sig-filter*))
+(comment (api:with-ns-filter `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:set-ns-filter! [*rt-sig-filter*]
+   (defn- api:set-ns-filter! [*rt-call-filter*]
      `(defn ~'set-ns-filter!
-        "Sets signal namespace filter based on given `ns-filter` spec.
+        "Sets call namespace filter based on given `ns-filter` spec.
   `ns-filter` may be:
 
     - A namespace.
@@ -1180,26 +1167,26 @@
       If present, `:disallow` spec MUST NOT match."
         ~'[ns-filter]
         (enc/force-ref
-          (enc/update-var-root! ~*rt-sig-filter*
-            (fn [old#] (update-sig-filter old# {:ns-filter ~'ns-filter})))))))
+          (enc/update-var-root! ~*rt-call-filter*
+            (fn [old#] (update-spec-filter old# {:ns-filter ~'ns-filter})))))))
 
-(comment (api:set-ns-filter! `*my-rt-sig-filter*))
+(comment (api:set-ns-filter! `*my-rt-call-filter*))
 
 #?(:clj
-   (defn-     api:with-id-filter [*rt-sig-filter*]
+   (defn-     api:with-id-filter [*rt-call-filter*]
      `(defmacro ~'with-id-filter
-        "Executes form with given signal id filter in effect.
+        "Executes form with given call id filter in effect.
   See `set-id-filter!` for details."
         ~'[id-filter form]
-        `(binding [~'~*rt-sig-filter* (update-sig-filter ~'~*rt-sig-filter* {:id-filter ~~'id-filter})]
+        `(binding [~'~*rt-call-filter* (update-spec-filter ~'~*rt-call-filter* {:id-filter ~~'id-filter})]
            ~~'form))))
 
-(comment (api:with-id-filter `*my-rt-sig-filter*))
+(comment (api:with-id-filter `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:set-id-filter! [*rt-sig-filter*]
+   (defn- api:set-id-filter! [*rt-call-filter*]
      `(defn ~'set-id-filter!
-        "Sets signal id filter based on given `id-filter` spec.
+        "Sets call id filter based on given `id-filter` spec.
   `id-filter` may be:
 
     - A regex pattern of id/s to allow
@@ -1213,24 +1200,24 @@
       If present, `:disallow` spec MUST NOT match."
         ~'[id-filter]
         (enc/force-ref
-          (enc/update-var-root! ~*rt-sig-filter*
-            (fn [old#] (update-sig-filter old# {:id-filter ~'id-filter})))))))
+          (enc/update-var-root! ~*rt-call-filter*
+            (fn [old#] (update-spec-filter old# {:id-filter ~'id-filter})))))))
 
-(comment (api:set-id-filter! `*my-rt-sig-filter*))
+(comment (api:set-id-filter! `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:with-min-level [sf-arity *rt-sig-filter*]
+   (defn- api:with-min-level [sf-arity *rt-call-filter*]
      (let [self (symbol (str *ns*) "with-min-level")]
        (case (int sf-arity)
          (4)
          `(defmacro ~'with-min-level
-            "Executes form with given minimum signal level in effect.
+            "Executes form with given minimum call level in effect.
   See `set-min-level!` for details."
             (~'[               min-level form] (list '~self nil    nil ~'min-level ~'form))
             (~'[kind           min-level form] (list '~self ~'kind nil ~'min-level ~'form))
             (~'[kind ns-filter min-level form]
-             `(binding [~'~*rt-sig-filter*
-                        (update-sig-filter ~'~*rt-sig-filter*
+             `(binding [~'~*rt-call-filter*
+                        (update-spec-filter ~'~*rt-call-filter*
                           {:min-level-fn
                            (fn [~'old-ml#]
                              (update-min-level ~'old-ml# ~~'kind ~~'ns-filter ~~'min-level))})]
@@ -1238,25 +1225,25 @@
 
          (2 3)
          `(defmacro ~'with-min-level
-            "Executes form with given minimum signal level in effect.
+            "Executes form with given minimum call level in effect.
   See `set-min-level!` for details."
             (~'[          min-level form] (list '~self nil ~'min-level ~'form))
             (~'[ns-filter min-level form]
-             `(binding [~'~*rt-sig-filter*
-                        (update-sig-filter ~'~*rt-sig-filter*
+             `(binding [~'~*rt-call-filter*
+                        (update-spec-filter ~'~*rt-call-filter*
                           {:min-level-fn
                            (fn [~'old-ml#]
                              (update-min-level ~'old-ml# nil ~~'ns-filter ~~'min-level))})]
                 ~~'form)))))))
 
-(comment (api:with-min-level 4 `*my-rt-sig-filter*))
+(comment (api:with-min-level 4 `*my-rt-call-filter*))
 
 #?(:clj
-   (defn- api:set-min-level! [sf-arity *rt-sig-filter*]
+   (defn- api:set-min-level! [sf-arity *rt-call-filter*]
      (case (int sf-arity)
        (4)
        `(defn ~'set-min-level!
-          "Sets minimum signal level based on given `min-level` spec.
+          "Sets minimum call level based on given `min-level` spec.
   `min-level` may be:
 
     - nil (=> no minimum level).
@@ -1268,7 +1255,7 @@
   See `set-ns-filter!` for details.
 
   If non-nil `kind` is provided, then the given minimum level
-  will apply only for that signal kind.
+  will apply only for that call kind.
 
   Examples:
     (set-min-level! nil)   ; Disable        minimum level
@@ -1282,16 +1269,16 @@
           (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
           (~'[kind ns-filter min-level]
            (enc/force-ref
-             (enc/update-var-root! ~*rt-sig-filter*
+             (enc/update-var-root! ~*rt-call-filter*
                (fn [old-sf#]
-                 (update-sig-filter old-sf#
+                 (update-spec-filter old-sf#
                    {:min-level-fn
                     (fn [old-ml#]
                       (update-min-level old-ml# ~'kind ~'ns-filter ~'min-level))}))))))
 
        (2 3)
        `(defn ~'set-min-level!
-          "Sets minimum signal level based on given `min-level` spec.
+          "Sets minimum call level based on given `min-level` spec.
 `min-level` may be:
 
     - nil (=> no minimum level).
@@ -1312,14 +1299,14 @@
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]
            (enc/force-ref
-             (enc/update-var-root! ~*rt-sig-filter*
+             (enc/update-var-root! ~*rt-call-filter*
                (fn [old-sf#]
-                 (update-sig-filter old-sf#
+                 (update-spec-filter old-sf#
                    {:min-level-fn
                     (fn [old-ml#]
                       (update-min-level old-ml# nil ~'ns-filter ~'min-level))})))))))))
 
-(comment (api:set-min-level! 4 `*my-rt-sig-filter*))
+(comment (api:set-min-level! 4 `*my-rt-call-filter*))
 
 ;;;
 
@@ -1577,21 +1564,21 @@
      [{:as opts
        :keys
        [sf-arity lib-dispatch-opts
-        ct-sig-filter *rt-sig-filter* *sig-handlers*
+        ct-call-filter *rt-call-filter* *sig-handlers*
         exclude]}]
 
-     (enc/have? [:ks>= #{:sf-arity :ct-sig-filter :*rt-sig-filter* :*sig-handlers*}] opts)
-     (enc/have? [:or nil? symbol?]  ct-sig-filter  *rt-sig-filter*  *sig-handlers*)
+     (enc/have? [:ks>= #{:sf-arity :ct-call-filter :*rt-call-filter* :*sig-handlers*}] opts)
+     (enc/have? [:or nil? symbol?]  ct-call-filter  *rt-call-filter*  *sig-handlers*)
 
      (when-not (contains? #{2 3 4} sf-arity)
        (unexpected-sf-artity! sf-arity `def-api))
 
-     (let [clj?            (not (:ns &env))
-           sf-arity        (int sf-arity)
-           ct-sig-filter   (enc/resolve-sym &env  ct-sig-filter)
-           *rt-sig-filter* (enc/resolve-sym &env *rt-sig-filter*)
-           *sig-handlers*  (enc/resolve-sym &env *sig-handlers*)
-           incl?           (complement (set exclude))]
+     (let [clj?             (not (:ns &env))
+           sf-arity         (int sf-arity)
+           ct-call-filter   (enc/resolve-sym &env  ct-call-filter)
+           *rt-call-filter* (enc/resolve-sym &env *rt-call-filter*)
+           *sig-handlers*   (enc/resolve-sym &env *sig-handlers*)
+           incl?            (complement (set exclude))]
 
        `(do
           (enc/defalias level-aliases)
@@ -1600,25 +1587,25 @@
           ~(api:help:handlers)
           ~(api:help:handler-dispatch-options)
 
-          ~(api:get-filters             *rt-sig-filter* ct-sig-filter)
-          ~(api:get-min-levels sf-arity *rt-sig-filter* ct-sig-filter)
+          ~(api:get-filters             *rt-call-filter* ct-call-filter)
+          ~(api:get-min-levels sf-arity *rt-call-filter* ct-call-filter)
 
           ~(api:get-handlers       *sig-handlers*)
           ~(api:get-handlers-stats *sig-handlers*)
 
-          ~(when clj? (api:without-filters *rt-sig-filter*))
+          ~(when clj? (api:without-filters *rt-call-filter*))
 
-          ~(when (and (>= sf-arity 4) clj?) (api:with-kind-filter *rt-sig-filter*))
-          ~(when      (>= sf-arity 4)       (api:set-kind-filter! *rt-sig-filter*))
+          ~(when (and (>= sf-arity 4) clj?) (api:with-kind-filter *rt-call-filter*))
+          ~(when      (>= sf-arity 4)       (api:set-kind-filter! *rt-call-filter*))
 
-          ~(when clj? (api:with-ns-filter *rt-sig-filter*))
-          ~(do        (api:set-ns-filter! *rt-sig-filter*))
+          ~(when clj? (api:with-ns-filter *rt-call-filter*))
+          ~(do        (api:set-ns-filter! *rt-call-filter*))
 
-          ~(when (and (>= sf-arity 3) clj?) (api:with-id-filter *rt-sig-filter*))
-          ~(when      (>= sf-arity 3)       (api:set-id-filter! *rt-sig-filter*))
+          ~(when (and (>= sf-arity 3) clj?) (api:with-id-filter *rt-call-filter*))
+          ~(when      (>= sf-arity 3)       (api:set-id-filter! *rt-call-filter*))
 
-          ~(when clj? (api:with-min-level sf-arity *rt-sig-filter*))
-          ~(do        (api:set-min-level! sf-arity *rt-sig-filter*))
+          ~(when clj? (api:with-min-level sf-arity *rt-call-filter*))
+          ~(do        (api:set-min-level! sf-arity *rt-call-filter*))
 
           ~(when clj? (api:with-handler  *sig-handlers* lib-dispatch-opts))
           ~(when clj? (api:with-handler+ *sig-handlers* lib-dispatch-opts))
@@ -1644,9 +1631,9 @@
   (macroexpand
     '(def-api
        {:sf-arity 4
-        :ct-sig-filter    my-ct-sig-filter
-        :*rt-sig-filter* *my-rt-sig-filter*
-        :*sig-handlers*  *my-sig-handlers*})))
+        :ct-call-filter    my-ct-call-filter
+        :*rt-call-filter* *my-rt-call-filter*
+        :*sig-handlers*   *my-sig-handlers*})))
 
 ;;;; Utils
 
