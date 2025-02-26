@@ -36,10 +36,9 @@
   (defn bad-level!
     "Throws an `ex-info` for given invalid level."
     [x]
-    (throw
-      (truss/ex-info "[encore/signals] Invalid level"
-        {:level    (enc/typed-val x)
-         :expected expected}))))
+    (truss/ex-info! "[encore/signals] Invalid level"
+      {:level    (enc/typed-val x)
+       :expected expected})))
 
 (defn ^:no-doc -valid-level-int ^long [x]
   (enc/cond
@@ -94,13 +93,12 @@
     "Returns valid `encore/name-filter` spec, or throws."
     [x]
     (if-let [t (truss/try* (do (nf-compile x) nil) (catch :all t t))]
-      (throw
-        (truss/ex-info
-          (if (fn? x)
-            "[encore/signals] Invalid name filter (fn filters no longer supported)"
-            "[encore/signals] Invalid name filter")
-          {:name-filter (enc/typed-val x)}
-          t))
+      (truss/ex-info!
+        (if (fn? x)
+          "[encore/signals] Invalid name filter (fn filters no longer supported)"
+          "[encore/signals] Invalid name filter")
+        {:name-filter (enc/typed-val x)}
+        t)
       x))
 
   (defn allow-name?
@@ -345,9 +343,8 @@
    (defn- const-form! [param form]
      (if (enc/const-form? form)
        (do                form)
-       (throw
-         (truss/ex-info "[encore/signals] `filter-call` arg must be a const (compile-time) value"
-           {:param param, :form form})))))
+       (truss/ex-info! "[encore/signals] `filter-call` arg must be a const (compile-time) value"
+         {:param param, :form form}))))
 
 #?(:clj
    (defn filter-call
@@ -559,10 +556,9 @@
       (enc/comp-middleware fn-or-fns)
       (if (fn? fn-or-fns)
         (do    fn-or-fns)
-        (throw
-          (truss/ex-info "[encore/signals] Unexpected middleware value"
-            {:given    (enc/typed-val fn-or-fns)
-             :expected '#{nil fn [f1 f2 ...]}}))))))
+        (truss/ex-info! "[encore/signals] Unexpected middleware value"
+          {:given    (enc/typed-val fn-or-fns)
+           :expected '#{nil fn [f1 f2 ...]}})))))
 
 (def ^:private default-handler-priority 100)
 (def           default-handler-dispatch-opts
@@ -763,7 +759,7 @@
         stats-fn
         (when track-stats?
           (fn
-            ([action] (throw (truss/ex-info "Not currently implemented" {})))
+            ([action] (truss/ex-info! "Not currently implemented" {}))
             ([]
              {:handling-nsecs (when-let [sstats @ssb] @sstats)
               :counts ; Chronologically

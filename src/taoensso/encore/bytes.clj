@@ -27,10 +27,9 @@
 
   (let [fail!
         (fn [n target-type target-min target-max]
-          (throw
-            (truss/ex-info "Failed to cast number to typed int (exceeds type range)"
-              {:given  (enc/typed-val n)
-               :target {:type target-type :min target-min :max target-max}})))]
+          (truss/ex-info! "Failed to cast number to typed int (exceeds type range)"
+            {:given  (enc/typed-val n)
+             :target {:type target-type :min target-min :max target-max}}))]
 
     (defn as-byte   ^long [^long n] (if (and (>= n    Byte/MIN_VALUE) (<= n    Byte/MAX_VALUE)) n (fail! n :byte     Byte/MIN_VALUE    Byte/MAX_VALUE)))
     (defn as-short  ^long [^long n] (if (and (>= n   Short/MIN_VALUE) (<= n   Short/MAX_VALUE)) n (fail! n :short   Short/MIN_VALUE   Short/MAX_VALUE)))
@@ -194,9 +193,8 @@
       (== target-len actual-len) ba
       (<  target-len actual-len) (java.util.Arrays/copyOf ba target-len)
       :else
-      (throw
-        (truss/ex-info "Given byte[] too short"
-          {:length {:actual actual-len, :target target-len}})))))
+      (truss/ex-info! "Given byte[] too short"
+        {:length {:actual actual-len, :target target-len}}))))
 
 (defn nempty-ba?
   "Returns true iff given non-empty byte[]."
@@ -336,9 +334,8 @@
       (<= n range-ushort) (do (.writeByte out 126) (.writeShort out (from-ushort n)) 3) ; 1+2=3 bytes for [0,65535]
       (<= n   range-uint) (do (.writeByte out 127) (.writeInt   out (from-uint   n)) 5) ; 1+4=5 bytes for [0,4294967295]
       :else
-      (throw
-        (truss/ex-info "Dynamic unsigned int exceeds max"
-          {:value n, :max range-uint})))))
+      (truss/ex-info! "Dynamic unsigned int exceeds max"
+        {:value n, :max range-uint}))))
 
 (defn read-dynamic-uint
   "Reads 1-5 bytes from `in`, and returns unsigned int."
@@ -425,10 +422,9 @@
             (.set bs (int bit-idx))
             (if skip-unknown?
               nil
-              (throw
-                (truss/ex-info "Failed to freeze set (encountered element not in bit schema)"
-                  {:element    (enc/typed-val el)
-                   :bit-schema bit-schema})))))
+              (truss/ex-info! "Failed to freeze set (encountered element not in bit schema)"
+                {:element    (enc/typed-val el)
+                 :bit-schema bit-schema}))))
         els)
       (.toByteArray bs))))
 
@@ -450,10 +446,9 @@
                 (conj! els el)
                 (if skip-unknown?
                   els
-                  (throw
-                    (truss/ex-info "Failed to thaw set (encountered bit index not in bit schema)"
-                      {:bit-index  bit-idx
-                       :bit-schema bit-schema})))))
+                  (truss/ex-info! "Failed to thaw set (encountered bit index not in bit schema)"
+                    {:bit-index  bit-idx
+                     :bit-schema bit-schema}))))
             (transient #{}) bs))))))
 
 (comment
