@@ -7303,53 +7303,53 @@
   (def* ^:no-doc ^:deprecated ?substr<len "Prefer `substr`." (comp as-?nempty-str get-substring)))
 
 (deprecated "2025-02 Truss v2"
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-root)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-type)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-map*)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-map)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/ex-chain)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/matching-error)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/catching-rf)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/catching-xform)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/unexpected-arg!)
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} get-truss-data taoensso.truss/get-data)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/ex-root)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/ex-type)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/ex-map*)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/ex-map)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/ex-chain)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/matching-error)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/catching-rf)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/catching-xform)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/unexpected-arg!)
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} get-truss-data taoensso.truss/get-data)
   #?(:clj
      (do
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/try*)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/throws)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/throws?)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} truss/critical-error?)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have!)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have?)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"}                 taoensso.truss/have!?)
-       (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} with-truss-data taoensso.truss/with-data)))
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/try*)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/throws)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/throws?)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/critical-error?)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have!)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have?)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have!?)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} with-truss-data taoensso.truss/with-data)))
 
-  (defn ^:no-doc ex-message {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+  (defn ^:no-doc ex-message {:deprecated "v3.135.0 (2025-02-27)"} [x]
     #?(:clj  (when (instance? Throwable x) (.getMessage ^Throwable x))
        :cljs (when (instance? js/Error  x) (.-message              x))))
 
-  (defn ^:no-doc ex-data {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+  (defn ^:no-doc ex-data {:deprecated "v3.135.0 (2025-02-27)"} [x]
     #?(:clj  (when (instance? clojure.lang.IExceptionInfo x) (.getData ^clojure.lang.IExceptionInfo x))
        :cljs (when (instance?               ExceptionInfo x) (.-data                                x))))
 
-  (defn ^:no-doc ex-cause {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [x]
+  (defn ^:no-doc ex-cause {:deprecated "v3.135.0 (2025-02-27)"} [x]
     #?(:clj  (when (instance? Throwable     x) (.getCause ^Throwable x))
        :cljs (when (instance? ExceptionInfo x) (.-cause              x)))))
 
 (deprecated "2025-02 Misc"
   #?(:clj (defalias ^:no-doc ^:deprecated and* and?))
-  (defalias ^{:no-doc true :deprecated "vX.Y.Z (YYYY-MM-DD)"} core/some?)
-  #?(:clj (defmacro ^:no-doc try-eval {:deprecated "vX.Y.Z (YYYY-MM-DD)"} [form] `(compile-if ~form ~form nil)))
+  (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} core/some?)
+  #?(:clj (defmacro ^:no-doc try-eval {:deprecated "v3.135.0 (2025-02-27)"} [form] `(compile-if ~form ~form nil)))
   #?(:clj
      (defmacro ^:no-doc or-some
-       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "v3.135.0 (2025-02-27)"}
        ([        ] nil)
        ([x       ] x)
        ([x & next] `(let [x# ~x] (if (identical? x# nil) (or-some ~@next) x#)))))
 
   (defn ^:no-doc is!
-    {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+    {:deprecated "v3.135.0 (2025-02-27)"}
     ([     x     ] ^:deprecation-nowarn (is! core/some? x nil)) ; Nb different to single-arg `have`
     ([pred x     ] ^:deprecation-nowarn (is! pred       x nil))
     ([pred x data]
@@ -7361,7 +7361,7 @@
 
   #?(:clj
      (defmacro ^:no-doc check-some
-       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "v3.135.0 (2025-02-27)"}
        ([test & more] `(or ~@(map (fn [test] `(check-some ~test)) (cons test more))))
        ([test       ]
         (let [[error-id test] (if (vector? test) test [nil test])]
@@ -7370,7 +7370,7 @@
 
   #?(:clj
      (defmacro ^:no-doc check-all
-       {:deprecated "vX.Y.Z (YYYY-MM-DD)"}
+       {:deprecated "v3.135.0 (2025-02-27)"}
        ([test       ] `(check-some ~test))
        ([test & more]
         `(let [errors# (filterv identity [~@(map (fn [test] `(check-some ~test)) (cons test more))])]
