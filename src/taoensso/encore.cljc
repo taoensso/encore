@@ -64,7 +64,7 @@
 
   (:refer-clojure :exclude
    [if-let if-some if-not when when-not when-some when-let cond defonce
-    run! some? ident? float? boolean? uri? indexed? bytes?
+    binding run! some? ident? float? boolean? uri? indexed? bytes?
     int? pos-int? neg-int? nat-int? inst?
     simple-ident?   qualified-ident?
     simple-symbol?  qualified-symbol?
@@ -3497,7 +3497,7 @@
           :cljs   (cljs.tools.reader.edn/read-string opts s))))))
 
 (comment
-  (binding [*data-readers* {'my.tag/foo (fn [x] x)}]
+  (core/binding [*data-readers* {'my.tag/foo (fn [x] x)}]
     (read-edn "#my.tag/foo \"text\"")))
 
 #?(:clj
@@ -5318,7 +5318,7 @@
   (qb 1e6 (delay) (bound-delay)) ; [42.11 55.09]
   (do
     (def ^:dynamic *dyn* nil)
-    (def bd_ (binding [*dyn* 1] (bound-delay *dyn*)))
+    (def bd_ (core/binding [*dyn* 1] (bound-delay *dyn*)))
     (do @bd_)))
 
 #?(:clj
@@ -6297,7 +6297,7 @@
 (comment
   @(after-timeout 500 (println "foo") "bar")
   (def ^:dynamic *foo* nil)
-  (binding [*foo* "bar"] ; Note no auto conveyance
+  (core/binding [*foo* "bar"] ; Note no auto conveyance
     ((:fn (tf-state (after-timeout 200 (println *foo*) *foo*))))))
 
 ;;;; Browser
