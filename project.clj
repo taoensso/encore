@@ -1,4 +1,4 @@
-(defproject com.taoensso/encore "3.137.0"
+(defproject com.taoensso/encore "3.137.4"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Core utils library for Clojure/Script"
   :url "https://www.taoensso.com/encore"
@@ -13,7 +13,7 @@
   :javac-options     ["--release" "8" "-g"] ; Support Java >= v8
   :dependencies
   [[org.clojure/tools.reader "1.5.0"]
-   [com.taoensso/truss       "2.0.1"]]
+   [com.taoensso/truss       "2.0.4"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
