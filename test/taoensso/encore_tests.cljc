@@ -1626,7 +1626,10 @@
       (is (=   (sigs/update-min-level {:my-kind :info} nil      nil :warn)   {:my-kind :info, :default :warn}))
       (is (=   (sigs/update-min-level {:default :info} nil      nil :warn)   :warn))
       (is (=   (sigs/update-min-level nil              :my-kind "ns1" :info) {:my-kind [["ns1" :info]]}))
-      (is (=   (sigs/update-min-level {:default :info} nil      "ns1" :info) [["ns1" :info] ["*" :info]]))])
+      (is (=   (sigs/update-min-level {:default :info} nil      "ns1" :info) [["ns1" :info] ["*" :info]]))
+      (is (=   (sigs/update-min-level ["a" :info] nil nil [["b" :trace] ["c" :info] ["*" :debug]])
+            (do                                           [["b" :trace] ["c" :info] ["*" :debug]]))
+        "Given min-level can be full replacement [[nf-filter min-level] ...] spec.")])
 
    (testing "[ns level] filter basics"
      [(is (true?  (sf-allow? [nil   nil] [nil     nil])))

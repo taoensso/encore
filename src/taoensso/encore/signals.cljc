@@ -170,7 +170,10 @@
 
     :else ; Update name-specific min-level
     (let [new     (when new (valid-level new))
-          nf-spec (valid-nf-spec nf-spec)
+          nf-spec (valid-nf-spec
+                    (if (instance? #?(:clj clojure.lang.Namespace :cljs Namespace) nf-spec)
+                      (str nf-spec)
+                      (do  nf-spec)))
 
           old-vec (if (vector? old) old (if old [["*" (valid-level old)]] []))
           new-vec
@@ -1011,22 +1014,24 @@
      (case (int sf-arity)
        (4)
        `(defn ~'get-min-levels
-          "Returns current ?{:keys [compile-time runtime]} minimum call levels."
+          "Returns current ?{:keys [compile-time runtime]} minimum call levels
+  for given/current namespace."
           (~'[       ] (~'get-min-levels nil    (str *ns*)))
           (~'[kind   ] (~'get-min-levels ~'kind (str *ns*)))
           (~'[kind ns]
            (enc/assoc-some nil
-             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) ~'kind ~'ns)
-              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) ~'kind ~'ns)})))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) ~'kind (str ~'ns))
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) ~'kind (str ~'ns))})))
 
        (2 3)
        `(defn ~'get-min-levels
-          "Returns current ?{:keys [compile-time runtime]} minimum call levels."
+          "Returns current ?{:keys [compile-time runtime]} minimum call levels
+  for given/current namespace."
           (~'[  ] (~'get-min-levels nil (str *ns*)))
           (~'[ns]
            (enc/assoc-some nil
-             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) nil ~'ns)
-              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) nil ~'ns)}))))))
+             {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) nil (str ~'ns))
+              :compile-time (parse-min-level (get (enc/force-ref  ~ct-call-filter)  :min-level) nil (str ~'ns))}))))))
 
 (comment (api:get-min-levels 4 `*my-rt-call-filter* `my-ct-call-filter))
 
@@ -1243,24 +1248,26 @@
   `min-level` may be:
 
     - nil (=> no minimum level).
-    - A level keyword (see `level-aliases` var for details).
-    - An integer.
+    - A level keyword (see `level-aliases` value for details).
+    - An integer      (see `level-aliases` value for details).
+    - (Advanced) [[nf-filter min-level] ...] vector.
 
-  If `ns-filter` is provided, then the given minimum level
-  will apply only for the namespace/s that match `ns-filter`.
-  See `set-ns-filter!` for details.
+  If non-nil `kind` is provided, then the given minimum level will
+  apply only for that call kind.
 
-  If non-nil `kind` is provided, then the given minimum level
-  will apply only for that call kind.
+  If `ns-filter` is provided, then the given minimum level will
+  apply only for the namespace/s that match (see `set-ns-filter!`).
+  Order matters if >1 configured ns filter can match an ns! First
+  match wins, see `tel/get-filters` or `tel/get-min-levels` to
+  view/debug (left->right) match order.
 
   Examples:
     (set-min-level! nil)   ; Disable        minimum level
     (set-min-level! :info) ; Set `:info` as minimum level
     (set-min-level! 100)   ; Set 100     as minimum level
 
-    ;; Set `:debug` as minimum level for current namespace
-    ;; (nil `kind` => all kinds)
-    (set-min-level! nil *ns* :debug)"
+    (set-min-level! nil *ns* :info) ; Set for this ns only
+    (set-min-level! nil [[\"my.ns\" :debug] [\"* :info]]) ; Advanced"
           (~'[               min-level] (~'set-min-level! nil    nil ~'min-level))
           (~'[kind           min-level] (~'set-min-level! ~'kind nil ~'min-level))
           (~'[kind ns-filter min-level]
@@ -1278,8 +1285,15 @@
 `min-level` may be:
 
     - nil (=> no minimum level).
-    - A level keyword (see `level-aliases` var for details).
-    - An integer.
+    - A level keyword (see `level-aliases` value for details).
+    - An integer      (see `level-aliases` value for details).
+    - (Advanced) [[nf-filter min-level] ...] vector.
+
+  If `ns-filter` is provided, then the given minimum level will
+  apply only for the namespace/s that match (see `set-ns-filter!`).
+  Order matters if >1 configured ns filter can match an ns! First
+  match wins, see `tel/get-filters` or `tel/get-min-levels` to
+  view/debug (left->right) match order.
 
   If `ns-filter` is provided, then the given minimum level
   will apply only for the namespace/s that match `ns-filter`.
@@ -1290,8 +1304,8 @@
     (set-min-level! :info) ; Set `:info` as minimum level
     (set-min-level! 100)   ; Set 100     as minimum level
 
-    ;; Set `:debug` as minimum level for current namespace
-    (set-min-level! *ns* :debug)"
+    (set-min-level! *ns* :info) ; Set for this ns only
+    (set-min-level! [[\"my.ns\" :debug] [\"* :info]]) ; Advanced"
           (~'[          min-level] (~'set-min-level! nil ~'min-level))
           (~'[ns-filter min-level]
            (enc/force-ref
