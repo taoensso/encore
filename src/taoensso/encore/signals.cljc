@@ -925,7 +925,7 @@
 
   All handlers support the same dispatch options, including:
 
-    `:async` (Clj only) - may be `nil` (synchronous) or map with options:
+    `:async` (Clj only) - may be `nil` (=> synchronous) or map with options:
 
       `:buffer-size` (default 1024)
         Size of request buffer, and the max number of pending requests before
@@ -940,7 +940,7 @@
 
       `:n-threads` (default 1)
         Number of threads to use for executing fns (servicing request buffer).
-        NB execution order may be non-sequential when n > 1.
+        NB handling order guaranteed to be be sequential iff n=1.
 
       `:drain-msecs` (default 6000 msecs)
         Maximum time (in milliseconds) to try allow pending execution requests to
