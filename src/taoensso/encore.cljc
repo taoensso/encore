@@ -516,18 +516,6 @@
        `(set!                ~var-sym           ~root-val)
        `(alter-var-root (var ~var-sym) (fn [_#] ~root-val)))))
 
-#?(:clj
-   (defmacro keep-callsite
-     "The long-standing CLJ-865 means that it's not possible for an inner
-     macro to access the `&form` metadata of a wrapping outer macro. This
-     means that wrapped macros lose calsite info, etc.
-
-     This util offers a workaround for macro authors:
-       (defmacro inner [] (meta &form))
-       (defmacro outer [] (keep-callsite `(inner)))
-       (outer) => {:keys [line column ...]}"
-     [form] `(with-meta ~form (meta ~'&form))))
-
 ;;;; Vars
 
 #?(:clj
@@ -2344,14 +2332,6 @@
               file))}))))
 
 (comment (.getPath (jio/resource "taoensso/encore.cljc")))
-
-#?(:clj
-   (defn callsite-coords
-     "Returns [line column] from meta on given macro `&form`.
-     See also `keep-callsite`."
-     [macro-form]
-     (when-let [{:keys [line column]} (meta macro-form)]
-       (when line (if column [line column] [line])))))
 
 #?(:clj
    (defn ^:no-doc have-resource?
@@ -7319,6 +7299,7 @@
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/throws)
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/throws?)
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/critical-error?)
+       (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"} truss/keep-callsite)
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have)
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have!)
        (defalias ^{:no-doc true :deprecated "v3.135.0 (2025-02-27)"}                 taoensso.truss/have?)

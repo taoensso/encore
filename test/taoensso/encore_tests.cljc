@@ -17,10 +17,8 @@
 
   #?(:cljs
      (:require-macros
-      [taoensso.encore-tests
-       :refer
-       [test-macro-alias test-if-cljs test-get-source resolve-sym
-        callsite-inner callsite-outer]])))
+      [taoensso.encore-tests :refer
+       [test-macro-alias test-if-cljs test-get-source resolve-sym]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -727,13 +725,6 @@
    (is (= (enc/round 1.55 :ceil  1) 1.6) "Old API (3 args)")])
 
 ;;;; Callsites, etc.
-
-(defmacro ^:private callsite-inner [] (meta &form))
-(defmacro ^:private callsite-outer [] (enc/keep-callsite `(callsite-inner)))
-
-(deftest _keep-callsite
-  [(is (map? (callsite-inner)))
-   (is (map? (callsite-outer)))])
 
 (defmacro test-if-cljs [caller]
   `(enc/if-cljs
