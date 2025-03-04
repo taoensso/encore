@@ -1258,8 +1258,8 @@
   If `ns-filter` is provided, then the given minimum level will
   apply only for the namespace/s that match (see `set-ns-filter!`).
   Order matters if >1 configured ns filter can match an ns! First
-  match wins, see `tel/get-filters` or `tel/get-min-levels` to
-  view/debug (left->right) match order.
+  match wins, see `get-filters` or `get-min-levels` to view/debug
+  (left->right) match order.
 
   Examples:
     (set-min-level! nil)   ; Disable        minimum level
@@ -1292,8 +1292,8 @@
   If `ns-filter` is provided, then the given minimum level will
   apply only for the namespace/s that match (see `set-ns-filter!`).
   Order matters if >1 configured ns filter can match an ns! First
-  match wins, see `tel/get-filters` or `tel/get-min-levels` to
-  view/debug (left->right) match order.
+  match wins, see `get-filters` or `get-min-levels` to view/debug
+  (left->right) match order.
 
   If `ns-filter` is provided, then the given minimum level
   will apply only for the namespace/s that match `ns-filter`.
