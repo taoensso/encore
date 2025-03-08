@@ -1,1 +1,1 @@
-{:config-paths ["taoensso/encore"]}
+{:config-paths ["../resources/clj-kondo.exports/taoensso/encore"]}
