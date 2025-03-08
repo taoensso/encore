@@ -28,9 +28,17 @@
        [(hooks/token-node 'do)]
        (map
         (fn alias->defalias [alias-node]
-          (hooks/list-node
-           [(hooks/token-node 'taoensso.encore/defalias)
-            alias-node])))
+          (cond
+            (symbol? (hooks/sexpr alias-node))
+            (hooks/list-node
+             [(hooks/token-node 'taoensso.encore/defalias)
+              alias-node])
+
+            (hooks/map-node? alias-node)
+            (let [{:keys [src alias]} (hooks/sexpr alias-node)]
+              (hooks/list-node
+               [(hooks/token-node 'taoensso.encore/defalias)
+                (symbol (name (hooks/sexpr (or alias src)))) src])))))
        alias-nodes))}))
 
 (defn defn-cached
