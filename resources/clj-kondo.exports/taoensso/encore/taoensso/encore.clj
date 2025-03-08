@@ -19,6 +19,20 @@
           (hooks/token-node (hooks/sexpr src))])
        (meta src))}))
 
+(defn defaliases
+  [{:keys [node]}]
+  (let [alias-nodes (rest (:children node))]
+    {:node
+     (hooks/list-node
+      (into
+       [(hooks/token-node 'do)]
+       (map
+        (fn alias->defalias [alias-node]
+          (hooks/list-node
+           [(hooks/token-node 'taoensso.encore/defalias)
+            alias-node])))
+       alias-nodes))}))
+
 (defn defn-cached
   [{:keys [node]}]
   (let [[sym _opts binding-vec & body] (rest (:children node))]
