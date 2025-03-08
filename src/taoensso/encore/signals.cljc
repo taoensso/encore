@@ -1605,17 +1605,17 @@
 
           ~(when clj? (api:without-filters *rt-call-filter*))
 
-          ~(when (and (>= sf-arity 4) clj?) (api:with-kind-filter *rt-call-filter*))
           ~(when      (>= sf-arity 4)       (api:set-kind-filter! *rt-call-filter*))
+          ~(when (and (>= sf-arity 4) clj?) (api:with-kind-filter *rt-call-filter*))
 
-          ~(when clj? (api:with-ns-filter *rt-call-filter*))
           ~(do        (api:set-ns-filter! *rt-call-filter*))
+          ~(when clj? (api:with-ns-filter *rt-call-filter*))
 
-          ~(when (and (>= sf-arity 3) clj?) (api:with-id-filter *rt-call-filter*))
           ~(when      (>= sf-arity 3)       (api:set-id-filter! *rt-call-filter*))
+          ~(when (and (>= sf-arity 3) clj?) (api:with-id-filter *rt-call-filter*))
 
-          ~(when clj? (api:with-min-level sf-arity *rt-call-filter*))
           ~(do        (api:set-min-level! sf-arity *rt-call-filter*))
+          ~(when clj? (api:with-min-level sf-arity *rt-call-filter*))
 
           ~(when clj? (api:with-handler  *sig-handlers* lib-dispatch-opts))
           ~(when clj? (api:with-handler+ *sig-handlers* lib-dispatch-opts))
