@@ -1,4 +1,4 @@
-(ns taoensso.encore
+(ns taoensso.encore-hooks
   "I don't personally use clj-kondo, so these hooks are
   kindly authored and maintained by contributors.
   PRs very welcome! - Peter Taoussanis"
