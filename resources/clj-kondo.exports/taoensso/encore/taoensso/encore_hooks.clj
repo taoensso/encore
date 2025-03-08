@@ -8,15 +8,19 @@
 
 (defn defalias
   [{:keys [node]}]
-  (let [[sym-raw src-raw] (rest (:children node))
-        src (or src-raw sym-raw)
-        sym (if src-raw sym-raw (symbol (name (hooks/sexpr src))))]
+  (let [[alias src-raw _attrs body] (rest (:children node))
+        src (or src-raw alias)
+        sym (if src-raw (hooks/sexpr alias) (symbol (name (hooks/sexpr src))))]
     {:node
      (with-meta
        (hooks/list-node
-         [(hooks/token-node 'def)
-          (hooks/token-node (hooks/sexpr sym))
-          (hooks/token-node (hooks/sexpr src))])
+        [(hooks/token-node 'def)
+         (hooks/token-node sym)
+         (if body
+           (hooks/list-node
+            ;; use :body in the def to avoid unused import/private var warnings
+            [(hooks/token-node 'or) body src])
+           src)])
        (meta src))}))
 
 (defn defaliases
@@ -29,16 +33,21 @@
        (map
         (fn alias->defalias [alias-node]
           (cond
-            (symbol? (hooks/sexpr alias-node))
+            (hooks/token-node? alias-node)
             (hooks/list-node
              [(hooks/token-node 'taoensso.encore/defalias)
               alias-node])
 
             (hooks/map-node? alias-node)
-            (let [{:keys [src alias]} (hooks/sexpr alias-node)]
+            (let [{:keys [src alias attrs body]} (hooks/sexpr alias-node)
+                  ;; workaround as can't seem to (get) using a token-node
+                  ;; and there's no update-keys (yet) in sci apparently
+                  [& {:as node-as-map}] (:children alias-node)
+                  {:keys [attrs body]} (zipmap (map hooks/sexpr (keys node-as-map))
+                                               (vals node-as-map))]
               (hooks/list-node
                [(hooks/token-node 'taoensso.encore/defalias)
-                (symbol (name (hooks/sexpr (or alias src)))) src])))))
+                (or alias src) (hooks/token-node src) attrs body])))))
        alias-nodes))}))
 
 (defn defn-cached
