@@ -1,5 +1,6 @@
 {:hooks
  {:analyze-call
   {taoensso.encore/defalias    taoensso.encore/defalias
+   taoensso.encore/defaliases  taoensso.encore/defaliases
    taoensso.encore/defn-cached taoensso.encore/defn-cached
    taoensso.encore/defonce     taoensso.encore/defonce}}}
