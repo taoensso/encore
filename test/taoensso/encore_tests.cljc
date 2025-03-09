@@ -980,31 +980,6 @@
            (let [ff (enc/format-inst-fn {:formatter java.time.format.DateTimeFormatter/ISO_LOCAL_DATE_TIME})]
              (is (= (ff ref-inst) "2024-06-09T21:15:20.17") "Depends on auto zone")))]))])
 
-(deftest _comp-middleware
-  (let [x2 (fn [n] (* (long n) 2))
-        xn (fn [_] nil)
-        x! (fn [_] (ex1!))]
-
-    [(is (= ((enc/comp-middleware nil) :x) :x) "Acts as identity")
-     (is (= ((enc/comp-middleware [])  :x) :x) "Acts as identity")
-     (is (= ((enc/comp-middleware [identity]) :x) :x))
-     (is (= ((enc/comp-middleware  x2 inc x2)  0) 2))
-     (is (= ((enc/comp-middleware [x2 inc x2]) 0) 2))
-
-     (testing "`xn` short-circuits (skips `x!`)"
-       [(is (= ((enc/comp-middleware  inc xn x!)             0) nil))
-        (is (= ((enc/comp-middleware [inc xn x!])            0) nil))
-        (is (= ((enc/comp-middleware  inc inc inc inc xn x!) 0) nil))])
-
-     (testing "nil fns"
-       [(is (= ((enc/comp-middleware [nil inc nil x2]) 0) 2))
-        (is (= ((enc/comp-middleware nil x2     ) 1) 2))
-        (is (= ((enc/comp-middleware x2  nil    ) 1) 2))
-        (is (= ((enc/comp-middleware x2  nil nil) 1) 2))
-        (is (= ((enc/comp-middleware nil x2  nil) 1) 2))
-        (is (= ((enc/comp-middleware nil nil x2 ) 1) 2))
-        (is (= ((enc/comp-middleware nil x2 nil x2 nil inc) 1) 5))])]))
-
 ;;;; Futures
 
 #?(:clj
@@ -1564,6 +1539,38 @@
 
 ;;;; Signals API
 
+;;; Misc
+
+(deftest _comp-xfn
+  [(testing "Application order"
+     (let [v_ (atom []), conj! (fn [idx] (swap! v_ conj idx))]
+       [(is (= ((sigs/comp-xfn
+                  (sigs/comp-xfn
+                    (fn [in] (conj! 1) in)
+                    (fn [in] (conj! 2) in)
+                    (fn [in] (conj! 3) in)
+                    (fn [in] (conj! 4) in)
+                    (fn [in] (conj! 5) in))
+                  (fn   [in] (conj! 6) in)) "in") "in"))
+        (is (= @v_ [1 2 3 4 5 6]))]))
+
+   (testing "nil fns acts as identity"
+     [(is (= 0 ((sigs/comp-xfn nil) 0)))
+      (is (= 0 ((sigs/comp-xfn [])  0)))
+      (is (= 0 ((sigs/comp-xfn [identity]) 0)))
+      (is (= 2 ((sigs/comp-xfn [nil inc nil inc]) 0)))
+      (is (= 1 ((sigs/comp-xfn  nil inc) 0)))
+      (is (= 1 ((sigs/comp-xfn  inc nil) 0)))
+      (is (= 1 ((sigs/comp-xfn  inc nil nil) 0)))
+      (is (= 1 ((sigs/comp-xfn  nil inc nil) 0)))
+      (is (= 1 ((sigs/comp-xfn  nil nil inc) 0)))
+      (is (= 3 ((sigs/comp-xfn  nil inc nil inc nil inc) 0)))])
+
+   (testing "nil results short-circuit (skip remaining fns)"
+     [(is (nil? ((sigs/comp-xfn      (fn [_] nil) #(/ % 0))  0)))
+      (is (nil? ((sigs/comp-xfn  inc (fn [_] nil) #(/ % 0))  0)))
+      (is (nil? ((sigs/comp-xfn [inc (fn [_] nil) #(/ % 0)]) 0)))])])
+
 ;;; Spec filters
 
 (defn- sf-allow?
@@ -1791,10 +1798,10 @@
       (is (= (rns/with-ctx "my-ctx1"       (rns/with-ctx+ (fn [old] [old "my-ctx2"]) rns/*ctx*)) ["my-ctx1" "my-ctx2"])  "fn  update => apply")
       (is (= (rns/with-ctx {:a :A1 :b :B1} (rns/with-ctx+ {:a :A2 :c :C2}            rns/*ctx*)) {:a :A2 :b :B1 :c :C2}) "map update => merge")])
 
-   (testing "Dynamic middleware (`*middleware*`)"
-     [(is (= (binding [rns/*middleware* identity] rns/*middleware*) identity)                  "via `binding`")
-      (is (= (rns/with-middleware       identity  rns/*middleware*) identity)                  "via `with-middleware`")
-      (is (= (rns/with-middleware inc (rns/with-middleware+ #(* 2 %) (rns/*middleware* 1))) 4) "via `with-middleware+`")])
+   (testing "Dynamic transform (`*xfn*`)"
+     [(is (= (binding [rns/*xfn* identity] rns/*xfn*) identity)           "via `binding`")
+      (is (= (rns/with-xfn       identity  rns/*xfn*) identity)           "via `with-xfn`")
+      (is (= (rns/with-xfn inc (rns/with-xfn+ #(* 2 %) (rns/*xfn* 1))) 4) "via `with-xfn+`")])
 
    (testing "Utils"
      [(is (= (sigs/upper-qn :foo/bar) "FOO/BAR"))
@@ -1913,17 +1920,17 @@
         (is (<= 400  (n-sampled        0.5)  600)  "50% sampling (const)")
         (is (<= 400  (n-sampled (fn [] 0.5)) 600)  "50% sampling (fn)")]))
 
-   (testing "Handler middleware"
+   (testing "Handler transforms"
      (let [v1 (atom ::nx)
            v2 (atom ::nx)
            v3 (atom ::nx)
-           cm enc/comp-middleware]
+           cx sigs/comp-xfn]
 
        [(is (nil? (clear-handlers!)))
         (is (nil? (cnt :set 0)))
         (is (enc/submap? (rns/add-handler! :hid1 (fn hf1 [x] (reset! v1 [(cnt) x])) {:async nil, :priority 3                                                  }) {:hid1 :submap/ex}))
-        (is (enc/submap? (rns/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :middleware (cm #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
-        (is (enc/submap? (rns/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :middleware (fn [_] nil)})                         {:hid3 :submap/ex}))
+        (is (enc/submap? (rns/add-handler! :hid2 (fn hf2 [x] (reset! v2 [(cnt) x])) {:async nil, :priority 2, :xfn (cx #(str % ".mw1") #(str % ".mw2"))}) {:hid2 :submap/ex}))
+        (is (enc/submap? (rns/add-handler! :hid3 (fn hf3 [x] (reset! v3 [(cnt) x])) {:async nil, :priority 1, :xfn (fn [_] nil)})                         {:hid3 :submap/ex}))
         (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
 
         #?(:clj (do (Thread/sleep 4000) :sleep))

@@ -2358,29 +2358,6 @@
     true
     false))
 
-(defn comp-middleware
-  "Returns a single (composite) unary fn that applies all given unary fns
-  sequentially (left->right!: f1, f2, ...). If any given fn returns nil, the
-  returned composite fn immediately returns nil:
-
-    ((comp-middleware inc #(* % 2) inc) 1) => 5 ; (inc (* (inc 1) 2))
-    ((comp-middleware inc (fn [_] nil) (fn [_] (throw (Exception. \"Never thrown!\")))) 1) => nil
-
-  Useful for composing Ring-style middleware fns."
-  ([fs   ] (fn [x] (reduce (fn [x f] (if f (or (f x) (reduced nil)) x)) x fs)))
-  ([f1 f2]
-   (fn [x]
-     (if f1
-       (if f2
-         (when-let [x (f1 x)] (f2 x))
-         (do                  (f1 x)))
-       (if f2 (f2 x) x))))
-
-  ([f1 f2 f3     ] (fn [x] (when-let [x (if f1 (f1 x) x), x (if f2 (f2 x) x)                    ] (if f3 (f3 x) x))))
-  ([f1 f2 f3 & fs] (fn [x] (when-let [x (if f1 (f1 x) x), x (if f2 (f2 x) x), x (if f3 (f3 x) x)] ((comp-middleware fs) x)))))
-
-(comment ((comp-middleware inc inc (fn [_] nil) (fn [_] (throw (Exception. "Foo")))) 0))
-
 ;;;; Thread locals
 
 #?(:clj

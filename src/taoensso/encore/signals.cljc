@@ -371,6 +371,9 @@
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
+     (when (contains? call-opts :middleware)  (truss/ex-info! "`:middleware` option has been renamed `:xfn`, apologies!"))
+     (when (contains? call-opts :middleware+) (truss/ex-info! "`:middleware+` option has been renamed `:xfn+`, apologies!"))
+
      (let [opts        call-opts
            kind-form   (get opts :kind)
            ns-form     (get opts :ns (str *ns*))
@@ -551,18 +554,6 @@
 (enc/defonce ^:dynamic *default-handler-error-fn* nil)
 (enc/defonce ^:dynamic *default-handler-backp-fn* nil)
 
-(defn as-middleware-fn
-  "Returns (composed) unary middleware fn, or nil."
-  [fn-or-fns]
-  (when                    fn-or-fns
-    (if (vector?           fn-or-fns)
-      (enc/comp-middleware fn-or-fns)
-      (if (fn? fn-or-fns)
-        (do    fn-or-fns)
-        (truss/ex-info! "[encore/signals] Unexpected middleware value"
-          {:given    (enc/typed-val fn-or-fns)
-           :expected '#{nil fn [f1 f2 ...]}})))))
-
 (def ^:private default-handler-priority 100)
 (def           default-handler-dispatch-opts
   "Default handler dispatch options, see
@@ -581,6 +572,24 @@
        :drain-msecs      6000
        :convey-bindings? true}}))
 
+(defn comp-xfn
+  "Returns a composite unary signal transform fn (xfn).
+  Like `core/comp` but takes only unary fns, applies functions left->right(!),
+  and composite immediately returns nil if any given fn returns nil."
+  ([fs   ] (fn xfn-comp [in] (reduce (fn [in f] (if f (or (f in) (reduced nil)) in)) in fs)))
+  ([f1 f2]
+   (fn xfn-comp [in]
+     (if f1
+       (if f2
+         (when-let [in (f1 in)] (f2 in))
+         (do                    (f1 in)))
+       (if f2 (f2 in) in))))
+
+  ([f1 f2 f3     ] (fn xfn-comp [in] (enc/when-let [in (if f1 (f1 in) in), in (if f2 (f2 in) in)                       ] (if f3 (f3 in) in))))
+  ([f1 f2 f3 & fs] (fn xfn-comp [in] (enc/when-let [in (if f1 (f1 in) in), in (if f2 (f2 in) in), in (if f3 (f3 in) in)] ((comp-xfn fs) in)))))
+
+(comment ((comp-xfn inc inc nil (fn [_] nil) (fn [_] (throw (Exception. "Foo")))) 0))
+
 (defn wrap-handler
   "Wraps given handler-fn to add common handler-level functionality."
   [handler-id handler-fn, lib-dispatch-opts user-dispatch-opts]
@@ -593,7 +602,7 @@
           user-dispatch-opts)
 
         {:keys
-         [#?(:clj async) priority sample-rate rate-limit when-fn middleware,
+         [#?(:clj async) priority sample-rate rate-limit when-fn xfn,
           kind-filter ns-filter id-filter min-level,
           rl-error rl-backp error-fn backp-fn, track-stats?]}
         dispatch-opts
@@ -608,8 +617,11 @@
         rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
         spec-filter*  (spec-filter kind-filter ns-filter id-filter min-level)
 
-        middleware    (as-middleware-fn          middleware) ; Deprecated, kept temporarily for back compatibility
-        ;; middleware (truss/have [:or nil? fn?] middleware) ; (fn [signal-value]) => ?modified-signal-value
+        ;; (fn [signal-value]) => ?modified-signal-value transform
+        xfn (if (vector? xfn) (comp-xfn xfn) (truss/have [:or nil? fn?] xfn))
+        _
+        (when (contains? dispatch-opts :middleware)
+          (truss/ex-info! "`:middleware` handler dispatch option has been renamed `:xfn`, apologies!"))
 
         rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
         rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
@@ -711,9 +723,9 @@
                           (truss/try*
                             (enc/if-not
                                 [sig-val*
-                                 (if middleware
-                                   (middleware sig-val) ; Apply handler middleware
-                                   (do         sig-val))]
+                                 (if xfn
+                                   (xfn sig-val) ; Apply handler transform
+                                   (do  sig-val))]
 
                               (do (when track-stats? (cnt-suppressed)) nil)
                               (truss/try*
@@ -809,8 +821,8 @@
    with-handler with-handler+
    add-handler! remove-handler! stop-handlers!
 
-   *ctx*        set-ctx!        with-ctx        with-ctx+
-   *middleware* set-middleware! with-middleware with-middleware+])
+   *ctx* set-ctx! with-ctx with-ctx+
+   *xfn* set-xfn! with-xfn with-xfn+])
 
 ;;;
 
@@ -827,11 +839,11 @@
       a. Compile-time: not applicable
       b. Runtime:      sample rate, kind, ns, id, level, when fn, rate limit
 
-    3. Call    middleware (fn [signal]) => ?modified-signal returns non-nil
-    4. Handler middleware (fn [signal]) => ?modified-signal returns non-nil
+    3. Call    transform (fn [signal]) => ?modified-signal returns non-nil
+    4. Handler transform (fn [signal]) => ?modified-signal returns non-nil
 
-  Middleware provides a flexible way to modify and/or filter signals by arbitrary
-  signal data/content conditions (return nil to skip).
+  Transform fns provides a flexible way to modify and/or filter signals by
+  arbitrary signal data/content conditions (return nil to skip handling).
 
   Config:
 
@@ -845,7 +857,7 @@
 
       or see `help:environmental-config`.
 
-    To set handler filters (2b) or middleware (4):
+    To set handler filters (2b) or transform (4):
 
       Provide relevant opts when calling `add-handler!` or `with-handler/+`.
       See `help:handler-dispatch-options` for details.
@@ -853,7 +865,7 @@
       Note: call filters (1a, 1b) should generally be AT LEAST as permissive
       as handler filters (2b) since they're always applied first.
 
-    To set call middleware (3): use `set-middleware!`, `with-middleware`.
+    To set call transform (3): use `set-xfn!`, `with-xfn`.
 
   Compile-time vs runtime filtering:
 
@@ -970,8 +982,7 @@
       Optional NULLARY (fn allow? []) that must return truthy for handler to be
       called. When present, called *after* sampling and other filters, but before
       rate limiting. Useful for filtering based on external state/context.
-
-      See `:middleware` for an alternative that takes a signal argument!
+      See `:xfn` for an alternative that takes a signal argument!
 
     `:rate-limit` (default nil => no rate limit)
       Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
@@ -983,11 +994,11 @@
          \"10/min\" [10 60000]} => Max 1  call  per 1000 msecs,
                                  and 10 calls per 60   secs
 
-    `:middleware` (default nil => no middleware)
-      Optional (fn [signal]) => ?modified-signal to apply before
-      handling signal. When middleware returns nil, skips handler.
+    `:xfn` (default nil => no transform)
+      Optional transform (fn [signal]) => ?modified-signal to apply before
+      handling signal. When transform returns nil, skips handler.
 
-      Compose multiple middleware fns together with `comp-middleware`.
+      Compose multiple transform fns together with `comp-some`.
 
     `:error-fn` - (fn [{:keys [handler-id signal error]}]) to call on handler error.
     `:backp-fn` - (fn [{:keys [handler-id             ]}]) to call on handler back-pressure.
@@ -1080,7 +1091,7 @@
       `:disallowed`   - Noop  handler calls due to sampling/filtering/rate-limiting
       `:allowed`      - Other handler calls    (no sampling/filtering/rate-limiting)
 
-      `:suppressed`   - Noop handler calls due to nil middleware result
+      `:suppressed`   - Noop handler calls due to nil transform (xfn) result
       `:handled`      - Handler calls that completed successfully
       `:errors`       - Handler calls that threw an error
 
@@ -1389,7 +1400,7 @@
           '([handler-id handler-fn]
             [handler-id handler-fn
              {:as   dispatch-opts
-              :keys [async priority sample-rate rate-limit when-fn middleware,
+              :keys [async priority sample-rate rate-limit when-fn xfn,
                      kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
@@ -1463,16 +1474,15 @@
         nil)))
 
 #?(:clj
-   (defn- api:*middleware* []
-     `(enc/def* ~'*middleware* {:dynamic true}
-        "Optional (fn [signal]) => ?modified-signal to apply to all signals.
-  When middleware returns nil, skips all handlers. Default (root) value is nil.
+   (defn- api:*xfn* []
+     `(enc/def* ~'*xfn* {:dynamic true}
+        "Optional transform (fn [signal]) => ?modified-signal to apply to all signals.
+  When transform returns nil, skips all handlers. Default (root) value is nil.
 
-  Useful for dynamically transforming signals and/or filtering signals
-  by signal data/content/etc.
+  Useful for dynamically filtering and/or modifying signals by signal data/content/etc.
 
-  Re/bind dynamic        value using `with-middleware`, `with-middleware+`, `binding`.
-  Modify  root (default) value using `set-middleware!`.
+  Re/bind dynamic        value using `with-xfn`, `with-xfn+`, `binding`.
+  Modify  root (default) value using `set-xfn!`.
 
   As with all dynamic Clojure vars, \"binding conveyance\" applies when using
   futures, agents, etc.
@@ -1480,21 +1490,21 @@
   Examples:
 
     ;; Filter all signals by returning nil:
-    (t/set-middleware! (fn [signal] (when-not (:skip-me? signal) signal)))
+    (t/set-xfn! (fn [signal] (when-not (:skip-me? signal) signal)))
 
     ;; Remove key/s from all signals:
-    (t/set-middleware! (fn [signal] (dissoc signal :unwanted-key1 ...)))
+    (t/set-xfn! (fn [signal] (dissoc signal :unwanted-key1 ...)))
 
     ;; Remove key/s from signals to specific handler:
     (t/add-handler! ::my-handler my-handler
-      {:middleware (fn [signal] (dissoc signal :unwanted-key1 ...))})
+      {:xfn (fn [signal] (dissoc signal :unwanted-key1 ...))})
 
-    ;; Set middleware for specific signal/s:
-    (binding [*middleware* (fn [signal] ...)]
+    ;; Dynamic transform for specific signal/s:
+    (binding [*xfn* (fn [signal] ...)]
       (...))
 
   Tips:
-    - Compose multiple middleware fns together with `comp-middleware`.
+    - Compose multiple transform fns together with `comp-xfn`.
     - Use `get-env` to set default (root) value based on environmental config."
         nil)))
 
@@ -1515,21 +1525,21 @@
    (defn- api:set-ctx! []
      `(defn ~'set-ctx!
         "Set `*ctx*` var's default (root) value. See `*ctx*` for details."
-        ~'[root-ctx-val] (enc/set-var-root! ~'*ctx* ~'root-ctx-val))))
+        ~'[root-ctx] (enc/set-var-root! ~'*ctx* ~'root-ctx))))
 
 #?(:clj
-   (defn- api:set-middleware! []
-     `(defn ~'set-middleware!
-        "Set `*middleware*` var's default (root) value. See `*middleware*` for details."
-        ~'[?root-middleware-fn]
-        (enc/set-var-root! ~'*middleware* ~'?root-middleware-fn))))
+   (defn- api:set-xfn! []
+     `(defn ~'set-xfn!
+        "Set `*xfn*` var's default (root) value. See `*xfn*` for details."
+        ~'[?root-xfn]
+        (enc/set-var-root! ~'*xfn* ~'?root-xfn))))
 
 #?(:clj
    (defn- api:with-ctx []
      (let [*ctx* (symbol (str *ns*) "*ctx*")]
        `(defmacro ~'with-ctx
           "Evaluates given form with given `*ctx*` value. See `*ctx*` for details."
-          ~'[ctx-val form] `(binding [~'~*ctx* ~~'ctx-val] ~~'form)))))
+          ~'[ctx form] `(binding [~'~*ctx* ~~'ctx] ~~'form)))))
 
 #?(:clj
    (defn- api:with-ctx+ []
@@ -1546,23 +1556,22 @@
           `(binding [~'~*ctx* (update-ctx ~'~*ctx* ~~'update-map-or-fn)] ~~'form)))))
 
 #?(:clj
-   (defn- api:with-middleware []
-     (let [*middleware* (symbol (str *ns*) "*middleware*")]
-       `(defmacro ~'with-middleware
-          "Evaluates given form with given `*middleware*` value.
-  See `*middleware*` for details."
-          ~'[?middleware-fn form]
-          `(binding [~'~*middleware* ~~'?middleware-fn] ~~'form)))))
+   (defn- api:with-xfn []
+     (let [*xfn* (symbol (str *ns*) "*xfn*")]
+       `(defmacro ~'with-xfn
+          "Evaluates given form with given `*xfn*` value, see `*xfn*` for details."
+          ~'[?xfn form]
+          `(binding [~'~*xfn* ~~'?xfn] ~~'form)))))
 
 #?(:clj
-   (defn- api:with-middleware+ []
-     (let [*middleware* (symbol (str *ns*) "*middleware*")]
-       `(defmacro ~'with-middleware+
-          "Evaluates given form with composed `*middleware*` value.
-  Same as (with-middleware (comp-middleware *middleware* ?middleware-fn) ...).
-  See `*middleware*` for details."
-          ~'[?middleware-fn form]
-          `(binding [~'~*middleware* (enc/comp-middleware ~'~*middleware* ~~'?middleware-fn)]
+   (defn- api:with-xfn+ []
+     (let [*xfn* (symbol (str *ns*) "*xfn*")]
+       `(defmacro ~'with-xfn+
+          "Evaluates given form with composed `*xfn*` value.
+  Same as (with-xfn (comp-xfn *xfn* ?xfn) ...).
+  See `*xfn*` for details."
+          ~'[?xfn form]
+          `(binding [~'~*xfn* (comp-xfn ~'~*xfn* ~~'?xfn)]
              ~~'form)))))
 
 ;;;;
@@ -1630,11 +1639,11 @@
                (api:with-ctx)
                (api:with-ctx+)])
 
-          ~@(when (incl? :middleware)
-              [(api:*middleware*)
-               (api:set-middleware!)
-               (api:with-middleware)
-               (api:with-middleware+)])))))
+          ~@(when (incl? :xfn)
+              [(api:*xfn*)
+               (api:set-xfn!)
+               (api:with-xfn)
+               (api:with-xfn+)])))))
 
 (comment
   ;; See `taoensso.encore-tests.required-ns` ns
