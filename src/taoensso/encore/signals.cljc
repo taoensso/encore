@@ -310,8 +310,8 @@
 
 #?(:clj (enc/defonce callsite-counter (enc/counter 1)))
 
-(let [basic-rate-limiters_ (enc/latom {})
-      full-rate-limiters_  (enc/latom {})]
+(let [limiters-basic_ (enc/latom {})
+      limiters-full_  (enc/latom {})]
 
   (defn call-limited!?
     "Calls the identified stateful rate-limiter and returns true iff limited."
@@ -319,15 +319,15 @@
     ([cs-id spec] ; Common case (no request ids)
      (let [rl
            (or
-             (get (basic-rate-limiters_) cs-id) ; Common case
-             (basic-rate-limiters_       cs-id #(or % (enc/rate-limiter {:allow-basic? true} spec))))]
+             (get (limiters-basic_) cs-id) ; Common case
+             (limiters-basic_       cs-id #(or % (enc/rate-limiter {:allow-basic? true} spec))))]
        (if (rl) true false)))
 
     ([cs-id spec req-id]
      (let [rl
            (or
-             (get (full-rate-limiters_) cs-id) ; Common case
-             (full-rate-limiters_       cs-id #(or % (enc/rate-limiter {:allow-basic? false} spec))))]
+             (get (limiters-full_) cs-id) ; Common case
+             (limiters-full_       cs-id #(or % (enc/rate-limiter {:allow-basic? false} spec))))]
        (if (rl req-id) true false)))))
 
 (comment
@@ -358,7 +358,7 @@
       '([{:keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}]
         [{:keys
           [elidable? elide? allow? callsite-id,
-           sample kind ns id level when rate-limit rate-limit-by]}])}
+           sample kind ns id level when limit limit-by]}])}
 
      [{:as core-opts :keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}
       call-opts]
@@ -371,9 +371,11 @@
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
-     (when (contains? call-opts :middleware)  (truss/ex-info! "`:middleware` option has been renamed `:xfn`, apologies!"))
-     (when (contains? call-opts :middleware+) (truss/ex-info! "`:middleware+` option has been renamed `:xfn+`, apologies!"))
-     (when (contains? call-opts :sample-rate) (truss/ex-info! "`:sample-rate` option has been renamed `:sample`, apologies!"))
+     (when (contains? call-opts :middleware)    (truss/ex-info! "`:middleware` option has been renamed `:xfn`, apologies!"))
+     (when (contains? call-opts :middleware+)   (truss/ex-info! "`:middleware+` option has been renamed `:xfn+`, apologies!"))
+     (when (contains? call-opts :sample-rate)   (truss/ex-info! "`:sample-rate` option has been renamed `:sample`, apologies!"))
+     (when (contains? call-opts :rate-limit)    (truss/ex-info! "`:rate-limit` option has been renamed `:limit`, apologies!"))
+     (when (contains? call-opts :rate-limit-by) (truss/ex-info! "`:rate-limit-by` option has been renamed `:limit-by`, apologies!"))
 
      (let [opts        call-opts
            kind-form   (get opts :kind)
@@ -427,10 +429,10 @@
                        when-form (get opts :when)
 
                        rl-form ; Nb last (increments count)
-                       (when-let [spec-form     (get opts :rate-limit)]
-                         (if-let [limit-by-form (get opts :rate-limit-by)]
-                           `(call-limited!? ~callsite-id ~spec-form ~limit-by-form)
-                           `(call-limited!? ~callsite-id ~spec-form               )))]
+                       (when-let [spec-form (get opts :limit)]
+                         (if-let [by-form   (get opts :limit-by)]
+                           `(call-limited!? ~callsite-id ~spec-form ~by-form)
+                           `(call-limited!? ~callsite-id ~spec-form)))]
 
                    `(enc/and? ~@(filter some? [sample-form sf-form when-form rl-form]))))]
 
@@ -439,13 +441,13 @@
 (comment
   (filter-call
     {:sf-arity 2, :ct-call-filter nil, :*rt-call-filter* `*rt-sf*, :cljs? true}
-    {;; :ns       (str *ns*)
-     :level       (do :info)
-     ;; :elide?   true
-     ;; :allow?   false
-     :sample      0.3
-     :when        false
-     :rate-limit  [[1 1000]]}))
+    {;; :ns     (str *ns*)
+     :level     (do :info)
+     ;; :elide? true
+     ;; :allow? false
+     :sample    0.3
+     :when      false
+     :limit     [[1 1000]]}))
 
 ;;;; Signal handling
 
@@ -603,13 +605,14 @@
           user-dispatch-opts)
 
         {:keys
-         [#?(:clj async) priority sample rate-limit when-fn xfn,
+         [#?(:clj async) priority sample limit when-fn xfn,
           kind-filter ns-filter id-filter min-level,
           rl-error rl-backp error-fn backp-fn, track-stats?]}
         dispatch-opts
 
         _ (when (contains? dispatch-opts :middleware)  (truss/ex-info! "`:middleware` handler dispatch option has been renamed `:xfn`, apologies!"))
         _ (when (contains? dispatch-opts :sample-rate) (truss/ex-info! "`:sample-rate` handler dispatch option has been renamed `:sample`, apologies!"))
+        _ (when (contains? dispatch-opts :rate-limit)  (truss/ex-info! "`:rate-limit` handler dispatch option has been renamed `:limit`, apologies!"))
 
         [sample-rate sample-rate-fn]
         (when      sample
@@ -618,7 +621,7 @@
             [(enc/as-pnum! sample) nil] ; Static  rate
             ))
 
-        rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
+        rl-handler    (when-let [spec limit] (enc/rate-limiter {:allow-basic? true} spec))
         spec-filter*  (spec-filter kind-filter ns-filter id-filter min-level)
 
         ;; (fn [signal-value]) => ?modified-signal-value transform
@@ -985,7 +988,7 @@
       rate limiting. Useful for filtering based on external state/context.
       See `:xfn` for an alternative that takes a signal argument!
 
-    `:rate-limit` (default nil => no rate limit)
+    `:limit` (default nil => no rate limit)
       Optional rate limit spec as provided to `taoensso.encore/rate-limiter`,
       {<limit-id> [<n-max-calls> <msecs-window>]}.
 
@@ -1401,7 +1404,7 @@
           '([handler-id handler-fn]
             [handler-id handler-fn
              {:as   dispatch-opts
-              :keys [async priority sample rate-limit when-fn xfn,
+              :keys [async priority sample limit when-fn xfn,
                      kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 

@@ -1774,7 +1774,7 @@
            "With basic filtering")
 
          (is (enc/submap? (rns/filter-call {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :callsite-id 1234
-                                            :sample 0.5, :when (> 1 0), :rate-limit [[1 1000]],
+                                            :sample 0.5, :when (> 1 0), :limit [[1 1000]],
                                             :local-forms {:ns __ns}})
                {:callsite-id 1234
                 :elide? :submap/nx
