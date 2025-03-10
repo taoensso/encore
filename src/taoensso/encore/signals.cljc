@@ -358,7 +358,7 @@
       '([{:keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}]
         [{:keys
           [elidable? elide? allow? callsite-id,
-           sample-rate kind ns id level when rate-limit rate-limit-by]}])}
+           sample kind ns id level when rate-limit rate-limit-by]}])}
 
      [{:as core-opts :keys [cljs? sf-arity ct-call-filter *rt-call-filter*]}
       call-opts]
@@ -373,6 +373,7 @@
 
      (when (contains? call-opts :middleware)  (truss/ex-info! "`:middleware` option has been renamed `:xfn`, apologies!"))
      (when (contains? call-opts :middleware+) (truss/ex-info! "`:middleware+` option has been renamed `:xfn+`, apologies!"))
+     (when (contains? call-opts :sample-rate) (truss/ex-info! "`:sample-rate` option has been renamed `:sample`, apologies!"))
 
      (let [opts        call-opts
            kind-form   (get opts :kind)
@@ -410,11 +411,11 @@
                (get opts :allow?
                  ;; Try keep expansion minimal, and avoid resolving to core since
                  ;; these backticks will always resolve to Clj only (never Cljs)
-                 (let [sample-rate-form
-                       (when-let [sr-form (get opts :sample-rate)]
-                         (if (enc/const-form? sr-form)
-                           (do                       `(~'< ~'(Math/random) ~(enc/as-pnum! sr-form)))
-                           `(~'if-let [~'sr ~sr-form] (~'< ~'(Math/random)  (~'double   ~'sr)) true)))
+                 (let [sample-form
+                       (when-let [sform (get opts :sample)]
+                         (if (enc/const-form? sform)
+                           (do                    `(~'< ~'(Math/random) ~(enc/as-pnum! sform)))
+                           `(~'if-let [~'s ~sform] (~'< ~'(Math/random)  (~'double   ~'s)) true)))
 
                        sf-form
                        (case (int (or sf-arity -1))
@@ -431,7 +432,7 @@
                            `(call-limited!? ~callsite-id ~spec-form ~limit-by-form)
                            `(call-limited!? ~callsite-id ~spec-form               )))]
 
-                   `(enc/and? ~@(filter some? [sample-rate-form sf-form when-form rl-form]))))]
+                   `(enc/and? ~@(filter some? [sample-form sf-form when-form rl-form]))))]
 
            (assoc base-rv :allow? allow?-form))))))
 
@@ -442,7 +443,7 @@
      :level       (do :info)
      ;; :elide?   true
      ;; :allow?   false
-     :sample-rate 0.3
+     :sample      0.3
      :when        false
      :rate-limit  [[1 1000]]}))
 
@@ -602,16 +603,19 @@
           user-dispatch-opts)
 
         {:keys
-         [#?(:clj async) priority sample-rate rate-limit when-fn xfn,
+         [#?(:clj async) priority sample rate-limit when-fn xfn,
           kind-filter ns-filter id-filter min-level,
           rl-error rl-backp error-fn backp-fn, track-stats?]}
         dispatch-opts
 
+        _ (when (contains? dispatch-opts :middleware)  (truss/ex-info! "`:middleware` handler dispatch option has been renamed `:xfn`, apologies!"))
+        _ (when (contains? dispatch-opts :sample-rate) (truss/ex-info! "`:sample-rate` handler dispatch option has been renamed `:sample`, apologies!"))
+
         [sample-rate sample-rate-fn]
-        (when      sample-rate
-          (if (fn? sample-rate)
-            [nil                sample-rate] ; Dynamic rate (use dynamic binding, deref atom, etc.)
-            [(enc/as-pnum! sample-rate) nil] ; Static  rate
+        (when      sample
+          (if (fn? sample)
+            [nil           sample]      ; Dynamic rate (use dynamic binding, deref atom, etc.)
+            [(enc/as-pnum! sample) nil] ; Static  rate
             ))
 
         rl-handler    (when-let [spec rate-limit] (enc/rate-limiter {:allow-basic? true} spec))
@@ -619,9 +623,6 @@
 
         ;; (fn [signal-value]) => ?modified-signal-value transform
         xfn (if (vector? xfn) (comp-xfn xfn) (truss/have [:or nil? fn?] xfn))
-        _
-        (when (contains? dispatch-opts :middleware)
-          (truss/ex-info! "`:middleware` handler dispatch option has been renamed `:xfn`, apologies!"))
 
         rl-error (get dispatch-opts :rl-error (enc/rate-limiter-once-per (enc/ms :mins 1)))
         rl-backp (get dispatch-opts :rl-backp (enc/rate-limiter-once-per (enc/ms :mins 1)))
@@ -890,8 +891,8 @@
     handles 50% of received signals, then 10% of possible signals will be
     handled (50% of 20%).
 
-    The final (multiplicative) rate is helpfully reflected in each signal's
-    `:sample-rate` value.
+    When sampling is active, the final (combined multiplicative) rate is
+    helpfully reflected in each signal's `:sample` rate value ∈ℝ[0,1].
 
   If anything is unclear, please ping me (@ptaoussanis) so that I can
   improve these docs!"
@@ -966,12 +967,12 @@
       Should handler track statistics (e.g. handling times) for
       reporting by `get-handlers-stats`?
 
-    `:sample-rate` (default nil => no sampling)
+    `:sample` (default nil => no sampling)
       Optional sample rate ∈ℝ[0,1], or (fn dyamic-sample-rate []) => ℝ[0,1].
-      When present, handle only this (random) proportion of args:
-        1.0 => handle every arg (same as nil rate, default)
-        0.0 => noop   every arg
-        0.5 => handle random 50% of args
+      When present, handle only this (random) proportion of signals:
+        1.0 => handle 100% of signals (same as nil rate, default)
+        0.0 => hanel    0% of signals (noop all)
+        0.5 => handle  50% of signals (random)
 
     `:kind-filter` - Kind      filter as in `set-kind-filter!` (when relevant)
     `:ns-filter`   - Namespace filter as in `set-ns-filter!`
@@ -1400,7 +1401,7 @@
           '([handler-id handler-fn]
             [handler-id handler-fn
              {:as   dispatch-opts
-              :keys [async priority sample-rate rate-limit when-fn xfn,
+              :keys [async priority sample rate-limit when-fn xfn,
                      kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
@@ -1694,10 +1695,8 @@
   (or
     (when handler-sample-rate
       (when (map? sig-val)
-        (assoc sig-val :sample-rate
+        (assoc sig-val :sample
           (*
             (double handler-sample-rate)
-            (double (or (get sig-val :sample-rate) 1.0))))))
+            (double (or (get sig-val :sample) 1.0))))))
     sig-val))
-
-(comment (signal-with-combined-sample-rate 0.2 {:sample-rate 0.3}))

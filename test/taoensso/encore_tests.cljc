@@ -1774,7 +1774,7 @@
            "With basic filtering")
 
          (is (enc/submap? (rns/filter-call {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :callsite-id 1234
-                                            :sample-rate 0.5, :when (> 1 0), :rate-limit [[1 1000]],
+                                            :sample 0.5, :when (> 1 0), :rate-limit [[1 1000]],
                                             :local-forms {:ns __ns}})
                {:callsite-id 1234
                 :elide? :submap/nx
@@ -1811,7 +1811,12 @@
 
       (is (= (sigs/format-id "foo.bar" :foo.bar/qux) "::qux"))
       (is (= (sigs/format-id "foo.baz" :foo.bar/qux) ":foo.bar/qux"))
-      (is (= (sigs/format-id nil       :foo.bar/qux) ":foo.bar/qux"))])])
+      (is (= (sigs/format-id nil       :foo.bar/qux) ":foo.bar/qux"))
+
+      (is (= (sigs/signal-with-combined-sample-rate nil {})            {}))
+      (is (= (sigs/signal-with-combined-sample-rate 0.2 {})            {:sample 0.2}))
+      (is (= (sigs/signal-with-combined-sample-rate nil {:sample 0.6}) {:sample 0.6}))
+      (is (= (sigs/signal-with-combined-sample-rate 0.2 {:sample 0.6}) {:sample 0.12}))])])
 
 ;;; Handling
 
@@ -1830,15 +1835,15 @@
       (is (nil? (cnt :set 0)))
 
       (is (=           (rns/get-handlers) nil))
-      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
-      (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample-rate 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
-      (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 0.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample 0.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/add-handler! :hid2 nil                   {:async nil, :sample 0.5}) {:hid1 {:dispatch-opts {:async nil, :sample 0.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/get-handlers)                                                       {:hid1 {:dispatch-opts {:async nil, :sample 0.0}, :handler-fn fn?}}))
 
       (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "foo"))))
       (is (= @cnt 0))
 
-      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample-rate 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
-      (is (enc/submap? (rns/get-handlers)                                                            {:hid1 {:dispatch-opts {:async nil, :sample-rate 1.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample 1.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/get-handlers)                                                       {:hid1 {:dispatch-opts {:async nil, :sample 1.0}, :handler-fn fn?}}))
 
       (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
       (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
@@ -1900,11 +1905,11 @@
 
    (testing "Handler sampling"
      (let [n-sampled
-           (fn [sample-rate]
+           (fn [sample]
              (let [c (enc/counter)
                    handlers
                    [(sigs/wrap-handler :hid1 (fn [x] (c) x) nil
-                      {:sample-rate sample-rate, :async {:mode :sync}})]]
+                      {:sample sample, :async {:mode :sync}})]]
 
                (dotimes [_ 1000]
                  (sigs/call-handlers! handlers (MySignal. :info "foo")))
