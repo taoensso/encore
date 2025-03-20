@@ -3015,7 +3015,7 @@
   {:tag #?(:clj 'String :cljs 'string)}
   [s] (str/replace (str s) #"\s+" \space))
 
-(defn count-words [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
+(defn count-words ^long [s] (if (str/blank? s) 0 (count (str/split s #"\s+"))))
 (comment (count-words "Hello this is a    test"))
 
 (defn into-str
