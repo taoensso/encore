@@ -4584,7 +4584,7 @@
       gc-rate (let [gce (long gc-every)] (/ 1.0 gce))
 
       f1
-      (fn [rid peek?]
+      (fn [rid ^long delta peek?]
         (let [instant (now-udt)]
           (when (and (not peek?) (gc-now? gc-rate))
             (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
@@ -4626,7 +4626,7 @@
                     (reduce-kv
                       (fn [^LimitHits acc lid ^LimitEntry e]
                         (if-let [^LimitSpec s (get spec lid)]
-                          (if (< (.-n e) (.-n s))
+                          (if (<= (+ (.-n e) delta) (.-n s))
                             acc
                             (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
                               (if (<= tdelta 0)
@@ -4660,9 +4660,9 @@
                               (if-let [^LimitEntry e (get entries lid)]
                                 (let [udt0 (.-udt0 e)]
                                   (if (>= instant (+ udt0 (.-ms s)))
-                                    (LimitEntry. 1 instant)
-                                    (LimitEntry. (inc (.-n e)) udt0)))
-                                (LimitEntry. 1 instant))))
+                                    (LimitEntry.    delta          instant)
+                                    (LimitEntry. (+ delta (.-n e)) udt0)))
+                                (do (LimitEntry.    delta          instant)))))
                           entries
                           spec)]
 
@@ -4672,8 +4672,8 @@
 
       limiter-fn
       (fn a-rate-limiter
-        ([          ] (f1 nil    false))
-        ([    req-id] (f1 req-id false))
+        ([          ] (f1 nil    +1 false))
+        ([    req-id] (f1 req-id +1 false))
         ([cmd req-id]
          (case cmd
            (:rl/reset :limiter/reset)
@@ -4683,13 +4683,15 @@
                (reqs_ #(dissoc % req-id)))
              nil)
 
-           (:rl/peek :limiter/peek) (f1 req-id true)
+           (:rl/peek :limiter/peek) (f1 req-id +1 true)
 
-           (truss/unexpected-arg! cmd
-             {:context  `rate-limiter
-              :param    'rate-limiter-command
-              :expected #{:rl/reset :rl/peek}
-              :req-id   req-id}))))]
+           (if (number? cmd) ; Undocumented arb delta
+             (f1 req-id (long cmd) false)
+             (truss/unexpected-arg! cmd
+               {:context  `rate-limiter
+                :param    'rate-limiter-command
+                :expected #{:rl/reset :rl/peek}
+                :req-id   req-id})))))]
 
      :always
      (if with-state?
