@@ -965,9 +965,10 @@
          (when (<= (count s) ^long max-len)
            (re-find regex s))))))
 
+  (declare norm-str)
   (defn as-?nemail
-    ([        ?s] (when-let [email (as-?email         ?s)] (str/lower-case email)))
-    ([max-len ?s] (when-let [email (as-?email max-len ?s)] (str/lower-case email))))
+    ([        ?s] (when-let [email (as-?email         ?s)] (str/lower-case (norm-str email))))
+    ([max-len ?s] (when-let [email (as-?email max-len ?s)] (str/lower-case (norm-str email)))))
 
   (comment
     (do  (as-?nemail 11 "FOO@bar.com"))
@@ -2888,30 +2889,29 @@
       (str/lower-case "-abcdefghijklmnop")
       (str/lower-case "_abcdefghijklmnop"))))
 
-#?(:clj
-   (defn ^String norm-str
-     "Given a Unicode string, returns the normalized de/composed form.
-     It's often a good idea to normalize strings before exchange or storage,
-     especially if you're going to be querying against those string.
+(defn norm-str
+  "Returns normalized form of given string.
+    `norm-form` is ∈ #{:nfc :nfkc :nfd :nfkd} (default `:nfc` as per W3C)."
+  {:tag #?(:clj 'String :cljs 'string)}
+  ([          s] (norm-str :nfc s))
+  ([norm-form s]
+   (let [norm-form
+         (case norm-form
+           :nfc  #?(:clj java.text.Normalizer$Form/NFC,  :cljs "NFC")
+           :nfkc #?(:clj java.text.Normalizer$Form/NFKC, :cljs "NFKC")
+           :nfd  #?(:clj java.text.Normalizer$Form/NFD,  :cljs "NFD")
+           :nfkd #?(:clj java.text.Normalizer$Form/NFKD, :cljs "NFKD")
+           (if #?(:clj (instance? java.text.Normalizer$Form norm-form) :cljs false)
+             (do                    norm-form) ; Back compatibility
+             (truss/unexpected-arg! norm-form
+               {:param             'norm-form
+                :context `norm-str
+                :expected #{:nfc :nfkc :nfd :nfkd}})))]
 
-     `form` is ∈ #{:nfc :nfkc :nfd :nfkd <java.text.NormalizerForm>}.
-     Defaults to :nfc as per W3C recommendation."
-     ([     s] (norm-str :nfc s))
-     ([form s]
-      [s]
-      (java.text.Normalizer/normalize s
-        (case form
-          :nfc  java.text.Normalizer$Form/NFC
-          :nfkc java.text.Normalizer$Form/NFKC
-          :nfd  java.text.Normalizer$Form/NFD
-          :nfkd java.text.Normalizer$Form/NFKD
-          (if (instance? java.text.Normalizer$Form form)
-            form
-            (throw
-              (ex-info "[encore/norm-str] Unrecognized normalization form (expected ∈ #{:nfc :nfkc :nfd :nfkd <java.text.Normalizer$Form>})"
-                {:form (typed-val form)}))))))))
+     #?(:clj  (java.text.Normalizer/normalize ^String s norm-form)
+        :cljs (.normalize                             s norm-form)))))
 
-(comment (qb 1e6 (norm-str :nfc "foo"))) ; 114
+(comment (qb 1e6 (norm-str "foo"))) ; 48.52
 
 (defn str-replace
   "Like `str/replace` but provides consistent Clj/s behaviour.
