@@ -36,7 +36,8 @@
   (defn bad-level!
     "Throws an `ex-info` for given invalid level."
     [x]
-    (truss/ex-info! "[encore/signals] Invalid level"
+    (truss/ex-info!
+      (str "[encore/signals] Invalid level: `" (if (nil? x) "nil" x) "`")
       {:level    (enc/typed-val x)
        :expected expected})))
 
