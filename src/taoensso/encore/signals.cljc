@@ -1043,7 +1043,7 @@
        `(defn ~'get-min-levels
           "Returns current ?{:keys [compile-time runtime]} minimum call levels
   for given/current namespace."
-          (~'[  ] (~'get-min-levels nil (str *ns*)))
+          (~'[  ] (~'get-min-levels (str *ns*)))
           (~'[ns]
            (enc/assoc-some nil
              {:runtime      (parse-min-level (get (enc/force-ref ~*rt-call-filter*) :min-level) nil (str ~'ns))
