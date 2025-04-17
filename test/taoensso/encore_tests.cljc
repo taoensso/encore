@@ -343,6 +343,20 @@
    (is (let [c (enc/counter)] (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 3))) "falsey k3")
    (is (let [c (enc/counter)] (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 4))) "fallback")])
 
+(deftest _get-in*
+  (let [m {:a {:b {:c {:d :D}}}}]
+    [(is (= (get-in m [])                  (enc/get-in* m [])))
+     (is (= (get-in m [:a])                (enc/get-in* m [:a])))
+     (is (= (get-in m [:a :b :c :d])       (enc/get-in* m [:a :b :c :d])))
+     ;;
+     (is (= (get-in m [])                  (enc/get-in* m [])))
+     (is (= (get-in m [:nx]           :nf) (enc/get-in* m [:nx]           :nf)))
+     (is (= (get-in m [:a :b  :c :nx] :nf) (enc/get-in* m [:a :b  :c :nx] :nf)))
+     (is (= (get-in m [:a :nx :c :d]  :nf) (enc/get-in* m [:a :nx :c :d]  :nf)))
+     (is
+       (= (let [c (enc/counter)] (enc/get-in* m [:a :b :c :nx] (c)) 0))
+       "Avoids unnecessary evaluation of `not-found`.")]))
+
 (deftest _select-nested-keys
   [(is (= (enc/select-nested-keys nil    nil)) {})
    (is (= (enc/select-nested-keys {:a 1} nil)  {}))

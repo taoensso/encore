@@ -1470,6 +1470,30 @@
      ([m k1 k2    not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2)))              ] (val e#) ~not-found)))
      ([m k1 k2 k3 not-found] `(let [m# ~m] (if-let [e# (and m# (or (find m# ~k1) (find m# ~k2) (find m# ~k3)))] (val e#) ~not-found)))))
 
+#?(:clj
+   (defmacro get-in*
+     "Private, don't use this. Micro-optimized macro version of `core/get-in`.
+     Avoids unnecessary evaluation of `not-found`."
+     ([m ks]
+      (truss/have? const-form? ks)
+      (if (empty? ks)
+        m
+        (let [[k1 & kn] ks
+              gs (gensym)]
+          (if       kn
+            `(let [~gs (get ~m ~k1)] (if ~gs (get-in* ~gs ~kn) nil))
+            `(get ~m ~k1)))))
+
+     ([m ks not-found]
+      (truss/have? const-form? ks)
+      (if (empty? ks)
+        m
+        (let [[k1 & kn] ks
+              gs (gensym)]
+          (if       kn
+            `(let [~gs (get ~m ~k1 ::nx)] (if (identical-kw? ~gs ::nx) ~not-found (get-in* ~gs ~kn ~not-found)))
+            `(let [~gs (get ~m ~k1 ::nx)] (if (identical-kw? ~gs ::nx) ~not-found          ~gs))))))))
+
 (do
   (defn conj-some "Conjoins each non-nil value."
     ([             ] [])
