@@ -1695,6 +1695,28 @@
   (format-id (str *ns*) ::id1)
   (format-id nil ::id1))
 
+(defn format-callsite
+  "Returns \"<namespace>[<line>,<column>]\" ?string."
+  {:arglists '([{:keys [ns line column]}] [ns coords])}
+  ([ns coords]
+   (when ns
+     (if-let [[line column] coords]
+       (if line
+         (if column
+           (str ns "[" line "," column "]")
+           (str ns "[" line            "]"))
+         ns)
+       ns)))
+
+  ([location]
+   (when-let [{:keys [ns line column]} location]
+     (when ns
+       (if line
+         (if column
+           (str ns "[" line "," column "]")
+           (str ns "[" line            "]"))
+         ns)))))
+
 (defn signal-with-combined-sample-rate [handler-sample-rate sig-val]
   (or
     (when handler-sample-rate

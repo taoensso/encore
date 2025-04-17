@@ -1813,6 +1813,11 @@
       (is (= (sigs/format-id "foo.baz" :foo.bar/qux) ":foo.bar/qux"))
       (is (= (sigs/format-id nil       :foo.bar/qux) ":foo.bar/qux"))
 
+      (is (= nil       (sigs/format-callsite nil  nil)     (sigs/format-callsite nil)))
+      (is (= "ns"      (sigs/format-callsite "ns" [nil 0]) (sigs/format-callsite {:ns "ns", :column 0})))
+      (is (= "ns[0]"   (sigs/format-callsite "ns" [0])     (sigs/format-callsite {:ns "ns", :line 0})))
+      (is (= "ns[0,1]" (sigs/format-callsite "ns" [0 1])   (sigs/format-callsite {:ns "ns", :line 0, :column 1})))
+
       (is (= (sigs/signal-with-combined-sample-rate nil {})            {}))
       (is (= (sigs/signal-with-combined-sample-rate 0.2 {})            {:sample 0.2}))
       (is (= (sigs/signal-with-combined-sample-rate nil {:sample 0.6}) {:sample 0.6}))
