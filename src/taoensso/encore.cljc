@@ -1460,7 +1460,6 @@
          first key that exists in map. Useful for key aliases or fallbacks.
 
     Equivalent to:
-
       (cond
         (contains? m k1) (get m k1)
         (contains? m k2) (get m k2)

@@ -334,14 +334,14 @@
    (is (= (enc/get1 {:a nil} :c :b :a ::nx) nil))])
 
 (deftest _get*
-  [(let [c (enc/counter)] (is (and (= (enc/get* {:a  :A}                         (do (c) :a) (do (c) ::nx))   :A) (= @c 1)) "truthy v1"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a  :A}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2)) "fallback"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}                         (do (c) :a) (do (c) ::nx))  nil) (= @c 1)) "falsey v1"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2)) "fallback"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 2)) "falsey v2"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 3)) "fallback"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 3)) "falsey k3"))
-   (let [c (enc/counter)] (is (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 4)) "fallback"))])
+  [(is (let [c (enc/counter)] (and (= (enc/get* {:a  :A}                         (do (c) :a) (do (c) ::nx))   :A) (= @c 1))) "truthy v1")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a  :A}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2))) "fallback")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil}                         (do (c) :a) (do (c) ::nx))  nil) (= @c 1))) "falsey v1")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil}                         (do (c) :b) (do (c) ::nx)) ::nx) (= @c 2))) "fallback")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 2))) "falsey v2")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil}             (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 3))) "fallback")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :a) (do (c) ::nx))  nil) (= @c 3))) "falsey k3")
+   (is (let [c (enc/counter)] (and (= (enc/get* {:a nil} (do (c) :c) (do (c) :b) (do (c) :d) (do (c) ::nx)) ::nx) (= @c 4))) "fallback")])
 
 (deftest _select-nested-keys
   [(is (= (enc/select-nested-keys nil    nil)) {})
