@@ -368,7 +368,7 @@
      (truss/have? [:or nil? spec-filter?] ct-call-filter)
      (truss/have? qualified-symbol?      *rt-call-filter*)
 
-     (truss/have? [:or nil? map?]   call-opts)
+     (truss/have? [:or nil? map?] call-opts)
      (const-form! 'elide?    (get call-opts :elide?))
      (const-form! 'elidable? (get call-opts :elidable?))
 
@@ -898,8 +898,8 @@
     When sampling is active, the final (combined multiplicative) rate is
     helpfully reflected in each signal's `:sample` rate value ∈ℝ[0,1].
 
-  If anything is unclear, please ping me (@ptaoussanis) so that I can
-  improve these docs!"
+If anything is unclear, please ping me (@ptaoussanis) so that I can
+improve these docs!"
         "See docstring")))
 
 (comment (api:help:filters))
@@ -908,7 +908,7 @@
    (defn- api:help:handlers []
      `(def  ~'help:handlers
         "Signal handlers process created signals to do something with them (analyse them,
-        write them to console/file/queue/db, etc.).
+  write them to console/file/queue/db, etc.).
 
   Manage handlers with:
 

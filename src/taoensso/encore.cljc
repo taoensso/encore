@@ -337,8 +337,8 @@
        :if-some [y \"y\", z nil] \"y and z were both non-nil\"
        :else    \"fallback value\")
 
-     `:let` support inspired by <https://github.com/Engelberg/better-cond>.
-     Simple, flexible way to eliminate deeply-nested control flow code."
+     Simple, flexible way to eliminate deeply-nested control flow code.
+     `:let` support inspired by <https://github.com/Engelberg/better-cond>."
      [& clauses] `(-cond false ~@clauses)))
 
 #?(:clj
