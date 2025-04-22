@@ -271,6 +271,8 @@
   #?(:cljs {:tag 'boolean})
   [x] (or (list? x) (instance? #?(:clj clojure.lang.Cons :cljs cljs.core/Cons) x)))
 
+(declare str-starts-with?)
+
 #?(:clj
    (defmacro ^:no-doc -cond [throw? & clauses]
      (if-let [[c1 c2 & more] (seq clauses)]
@@ -307,9 +309,11 @@
                  )))
 
            (if (keyword? c1)
-             (throw ; Undocumented, but throws at compile-time so easy to catch
-               (ex-info (str "[encore/cond] Unrecognized special keyword: " c1)
-                 {:form `(cond ~c1 ~c2)}))
+             (if (str-starts-with? (name c1) "_")
+               `(-cond ~throw? ~@more) ; Skip
+               (throw ; Undocumented, but throws at compile-time so easy to catch
+                 (ex-info (str "[encore/cond] Unrecognized special keyword: " c1)
+                   {:form `(cond ~c1 ~c2)})))
 
              (if (vector? c1) ; Undocumented, deprecated
                `(if-let ~c1 ~c2 (-cond ~throw? ~@more))
