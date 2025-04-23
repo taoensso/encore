@@ -297,9 +297,8 @@
            ;;; 3-clause cases
            (:if-let :if-some :if-not)
            (if (empty? more) ; Missing 3rd clause
-             (throw
-               (ex-info (str "[encore/cond] Missing 3rd clause after special keyword: " c1)
-                 {:form `(cond ~c1 ~c2 '<missing>)}))
+             (truss/ex-info! (str "[encore/cond] Missing 3rd clause after special keyword: " c1)
+               {:form `(cond ~c1 ~c2 '<missing>)})
 
              (let [[c3 & more] more]
                (case c1
@@ -311,9 +310,8 @@
            (if (keyword? c1)
              (if (str-starts-with? (name c1) "_")
                `(-cond ~throw? ~@more) ; Skip
-               (throw ; Undocumented, but throws at compile-time so easy to catch
-                 (ex-info (str "[encore/cond] Unrecognized special keyword: " c1)
-                   {:form `(cond ~c1 ~c2)})))
+               (truss/ex-info! (str "[encore/cond] Unrecognized special keyword: " c1)
+                 {:form `(cond ~c1 ~c2)}))
 
              (if (vector? c1) ; Undocumented, deprecated
                `(if-let ~c1 ~c2 (-cond ~throw? ~@more))
@@ -324,8 +322,7 @@
                  `(if          ~c1 ~c2 (-cond ~throw? ~@more)))))))
 
        (when throw?
-         `(throw
-            (ex-info "[encore/cond!] No matching clause" {}))))))
+         `(truss/ex-info! "[encore/cond!] No matching clause" {})))))
 
 #?(:clj
    (defmacro cond
@@ -622,9 +619,8 @@
         #_(spit "debug.txt" (str (if cljs? "cljs: " "clj:  ") src-sym ": " (meta alias-sym) "\n") :append true)
 
         (when-not src-var-info
-          (throw
-            (ex-info (str "[encore/defalias] Source var not found: " src)
-              {:src src, :ns (str *ns*)})))
+          (truss/ex-info! (str "[encore/defalias] Source var not found: " src)
+            {:src src, :ns (str *ns*)}))
 
         (if cljs?
           `(def ~alias-sym ~alias-body)
@@ -981,10 +977,9 @@
        "foo@@bar.com" "foo@bar.com." "foo.baz@bar.com"])))
 
 (defn ^:no-doc -as-throw [kind x]
-  (throw
-    (ex-info (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
-      {:pred-kind kind
-       :arg (typed-val x)})))
+  (truss/ex-info! (str "[encore/as-" (name kind) "] failed against arg: " (pr-str x))
+    {:pred-kind kind
+     :arg (typed-val x)}))
 
 (let [-as-throw -as-throw]
   (defn as-nblank      {:tag #?(:clj 'String :cljs 'string)} [x] (or (as-?nblank      x) (-as-throw :nblank      x)))
@@ -1646,9 +1641,8 @@
   (when-let [im (invert-map m)]
     (if (= (count im) (count m)) ; 1-to-1
       im
-      (throw
-        (ex-info "[encore/invert-map!] Non-unique map vals"
-          {:given (typed-val m)})))))
+      (truss/ex-info! "[encore/invert-map!] Non-unique map vals"
+        {:given (typed-val m)}))))
 
 (defn map-keys
   "Returns given ?map with (key-fn <key>) keys."
@@ -2322,13 +2316,12 @@
        (when-not (or (> xc xm) (and (= xc xm) (or (> yc ym) (and (= yc ym) (>= zc zm)))))
          (let [min-version  (str/join "." [xm ym zm])
                your-version (str/join "." [xc yc zc])]
-           (throw
-             (ex-info
-               (str
-                 "Insufficient `com.taoensso/encore` version (v" your-version " < v" min-version "), "
-                 "you may have a dependency conflict. Please see `https://www.taoensso.com/dependency-conflicts` for solutions!")
-               {:min-version  min-version
-                :your-version your-version})))))))
+           (truss/ex-info!
+             (str
+               "Insufficient `com.taoensso/encore` version (v" your-version " < v" min-version "), "
+               "you may have a dependency conflict. Please see `https://www.taoensso.com/dependency-conflicts` for solutions!")
+             {:min-version  min-version
+              :your-version your-version}))))))
 
 (comment (assert-min-encore-version [3 10]))
 
@@ -2969,7 +2962,7 @@
                ;; behaviour here based on the number of matches(!)
                (fn [& args] (replacement (vec args))))]
          (.replace s (js/RegExp. (.-source match) flags) replacement))
-       :else (throw (str "Invalid match arg: " match)))))
+       :else (truss/ex-info! (str "Invalid match arg: " match)))))
 
 (do
   (defn ^:no-doc nil->str [x] (if (nil? x) "nil" x)) ; (undefined? x) check no longer needed for modern Cljs
@@ -3304,9 +3297,8 @@
           allow    (if (= allow    always) always (fn match? [in] (if ^boolean (allow    in) true  false)))
           disallow (if (= disallow never)  always (fn match? [in] (if ^boolean (disallow in) false true)))
           :else
-          (throw
-            (ex-info "[encore/name-filter] `allow-spec` and `disallow-spec` cannot both be nil"
-              {:allow-spec allow-spec :disallow-spec disallow-spec})))))))
+          (truss/ex-info! "[encore/name-filter] `allow-spec` and `disallow-spec` cannot both be nil"
+            {:allow-spec allow-spec :disallow-spec disallow-spec}))))))
 
 (comment
   (let [nf (name-filter #{"foo.*" "bar"})] (qb 1e6 (nf "foo"))) ; 85.18
@@ -3457,9 +3449,8 @@
      ;; First normalize behaviour for unexpected inputs:
      (or (nil? s) (= s "")) nil
      (not (string? s))
-     (throw
-       (ex-info "[encore/read-edn] Unexpected arg type (expected string or nil)"
-         {:arg (typed-val s)}))
+     (truss/ex-info! "[encore/read-edn] Unexpected arg type (expected string or nil)"
+       {:arg (typed-val s)})
 
      :else
      (let [readers (get opts :readers ::dynamic)
@@ -3759,9 +3750,8 @@
          ^bytes [^String s]
          (if (even? (count s))
            (byte-array (into [] (comp (partition-all 2) (map char-pair->byte)) s))
-           (throw
-             (ex-info "[encore/hex-str->ba] Invalid hex string (length must be even)"
-               {:given (typed-val s)})))))
+           (truss/ex-info! "[encore/hex-str->ba] Invalid hex string (length must be even)"
+             {:given (typed-val s)}))))
 
      ;; TODO Any way to auto select fastest implementation?
      ;; Ref. <https://stackoverflow.com/a/58118078/1982742>
@@ -4531,7 +4521,7 @@
         msecs (long msecs)]
 
     (fn a-rate-limiter-once-per
-      ([req-id] (throw (ex-info "[encore/rate-limiter] Basic rate limiters don't support request ids" {})))
+      ([req-id] (truss/ex-info! "[encore/rate-limiter] Basic rate limiters don't support request ids" {}))
       ([      ]
        (let [t1 (now-udt*)]
          #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
@@ -5034,7 +5024,7 @@
        (try
          (slurp (jio/reader r))
          (catch Exception e
-           (throw (ex-info "[encore/slurp-resource] Slurp failed" {:rname rname} e)))))))
+           (truss/ex-info! "[encore/slurp-resource] Slurp failed" {:rname rname} e))))))
 
 #?(:clj
    (defn get-file-resource-?last-modified
@@ -5078,9 +5068,8 @@
      "Private, don't use."
      [rname]
      (if-not [res (jio/resource rname)]
-       (throw
-         (ex-info (str "[encore/read-resource] Resource not found on classpath: " rname)
-           {:rname (typed-val rname)}))
+       (truss/ex-info! (str "[encore/read-resource] Resource not found on classpath: " rname)
+         {:rname (typed-val rname)})
 
        (with-open [reader (java.io.PushbackReader. (jio/reader res))]
          (loop [forms []]
@@ -5088,10 +5077,9 @@
                  (try
                    (read reader false ::eof)
                    (catch Throwable t
-                     (throw
-                       (ex-info (str "[encore/read-resource] Error while reading resource: " rname)
-                         {:rname (typed-val rname)
-                          :error t}))))]
+                     (truss/ex-info! (str "[encore/read-resource] Error while reading resource: " rname)
+                       {:rname (typed-val rname)
+                        :error t})))]
              (if (= form ::eof)
                forms
                (recur (conj forms form)))))))))
@@ -5140,9 +5128,8 @@
                   (let [idx (.indexOf    s ".")] (when (pos? idx) (.substring s 0 idx))) ; "9.0.1",    etc.
                   (let [idx (.indexOf    s "-")] (when (pos? idx) (.substring s 0 idx))) ; "16-ea",    etc.
                   (do                                                         s)))))
-          (throw
-            (ex-info "[encore/java-version] Failed to parse Java version string (unexpected form)"
-              {:version-string version-string})))))))
+          (truss/ex-info! "[encore/java-version] Failed to parse Java version string (unexpected form)"
+            {:version-string version-string}))))))
 
 #?(:clj
    (defn java-version>=
@@ -5380,9 +5367,8 @@
                (future (try (f) (finally (.release s))))
                (do
                  (.release s)
-                 (throw
-                   (ex-info "[encore/future-pool] Unexpected arg type (expected function)"
-                     {:arg (typed-val f)})))))]
+                 (truss/ex-info! "[encore/future-pool] Unexpected arg type (expected function)"
+                   {:arg (typed-val f)}))))]
 
        (fn fp
          ([ ] (.acquire s n) (.release s n) true)
@@ -5783,9 +5769,8 @@
                  s  (as-qname
                       (if (const-form? x)
                         x
-                        (throw
-                          (ex-info "[encore/get-env] Ids must be const forms"
-                            {:id x}))))
+                        (truss/ex-info! "[encore/get-env] Ids must be const forms"
+                          {:id x})))
 
                  without-platform                   (str/replace s pattern-platform "")
                  with-platform       (when platform (str/replace s pattern-platform (fn [[_ pre post]] (str pre (name platform) post))))
@@ -5863,14 +5848,13 @@
                           (case bool-str
                             ("true"  "1" "t" "T" "TRUE")  true
                             ("false" "0" "f" "F" "FALSE") false
-                            (throw
-                              (ex-info "[encore/get-env] Error parsing as boolean"
-                                {:bool-str bool-str
-                                 :source   source
-                                 :platform platform
-                                 :expected
-                                 {true  #{"true"  "1" "t" "T" "TRUE"}
-                                  false #{"false" "0" "f" "F" "FALSE"}}})))]
+                            (truss/ex-info! "[encore/get-env] Error parsing as boolean"
+                              {:bool-str bool-str
+                               :source   source
+                               :platform platform
+                               :expected
+                               {true  #{"true"  "1" "t" "T" "TRUE"}
+                                false #{"false" "0" "f" "F" "FALSE"}}}))]
                       [source parsed-bool]))
 
                   :edn
@@ -5879,22 +5863,19 @@
                           (try
                             (read-edn (get opts :read-opts) edn)
                             (catch Throwable t
-                              (throw
-                                (ex-info "[encore/get-env] Error reading as edn"
-                                  {:edn edn, :source source, :platform platform} t))))]
+                              (truss/ex-info! "[encore/get-env] Error reading as edn"
+                                {:edn edn, :source source, :platform platform} t)))]
 
                       (if-not (and (symbol? x) (get opts :eval-sym? (= platform :clj)))
                         [source x]
                         (if-let [sym (resolve-sym nil x true)]
                           [source (eval sym)] ; Eval sym at runtime
-                          (throw
-                            (ex-info (str "[encore/get-env] Failed to resolve symbol: " x)
-                              {:edn edn, :source source, :platform platform}))))))
+                          (truss/ex-info! (str "[encore/get-env] Failed to resolve symbol: " x)
+                            {:edn edn, :source source, :platform platform})))))
 
-                  (throw
-                    (ex-info "[encore/get-env] Unexpected `:as` option"
-                      {:given (typed-val as)
-                       :expected #{:str :edn :bool}})))
+                  (truss/ex-info! "[encore/get-env] Unexpected `:as` option"
+                    {:given (typed-val as)
+                     :expected #{:str :edn :bool}}))
 
                 (when (contains? opts :default)
                   [:default default]))]
@@ -5906,10 +5887,9 @@
                 :legacy              {:config value, :source source} ; Back compatibility
                 :map     (assoc-some {:value  value, :source source}  :platform platform)
                 :explain (assoc-some {:value  value, :source source} {:platform platform, :search (vinterleave-all to-search)})
-                (throw
-                  (ex-info "[encore/get-env] Unexpected `:return` option"
-                    {:given (typed-val return)
-                     :expected #{:value :map :explain}}))))))))
+                (truss/ex-info! "[encore/get-env] Unexpected `:return` option"
+                  {:given (typed-val return)
+                   :expected #{:value :map :explain}})))))))
 
      (defmacro get-env
        "Flexible cross-platform environmental value util.
@@ -6026,10 +6006,9 @@
 (defn ^:no-doc -valid-unstub-impl [x]
   (if #?(:clj (symbol? x) :cljs (fn? x))
     x
-    (throw
-      (ex-info "[encore/stubfn] Unexpected unstub implementation "
-        {:given    (typed-val x)
-         :expected #?(:clj 'symbol :cljs 'fn)}))))
+    (truss/ex-info! "[encore/stubfn] Unexpected unstub implementation "
+      {:given    (typed-val x)
+       :expected #?(:clj 'symbol :cljs 'fn)})))
 
 #?(:clj
    (defmacro defstub
@@ -6053,9 +6032,8 @@
           `(let [stubfn_#
                  (volatile!
                    (fn [~'& args#]
-                     (throw
-                       (ex-info (str "[encore/stubfn] Attempted to call uninitialized stub fn")
-                         {:stub '~stub-sym, :args args#}))))]
+                     (truss/ex-info! (str "[encore/stubfn] Attempted to call uninitialized stub fn")
+                       {:stub '~stub-sym, :args args#})))]
 
              (defn ~unstub-sym* [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#))) ; For Clj+s case
              (defn ~unstub-sym  [impl-fn#] (vreset! stubfn_# (-valid-unstub-impl impl-fn#)))
@@ -6741,9 +6719,8 @@
       (cond
         (or (nil? s) (= s "")) nil
         (not (string? s))
-        (throw
-          (ex-info "[encore/read-json] Unexpected arg type (expected string or nil)"
-            {:arg (typed-val s)}))
+        (truss/ex-info! "[encore/read-json] Unexpected arg type (expected string or nil)"
+          {:arg (typed-val s)})
 
         :else
         (if kw-keys?
@@ -7244,9 +7221,8 @@
                  (assoc m :config config)))
 
              (catch Throwable t
-               (throw
-                 (ex-info "[encore/load-edn-config] Error loading edn config"
-                   (assoc error-data :opts opts) t)))))))))
+               (truss/ex-info! "[encore/load-edn-config] Error loading edn config"
+                 (assoc error-data :opts opts) t))))))))
 
 (deprecated "2024-10 New sub API"
   (defn ^:no-doc get-subvec "Prefer `subvec`."
@@ -7345,9 +7321,8 @@
     ([pred x data]
      (if (truss/catching (pred x))
        x
-       (throw
-         (ex-info (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
-           (assoc-some {:pred pred, :arg (typed-val x)} :data data))))))
+       (truss/ex-info! (str "[encore/is!] " (str pred) " failed against arg: " (pr-str x))
+         (assoc-some {:pred pred, :arg (typed-val x)} :data data)))))
 
   #?(:clj
      (defmacro ^:no-doc check-some
