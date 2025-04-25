@@ -3135,9 +3135,10 @@
   type with at most `n-full` (default 1) unabbreviated namespace parts.
 
   Example:
-    (abbreviate-ns 0  :foo.bar/baz)   => :f.b/baz
-    (abbreviate-ns 1  'foo.bar/baz)   => 'f.bar/baz
-    (abbreviate-ns 2 \"foo.bar/baz\") => \"foo.bar/baz\""
+    (abbreviate-ns 2 :foo.bar/baz) => :foo.bar/baz
+    (abbreviate-ns 1 :foo.bar/baz) =>   :f.bar/baz
+    (abbreviate-ns 0 :foo.bar/baz) =>     :f.b/baz"
+
   ([       x] (abbreviate-ns 1 x))
   ([n-full x]
    (let [n-full (long (truss/have nat-int? n-full))
