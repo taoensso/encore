@@ -3305,10 +3305,17 @@
   (let [nf (name-filter "a(.*)")] [(nf "a") (nf "a.b") (nf "aX")]))
 
 ;;;; Printing
-;; - `pr/int` ; (if *print-dup* print-method print-dup), with `*print-readably?` true by default
-;; - `pr`     ; For `read-string`/`read-edn`, assumes default (true) `*print-readably*`
-;; - `print`  ; For human consumption, disables `*print-readably*`
-;; - `str`    ; Inconsistent, sometimes (but not always) affected by `*print-readably?`
+;;
+;; `print-method` ----- (Clj)  Affects `pr`, `print`
+;; `IPrintWithWriter` - (Cljs) Affects `pr`, `print`
+;; `print-dup` -------- (Clj)  Affects `pr`
+;;
+;; `*print-readably*` - (Clj)  Affects `print-method`, default true
+;; `*print-dup` ------- (Clj)  Affects `print-method`, default false
+;;
+;; `print` - Human consumption (console or logs, etc.)
+;; `pr` ---- Mixed use, often for serialization (Cljs: default, Clj: with `*print-dup*`)
+;; `str` --- Mixed use, often delegates to `pr-str`
 
 (comment (for [x ["s" {:k "s"}], f [pr-str print-str str]] (f x))) ; ("\"s\"" "s" "s" "{:k \"s\"}" "{:k s}" "{:k \"s\"}")
 
@@ -3478,7 +3485,7 @@
 
 #?(:clj
    (defmacro ^:no-doc def-print-impl
-     "Private, don't use."
+     "Private, don't use. Clj/s: affects `pr`, `print`, etc."
      [[sym type] form]
      (if (:ns &env)
        `(extend-protocol ~'IPrintWithWriter ~type (~'-pr-writer [~sym ~'__w ~'_] (~'-write ~'__w ~form)))
@@ -3489,7 +3496,7 @@
 
 #?(:clj
    (defmacro ^:no-doc def-print-dup
-     "Private, don't use."
+     "Private, don't use. Clj only: affects `pr`."
      [[sym type] form]
      `(defmethod print-dup ~type
         [~(with-meta sym  {:tag type})
