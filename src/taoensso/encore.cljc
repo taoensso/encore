@@ -423,7 +423,8 @@
 #?(:clj
    (defmacro def*
      "Like `core/def` but supports attrs map."
-     {:style/indent 1}
+     {:arglists     '([sym doc-string? attr-map? init-expr])
+      :style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        `(def ~sym ~@body))))
@@ -433,7 +434,8 @@
 #?(:clj
    (defmacro defonce
      "Like `core/defonce` but supports docstring and attrs map."
-     {:style/indent 1}
+     {:arglists     '([sym doc-string? attr-map? init-expr])
+      :style/indent 1}
      [sym & args]
      (let [[sym body] (name-with-attrs sym args)]
        (if (:ns &env)
