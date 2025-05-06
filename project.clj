@@ -62,10 +62,10 @@
     :dependencies
     [[org.clojure/test.check "1.1.1"]
      [org.clojure/core.async "1.8.741"]
-     [thheller/shadow-cljs   "3.0.4"]
+     #_[thheller/shadow-cljs "3.0.4"]
      [nrepl                  "1.3.1"]
      [cider/cider-nrepl      "0.55.7"]
-     [com.google.javascript/closure-compiler-unshaded "v20250407"]]
+     #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
     :plugins
     [[lein-pprint    "1.3.2"]
