@@ -850,6 +850,11 @@
   Transform fns provides a flexible way to modify and/or filter signals by
   arbitrary signal data/content conditions (return nil to skip handling).
 
+  Call and handler filters are ADDITIVE, so handlers can be MORE but not LESS
+  restrictive than call filters allow. This makes sense: call filters decide
+  if a signal can be created. Handler filters decide if a particular handler
+  is allowed to handle a created signal.
+
   Config:
 
     To set call filters (1a, 1b):
@@ -982,6 +987,9 @@ improve these docs!"
     `:ns-filter`   - Namespace filter as in `set-ns-filter!`
     `:id-filter`   - Id        filter as in `set-id-filter!`   (when relevant)
     `:min-level`   - Minimum   level  as in `set-min-level!`
+
+     ^^ Recall that all handler filters are ADDITIVE: handlers can be MORE
+     (but not LESS) restrictive than call filters allow!
 
     `:when-fn` (default nil => always allow)
       Optional NULLARY (fn allow? []) that must return truthy for handler to be
