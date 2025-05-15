@@ -1011,7 +1011,7 @@ improve these docs!"
       Optional transform (fn [signal]) => ?modified-signal to apply before
       handling signal. When transform returns nil, skips handler.
 
-      Compose multiple transform fns together with `comp-some`.
+      Compose multiple transform fns together with `comp-xfn`.
 
     `:error-fn` - (fn [{:keys [handler-id signal error]}]) to call on handler error.
     `:backp-fn` - (fn [{:keys [handler-id             ]}]) to call on handler back-pressure.
