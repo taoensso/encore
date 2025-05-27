@@ -1798,7 +1798,7 @@
                    (let [sf taoensso.encore-tests.required-ns/*rt-call-filter*]
                      (if sf (sf :my-sig-kind __ns :my-sig-id :info) true))
                    (> 1 0)
-                   (taoensso.encore.signals/call-limited!? 1234 [[1 1000]]))})
+                   (if (taoensso.encore.signals/call-limited!? 1234 [[1 1000]]) false true))})
            "With rich filtering")])])])
 
 ;;; Misc

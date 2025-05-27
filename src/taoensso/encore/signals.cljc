@@ -432,8 +432,8 @@
                        rl-form ; Nb last (increments count)
                        (when-let [spec-form (get opts :limit)]
                          (if-let [by-form   (get opts :limit-by)]
-                           `(call-limited!? ~callsite-id ~spec-form ~by-form)
-                           `(call-limited!? ~callsite-id ~spec-form)))]
+                           `(if (call-limited!? ~callsite-id ~spec-form ~by-form) false true)
+                           `(if (call-limited!? ~callsite-id ~spec-form)          false true)))]
 
                    `(enc/and? ~@(filter some? [sample-form sf-form when-form rl-form]))))]
 
