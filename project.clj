@@ -18,7 +18,7 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
-              :dependencies [[org.clojure/clojurescript "1.12.38"]
+              :dependencies [[org.clojure/clojurescript "1.12.42"]
                              [org.clojure/clojure       "1.11.4"]]}
    :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
