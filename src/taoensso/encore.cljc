@@ -447,11 +447,12 @@
      "Like `case` but test expressions are evaluated for their compile-time value."
      {:style/indent 1}
      [expr & clauses]
-     (let [default (when   (odd? (count clauses)) (last clauses))
-           clauses (if default (butlast clauses)        clauses)]
+     (let [default? (odd? (count clauses))
+           default  (when default? (last    clauses))
+           clauses  (if   default? (butlast clauses) clauses)]
        `(case ~expr
           ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
-          ~(when default default)))))
+          ~(when default? default)))))
 
 #?(:clj
    (defmacro doto-cond
