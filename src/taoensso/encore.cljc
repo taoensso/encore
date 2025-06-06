@@ -3950,9 +3950,8 @@
 
   (defn reset-val!? ; Keys: 1 (optimized)
     "Like `reset-in!?` but optimized for single-key case."
-    [atom_ k new-val]
-    (let [v0 (reset-val! atom_ k sentinel new-val)]
-      (not= v0 new-val))))
+    ([atom_ k           new-val] (let [v0 (reset-val! atom_ k sentinel  new-val)] (not= v0 new-val)))
+    ([atom_ k not-found new-val] (let [v0 (reset-val! atom_ k not-found new-val)] (not= v0 new-val)))))
 
 (comment
   (reset-in!? (atom :a) :b)
