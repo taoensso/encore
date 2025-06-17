@@ -18,9 +18,9 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
-              :dependencies [[org.clojure/clojurescript "1.12.38"] ; v1.12.42+ needs JVM 21+
+              :dependencies [[org.clojure/clojurescript "1.12.42"]
                              [org.clojure/clojure       "1.11.4"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.0"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.1"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
 
@@ -62,9 +62,9 @@
     :dependencies
     [[org.clojure/test.check "1.1.1"]
      [org.clojure/core.async "1.8.741"]
-     #_[thheller/shadow-cljs "3.0.4"]
+     [thheller/shadow-cljs   "3.1.7"]
      [nrepl                  "1.3.1"]
-     [cider/cider-nrepl      "0.55.7"]
+     [cider/cider-nrepl      "0.56.0"]
      #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
     :plugins
