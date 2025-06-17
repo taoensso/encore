@@ -24,7 +24,8 @@ TODO Clojars above, or
 - `YYYY-MM-DD` `vX.Y.Z` (dev): [release info](../../releases/tag/vTODO)
 - `YYYY-MM-DD` `vX.Y.Z` (stable): [release info](../../releases/tag/vTODO)
 
-[![Main tests][Main tests SVG]][Main tests URL]
+[![Clj tests][Clj tests SVG]][Clj tests URL]
+[![Cljs tests][Cljs tests SVG]][Cljs tests URL]
 [![Graal tests][Graal tests SVG]][Graal tests URL]
 
 See [here][GitHub releases] for earlier releases.
@@ -75,7 +76,9 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/TODO.svg
 [Clojars URL]: https://clojars.org/com.taoensso/TODO
 
-[Main tests SVG]:  https://github.com/taoensso/TODO/actions/workflows/main-tests.yml/badge.svg
-[Main tests URL]:  https://github.com/taoensso/TODO/actions/workflows/main-tests.yml
+[Clj tests SVG]:  https://github.com/taoensso/TODO/actions/workflows/clj-tests.yml/badge.svg
+[Clj tests URL]:  https://github.com/taoensso/TODO/actions/workflows/clj-tests.yml
+[Cljs tests SVG]:  https://github.com/taoensso/TODO/actions/workflows/cljs-tests.yml/badge.svg
+[Cljs tests URL]:  https://github.com/taoensso/TODO/actions/workflows/cljs-tests.yml
 [Graal tests SVG]: https://github.com/taoensso/TODO/actions/workflows/graal-tests.yml/badge.svg
 [Graal tests URL]: https://github.com/taoensso/TODO/actions/workflows/graal-tests.yml
