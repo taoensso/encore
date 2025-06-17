@@ -280,7 +280,7 @@
          c1 ; Implicit else
          (case c1
            (true :else :default :always :then) c2                          ; Avoid unnecessary (if <truthy> ...)
-           (false nil)                            `(-cond ~throw? ~@more)  ; Avoid unnecessary (if <falsey> ...)
+           (false nil)                             `(-cond ~throw? ~@more) ; Avoid unnecessary (if <falsey> ...)
            :do               `(do           ~c2     (-cond ~throw? ~@more))
            :let              `(let          ~c2     (-cond ~throw? ~@more))
 
@@ -384,7 +384,7 @@
    (defmacro binding*
      "For Clj: faster version of `core/binding`.
      For Cljs: identical to `core/binding`.
-     Can interfere with deep-walking macros."
+     Can interfere with some deep-walking macros."
      {:style/indent 1}
      [bindings & body]
      (if (:ns &env)
@@ -1078,41 +1078,54 @@
            (defn run-kvs! [proc  kvs] (reduce-kvs #(proc %2 %3) nil  kvs) nil)
   #?(:cljs (defn run-obj! [proc  obj] (reduce-obj #(proc %2 %3) nil  obj) nil)))
 
-(do ; Faster variants using reduce/transduce
-  (let [rf (fn [pred] (fn [_acc in] (when-let [p (pred in)] (reduced p))))]
-    (defn rsome
-      ([      pred coll] (reduce                      (rf pred)  nil coll))
-      ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
+(let [rf (fn [pred] (fn [_acc in] (when-let [p (pred in)] (reduced p))))]
+  (defn rsome
+    "Returns nil, or first truthy (pred x) for x in coll.
+    Like `core/some` but faster and supports transducers."
+    ([      pred coll] (reduce                      (rf pred)  nil coll))
+    ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [_acc  k v]  (when-let [p (pred k v)] (reduced p))))
-        tf (fn [pred] (fn [_acc [k v]] (when-let [p (pred k v)] (reduced p))))]
-    (defn rsome-kv
-        ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
-      #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
+(let [rf (fn [pred] (fn [_acc  k v]  (when-let [p (pred k v)] (reduced p))))
+      tf (fn [pred] (fn [_acc [k v]] (when-let [p (pred k v)] (reduced p))))]
+  (defn rsome-kv
+    "Returns nil, or first truthy (pred k v) for kv in associative coll.
+    Like `core/some` but faster and takes kvs."
+      ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
+    #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [_acc in] (when (pred in) (reduced in))))]
-    (defn rfirst
-      ([      pred coll] (reduce                      (rf pred)  nil coll))
-      ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
+(let [rf (fn [pred] (fn [_acc in] (when (pred in) (reduced in))))]
+  (defn rfirst
+    "Returns nil, or first x in coll with truthy (pred x)."
+    ([      pred coll] (reduce                      (rf pred)  nil coll))
+    ([xform pred coll] (transduce xform (completing (rf pred)) nil coll))))
 
-  (let [rf (fn [pred] (fn [_acc  k v]  (when (pred k v) (reduced [k v]))))
-        tf (fn [pred] (fn [_acc [k v]] (when (pred k v) (reduced [k v]))))]
-    (defn rfirst-kv
-        ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
-      #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
+(let [entry
+      #?(:clj  (fn [k v] (clojure.lang.MapEntry/create k v))
+         :cljs (fn [k v]              (MapEntry.       k v nil)))
 
-  (let [rf (fn [pred] (fn [_acc in] (if (pred in) true (reduced false))))]
-    (defn revery?
-      #?(:cljs {:tag 'boolean})
-      ([      pred coll] (reduce                      (rf pred)  true coll))
-      ([xform pred coll] (transduce xform (completing (rf pred)) true coll))))
+      rf (fn [pred] (fn [_acc  k v]  (when (pred k v) (reduced (entry k v)))))
+      tf (fn [pred] (fn [_acc [k v]] (when (pred k v) (reduced (entry k v)))))]
 
-  (let [rf (fn [pred] (fn [_acc  k v]  (if (pred k v) true (reduced false))))
-        tf (fn [pred] (fn [_acc [k v]] (if (pred k v) true (reduced false))))]
-    (defn revery-kv?
-      #?(:cljs {:tag 'boolean})
-        ([      pred coll] (reduce-kv                   (rf pred)  true coll))
-      #_([xform pred coll] (transduce xform (completing (tf pred)) true coll)))))
+  (defn rfirst-kv
+    "Returns nil, or first [k v] entry in associative coll with truthy (pred k v)."
+      ([      pred coll] (reduce-kv                   (rf pred)  nil coll))
+    #_([xform pred coll] (transduce xform (completing (tf pred)) nil coll))))
+
+(let [rf (fn [pred] (fn [_acc in] (if (pred in) true (reduced false))))]
+  (defn revery?
+    "Returns true iff (pred x) is truthy for every x in coll.
+    Like `core/every?` but faster and supports transducers."
+    #?(:cljs {:tag 'boolean})
+    ([      pred coll] (reduce                      (rf pred)  true coll))
+    ([xform pred coll] (transduce xform (completing (rf pred)) true coll))))
+
+(let [rf (fn [pred] (fn [_acc  k v]  (if (pred k v) true (reduced false))))
+      tf (fn [pred] (fn [_acc [k v]] (if (pred k v) true (reduced false))))]
+  (defn revery-kv?
+    "Returns true iff (pred k v) is truthy for every kv in associative coll."
+    #?(:cljs {:tag 'boolean})
+      ([      pred coll] (reduce-kv                   (rf pred)  true coll))
+    #_([xform pred coll] (transduce xform (completing (tf pred)) true coll))))
 
 (comment
   (= (rfirst-kv (fn [k v] (number? v)) {:a :b :c 2}) [:c 2])
@@ -1365,7 +1378,7 @@
 
 (defn map-entry
   "Returns a `MapEntry` with given key and value."
-  {:inline #?(:clj (fn [k v] `(clojure.lang.MapEntry/create ~k ~v)) :default nil)}
+  #?(:clj {:inline (fn [k v] `(clojure.lang.MapEntry/create ~k ~v))})
   [k v]
   #?(:clj  (clojure.lang.MapEntry/create k v)
      :cljs              (MapEntry.       k v nil)))
@@ -3935,7 +3948,7 @@
     ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
 
   (defn reset-val! ; Optimized k1 case
-    "Like `reset-in!` but optimized for single-key case."
+    "Like `reset-in!` but optimized for single-key case. Returns <old-key-val>."
     ([atom_ k           val] (-reset-k1! return atom_ k nil       val))
     ([atom_ k not-found val] (-reset-k1! return atom_ k not-found val))))
 
@@ -3949,7 +3962,8 @@
     ([atom_ ks not-found val] (-reset-kn! return atom_ ks not-found val)))
 
   (defn reset-val!? ; Keys: 1 (optimized)
-    "Like `reset-in!?` but optimized for single-key case."
+    "Like `reset-in!?` but optimized for single-key case.
+    Returns true iff the atom's value changed."
     ([atom_ k           new-val] (let [v0 (reset-val! atom_ k sentinel  new-val)] (not= v0 new-val)))
     ([atom_ k not-found new-val] (let [v0 (reset-val! atom_ k not-found new-val)] (not= v0 new-val)))))
 
@@ -4114,7 +4128,8 @@
     ([atom_ ks not-found f] (-swap-kn! return atom_ ks not-found f)))
 
   (defn swap-val! ; Keys: 1 (optimized)
-    "Like `swap-in!` but optimized for single-key case:
+    "Like `swap-in!` but optimized for single-key case.
+    Returns <new-key-val> or <swapped-return-val>:
       (swap-val! (atom {:k 5}) :k inc) => 6
       (swap-val! (atom {:k 5}) :k
         (fn [old] (swapped (inc old) old))) => 5"
