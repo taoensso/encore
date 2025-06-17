@@ -2,7 +2,7 @@ name: Graal tests
 on: [push, pull_request]
 
 jobs:
-  test:
+  tests:
     strategy:
       matrix:
         java: ['17']
