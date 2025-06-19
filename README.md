@@ -26,7 +26,7 @@ Always use the **latest stable version** of Encore when possible.
 
 ## Funding
 
-You can [help support][sponsor] continued work on this project, thank you!! 🙏
+You can [help support][sponsor] continued work on this project and [others][my work], thank you!! 🙏
 
 ## License
 
@@ -42,10 +42,11 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
 [Peter Taoussanis]: https://www.taoensso.com
 [sponsor]:          https://www.taoensso.com/sponsor
+[my work]:          https://www.taoensso.com/clojure-libraries
 
 <!-- Project -->
 
-[cljdoc]: https://cljdoc.org/d/com.taoensso/encore/
+[cljdoc]: https://cljdoc.org/d/com.taoensso/encore/CURRENT/api/taoensso.encore
 
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/encore.svg
 [Clojars URL]: https://clojars.org/com.taoensso/encore

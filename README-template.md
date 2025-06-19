@@ -52,7 +52,7 @@ See for  intro and usage:
 
 ## Funding
 
-You can [help support][sponsor] continued work on this project, thank you!! 🙏
+You can [help support][sponsor] continued work on this project and [others][my work], thank you!! 🙏
 
 ## License
 
@@ -68,10 +68,11 @@ Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
 [Peter Taoussanis]: https://www.taoensso.com
 [sponsor]:          https://www.taoensso.com/sponsor
+[my work]:          https://www.taoensso.com/clojure-libraries
 
 <!-- Project -->
 
-[cljdoc]: https://cljdoc.org/d/com.taoensso/TODO/
+[cljdoc]: https://cljdoc.org/d/com.taoensso/TODO/CURRENT/api/taoensso.TODO
 
 [Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/TODO.svg
 [Clojars URL]: https://clojars.org/com.taoensso/TODO
