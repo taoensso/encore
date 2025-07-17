@@ -4358,7 +4358,8 @@
                        (== (rem tick gc-every) 0)
                        (>= (count (cache_)) (* 1.1 size)))
 
-                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
+                 (let [latch #?(:clj (CountDownLatch. 1) :default nil)
+                       udt-floor (- instant ttl-ms)]
 
                    (when (-cas!? latch_ nil latch)
                      ;; First prune ttl-expired stuff
@@ -4368,7 +4369,7 @@
                            (persistent!
                              (reduce-kv
                                (fn [acc k ^TickedCacheEntry e]
-                                 (if (> (- instant (.-udt e)) ttl-ms)
+                                 (if (< (.-udt e) udt-floor)
                                    (dissoc! acc k)
                                    acc))
                                (transient (or m {}))
