@@ -1548,11 +1548,18 @@
   ([m     m-kvs] (reduce-kv  reassoc-some               m    m-kvs))
   ([m k v & kvs] (reduce-kvs reassoc-some (reassoc-some m k v) kvs)))
 
+(defn reassoc-when
+  "Assocs each kv to given ?map if its value is truthy, otherwise dissocs it."
+  ([m k v      ] (if v (assoc m k v) (dissoc m k)))
+  ([m     m-kvs] (reduce-kv  reassoc-when               m    m-kvs))
+  ([m k v & kvs] (reduce-kvs reassoc-when (reassoc-when m k v) kvs)))
+
 (comment
   (assoc-some   {:a :A} {:a false :b :B}) ; => {:a false, :b :B}
   (assoc-when   {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
   (assoc-nx     {:a :A} {:a false :b :B}) ; => {:a :A, :b :B}
-  (reassoc-some {:a :A} {:a nil   :b :B}) ; => {:b :B}
+  (reassoc-some {:a :A} {:a false :b :B}) ; => {:a false, :b :B}
+  (reassoc-when {:a :A} {:a nil   :b :B}) ; => {:b :B}
   )
 
 (defn vnext          [v] (when (> (count v) 1) (core/subvec v 1)))
