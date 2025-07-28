@@ -1550,7 +1550,7 @@
 
 (defn reassoc-when
   "Assocs each kv to given ?map if its value is truthy, otherwise dissocs it."
-  ([m k v      ] (if-not v (assoc m k v) (dissoc m k)))
+  ([m k v      ] (if v (assoc m k v) (dissoc m k)))
   ([m     m-kvs] (reduce-kv  reassoc-when               m    m-kvs))
   ([m k v & kvs] (reduce-kvs reassoc-when (reassoc-when m k v) kvs)))
 
