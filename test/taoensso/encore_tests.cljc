@@ -13,12 +13,14 @@
    #?(:clj [taoensso.encore.bytes     :as bytes])
    [taoensso.encore.stats             :as stats]
    [taoensso.encore.signals           :as sigs]
+   [taoensso.encore.timers            :as timers]
    [taoensso.encore-tests.required-ns :as rns])
 
   #?(:cljs
      (:require-macros
       [taoensso.encore-tests :refer
-       [test-macro-alias test-if-cljs test-get-source resolve-sym]])))
+       [test-macro-alias test-if-cljs test-get-source resolve-sym
+        async-test]])))
 
 (comment
   (remove-ns      'taoensso.encore-tests)
@@ -1530,6 +1532,30 @@
      (dotimes [n 1e5] (ssb n))
      [(is (enc/submap? @@ssb {:n 100000 :min 0 :max 99999}))
       (is (enc/str-starts-with? (str ssb) "taoensso.encore.stats.SummaryStatsBuffered[{:n 0, :pending 0, :merged 9091}"))])])
+
+;;;; Timers
+
+(defmacro async-test [msecs bindings pre post]
+  (if-not (:ns &env)
+    `(let ~bindings [~@pre (do (Thread/sleep ~msecs) :sleep) ~@post])
+    `(cljs.test/async ~'done
+       (let ~bindings
+         ~@pre
+         (js/setTimeout (fn [] ~@post (~'done))
+           ~msecs)))))
+
+(deftest _timer-service
+  (async-test 500
+    [ts (timers/timer-service), c (enc/counter)]
+
+    [(is (fn?    (ts 100 (fn [] (c))))  "Schedule")
+     (is (true? ((ts 100 (fn [] (c))))) "Cancel")
+
+     (do (dotimes [_ 100] (ts :id1 100 (fn [] (c)))) :debounced)
+     (is (true? (timers/timer-pending? ts :id1)))
+     (is (true? (timers/timer-cancel   ts :id1)))]
+
+    [(is (= @c 1))]))
 
 ;;;;
 
