@@ -115,8 +115,8 @@
      (:require-macros
       [taoensso.encore :as enc-macros :refer
        [compile-if qb
-        if-let if-some if-not when when-not when-some when-let -cond cond cond!
-        and? or? def* defonce
+        if-let if-some if-not when when-not when-some when-let
+        -cond cond cond! cond-let and? or? def* defonce
         -cas!? now-udt* now-nano* min* max*
         name-with-attrs deprecated new-object defalias
         identical-kw? satisfies? satisfies! instance! use-transient?
@@ -344,6 +344,30 @@
    (defmacro cond!
      "Like `cond` but throws on non-match like `case` and `condp`."
      [& clauses] `(-cond true ~@clauses)))
+
+#?(:clj
+   (defmacro cond-let
+     "Repeatedly rebinds given `sym` for each truthy condition and
+     returns `sym`'s final value.
+
+     Like a cross between `as->` and `cond->`:
+       (cond-let [n 0]   ; sym and its init value
+         true    (inc n)
+         false   (* n 5)
+         (> n 0) (* n 2)) => 2"
+
+     [[sym init-val]       & clauses]
+     (when-not (even? (count clauses))
+       (truss/ex-info!
+         (str "[encore/cond-let] Needs even number of clauses: "
+           `(~'cond-let [~sym ~init-val] ~'...))))
+
+     (if (empty? clauses)
+       init-val
+       (let [steps (mapv (fn [[test step]] `(if ~test ~step ~sym)) (partition 2 clauses))]
+         `(let [~sym ~init-val
+                ~@(interleave (repeat sym) steps)]
+            ~sym)))))
 
 #?(:clj
    (defmacro compile-if

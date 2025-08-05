@@ -124,6 +124,13 @@
              :if-not      [d "d1", e false] c
              "default"))))])
 
+(deftest _cond-let
+  [(is (= 0 (enc/cond-let [n 0])))
+   (is (= 2 (enc/cond-let [n 0]
+              true    (inc n)
+              false   (* n 10)
+              (> n 0) (* n 2))))])
+
 ;;;; Submap/s
 
 (deftest _submap?
