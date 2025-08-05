@@ -297,8 +297,8 @@
            ;;; 3-clause cases
            (:if-let :if-some :if-not)
            (if (empty? more) ; Missing 3rd clause
-             (truss/ex-info! (str "[encore/cond] Missing 3rd clause after special keyword: " c1)
-               {:form `(cond ~c1 ~c2 '<missing>)})
+             (truss/ex-info!
+               (str "[encore/cond] Missing 3rd clause after special keyword: " `(~'cond ~c1 ~c2 ~'<missing>)))
 
              (let [[c3 & more] more]
                (case c1
@@ -310,8 +310,7 @@
            (if (keyword? c1)
              (if (str-starts-with? (name c1) "_")
                `(-cond ~throw? ~@more) ; Skip
-               (truss/ex-info! (str "[encore/cond] Unrecognized special keyword: " c1)
-                 {:form `(cond ~c1 ~c2)}))
+               (truss/ex-info! (str "[encore/cond] Unrecognized special keyword: " `(~'cond ~c1 ~c2))))
 
              (if (vector? c1) ; Undocumented, deprecated
                `(if-let ~c1 ~c2 (-cond ~throw? ~@more))
@@ -322,7 +321,7 @@
                  `(if          ~c1 ~c2 (-cond ~throw? ~@more)))))))
 
        (when throw?
-         `(truss/ex-info! "[encore/cond!] No matching clause" {})))))
+         `(truss/ex-info! "[encore/cond!] No matching clause")))))
 
 #?(:clj
    (defmacro cond
