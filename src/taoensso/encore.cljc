@@ -283,16 +283,17 @@
            (false nil)                             `(-cond ~throw? ~@more) ; Avoid unnecessary (if <falsey> ...)
            :do               `(do           ~c2     (-cond ~throw? ~@more))
            :let              `(let          ~c2     (-cond ~throw? ~@more))
-
            :binding          `(core/binding ~c2     (-cond ~throw? ~@more))
-           :with-redefs      `(with-redefs  ~c2     (-cond ~throw? ~@more))  ; Undocumented
-           :wrap              (concat        c2   [`(-cond ~throw? ~@more)]) ; '', arb wrap like (binding [] ...), etc.
+           :with-redefs      `(with-redefs  ~c2     (-cond ~throw? ~@more))
+           (:when :when-let) `(when         ~c2     (-cond ~throw? ~@more))
+           :when-not         `(when-not     ~c2     (-cond ~throw? ~@more))
+           :when-some        `(when-some    ~c2     (-cond ~throw? ~@more))
+           :return-when      `(if-let   [x# ~c2] x# (-cond ~throw? ~@more))
+           :return-some      `(if-some  [x# ~c2] x# (-cond ~throw? ~@more))
 
-           :return-when      `(if-let   [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
-           :return-some      `(if-some  [x# ~c2] x# (-cond ~throw? ~@more))  ; ''
-           (:when :when-let) `(when         ~c2     (-cond ~throw? ~@more))  ; ''
-           :when-not         `(when-not     ~c2     (-cond ~throw? ~@more))  ; ''
-           :when-some        `(when-some    ~c2     (-cond ~throw? ~@more))  ; ''
+           ;;; Support arbitrary wrapping
+           (:wrap->> :wrap)  `(->> (-cond ~throw? ~@more) ~c2)
+           (:wrap->)         `(->  (-cond ~throw? ~@more) ~c2)
 
            ;;; 3-clause cases
            (:if-let :if-some :if-not)
@@ -304,15 +305,14 @@
                (case c1
                  :if-let  `(if-let  ~c2 ~c3 (-cond ~throw? ~@more))
                  :if-some `(if-some ~c2 ~c3 (-cond ~throw? ~@more))
-                 :if-not  `(if-not  ~c2 ~c3 (-cond ~throw? ~@more)) ; Undocumented
-                 )))
+                 :if-not  `(if-not  ~c2 ~c3 (-cond ~throw? ~@more)))))
 
            (if (keyword? c1)
              (if (str-starts-with? (name c1) "_")
                `(-cond ~throw? ~@more) ; Skip
                (truss/ex-info! (str "[encore/cond] Unrecognized special keyword: " `(~'cond ~c1 ~c2))))
 
-             (if (vector? c1) ; Undocumented, deprecated
+             (if (vector? c1) ; Deprecated
                `(if-let ~c1 ~c2 (-cond ~throw? ~@more))
 
                ;; Experimental, assumes `not` = `core/not`:

@@ -104,6 +104,14 @@
    (is (= "dv2"     (enc/cond :binding       [*dynamic-var* "dv1"],  :binding       [*dynamic-var* "dv2"],  :else *dynamic-var*)))
    (is (= "dv2"     (enc/cond :wrap (binding [*dynamic-var* "dv1"]), :wrap (binding [*dynamic-var* "dv2"]), :else *dynamic-var*)))
 
+   (is (= :error (enc/cond :wrap-> (truss/try* (catch :all t :error)) :let [x (truss/ex-info! "Whoops!")])))
+   (is (= [1 2]
+         (enc/cond
+           :wrap->> (let [x 1])
+           :wrap->> (let [y (inc x)])
+           :wrap->  (truss/catching)
+           :then [x y])))
+
    (is (=
          {:r "r3", :a "a1", :b "b2", :dv "dv2"}
          (let [r_ (atom nil)]
@@ -115,6 +123,7 @@
              :when-let    [c *dynamic-var*]
              :wrap        (binding [*dynamic-var* "dv2"] (reset! r_ "r2"))
              :wrap        (do  (reset! r_ "r3"))
+             :wrap->      (truss/catching)
              :wrap        (let [b "b2"])
              :let         [c {:r @r_, :a a, :b b, :dv *dynamic-var*}]
              :do          (reset! r_ nil)
