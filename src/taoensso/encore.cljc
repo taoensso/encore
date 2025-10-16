@@ -300,7 +300,7 @@
            (:wrap->)         `(->  (-cond ~throw? ~@more) ~c2)
 
            ;;; 3-clause cases
-           (:if-let :if-some :if-not)
+           (:if-let :if-some :if-not :do-when :do-when-let :do-when-not :do-when-some)
            (if (empty? more) ; Missing 3rd clause
              (truss/ex-info!
                (str "[encore/cond] Missing 3rd clause after special keyword: " `(~'cond ~c1 ~c2 ~'<missing>)))
@@ -309,7 +309,12 @@
                (case c1
                  :if-let  `(if-let  ~c2 ~c3 (-cond ~throw? ~@more))
                  :if-some `(if-some ~c2 ~c3 (-cond ~throw? ~@more))
-                 :if-not  `(if-not  ~c2 ~c3 (-cond ~throw? ~@more)))))
+                 :if-not  `(if-not  ~c2 ~c3 (-cond ~throw? ~@more))
+
+                 ;; Experimental
+                 (:do-when :do-when-let) `(do (when      ~c2 ~c3) (-cond ~throw? ~@more))
+                 :do-when-not            `(do (when-not  ~c2 ~c3) (-cond ~throw? ~@more))
+                 :do-when-some           `(do (when-some ~c2 ~c3) (-cond ~throw? ~@more)))))
 
            (if (keyword? c1)
              (if (str-starts-with? (name c1) "_")
