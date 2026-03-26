@@ -1009,6 +1009,24 @@
            (let [ff (enc/format-inst-fn {:formatter java.time.format.DateTimeFormatter/ISO_LOCAL_DATE_TIME})]
              (is (= (ff ref-inst) "2024-06-09T21:15:20.17") "Depends on auto zone")))]))])
 
+#?(:clj
+   (deftest _interrupts
+     (testing "Preserve interrupt flag"
+       (let [t (Thread.
+                (fn []
+                  (enc/deref-safely (promise) 1000 "foo")))]
+         (.start t)
+
+         ;; Wait for thread to block on wait for promise. Then interrupt the thread
+         (loop []
+           (if (= (.getState t) Thread$State/TIMED_WAITING)
+             (.interrupt t)
+             (recur)))
+
+         (.join t)
+
+         (is (true? (.isInterrupted t)))))))
+
 ;;;; Futures
 
 #?(:clj
