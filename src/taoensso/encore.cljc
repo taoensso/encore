@@ -5711,13 +5711,16 @@
 ;;;; Host info
 
 #?(:clj
-   (defmacro ^:private deref-safely
-     "Like normal blocking deref, but returns `timeout-val` when calling
+   (defmacro ^:no-doc deref-safely
+     "Private, don't use.
+     Like normal blocking deref, but returns `timeout-val` when calling
      thread is interrupted while blocking."
      [p timeout-msecs timeout-val]
      `(try
         (deref ~p ~timeout-msecs ~timeout-val)
-        (catch InterruptedException _# ~timeout-val))))
+        (catch InterruptedException _#
+          (.interrupt (Thread/currentThread))
+          ~timeout-val))))
 
 #?(:clj
    (defn ^:no-doc refreshing-cache
