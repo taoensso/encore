@@ -12,7 +12,7 @@
   :java-source-paths ["src/java"]
   :javac-options     ["--release" "8" "-g"] ; Support Java >= v8
   :dependencies
-  [[org.clojure/tools.reader "1.5.2"]
+  [[org.clojure/tools.reader "1.6.0"]
    [com.taoensso/truss       "2.3.0"]]
 
   :profiles
@@ -20,7 +20,7 @@
    :provided {:injections   [(println "Lein profile: :provided")]
               :dependencies [[org.clojure/clojurescript "1.12.134"]
                              [org.clojure/clojure       "1.11.4"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.3"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.4"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
 
@@ -60,10 +60,10 @@
      *unchecked-math*     false #_:warn-on-boxed}
 
     :dependencies
-    [[org.clojure/test.check "1.1.2"]
-     [org.clojure/core.async "1.8.741"]
-     [thheller/shadow-cljs   "3.3.3"]
-     [nrepl                  "1.5.1"]
+    [[org.clojure/test.check "1.1.3"]
+     [org.clojure/core.async "1.9.865"]
+     [thheller/shadow-cljs   "3.3.8"]
+     [nrepl                  "1.6.0"]
      [cider/cider-nrepl      "0.58.0"]
      #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
