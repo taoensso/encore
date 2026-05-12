@@ -640,13 +640,17 @@
 
             link?       (get    alias-attrs :link? true)
             alias-attrs (dissoc alias-attrs :link?)
-
             final-attrs
-            (select-keys (core/merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
-              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
+            (->
+              (core/merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
+              (dissoc :name :declared #_:line #_:column #_:file #_:ns)
+              (assoc :alias-src
+                `'~(symbol
+                     (str (ns-name (:ns   src-var-info)))
+                     (name         (:name src-var-info)))))
 
-            alias-sym   (with-meta alias-sym final-attrs)
-            alias-body  (or alias-body (if cljs? src-sym `@~src-var))]
+            alias-sym  (with-meta alias-sym final-attrs)
+            alias-body (or alias-body (if cljs? src-sym `@~src-var))]
 
         #_(spit "debug.txt" (str (if cljs? "cljs: " "clj:  ") src-sym ": " (meta alias-sym) "\n") :append true)
 
