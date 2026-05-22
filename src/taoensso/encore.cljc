@@ -4555,7 +4555,7 @@
 (deftype LimitEntry [^long n ^long udt0])
 (deftype LimitHits  [m worst-lid ^long worst-ms])
 
-(let [limit-spec (fn [n ms] (truss/have? pos-int? n ms) (LimitSpec. n ms))]
+(let [limit-spec (fn [n ms] (LimitSpec. (long (truss/have pos? n)) ms))]
   (defn- coerce-limit-spec [x]
     (cond
       (map?    x) (reduce-kv (fn [acc lid [n ms]] (assoc acc lid (limit-spec n ms))) {} x)
@@ -4563,8 +4563,8 @@
       (reduce
         (fn [acc [n ms ?lid]] ; ?lid for back compatibility
           (assoc acc
-            (or ?lid [n ms])
-            (limit-spec n ms)))
+            (or ?lid [(long n) ms])
+            (limit-spec     n  ms)))
         {} x)
 
       (truss/unexpected-arg! x
@@ -4572,7 +4572,7 @@
          :param    'rate-limiter-spec
          :expected '#{map vector}}))))
 
-(comment (qb 1e6 (coerce-limit-spec [[10 1000] [20 2000]]))) ; 229.91
+(comment (qb 1e6 (coerce-limit-spec [[1e4 1000] [20 2000]]))) ; 229.91
 
 (defn rate-limiter
   "Takes a spec of form
