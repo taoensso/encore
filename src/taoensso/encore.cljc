@@ -122,7 +122,7 @@
         identical-kw? satisfies? satisfies! instance! use-transient?
         with-default-print-opts typed-val]])))
 
-(def encore-version "See `assert-min-encore-version`" [3 160 1])
+(def encore-version "See `assert-min-encore-version`" [3 161 0])
 
 (declare println)
 
