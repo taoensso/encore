@@ -2226,10 +2226,10 @@
 
 (defn approx==
   #?(:cljs {:tag 'boolean})
-  ([      x y] (< (Math/abs (- (double x) (double y))) 0.001))
-  ([signf x y] (< (Math/abs (- (double x) (double y))) (double signf))))
+  ([      x y] (<= (Math/abs (- (double x) (double y))) 0.001))
+  ([signf x y] (<= (Math/abs (- (double x) (double y))) (double signf))))
 
-(comment (qb 1e5 (approx== 0.01 3.141592 (/ 22 7))))
+(comment (qb 1e5 (approx== 0.01 3.141592 (/ 22 7))) (approx== 0.0 1.0 1.0))
 
 (defn clamp               [nmin nmax n]                                                             (if (< n nmin) nmin (if (> n nmax) nmax n))) ; Reflects
 (defn clamp-int   ^long   [nmin nmax n] (let [nmin (long   nmin), nmax (long   nmax), n (long   n)] (if (< n nmin) nmin (if (> n nmax) nmax n))))
