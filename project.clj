@@ -18,9 +18,9 @@
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:injections   [(println "Lein profile: :provided")]
-              :dependencies [[org.clojure/clojurescript "1.12.134"]
-                             [org.clojure/clojure       "1.11.4"]]}
-   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.4"]]}
+              :dependencies [[org.clojure/clojurescript "1.12.145"]
+                             [org.clojure/clojure       "1.12.5"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure       "1.12.5"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
 
@@ -32,7 +32,7 @@
     :uberjar-name "graal-tests.jar"
     :dependencies
     [[org.clojure/clojure                  "1.11.4"]
-     [com.github.clj-easy/graal-build-time "1.0.5"]]}
+     [com.github.clj-easy/graal-build-time "1.0.6"]]}
 
    :test
    {:injections [(println "Lein profile: :test")]
@@ -62,14 +62,14 @@
     :dependencies
     [[org.clojure/test.check "1.1.3"]
      [org.clojure/core.async "1.9.865"]
-     [thheller/shadow-cljs   "3.3.8"]
-     [nrepl                  "1.6.0"]
-     [cider/cider-nrepl      "0.58.0"]
+     [thheller/shadow-cljs   "3.4.11"]
+     [nrepl                  "1.7.0"]
+     [cider/cider-nrepl      "0.59.0"]
      #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
     :plugins
     [[lein-pprint    "1.3.2"]
-     [lein-ancient   "0.7.0"]
+     [lein-ancient   "1.0.0"]
      [lein-cljsbuild "1.1.8"]]}}
 
   :cljsbuild
