@@ -1194,16 +1194,14 @@
        init)))
 
 (defn reduce-zip
-  "Reduces given sequential xs and ys as pairs (e.g. key-val pairs).
-  Calls (rf acc x y) for each sequential pair.
+  "Reduces given seqable xs and ys as pairs (e.g. key-val pairs).
+  Calls (rf acc x y) for each pair.
 
-  Useful, among other things, as a more flexible version of `zipmap`."
+  Useful as a more flexible version of `zipmap`, etc."
   ([rf init xs ys          ] (reduce-zip rf init xs ys ::skip))
   ([rf init xs ys not-found] ; Experimental, undocumented
-   (if (and
-         (vector? xs)
-         (vector? ys))
-
+   (cond
+     (and (vector? xs) (vector? ys)) ; Fast vector path
      (let [n
            (if (identical-kw? not-found ::skip)
              (min (count xs) (count ys))
@@ -1216,24 +1214,33 @@
              (get ys idx not-found)))
          init n))
 
-     (let [not-found? (not (identical-kw? not-found ::skip))]
-       (loop [acc init
-              xs (seq xs)
-              ys (seq ys)]
+     (identical-kw? not-found ::skip) ; Seq path without `not-found`
+     (loop [acc init, xs (seq xs), ys (seq ys)]
+       (if-not (and xs ys)
+         acc
+         (let [result (rf acc (first xs) (first ys))]
+           (if (reduced? result)
+             (deref result)
+             (recur result (next xs) (next ys))))))
 
-         (if (if not-found? (or xs ys) (and xs ys))
+     :else ; Seq path with `not-found`
+     (loop [acc init, xs (seq xs), ys (seq ys)]
+       (if-not (or xs ys)
+         acc
+         (let [result
+               (rf acc
+                 (if xs (first xs) not-found)
+                 (if ys (first ys) not-found))]
 
-           (let [result
-                 (rf acc
-                   (first (or xs [not-found]))
-                   (first (or ys [not-found])))]
+           (if (reduced? result)
+             (deref result)
+             (recur result (next xs) (next ys)))))))))
 
-             (if (reduced? result)
-               (deref result)
-               (recur result
-                 (next xs)
-                 (next ys))))
-           acc))))))
+(defn map2v "Optimised (mapv f c1 c2)" [f c1 c2] (persistent! (reduce-zip (fn [v x1 x2] (conj! v (f x1 x2))) (transient []) c1 c2)))
+(comment
+  (let [c (vec (range 128))] (qb 1e4 (mapv + c c) (map2v + c c))) ; [177.5  45.34]
+  (let [c      (range 128)]  (qb 1e4 (mapv + c c) (map2v + c c))) ; [174.64 59.51]
+  )
 
 (do
   (deftype ^:no-doc Tup2 [x y  ])
