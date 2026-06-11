@@ -1153,6 +1153,23 @@
 
 ;;;;
 
+(defn- test-limit-spec [x]
+  (when-let [coerced (#'enc/coerce-limit-spec x)]
+    (enc/map-vals (fn [limit-spec] [(.-n limit-spec) (.-ms limit-spec)])
+      coerced)))
+
+(deftest  _rate-limit-specs
+  [(is (= (test-limit-spec {"a" [1.0 2] "b" [3 4]}) {"a"   [1 2], "b"   [3 4]}))
+   (is (= (test-limit-spec [    [1.0 2]     [3 4]]) {[1 2] [1 2], [3 4] [3 4]}))
+   (is (= (test-limit-spec #{"1/2s" "3/4m" "5/6h" "7/8d" "9/10w"})
+         {"1/2s"  [1 (enc/msecs :secs   2)]
+          "3/4m"  [3 (enc/msecs :mins   4)]
+          "5/6h"  [5 (enc/msecs :hours  6)]
+          "7/8d"  [7 (enc/msecs :days   8)]
+          "9/10w" [9 (enc/msecs :weeks 10)]}))
+
+   (is (truss/throws? :ex-info {:entry "3/4M"} (test-limit-spec #{"1/2s" "3/4M"})))])
+
 (deftest _rate-limiters
   (let [c1  (enc/counter)
         c2  (enc/counter)

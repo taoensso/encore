@@ -4562,11 +4562,16 @@
 (deftype LimitEntry [^long n ^long udt0])
 (deftype LimitHits  [m worst-lid ^long worst-ms])
 
-(let [limit-spec (fn [n ms] (LimitSpec. (long (truss/have pos? n)) ms))]
+(let [limit-spec
+      (fn [n ms]
+        (LimitSpec.
+          (long (truss/have pos? n)) ; 0 would anyway allow through first call
+          (long (truss/have pos? ms))))]
+
   (defn- coerce-limit-spec [x]
     (cond
-      (map?    x) (reduce-kv (fn [acc lid [n ms]] (assoc acc lid (limit-spec n ms))) {} x)
-      (vector? x)
+      (map?    x) (reduce-kv (fn [m:acc lid [n ms]] (assoc m:acc lid (limit-spec n ms))) {} x)
+      (vector? x) ; [[n ms] ...]
       (reduce
         (fn [acc [n ms ?lid]] ; ?lid for back compatibility
           (assoc acc
@@ -4574,18 +4579,34 @@
             (limit-spec     n  ms)))
         {} x)
 
+      (set? x) ; #{"1/2d"}, etc.
+      (reduce
+        (fn [m:acc s]
+          (if-not [[_ n1 n2 unit] (re-matches #"(\d+)/(\d+)(s|m|h|d|w)" s)]
+            (truss/ex-info! "[encore/rate-limiter] Bad entry in #{} spec" {:entry s, :spec x})
+            (assoc m:acc s
+              (limit-spec
+                (do  (as-int n1))
+                (->> (as-int n2)
+                  (ms
+                    (case unit
+                      "s" :secs "m" :mins "h" :hours "d" :days "w" :weeks
+                      (truss/unexpected-arg! unit {:expected #{"s" "m" "h" "d" "w"}}))))))))
+        {} x)
+
       (truss/unexpected-arg! x
         {:context  `rate-limiter
          :param    'rate-limiter-spec
-         :expected '#{map vector}}))))
+         :expected '#{map vector set}}))))
 
 (comment (qb 1e6 (coerce-limit-spec [[1e4 1000] [20 2000]]))) ; 229.91
 
 (defn rate-limiter
-  "Takes a spec of form
-    [           [<n-max-reqs> <msecs-window>] ...] or ; Unnamed limits
-    {<limit-id> [<n-max-reqs> <msecs-window>]}        ;   Named limits
-  and returns stateful (fn a-rate-limiter [] [req-id] [command req-id]).
+  "Takes limit spec and returns stateful (fn a-rate-limiter [] [req-id] [command req-id]).
+  Spec forms:
+    * Vec: [   [n msecs-window] ...] ; e.g.           [[2 (enc/msecs :hours 1)] ...]
+    * Map: {id [n msecs-window] ...} ; e.g.  {\"2/1h\" [2 (enc/msecs :hours 1)] ...}
+    * Set: #{\"<n>/<n><s|m|h|d>\"}   ; e.g. #{\"2/1h\" ...}
 
   Call the returned limiter fn with a request id (any Clojure value!) to
   enforce limits independently for each id.
