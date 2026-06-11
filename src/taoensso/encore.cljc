@@ -4732,6 +4732,7 @@
                (reqs_ #(dissoc % req-id)))
              nil)
 
+           nil                      (f1 req-id +1 false)
            (:rl/peek :limiter/peek) (f1 req-id +1 true)
 
            (if (number? cmd) ; Undocumented arb delta
