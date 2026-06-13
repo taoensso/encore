@@ -6402,6 +6402,15 @@
 
 #?(:cljs (def ^:private default-xhr-pool_ (delay (goog.net.XhrIoPool.))))
 #?(:cljs
+   (def ^:private xhr-error-code->kw
+     "{goog.net.ErrorCode error-keyword}"
+     {goog.net.ErrorCode/EXCEPTION  :exception
+      goog.net.ErrorCode/HTTP_ERROR :http-error
+      goog.net.ErrorCode/ABORT      :abort
+      goog.net.ErrorCode/TIMEOUT    :timeout
+      goog.net.ErrorCode/NO_ERROR   nil}))
+
+#?(:cljs
    (defn ajax-call
      "Queues a lightweight Ajax call with Google Closure's `goog.net.XhrIo`
      and returns nil, or the resulting `goog.net.XhrIo` instance if one was
@@ -6416,6 +6425,7 @@
 
           :headers {\"Content-Type\" \"text/plain\"}             ; Request headers
           :params  {:username \"Rich Hickey\" :type \"Awesome\"} ; Request params
+          :body    nil ; Optional explicit body ∈ #{string js/FormData js/ArrayBuffer ...}
 
           :timeout-ms        10000       ; Request timeout in msecs
           :with-credentials? false       ; Enable if using CORS
@@ -6427,8 +6437,9 @@
          (fn callback [resp-map]
            (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
              ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
-             ;; ?error  ; ∈ #{nil <http-error-status-code> <exception> :timeout
-                              :abort :http-error :exception :xhr-pool-depleted :bad-edn}
+             ;; ?error  ; ∈ #{nil <http-error-status-code> <thrown-error> :bad-edn
+                              :exception :http-error :abort :timeout :unknown
+                              :xhr-pool-depleted :xhr-pool-timeout}
              (js/alert (str \"Ajax response: \" resp-map)))))"
      [url
       {:keys [method body params headers timeout-ms resp-type with-credentials?
@@ -6554,13 +6565,8 @@
                            error  error  ; :bad-edn, etc.
                            status status ; Http error status code (e.g. 404)
                            :else
-                           (case (.getLastErrorCode xhr)
-                             goog.net.ErrorCode/NO_ERROR   nil
-                             goog.net.ErrorCode/EXCEPTION  :exception
-                             goog.net.ErrorCode/HTTP_ERROR :http-error
-                             goog.net.ErrorCode/ABORT      :abort
-                             goog.net.ErrorCode/TIMEOUT    :timeout
-                             (do                           :unknown))))}))))
+                           (get xhr-error-code->kw (.getLastErrorCode xhr)
+                             :unknown)))}))))
 
               (.setTimeoutInterval xhr (or timeout-ms 0)) ; 0 => no timeout
               (.setWithCredentials xhr (boolean with-credentials?))
