@@ -2118,6 +2118,17 @@
 
 ;;;;
 
+(deftest       merge-url-with-query-string_
+  [(is (= (enc/merge-url-with-query-string "/"        nil)                     "/"))
+   (is (= (enc/merge-url-with-query-string "/?a=a1"   nil)                     "/?a=a1"))
+   (is (= (enc/merge-url-with-query-string "/?a=a1#h" nil)                     "/?a=a1#h"))
+   (is (= (enc/merge-url-with-query-string "/?a=a1#h" {"a" "a2"})              "/?a=a2#h"))
+   (is (= (enc/merge-url-with-query-string "/?a=a1#h" {"b" "b1" "c" 5 :d nil}) "/?b=b1&c=5&a=a1#h"))
+   (is (= (enc/merge-url-with-query-string "/?a=a1"   {:a nil})                "/")   "Removes pre-existing param")
+   (is (= (enc/merge-url-with-query-string "/?a=a1#h" {:a nil})                "/#h") "Removes param, keeps fragment")])
+
+;;;;
+
 #?(:cljs
    (defmethod test/report [:cljs.test/default :end-run-tests] [m]
      (when-not (test/successful? m)

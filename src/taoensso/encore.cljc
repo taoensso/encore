@@ -6770,21 +6770,21 @@
       (format-query-string)
       (parse-query-params)))
 
-(defn merge-url-with-query-string [url m]
-  (let [[url ?qstr] (str/split (str url) #"\?" 2)
-        qmap  (merge
-                (when ?qstr (map-keys keyword (parse-query-params ?qstr)))
-                (map-keys keyword m))
-        ?qstr (as-?nblank (format-query-string qmap))]
-    (if-let [qstr ?qstr] (str url "?" qstr) url)))
+(defn merge-url-with-query-string
+  "Returns given URL string with `param` map's entries merged into URL's query string.
+  Keys may be keywords or strings; nil vals remove params. Retains any #fragment."
+  [url params]
+  (if (empty? params)
+    url
+    (let [[_ base query frag] (re-matches #"([^?#]*)(?:\?([^#]*))?(?:#([\s\S]*))?" (str url))
+          params
+          (merge
+            (when query (map-keys keyword (parse-query-params query)))
+            (do         (map-keys keyword params)))]
 
-(comment
-  (merge-url-with-query-string "/" nil)
-  (merge-url-with-query-string "/?foo=bar" nil)
-  (merge-url-with-query-string "/?foo=bar" {"foo" "overwrite"})
-  (merge-url-with-query-string "/?foo=bar" {:foo  "overwrite"})
-  (merge-url-with-query-string "/?foo=bar" {:foo  nil})
-  (merge-url-with-query-string "/?foo=bar" {:foo2 "bar2" :num 5 :foo nil}))
+      (if-let [query (as-?nblank (format-query-string params))]
+        (str base "?" query (when frag (str "#" frag)))
+        (str base           (when frag (str "#" frag)))))))
 
 #?(:cljs
    (defn ^string pr-json
