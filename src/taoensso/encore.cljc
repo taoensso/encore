@@ -5946,7 +5946,7 @@
                   :bool
                   (when-let [[source bool-str] match]
                     (let [parsed-bool
-                          (case bool-str
+                          (case (str/trim bool-str)
                             ("true"  "1" "t" "T" "TRUE")  true
                             ("false" "0" "f" "F" "FALSE") false
                             (truss/ex-info! "[encore/get-env] Error parsing as boolean"

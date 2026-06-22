@@ -890,6 +890,9 @@
    (do     (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]}) #?(:clj "val:var-cljc/clj", :cljs "val:var-cljc/cljs"))))
    #?(:clj (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests.unrequired-ns/var-cljc"]}) "foreign.val:var-cljc/clj") "Auto require"))
 
+   (is (true?  (enc/get-env {:as :bool ,:debug/match [:debug/source " true  \n"]})))
+   (is (false? (enc/get-env {:as :bool ,:debug/match [:debug/source " false \n"]})))
+
    (testing "Needs :jvm-opts"
      [(is (enc/submap? (enc/get-env {:return :explain} :taoensso.encore-tests.config.str)
             {:value "foo"
