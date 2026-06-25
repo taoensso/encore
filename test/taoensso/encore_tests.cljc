@@ -53,11 +53,19 @@
   (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs      {:doc "doc4"}})
   (enc/defaliases {:src test-fn :alias test-fn-alias-5              :doc "doc5"})
 
-  #?(:clj  (defmacro ^:private test-macro [x] `~x))
+  #?(:clj  (defmacro            ^:private test-macro [x] `~x))
   #?(:clj  (enc/defalias test-macro-alias test-macro))
-  #?(:clj  (def ^{:doc "doc.link1"} test-link-src "val.link1"))
+
+  #?(:clj  (def ^{:doc "doc.link1" :bar "bar.link1"} test-link-src "val.link1"))
   #?(:clj  (enc/defalias ^{:foo "foo.link"} test-link-alias test-link-src))
-  #?(:cljs (enc/defalias ^{:foo "foo.cljs"} var-cljs-alias var-cljs)))
+  #?(:cljs (enc/defalias ^{:foo "foo.cljs"} var-cljs-alias var-cljs))
+
+  #?(:clj  (enc/defalias test-link-alias-keys test-link-src {:alias/keys [:doc :bar]}))
+  #?(:clj  (def test-alias-key-set #{:doc :bar}))
+  #?(:clj  (enc/defalias test-link-alias-var-keys test-link-src {:alias/keys test-alias-key-set}))
+
+  #?(:clj  (def ^:dynamic *test-dynamic-src* "val.dynamic"))
+  #?(:clj  (enc/defalias ^:dynamic *test-dynamic-alias* *test-dynamic-src*)))
 
 (deftest _defalias
   [(is (= (test-fn-alias-1  :x) :x))
@@ -72,10 +80,18 @@
    #?(:clj
       (do
         (alter-var-root #'test-link-src (constantly "val.link2"))
-        (reset-meta!    #'test-link-src (assoc (meta #'test-link-src) :doc "doc.link2"))
+        (reset-meta!    #'test-link-src (assoc (meta #'test-link-src) :doc "doc.link2" :bar "bar.link2"))
         (Thread/sleep 200)
         (is (= test-link-alias "val.link2"))
-        (is (truss/submap? (meta #'test-link-alias) {:doc "doc.link2" :foo "foo.link"}))))
+        (is (truss/submap?  (meta #'test-link-alias) {:doc "doc.link2" :foo "foo.link"}))
+        (is (not (contains? (meta #'test-link-alias) :bar)))
+        (is (truss/submap?  (meta #'test-link-alias-keys) {:doc "doc.link2" :bar "bar.link2"}))
+        (is (not (contains? (meta #'test-link-alias-keys) :alias/keys)))
+        (is (truss/submap?  (meta #'test-link-alias-var-keys) {:doc "doc.link2" :bar "bar.link2"}))
+        (is (not (contains? (meta #'test-link-alias-var-keys) :alias/keys)))
+
+        (is (= *test-dynamic-alias* "val.dynamic"))
+        (is (:dynamic (meta #'*test-dynamic-alias*)))))
 
    #?(:cljs (is (= var-cljs-alias                            "val.cljs")))
    #?(:cljs (is (truss/submap? (meta #'var-cljs)       {:doc "doc.cljs"})))
