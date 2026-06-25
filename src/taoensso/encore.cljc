@@ -633,6 +633,10 @@
             src-var-info (var-info &env src-sym)
             {src-var, :var src-attrs :meta} src-var-info
 
+            src-attrs
+            (select-keys (core/merge src-attrs (meta src-sym))
+              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
+
             alias-attrs
             (if (string? alias-attrs) ; Back compatibility
               {:doc      alias-attrs}
@@ -641,9 +645,8 @@
             link?       (get    alias-attrs :link? true)
             alias-attrs (dissoc alias-attrs :link?)
 
-            final-attrs
-            (select-keys (core/merge src-attrs (meta src-sym) (meta alias-sym) alias-attrs)
-              [:doc :no-doc :arglists :private :macro :added :deprecated :inline :tag :redef])
+            alias-attrs (core/merge (meta alias-sym) alias-attrs)
+            final-attrs (core/merge       src-attrs  alias-attrs)
 
             alias-sym   (with-meta alias-sym final-attrs)
             alias-body  (or alias-body (if cljs? src-sym `@~src-var))]

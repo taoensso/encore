@@ -39,37 +39,47 @@
 
 (do
   (defn var-fn [n] (* (long n) (long n)))
-  #?(:clj  (def ^{:doc "doc:var-clj"}  var-clj  "val:var-clj"))
-  #?(:cljs (def ^{:doc "doc:var-cljs"} var-cljs "val:var-cljs"))
-  (do      (def ^{:doc "doc:var-cljc"} var-cljc
-             #?(:clj  "val:var-cljc/clj"
-                :cljs "val:var-cljc/cljs"))))
+  #?(:clj  (def ^{:doc "doc.clj"}  var-clj  "val.clj"))
+  #?(:cljs (def ^{:doc "doc.cljs"} var-cljs "val.cljs"))
+  (do      (def ^{:doc "doc.cljc"} var-cljc
+             #?(:clj  "val.cljc.clj"
+                :cljs "val.cljc.cljs"))))
 
 (do
-  (defn- test-fn "doc a" [x] x)
-  (enc/defalias                        test-fn-alias-1 test-fn)
-  (enc/defalias        ^{:doc "doc b"} test-fn-alias-2 test-fn)
-  (enc/defalias        ^{:doc "doc b"} test-fn-alias-3 test-fn {:doc "doc c"})
-  (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs  {:doc "doc d"}})
-  (enc/defaliases {:src test-fn :alias test-fn-alias-5          :doc "doc e"})
+  (defn- test-fn "doc1" [x] x)
+  (enc/defalias                            test-fn-alias-1 test-fn)
+  (enc/defalias ^{:doc "doc2" :foo "foo1"} test-fn-alias-2 test-fn)
+  (enc/defalias ^{:doc "doc2" :foo "foo1"} test-fn-alias-3 test-fn {:doc "doc3" :foo "foo2"})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-4 :attrs      {:doc "doc4"}})
+  (enc/defaliases {:src test-fn :alias test-fn-alias-5              :doc "doc5"})
 
   #?(:clj  (defmacro ^:private test-macro [x] `~x))
   #?(:clj  (enc/defalias test-macro-alias test-macro))
-  #?(:cljs (enc/defalias var-cljs-alias var-cljs)))
+  #?(:clj  (def ^{:doc "doc.link1"} test-link-src "val.link1"))
+  #?(:clj  (enc/defalias ^{:foo "foo.link"} test-link-alias test-link-src))
+  #?(:cljs (enc/defalias ^{:foo "foo.cljs"} var-cljs-alias var-cljs)))
 
 (deftest _defalias
   [(is (= (test-fn-alias-1  :x) :x))
    (is (= (test-macro-alias :x) :x))
 
-   (is (= (:doc (meta #'test-fn-alias-1)) "doc a"))
-   (is (= (:doc (meta #'test-fn-alias-2)) "doc b"))
-   (is (= (:doc (meta #'test-fn-alias-3)) "doc c"))
-   (is (= (:doc (meta #'test-fn-alias-4)) "doc d"))
-   (is (= (:doc (meta #'test-fn-alias-5)) "doc e"))
+   (is (truss/submap? (meta #'test-fn-alias-1) {:doc "doc1"}))
+   (is (truss/submap? (meta #'test-fn-alias-2) {:doc "doc2" :foo "foo1"}))
+   (is (truss/submap? (meta #'test-fn-alias-3) {:doc "doc3" :foo "foo2"}))
+   (is (truss/submap? (meta #'test-fn-alias-4) {:doc "doc4"}))
+   (is (truss/submap? (meta #'test-fn-alias-5) {:doc "doc5"}))
 
-   #?(:cljs (is (= var-cljs-alias                 "val:var-cljs")))
-   #?(:cljs (is (= (:doc (meta #'var-cljs))       "doc:var-cljs")))
-   #?(:cljs (is (= (:doc (meta #'var-cljs-alias)) "doc:var-cljs")))])
+   #?(:clj
+      (do
+        (alter-var-root #'test-link-src (constantly "val.link2"))
+        (reset-meta!    #'test-link-src (assoc (meta #'test-link-src) :doc "doc.link2"))
+        (Thread/sleep 200)
+        (is (= test-link-alias "val.link2"))
+        (is (truss/submap? (meta #'test-link-alias) {:doc "doc.link2" :foo "foo.link"}))))
+
+   #?(:cljs (is (= var-cljs-alias                            "val.cljs")))
+   #?(:cljs (is (truss/submap? (meta #'var-cljs)       {:doc "doc.cljs"})))
+   #?(:cljs (is (truss/submap? (meta #'var-cljs-alias) {:doc "doc.cljs" :foo "foo.cljs"})))])
 
 (defprotocol       IMyProtocol (my-protocol-fn [_]))
 (deftype MyType [] IMyProtocol (my-protocol-fn [_]))
@@ -887,8 +897,8 @@
 
    #_(do   (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "(fn [x] (* (long x) (long x)))"]}) 5) 25) "Will eval inline fn"))
    (do     (is (= ((enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-fn"]})   5) 25) "Will eval symbol"))
-   (do     (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]}) #?(:clj "val:var-cljc/clj", :cljs "val:var-cljc/cljs"))))
-   #?(:clj (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests.unrequired-ns/var-cljc"]}) "foreign.val:var-cljc/clj") "Auto require"))
+   (do     (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests/var-cljc"]}) #?(:clj "val.cljc.clj", :cljs "val.cljc.cljs"))))
+   #?(:clj (is (=  (enc/get-env {:as :edn, :debug/match [:debug/source "taoensso.encore-tests.unrequired-ns/var-cljc"]}) "foreign.val.cljc.clj") "Auto require"))
 
    (is (true?  (enc/get-env {:as :bool ,:debug/match [:debug/source " true  \n"]})))
    (is (false? (enc/get-env {:as :bool ,:debug/match [:debug/source " false \n"]})))

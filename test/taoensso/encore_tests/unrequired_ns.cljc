@@ -3,6 +3,6 @@
   involving foreign namespaces. NOT required by tests ns.")
 
 (def ^:dummy-meta var-cljc
-           "foreign.doc:var-cljc"
-  #?(:clj  "foreign.val:var-cljc/clj"
-     :cljs "foreign.val:var-cljc/cljs"))
+           "foreign.doc.cljc"
+  #?(:clj  "foreign.val.cljc.clj"
+     :cljs "foreign.val.cljc.cljs"))
