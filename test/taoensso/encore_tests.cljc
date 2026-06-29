@@ -91,7 +91,9 @@
         (is (not (contains? (meta #'test-link-alias-var-keys) :alias/keys)))
 
         (is (= *test-dynamic-alias* "val.dynamic"))
-        (is (:dynamic (meta #'*test-dynamic-alias*)))))
+        (is (:dynamic (meta #'*test-dynamic-alias*)))
+        (is (truss/throws? :ex-info "Dynamic var alias"
+              (macroexpand '(taoensso.encore/defalias test-dynamic-alias-bad taoensso.encore-tests/*test-dynamic-src*))))))
 
    #?(:cljs (is (= var-cljs-alias                            "val.cljs")))
    #?(:cljs (is (truss/submap? (meta #'var-cljs)       {:doc "doc.cljs"})))

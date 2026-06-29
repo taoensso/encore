@@ -670,6 +670,10 @@
           (truss/ex-info! (str "[encore/defalias] Source var not found: " src)
             {:src src, :ns (str *ns*)}))
 
+        (when (and (:dynamic src-attrs*) (not (:dynamic dst-attrs*)))
+          (truss/ex-info! (str "[encore/defalias] Dynamic var alias must have ^:dynamic meta")
+            {:src src, :ns (str *ns*)}))
+
         (if cljs?
           `(def ~dst-sym ~dst-body)
           `(do
