@@ -5071,29 +5071,89 @@
 
   (defn reduce-top
     "Reduces the top `n` items from `coll` of N items.
-    Clj impln is O(N.logn) vs O(N.logN) for (take n (sort-by ...))."
+    Clj impln is O(N.logn) vs O(N.logN) for (take n (sort-by ...)).
+    Items with equal sort keys have unspecified order."
     ([n           rf init coll] (reduce-top n identity compare rf init coll))
     ([n keyfn     rf init coll] (reduce-top n keyfn    compare rf init coll))
     ([n keyfn cmp rf init coll]
-     (let [coll-size (count coll)
-           n (long (min coll-size (long n)))]
+     (cond
+       :let [n (long n)]
+       (not (pos? n)) init
 
-       (if-not (pos? n)
-         init
-         #?(:cljs ; Naive implementation
-            (transduce (take n) (completing rf) init
-              (sort-by keyfn cmp coll))
+       #?(:cljs true, :clj false)
+       (transduce (take n) (completing rf) init
+         (sort-by keyfn cmp coll)) ; Naive implementation
 
-            :clj
-            (let [pq
-                  (java.util.PriorityQueue. coll-size
-                    (fn [x y] (cmp
-                                (keyfn (sentinel->nil x))
-                                (keyfn (sentinel->nil y)))))]
+       :let
+       [identity-keyfn?  (identical?  keyfn identity)
+        uncached-keyfn?  (or identity-keyfn? (keyword? keyfn))]
 
-              (run! #(.offer pq (nil->sentinel %)) coll)
-              (reduce-n (fn [acc _] (rf acc (sentinel->nil (.poll pq))))
-                init n))))))))
+       uncached-keyfn? ; Avoid key caching overhead for common cheap-key paths
+       (let [item-cmp
+             (if identity-keyfn?
+               (fn [x y]
+                 (cmp
+                   (sentinel->nil x)
+                   (sentinel->nil y)))
+
+               (fn [x y]
+                 (cmp
+                   (keyfn (sentinel->nil x))
+                   (keyfn (sentinel->nil y)))))
+
+             ;; Keep only the best `n` items, with the current worst at root.
+             pq (java.util.PriorityQueue. (fn [x y] (item-cmp y x)))]
+
+         (run!
+           (fn [in]
+             (let [x (nil->sentinel in)]
+               (if (< (.size pq) n)
+                 (.offer pq x)
+                 (when (neg? (item-cmp x (.peek pq)))
+                   (.poll  pq)
+                   (.offer pq x)))))
+           coll)
+
+         (let [n-pq (.size pq)
+               a    (object-array n-pq)]
+           (dotimes [idx n-pq] (aset a idx (.poll pq)))
+           (reduce-n
+             (fn [acc idx] (rf acc (sentinel->nil (aget a (- n-pq idx 1)))))
+             init n-pq)))
+
+       :else
+       (let [make-entry
+             (fn [k x]
+               (let [e (object-array 2)]
+                 (aset e 0 k)
+                 (aset e 1 x)
+                 e))
+
+             ;; Keep only the best `n` items, with the current worst at root.
+             pq (java.util.PriorityQueue. (fn [^objects x ^objects y] (cmp (aget y 0) (aget x 0))))]
+
+         (run!
+           (fn [in]
+             (let [k (keyfn         in)
+                   x (nil->sentinel in)]
+               (if (< (.size pq) n)
+                 (.offer pq (make-entry k x))
+                 (let [^objects worst (.peek pq)]
+                   (when (neg? (cmp k (aget worst 0)))
+                     (let [^objects e (.poll pq)]
+                       (aset e 0 k)
+                       (aset e 1 x)
+                       (.offer pq e)))))))
+           coll)
+
+         (let [n-pq (.size pq)
+               a    (object-array n-pq)]
+           (dotimes [idx n-pq] (aset a idx (.poll pq)))
+           (reduce-n
+             (fn [acc idx]
+               (let [^objects e (aget a (- n-pq idx 1))]
+                 (rf acc (sentinel->nil (aget e 1)))))
+             init n-pq)))))))
 
 (defn top-into
   "Conjoins the top `n` items from `coll` into `to` using `reduce-top`."

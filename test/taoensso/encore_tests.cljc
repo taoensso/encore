@@ -1442,6 +1442,23 @@
         (is (= (enc/read-json      (enc/pr-json x)) {"k" ["k" "s" 1 1.2 {"s" "a/b"} "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10" "2024-03-28T09:43:52.283Z"]}))
         (is (= (enc/read-json true (enc/pr-json x)) {:k  ["k" "s" 1 1.2 {:s  "a/b"} "Hi ಬಾ ಇಲ್ಲಿ ಸಂಭವಿಸ 10" "2024-03-28T09:43:52.283Z"]}))])))
 
+;;;; Sorting
+
+(deftest _top
+  [(is (= (enc/top 0  [3 1 2]) []))
+   (is (= (enc/top -1 [3 1 2]) []))
+   (is (= (enc/top 10 [3 1 2]) [1 2 3]))
+   (is (= (enc/top 3 [2 3 5 4 88 nil]) [nil 2 3]))
+   (is (= (enc/top 3 identity enc/rcompare [2 3 5 4 88 nil]) [88 5 4]))
+   (is (= (enc/top 2 second              [[1 40] [2 10] [3 30] [4 20]]) [[2 10] [4 20]]))
+   (is (= (enc/top 2 second enc/rcompare [[1 40] [2 10] [3 30] [4 20]]) [[1 40] [3 30]]))
+   (is (= (enc/top 2 :v [{:id 1 :v 40} {:id 2 :v 10} {:id 3 :v 30} {:id 4 :v 20}]) [{:id 2 :v 10} {:id 4 :v 20}]))
+   (is (= (enc/reduce-top 3 + 0 [5 4 3 2 1]) 6))
+   #?(:clj
+      (let [c (enc/counter)]
+        [(is (= (enc/top 5 (fn [x] (c) x) (range 100)) [0 1 2 3 4]))
+         (is (= @c 100))]))])
+
 ;;;; Stats
 
 (deftest sorted-nums
