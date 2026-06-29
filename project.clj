@@ -64,7 +64,7 @@
      [org.clojure/core.async "1.9.865"]
      [thheller/shadow-cljs   "3.4.11"]
      [nrepl                  "1.7.0"]
-     [cider/cider-nrepl      "0.59.0"]
+     [cider/cider-nrepl      "0.61.0"]
      #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
     :plugins
