@@ -1043,7 +1043,13 @@
 #?(:clj
    (deftest _interrupts
      (testing "Preserve interrupt flag"
-       (let [t (Thread. (fn [] (enc/deref-safely (promise) 1000 "timeout-val")))]
+       ;; Java 8 doesn't retain interrupt status after thread termination,
+       ;; so capture it from inside the worker while it's still running.
+       (let [result_ (promise)
+             t (Thread.
+                 (fn []
+                   (let [result (enc/deref-safely (promise) 1000 "timeout-val")]
+                     (deliver result_ [result (.isInterrupted (Thread/currentThread))]))))]
          (.start t)
 
          ;; Wait for thread to block on wait for promise, then interrupt
@@ -1054,7 +1060,7 @@
 
          (.join t)
 
-         (is (true? (.isInterrupted t)))))))
+         (is (= ["timeout-val" true] (deref result_ 1000 nil)))))))
 
 ;;;; Futures
 
