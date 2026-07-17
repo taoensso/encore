@@ -13,7 +13,7 @@
   :javac-options ["-source" "8" "-target" "8"] ; Support Java >= v8
   :dependencies
   [[org.clojure/tools.reader "1.6.0"]
-   [com.taoensso/truss       "2.3.0"]]
+   [com.taoensso/truss       "2.4.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
