@@ -27,7 +27,7 @@ You can [help support][sponsor] continued work on this project and [others][my w
 
 ## License
 
-Copyright &copy; 2014-2025 [Peter Taoussanis][].  
+Copyright &copy; 2014-2026 [Peter Taoussanis][].  
 Licensed under [EPL 1.0](LICENSE.txt) (same as Clojure).
 
 <!-- Common -->
