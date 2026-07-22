@@ -17,7 +17,7 @@
 
 #?(:clj
    (deftype ^:no-doc TimerTask  [^long udt-due f]
-     Comparable (compareTo [_ task] (- udt-due (.-udt-due ^TimerTask task)))
+     Comparable (compareTo [_ task] (Long/compare udt-due (.-udt-due ^TimerTask task)))
      clojure.lang.IFn (invoke [_] (f))))
 
 #?(:clj

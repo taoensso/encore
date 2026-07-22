@@ -1858,6 +1858,16 @@
 
 ;;;; Timers
 
+#?(:clj
+   (deftest _timer-task-ordering
+     (let [task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE (fn []))
+           task-0   (taoensso.encore.timers.TimerTask. 0              (fn []))
+           task-max (taoensso.encore.timers.TimerTask. Long/MAX_VALUE (fn []))]
+       [(is (neg?  (compare task-min task-0)))
+        (is (neg?  (compare task-0 task-max)))
+        (is (zero? (compare task-0 task-0)))
+        (is (pos?  (compare task-max task-min)))])))
+
 (defmacro async-test [msecs bindings pre post]
   (if-not (:ns &env)
     `(let ~bindings [~@pre (do (Thread/sleep ~msecs) :sleep) ~@post])
