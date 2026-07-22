@@ -41,30 +41,37 @@
             runner
             (fn runner []
               (loop [stop-on-empty? false]
-                (if-let [^TimerTask task (locking pq (.peek pq))]
-                  (let [wait (- (.-udt-due task) (System/currentTimeMillis))]
-                    (if (pos? wait)
+                (let [[action task]
                       (locking pq
-                        (try
-                          (.wait pq wait)
-                          (catch InterruptedException _)))
-                      (do
-                        (locking pq
-                          (if (identical? task (.peek pq))
-                            (.poll   pq)
-                            (.remove pq task) ; O(n) but n usu ~1
-                            ))
-                        (task)))
-                    (recur false))
+                        (if-let [^TimerTask task (.peek pq)]
+                          (let [wait (- (.-udt-due task) (System/currentTimeMillis))]
+                            (if (pos? wait)
+                              (do
+                                (try
+                                  (.wait pq wait)
+                                  (catch InterruptedException _))
+                                [:wait nil])
+                              (do (.poll pq) [:call task])))
 
-                  (if stop-on-empty?
-                    (.compareAndSet running? true false)
+                          (if stop-on-empty?
+                            (do
+                              (.compareAndSet running? true false)
+                              [:stop nil])
+                            (do
+                              (try
+                                (.wait pq (long inactivity-timeout-msecs))
+                                (catch InterruptedException _))
+                              [:wait-empty nil]))))]
+
+                  (case action
+                    :call
                     (do
-                      (locking pq
-                        (try
-                          (.wait pq (long inactivity-timeout-msecs))
-                          (catch InterruptedException _)))
-                      (recur true))))))]
+                      (task)
+                      (recur false))
+
+                    :wait (recur false)
+                    :wait-empty (recur true)
+                    :stop nil))))]
 
         (reify
           Object (toString [this] (str "encore.timer-service[" @this " " (Integer/toHexString (System/identityHashCode this)) "]"))
@@ -94,13 +101,12 @@
                                (if (.putIfAbsent by-id id     ab:done?) (recur) nil)))]
                   (.set ab:old-done? true)))
 
-              (when-not         (.get running?)
-                (when (.compareAndSet running? false true)
-                  (thread-fn runner)))
-
-              (locking   pq
-                (.offer  pq task)
-                (.notify pq))
+              (let [start-runner?
+                    (locking pq
+                      (.offer  pq task)
+                      (.notify pq)
+                      (.compareAndSet running? false true))]
+                (when start-runner? (thread-fn runner)))
 
               (fn cancel-task
                 ([       ] (cancel-task false))

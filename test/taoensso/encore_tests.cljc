@@ -1868,6 +1868,29 @@
         (is (zero? (compare task-0 task-0)))
         (is (pos?  (compare task-max task-min)))])))
 
+#?(:clj
+   (deftest _timer-service-restarts
+     (let [ts (timers/timer-service {:inactivity-timeout-msecs 1})]
+       (dotimes [_ 32]
+         (let [result_ (promise)]
+           (ts 0 #(deliver result_ :called))
+           (is (= (deref result_ 1000 ::timeout) :called))
+           (is
+             (loop [attempt 0]
+               (cond
+                 (not (:running? @ts)) true
+                 (< attempt 1000) (do (Thread/sleep 1) (recur (inc attempt)))
+                 :else false))))))))
+
+#?(:clj
+   (deftest _timer-service-wakeup
+     (let [ts     (timers/timer-service)
+           early_ (promise)]
+       (ts 2000 (fn [] :late))
+       (Thread/sleep 20)
+       (ts 0 #(deliver early_ :called))
+       (is (= (deref early_ 1000 ::timeout) :called)))))
+
 (defmacro async-test [msecs bindings pre post]
   (if-not (:ns &env)
     `(let ~bindings [~@pre (do (Thread/sleep ~msecs) :sleep) ~@post])
