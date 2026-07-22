@@ -1240,6 +1240,13 @@
    (is (true?  ((enc/name-filter ["foo" "b*"])  :bar)))
    (is (false? ((enc/name-filter ["foo" "b*"])  :qux)))
 
+   (let [nf (enc/name-filter [#"^foo\d+$" "bar"])]
+     [(is (true?  (nf "foo42")))
+      (is (true?  (nf :bar)))
+      (is (false? (nf "foo")))])
+
+   (is (true? ((enc/name-filter #{#"^foo$" "bar"}) "foo")))
+
    (is (false? ((enc/name-filter {:allow :any :disallow :any}) "foo")))
    (is (true?  ((enc/name-filter {:allow :any :disallow  #{}}) "foo")))
 

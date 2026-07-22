@@ -3276,10 +3276,13 @@
             (let [[fixed-strs re-patterns]
                   (reduce
                     (fn [[fixed-strs re-patterns] spec]
-                      (let [spec (if (ns? spec) (str spec) (as-qname spec))]
-                        (if-let [re-pattern (if (re-pattern? spec) spec (wild-str->?re-pattern spec))]
-                          [      fixed-strs       (conj re-patterns re-pattern)]
-                          [(conj fixed-strs spec)       re-patterns            ])))
+                      (let [spec (if (ns? spec) (str spec) spec)]
+                        (if (re-pattern? spec)
+                          [fixed-strs (conj re-patterns spec)]
+                          (let [spec (as-qname spec)]
+                            (if-let [re-pattern (wild-str->?re-pattern spec)]
+                              [      fixed-strs       (conj re-patterns re-pattern)]
+                              [(conj fixed-strs spec)       re-patterns            ])))))
                     [#{} []]
                     spec)
 
