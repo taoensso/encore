@@ -6503,6 +6503,7 @@
         })))
 
 #?(:cljs (def ^:private default-xhr-pool_ (delay (goog.net.XhrIoPool.))))
+(declare merge-url-with-query-string)
 #?(:cljs
    (def ^:private xhr-error-code->kw
      "{goog.net.ErrorCode error-keyword}"
@@ -6568,12 +6569,12 @@
                   (cond
                     (case method (:get :head :options :trace "GET" "HEAD" "OPTIONS" "TRACE") true false)
                     (when-not (empty? params)
-                      {:url+ (str url "?" (gquery-data/createFromMap (clj->js params)))})
+                      {:url+ (merge-url-with-query-string url params)})
 
                     body ; Given explicit body ∈ #{string js/FormData js/ArrayBuffer ...}
                     (if (empty? params)
                       {:content body}
-                      {:content body, :url+ (str url "?" (gquery-data/createFromMap (clj->js params)))})
+                      {:content body, :url+ (merge-url-with-query-string url params)})
 
                     (and (exists? js/FormData) (instance? js/FormData params)) ; Back compatability
                     {:content params}
@@ -6817,7 +6818,7 @@
   [s & [encoding]]
   (when s
     #?(:clj  (java.net.URLDecoder/decode (str s) (str (or encoding "UTF-8")))
-       :cljs (js/decodeURIComponent      (str s)))))
+       :cljs (js/decodeURIComponent (str/replace (str s) "+" " ")))))
 
 (comment
   (url-decode (url-encode "Hello there"))
@@ -6850,15 +6851,18 @@
 (defn parse-query-params
   "Based on `ring-codec/form-decode`."
   [s & [keywordize? encoding]]
-  (if (or (str/blank? s) (not (str-contains? s "=")))
+  (if (str/blank? s)
     {}
     (let [;; For convenience (e.g. JavaScript win-loc :search)
           s (if (str-starts-with? s "?") (subs s 1) s)
           m (reduce
               (fn [m param]
-                (if-let [[k v] (str/split param #"=" 2)]
-                  (assoc-conj m (url-decode k encoding) (url-decode v encoding))
-                  m))
+                (if (= param "")
+                  m
+                  (let [[k v] (str/split param #"=" 2)]
+                    (assoc-conj m
+                      (url-decode k encoding)
+                      (if (nil? v) "" (url-decode v encoding))))))
               {}
               (str/split s #"&"))]
       (if-not keywordize?

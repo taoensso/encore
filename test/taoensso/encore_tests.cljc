@@ -2303,8 +2303,16 @@
 
 ;;;;
 
+(deftest _query-params
+  [(is (= (enc/url-decode "hello+there") "hello there"))
+   (is (= (enc/parse-query-params "?flag&q=hello+there")
+          {"flag" "", "q" "hello there"}))])
+
 (deftest       merge-url-with-query-string_
   [(is (= (enc/merge-url-with-query-string "/"        nil)                     "/"))
+   (is (= (enc/merge-url-with-query-string "/#h"      {:a "a1"})              "/?a=a1#h"))
+   (is (= (enc/merge-url-with-query-string "/?flag#h" {:a "a1"})              "/?flag=&a=a1#h"))
+   (is (= (enc/merge-url-with-query-string "/?q=hello+there" {:a "a1"})       "/?q=hello%20there&a=a1"))
    (is (= (enc/merge-url-with-query-string "/?a=a1"   nil)                     "/?a=a1"))
    (is (= (enc/merge-url-with-query-string "/?a=a1#h" nil)                     "/?a=a1#h"))
    (is (= (enc/merge-url-with-query-string "/?a=a1#h" {"a" "a2"})              "/?a=a2#h"))
