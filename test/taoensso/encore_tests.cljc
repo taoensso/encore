@@ -531,6 +531,14 @@
 
 (deftest _utf8-byte-strings (let [s enc/a-utf8-str] (is (= s (-> s enc/str->utf8-ba enc/utf8-ba->str)))))
 
+(deftest      _count-words
+  [(is (= (enc/count-words nil)                 0))
+   (is (= (enc/count-words "")                  0))
+   (is (= (enc/count-words " \n\t ")            0))
+   (is (= (enc/count-words "hello")             1))
+   (is (= (enc/count-words " hello world ")     2))
+   (is (= (enc/count-words "\nhello\tworld\r\n") 2))])
+
 #?(:clj
    (deftest _hex-strings
      [(is (= (enc/ba->hex-str (byte-array  0))    ""))
