@@ -563,6 +563,13 @@
    (is (= (enc/count-words " hello world ")     2))
    (is (= (enc/count-words "\nhello\tworld\r\n") 2))])
 
+(deftest _str-join-once
+  [(is (= (enc/path "foo/" nil "/bar") "foo/bar"))
+   (is (= (enc/str-join-once "/" [nil "foo" nil "bar" nil]) "foo/bar"))
+   (is (= (enc/str-join-once "/" ["foo/" "" "/bar"]) "foo/bar"))
+   (is (= (enc/str-join-once "::" ["foo::" "" "::bar"]) "foo::bar"))
+   (is (= (enc/str-join-once "::" ["foo::" "::bar"]) "foo::bar"))])
+
 #?(:clj
    (deftest _hex-strings
      [(is (= (enc/ba->hex-str (byte-array  0))    ""))

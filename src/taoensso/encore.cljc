@@ -3051,27 +3051,30 @@
         (str
           (reduce
             (fn [acc in]
-              (let [in (str in)
-                    in-empty? (= in "")
-                    in-starts-with-sep? (str-starts-with? in sep)
-                    in-ends-with-sep?   (str-ends-with?   in sep)
-                    acc-ends-with-sep?  @acc-ends-with-sep?_
-                    acc-empty?          @acc-empty?_]
+              (if (nil? in)
+                acc
+                (let [in (str in)]
+                  (if (= in "")
+                    acc
+                    (let [in-starts-with-sep? (str-starts-with? in sep)
+                          in-ends-with-sep?   (str-ends-with?   in sep)
+                          acc-ends-with-sep?  @acc-ends-with-sep?_
+                          acc-empty?          @acc-empty?_]
 
-                (vreset! acc-ends-with-sep?_ in-ends-with-sep?)
-                (when acc-empty? (vreset! acc-empty?_ in-empty?))
+                      (vreset! acc-ends-with-sep?_ in-ends-with-sep?)
+                      (when acc-empty? (vreset! acc-empty?_ false))
 
-                (if acc-ends-with-sep?
-                  (if in-starts-with-sep?
-                    (sb-append acc (.substring in 1))
-                    (sb-append acc in))
+                      (if acc-ends-with-sep?
+                        (if in-starts-with-sep?
+                          (sb-append acc (.substring in (count sep)))
+                          (sb-append acc in))
 
-                  (if in-starts-with-sep?
-                    (sb-append acc in)
-                    (if (or acc-empty? in-empty?)
-                      (sb-append acc in)
-                      (do (sb-append acc sep)
-                          (sb-append acc in)))))))
+                        (if in-starts-with-sep?
+                          (sb-append acc in)
+                          (if acc-empty?
+                            (sb-append acc in)
+                            (do (sb-append acc sep)
+                                (sb-append acc in))))))))))
             (str-builder)
             coll))))))
 
