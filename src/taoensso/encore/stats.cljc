@@ -30,7 +30,7 @@
          (let [max-idx (dec (alength a))]
            (enc/cond
              (> idx max-idx) not-found
-             (< idx max-idx) not-found
+             (< idx 0)       not-found
              :else (aget a idx))))
 
        clojure.lang.IReduceInit
@@ -48,7 +48,7 @@
          (let [max-idx (dec (alength a))]
            (enc/cond
              (> idx max-idx) not-found
-             (< idx max-idx) not-found
+             (< idx 0)       not-found
              :else (aget a idx))))
 
        IReduce
@@ -67,7 +67,7 @@
          (let [max-idx (dec (alength a))]
            (enc/cond
              (> idx max-idx) not-found
-             (< idx max-idx) not-found
+             (< idx 0)       not-found
              :else (aget a idx))))
 
        clojure.lang.IReduceInit
@@ -85,7 +85,7 @@
          (let [max-idx (dec (alength a))]
            (enc/cond
              (> idx max-idx) not-found
-             (< idx max-idx) not-found
+             (< idx 0)       not-found
              :else (aget a idx))))
 
        IReduce
@@ -308,9 +308,9 @@
        (let [snums
              (if-let [e (find opts :floats?)]
                (if (val e)
-                 (sorted-doubles true x)
-                 (sorted-longs   true x))
-               (sorted-nums      true x))
+                 (sorted-doubles false x)
+                 (sorted-longs   false x))
+               (sorted-nums      false x))
 
              nx (count snums)]
 
@@ -318,7 +318,17 @@
            (let [[xmin p25 p50 p75 p90 p95 p99 xmax] (percentiles snums)
                  xsum  (double (reduce rf-sum 0.0 snums))
                  xbar  (/ xsum nx)
-                 xlast (nth snums (dec nx))
+                 xlast
+                 #?(:clj
+                    (cond
+                      (sorted-nums? x)          (nth x (dec nx))
+                      (instance? LinkedList x) (.peekLast ^LinkedList x)
+                      :else                     (last x))
+
+                    :cljs
+                    (if (or (sorted-nums? x) (array? x))
+                      (nth x (dec nx))
+                      (last x)))
                  [^double xvar-sum ^double xmad-sum]
                  (enc/reduce-multi
                    (partial rf-sum-variance      xbar) 0.0
@@ -389,14 +399,27 @@
              xsum3 (+ xsum1 xsum2)
              xmin3 (if (< xmin1 xmin2) xmin1 xmin2)
              xmax3 (if (> xmax1 xmax2) xmax1 xmax2)
-             ;; xbar3 (/ xsum3 nx3)
+             xbar1 (/ xsum1 nx1)
+             xbar2 (/ xsum2 nx2)
+             xbar3 (/ xsum3 nx3)
 
-             ;; Batched "online" calculation here is better= the standard
-             ;; Knuth/Welford method, Ref. http://goo.gl/QLSfOc,
-             ;;                            http://goo.gl/mx5eSK.
-             ;; No apparent advantage in using `xbar3` asap.
-             xvar-sum3 (+ xvar-sum1 xvar-sum2)
-             xmad-sum3 (+ xmad-sum1 xmad-sum2)
+             ;; Exact parallel variance merge (Chan et al.)
+             xbar-delta (- xbar2 xbar1)
+             xvar-sum3
+             (+ xvar-sum1 xvar-sum2
+               (* xbar-delta xbar-delta nx1-ratio nx2))
+
+             ;; Exact MAD merging requires the original values. For each batch,
+             ;; its local MAD sum and total mean shift define lower/upper bounds
+             ;; on its merged MAD contribution. Use their midpoint, capped by
+             ;; the exact Cauchy-Schwarz bound derived from merged variance.
+             xmad-shift1 (* nx1 (Math/abs (- xbar1 xbar3)))
+             xmad-shift2 (* nx2 (Math/abs (- xbar2 xbar3)))
+             xmad-sum3
+             (min
+               (+ (max xmad-sum1 xmad-shift1)
+                  (max xmad-sum2 xmad-shift2))
+               (Math/sqrt (* nx3 xvar-sum3)))
 
              ;; These are pretty rough approximations. More sophisticated
              ;; approaches not worth the extra cost/effort in our case.
@@ -419,7 +442,7 @@
   ([    ] #?(:clj (LinkedList.) :cljs (array)))
   ([init]
    #?(:clj  (if init (LinkedList. init) (LinkedList.))
-      :cljs (if init (array       init) (array)))))
+      :cljs (if init (to-array    init) (array)))))
 
 (defn- buf-add [buf x]
   #?(:clj  (.add ^LinkedList buf x)

@@ -1533,7 +1533,16 @@
      [(is (= (vec (stats/sorted-nums [1   3   2]))   [1   2   3]))
       (is (= (vec (stats/sorted-nums [1.0 3.0 2.0])) [1.0 2.0 3.0]))
       (is (= (vec (stats/sorted-nums [1.0 3   2]))   [1.0 2.0 3.0]))
-      (is (= (vec (stats/sorted-nums [1   3.0 2.0])) [1   2   3]))])])
+      (is (= (vec (stats/sorted-nums [1   3.0 2.0])) [1   2   3]))])
+
+   (testing "Indexed lookup"
+     (doseq [snums [(stats/sorted-longs   [3 1 2])
+                    (stats/sorted-doubles [3 1 2])]]
+       [(is (= (nth snums  0 :not-found) (nth snums 0)))
+        (is (= (nth snums  1 :not-found) (nth snums 1)))
+        (is (= (nth snums  2 :not-found) (nth snums 2)))
+        (is (= (nth snums -1 :not-found) :not-found))
+        (is (= (nth snums  3 :not-found) :not-found))]))])
 
 (deftest weighted-nth
   [(is (= (#'stats/weighted-nth 0.5  [1  3])  2.0))
@@ -1607,6 +1616,21 @@
      [(is (= @ss @(stats/summary-stats  ss)) "(summary-stats <ss>)")
       (is (= @ss @(stats/summary-stats @ss)) "(summary-stats <map>)")])
 
+   (is (enc/submap? @(stats/summary-stats [3 1 2]) {:min 1 :max 3 :last 2}))
+
+   #?(:clj
+      (let [longs   (long-array   [3 1 2])
+            doubles (double-array [3 1 2])]
+        (stats/summary-stats longs)
+        (stats/summary-stats doubles)
+        [(is (= (vec longs)   [3 1 2]))
+         (is (= (vec doubles) [3.0 1.0 2.0]))])
+
+      :cljs
+      (let [nums (array 3 1 2)]
+        (stats/summary-stats nums)
+        (is (= (vec nums) [3 1 2]))))
+
    (is
      (= (sorted-sstats @(stats/summary-stats (range 1 1001)))
        {:n 1000, :sum 500500, :min 1, :max 1000, :last 1000, :p25 251, :p50 501, :p75 750, :p90 900, :p95 950, :p99 990,
@@ -1617,6 +1641,21 @@
        {:n 1000, :sum 500000.0, :min 0.5, :max 999.5, :last 999.5, :p25 250.5, :p50 500.5, :p75 749.5, :p90 899.5, :p95 949.5, :p99 989.5,
         :mean 500.0, :var 83333.25, :mad 250.0, :var-sum 8.333325E7, :mad-sum 250000.0, :meta {:floats? true}}))
 
+   (let [merged @(stats/summary-stats-merge
+                   (stats/summary-stats [0])
+                   (stats/summary-stats [10]))]
+     (is (= (select-keys merged [:n :mean :var :mad :var-sum :mad-sum])
+           {:n 2, :mean 5.0, :var 25.0, :mad 5.0,
+            :var-sum 50.0, :mad-sum 10.0})))
+
+   (let [merged @(stats/summary-stats-merge
+                   (stats/summary-stats [0 100])
+                   (stats/summary-stats [100]))
+         exact @(stats/summary-stats [0 100 100])]
+     [(is (= (:mad-sum merged) (:mad-sum exact)))
+      (is (= (:mad     merged) (:mad     exact)))
+      (is (<= (:mad merged) (Math/sqrt (:var merged))))])
+
    (is
      (= (sorted-sstats
           @(stats/summary-stats-merge
@@ -1624,7 +1663,7 @@
              (stats/summary-stats (range 200 500))))
 
        {:n 1200, :sum 509400, :min 0, :max 899, :last 499, :p25 238, :p50 425, :p75 612, :p90 724, :p95 762, :p99 792,
-        :mean 424.5, :var 52499.916666666664, :mad 187.5, :var-sum 6.29999E7, :mad-sum 225000.0, :meta {:floats? false}}))
+        :mean 424.5, :var 54374.916666666664, :mad 187.5, :var-sum 6.52499E7, :mad-sum 225000.0, :meta {:floats? false}}))
 
    (is
      (= (sorted-sstats
@@ -1633,7 +1672,7 @@
              (stats/summary-stats (range 200.5 500))))
 
        {:n 1200, :sum 510000.0, :min 0.5, :max 899.5, :last 499.5, :p25 238.0, :p50 425.5, :p75 612.0, :p90 724.5, :p95 762.0, :p99 792.0,
-        :mean 425.0, :var 52499.916666666664, :mad 187.5, :var-sum 6.29999E7, :mad-sum 225000.0, :meta {:floats? true}}))
+        :mean 425.0, :var 54374.916666666664, :mad 187.5, :var-sum 6.52499E7, :mad-sum 225000.0, :meta {:floats? true}}))
 
    (is
      (= (sorted-sstats
@@ -1643,9 +1682,12 @@
              (stats/summary-stats (range 200.5 500))))
 
        {:n 1200, :sum 509550.0, :min 0.0, :max 899.0, :last 499.5, :p25 237.625, :p50 425.125, :p75 611.625, :p90 724.125, :p95 761.625, :p99 791.625,
-        :mean 424.625, :var 52499.916666666664, :mad 187.5, :var-sum 6.29999E7, :mad-sum 225000.0, :meta {:floats? true}}))
+        :mean 424.625, :var 54356.213541666664, :mad 187.5, :var-sum 6.522745625E7, :mad-sum 225000.0, :meta {:floats? true}}))
 
    (is (nil? (ss-merging-error 10 100 10)))
+
+   (let [ssb (stats/summary-stats-buffered {:buffer-init [3 1 2]})]
+     (is (enc/submap? @@ssb {:n 3 :sum 6 :min 1 :max 3})))
 
    (let [ssb (stats/summary-stats-buffered {:buffer-size 10})]
      (dotimes [n 1e5] (ssb n))
