@@ -6270,8 +6270,9 @@
      (let [{:keys [before after]} fixtures-map]
        (fn fixtures [f]
          (when before (before))
-         (f)
-         (when after (after))))))
+         (try
+           (f)
+           (finally (when after (after))))))))
 
 (comment (test-fixtures {:before (fn [])}))
 
