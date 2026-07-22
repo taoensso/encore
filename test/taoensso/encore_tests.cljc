@@ -1620,7 +1620,12 @@
            (let [sf (assoc sf :freeze/skip-unknown? true)] (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))
            (let [sf (assoc sf :el3 3)]                     (is (-> (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) truss/throws?)))
            (let [sf (assoc sf :el3 3)
-                 st (assoc st :thaw/skip-unknown? true)]   (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))]))]))
+                 st (assoc st :thaw/skip-unknown? true)]   (is (=  (bytes/thaw-set st (bytes/freeze-set sf [:el1 :el3])) #{:el1})))
+
+           (let [sf {false 0, nil 1, :el2 2}
+                 st {0 false, 1 nil, 2 :el2}]
+             (is (= (bytes/thaw-set st (bytes/freeze-set sf #{false nil :el2}))
+                   #{false nil :el2})))]))]))
 
 ;;;; Printing
 

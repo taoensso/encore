@@ -442,8 +442,8 @@
         (persistent!
           (reduce-bitset
             (fn [els bit-idx]
-              (if-let [el (get bit-schema bit-idx)]
-                (conj! els el)
+              (if-let [entry (find bit-schema bit-idx)]
+                (conj! els (val entry))
                 (if skip-unknown?
                   els
                   (truss/ex-info! "Failed to thaw set (encountered bit index not in bit schema)"
