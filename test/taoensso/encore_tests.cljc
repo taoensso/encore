@@ -35,6 +35,13 @@
 (defn ex1!   [   ] (throw ex1))
 (defn throw! [arg] (throw (truss/ex-info "TestEx" {:arg {:value arg :type (type arg)}})))
 
+(deftest _rnum-coercion
+  [(is (= (enc/as-?rnum -2)   -1.0))
+   (is (= (enc/as-?rnum "-2") -1.0))
+   (is (= (enc/as-?rnum -1)   -1.0))
+   (is (= (enc/as-?rnum 0.5)   0.5))
+   (is (= (enc/as-?rnum 2)     1.0))])
+
 ;;;; Core
 
 (do

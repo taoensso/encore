@@ -1013,7 +1013,7 @@
   (defn as-?pos-float [x] (when-let [n (as-?float x)] (when     (pos? ^double n) n)))
 
   (defn as-?pnum      [x] (when-let [^double f (as-?float x)] (if (> f 1.0) 1.0 (if (< f  0.0)  0.0 f))))
-  (defn as-?rnum      [x] (when-let [^double f (as-?float x)] (if (> f 1.0) 1.0 (if (< f -1.0) -0.0 f))))
+  (defn as-?rnum      [x] (when-let [^double f (as-?float x)] (if (> f 1.0) 1.0 (if (< f -1.0) -1.0 f))))
 
   (defn as-?bool [x]
     (cond
