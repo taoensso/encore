@@ -4283,7 +4283,7 @@
       (f0) (f1 :x1) (f2 :x1 :x2))))
 
 (defn- gc-now? [rate]
-  #?(:clj  (<= (java.lang.Math/random) ^double rate)
+  #?(:clj  (<= (.nextDouble (java.util.concurrent.ThreadLocalRandom/current)) ^double rate)
      :cljs (<=       (.random js/Math)         rate)))
 
 (comment (qb 1e6 (gc-now? 0.5)))
