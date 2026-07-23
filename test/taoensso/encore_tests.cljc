@@ -2338,6 +2338,7 @@
    (testing "[ns level] filter with ns-specific min-levels"
      [(is (true?  (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :info])))
       (is (false? (sf-allow? [nil "ns1"] [[["*"   :info]                          ]  :debug])))
+      (is (true?  (sf-allow? [nil "ns2"] [[["ns1" :info]                          ]  :debug])) "No applicable minimum")
       (is (true?  (sf-allow? [nil "ns1"] [[["ns1" :info] ["ns1" :warn] ["*" :warn]]  :info])) "Match sequentially")
       (is (false? (sf-allow? [nil "ns1"] [[["ns1" :warn] ["ns1" :info] ["*" :warn]]  :info])) "Match sequentially")
 
@@ -2360,6 +2361,7 @@
 
       (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:k1 10} 10])))
       (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:k1 20} 10])))
+      (is (true?  (sf-allow? [:k2 :k2] [:ns1 :ns1] [:id1 :id1] [{:k1 20} 10])) "No applicable minimum")
 
       (is (true?  (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 10} 10])))
       (is (false? (sf-allow? [:k1 :k1] [:ns1 :ns1] [:id1 :id1] [{:default 20} 10])))])
@@ -2445,14 +2447,14 @@
 
          (is (enc/submap? (rns/filter-call {:level :info, :kind :my-sig-kind, :ns "my-ns", :id :my-sig-id, :callsite-id 1234
                                             :sample 0.5, :when (> 1 0), :limit [[1 1000]],
-                                            :local-forms {:ns __ns}})
+                                            :local-forms {:kind __kind, :ns __ns, :id __id, :level __level}})
                {:callsite-id 1234
                 :elide? :submap/nx
                 :allow?
                 '(taoensso.encore/and?
                    (< (Math/random) 0.5)
                    (let [sf taoensso.encore-tests.required-ns/*rt-call-filter*]
-                     (if sf (sf :my-sig-kind __ns :my-sig-id :info) true))
+                     (if sf (sf __kind __ns __id __level) true))
                    (> 1 0)
                    (if (taoensso.encore.signals/call-limited!? 1234 [[1 1000]]) false true))})
            "With rich filtering")])])])

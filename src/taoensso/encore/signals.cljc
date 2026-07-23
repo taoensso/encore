@@ -123,12 +123,13 @@
       #?(:cljs {:tag 'boolean})
       ([min-level      level] (if ^boolean (level>= level min-level) true false))
       ([ml-spec nf-arg level]
-       (let [min-level (nf->min-level ml-spec nf-arg)]
-         (if  ^boolean (level>= level min-level) true false)))
+       (if-some [min-level (nf->min-level ml-spec nf-arg)]
+         (if ^boolean (level>= level min-level) true false)
+         true))
 
       ([ml-spec kind nf-arg level]
-       (if ml-spec
-         (allow-level? (parse-min-level ml-spec kind nf-arg) level)
+       (if-some [min-level (when ml-spec (parse-min-level ml-spec kind nf-arg))]
+         (allow-level? min-level level)
          true)))))
 
 (defn valid-min-level
@@ -424,7 +425,7 @@
                        (case (int (or sf-arity -1))
                          2 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf            ~ns-form*           ~level-form*) true))
                          3 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf            ~ns-form* ~id-form* ~level-form*) true))
-                         4 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf ~kind-form ~ns-form* ~id-form* ~level-form*) true))
+                         4 `(~'let [~'sf ~*rt-call-filter*] (if ~'sf (~'sf ~kind-form* ~ns-form* ~id-form* ~level-form*) true))
                          (unexpected-sf-artity! sf-arity `filter-call))
 
                        when-form (get opts :when)
