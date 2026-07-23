@@ -1610,7 +1610,11 @@
         (let [sf {:el0 0, :el1 1, :el2 2}
               st {0 :el0, 1 :el1, 2 :el2}]
 
-          [(is (= (bytes/thaw-set st (bytes/freeze-set sf #{              })) nil))
+          [(is (bytes/ba=
+                 (byte-array [0 1 -1 64 0 -128])
+                 (-> (byte-array [0 1 -1 64 0 -128]) bytes/ba->bitset bytes/bitset->ba)))
+
+           (is (= (bytes/thaw-set st (bytes/freeze-set sf #{              })) nil))
            (is (= (bytes/thaw-set st (bytes/freeze-set sf  [              ])) nil))
            (is (= (bytes/thaw-set st (bytes/freeze-set sf #{:el0          })) #{:el0}))
            (is (= (bytes/thaw-set st (bytes/freeze-set sf  [:el0          ])) #{:el0}))

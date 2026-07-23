@@ -382,14 +382,7 @@
 
 (defn ba->bitset
   "Returns new `java.util.BitSet` containing the bits in given byte[]."
-  ;; Strange that Java doesn't have a built-in for this
-  ^BitSet [^bytes ba]
-  (let [bs (BitSet. (* (alength ba) 8))]
-    (areduce ba byte-idx _ bs
-      (dotimes [bit-idx 8]
-        (when (bit-test (aget ba byte-idx) bit-idx)
-          (.set bs (+ (* byte-idx 8) bit-idx)))))
-    bs))
+  ^BitSet [^bytes ba] (BitSet/valueOf ba))
 
 (comment (ba->bitset (bitset->ba (doto (BitSet.) (.set 0) (.set 3) (.set 5)))))
 
