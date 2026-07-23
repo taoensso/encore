@@ -555,6 +555,15 @@
 
 (deftest _utf8-byte-strings (let [s enc/a-utf8-str] (is (= s (-> s enc/str->utf8-ba enc/utf8-ba->str)))))
 
+(deftest _const-str=
+  [(is (true?  (enc/const-str= "" "")))
+   (is (true?  (enc/const-str= "foo" "foo")))
+   (is (true?  (enc/const-str= "สวัสดี😀" "สวัสดี😀")))
+   (is (false? (enc/const-str= "foo" "foO")))
+   (is (false? (enc/const-str= "foo" "foobar")))
+   (is (false? (enc/const-str= "สวัสดี😀" "สวัสดี😃")))
+   (is (nil?   (enc/const-str= nil "foo")))])
+
 (deftest      _count-words
   [(is (= (enc/count-words nil)                 0))
    (is (= (enc/count-words "")                  0))

@@ -3118,21 +3118,21 @@
   (when (and s1 s2)
     #?(:clj (const-ba= (str->utf8-ba s1) (str->utf8-ba s2))
        :cljs
-       (let [vx ["0" "1"]
-             v1 (vec   s1)
-             v2 (vec   s2)
-             n1 (count v1)
-             n2 (count v2)
+       (let [n1 (.-length ^string s1)
+             n2 (.-length ^string s2)
              nmax (max n1 n2)
              nmin (min n1 n2)]
 
-         (reduce-n
-           (fn [acc idx]
-             (if (>= idx nmin)
-               (and (= (get vx   0) (get vx   1)) acc)
-               (and (= (get v1 idx) (get v2 idx)) acc)))
-           true
-           nmax)))))
+         (loop [idx 0, acc true]
+           (if (< idx nmax)
+             (recur (inc idx)
+               (if (< idx nmin)
+                 (and
+                   (== (.charCodeAt ^string s1 idx)
+                       (.charCodeAt ^string s2 idx))
+                   acc)
+                 false))
+             acc))))))
 
 (comment (const-str= "foo" ""))
 
