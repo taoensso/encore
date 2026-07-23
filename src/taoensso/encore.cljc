@@ -5506,7 +5506,7 @@
      See also `future`, `virtual-executor`, `pool-executor`."
      ([                 f] (future-call* (deref! default-executor_) f))
      ([executor-service f]
-      (let [f   (binding-fn (f))
+      (let [f   (rebinding-fn (f))
             fut (.submit ^java.util.concurrent.ExecutorService executor-service
                   ^Callable f)]
 

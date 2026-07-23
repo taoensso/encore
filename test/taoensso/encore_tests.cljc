@@ -1157,6 +1157,21 @@
            (is (= false (realized? (do    f))))
            (is (= true  (realized? (do @f f)))))]))))
 
+#?(:clj
+   (deftest _future-binding-isolation
+     (let [executor (java.util.concurrent.Executors/newSingleThreadExecutor)]
+       (try
+         (let [conveyed
+               (binding [*dynamic-var* :bound]
+                 @(enc/future-call* executor (fn [] *dynamic-var*)))
+
+               subsequent (.get (.submit executor ^java.util.concurrent.Callable (fn [] *dynamic-var*)))]
+
+           [(is (= conveyed :bound))
+            (is (nil? subsequent))])
+
+         (finally (.shutdownNow executor))))))
+
 ;;;; LightAtom
 
 (deftest _light-atom
