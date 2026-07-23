@@ -572,9 +572,12 @@
 
 #?(:clj
    (deftest _hex-strings
-     [(is (= (enc/ba->hex-str (byte-array  0))    ""))
-      (is (= (enc/ba->hex-str (byte-array [0]))   "00"))
-      (is (= (enc/ba->hex-str (byte-array [0 1])) "0001"))
+     [(is (=      (enc/ba->hex-str (byte-array  0))    ""))
+      (is (=      (enc/ba->hex-str (byte-array [0]))   "00"))
+      (is (=      (enc/ba->hex-str (byte-array [0 1])) "0001"))
+      (is (= (vec (enc/hex-str->ba "aB")) [-85]))
+      (is (->>    (enc/hex-str->ba "0g") (truss/throws? :ex-info)))
+      (is (->>    (enc/hex-str->ba "zz") (truss/throws? :ex-info)))
       (let [v (vec (range -128 128))]
         (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))
 

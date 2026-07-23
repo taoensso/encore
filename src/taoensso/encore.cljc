@@ -3807,7 +3807,10 @@
            (fn [[c1 c2]]
              (let [d1 (Character/digit ^char c1 16)
                    d2 (Character/digit ^char c2 16)]
-               (unchecked-byte (+ (bit-shift-left d1 4) d2))))]
+               (if (and (not (neg? d1)) (not (neg? d2)))
+                 (unchecked-byte (+ (bit-shift-left d1 4) d2))
+                 (truss/ex-info! "[encore/hex-str->ba] Invalid hex character"
+                   {:given (str c1 c2)}))))]
 
        (defn hex-str->ba
          "Returns hex string for given byte[]."
