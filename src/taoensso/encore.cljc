@@ -481,7 +481,7 @@
            clauses  (if   default? (butlast clauses) clauses)]
        `(case ~expr
           ~@(map-indexed (fn [i# form#] (if (even? i#) (eval form#) form#)) clauses)
-          ~(when default? default)))))
+          ~@(when default? [default])))))
 
 #?(:clj
    (defmacro doto-cond

@@ -585,7 +585,10 @@
       (is (true?  (enc/list-form?  ())))
       (is (true?  (enc/list-form?  '(1 2 3))))
       (is (false? (enc/const-form? 'foo)))
-      (is (true?  (enc/const-form? :foo)))]))
+      (is (true?  (enc/const-form? :foo)))
+      (is (=   (enc/case-eval :known (keyword "known") :found) :found))
+      (is (=   (enc/case-eval :missing :known :found :default) :default))
+      (is (->> (enc/case-eval :missing :known :found) (truss/throws? IllegalArgumentException)))]))
 
 ;;;; LightAtoms
 
