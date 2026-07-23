@@ -692,8 +692,8 @@
       (is (= (cached-fn "a") 2))
       (is (= (cached-fn "b") 3))
       (is (= (cached-fn "b") 3))
-      (is (= (cached-fn "a" "b")) 4)
-      (is (= (cached-fn "a" "b")) 4)
+      (is (= (cached-fn "a" "b") 4))
+      (is (= (cached-fn "a" "b") 4))
       (is (= (cached-fn "a") 2))
 
       (is (= (cached-fn :cache/fresh)     5))
@@ -708,9 +708,9 @@
       (is (= @cache-idx_                7))
       (is (= (cached-fn "b")            8))
 
-      (is (= (cached-fn "a"                    7)))
+      (is (= (cached-fn "a")                  7))
       (is (= (cached-fn :cache/del :cache/all) nil))
-      (is (= (cached-fn "a"                    8)))])
+      (is (= (cached-fn "a")                  9))])
 
    #?(:clj
       (testing "TTL"
