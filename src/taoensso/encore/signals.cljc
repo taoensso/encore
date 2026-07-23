@@ -77,7 +77,7 @@
 
 ;;;; Low-level filtering
 
-(let [nf-compile (fn [nf-spec  ] (enc/name-filter (or nf-spec :any)))
+(let [nf-compile (enc/fmemoize (fn [nf-spec] (enc/name-filter (or nf-spec :any))))
       nf-match?  (fn [nf-spec n] ((nf-compile nf-spec) n))
       nf->min-level
       (fn [ml-spec nf-arg]
@@ -215,8 +215,8 @@
        :id-filter     id-filter :min-level min-level}))
 
   #?(:clj clojure.lang.IFn :cljs IFn)
-  (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns id level))
-  (#?(:clj invoke :cljs -invoke) [_      ns id level] (filter-fn      ns id level))
+  (#?(:clj invoke :cljs -invoke) [_ kind ns id level] (filter-fn kind ns (when id-filter id) level))
+  (#?(:clj invoke :cljs -invoke) [_      ns id level] (filter-fn      ns (when id-filter id) level))
   (#?(:clj invoke :cljs -invoke) [_      ns    level] (filter-fn      ns    level))
   (#?(:clj invoke :cljs -invoke) [_           ct-map] (filter-fn ct-map)))
 
