@@ -4304,7 +4304,36 @@
 (comment (qb 1e6 (gc-now? 0.5)))
 
 (deftype SimpleCacheEntry [delay ^long udt])
-(deftype TickedCacheEntry [delay ^long udt ^long tick-lru ^long tick-lfu])
+
+#?(:clj
+   (definterface ITickedCacheEntry
+     (^void tceTouch   [^long tick])
+     (^long tceTickSum [])))
+
+(deftype TickedCacheEntry
+  [delay ^long udt
+   ;; Mutable instead of updating cache map so that hits needn't swap.
+   ;; Increments are racy (may drop) but ticks are only used as GC heuristics.
+   #?(:clj ^:volatile-mutable ^long tick-lru, :cljs ^:mutable tick-lru)
+   #?(:clj ^:volatile-mutable ^long tick-lfu, :cljs ^:mutable tick-lfu)]
+
+  #?@(:clj
+      [ITickedCacheEntry
+       (tceTouch   [_ tick] (set! tick-lru tick) (set! tick-lfu (inc tick-lfu)))
+       (tceTickSum [_]      (+    tick-lru                           tick-lfu))]))
+
+#?(:clj
+   (defn- tce-touch! [^TickedCacheEntry e ^long tick] (.tceTouch e tick))
+   :cljs
+   (defn- tce-touch! [^TickedCacheEntry e tick]
+     (set! (.-tick-lru e) tick)
+     (set! (.-tick-lfu e) (inc (.-tick-lfu e)))
+     nil))
+
+#?(:clj
+   (defn- tce-tick-sum ^long [^TickedCacheEntry e] (.tceTickSum e))
+   :cljs
+   (defn- tce-tick-sum       [^TickedCacheEntry e] (+ (.-tick-lru e) (.-tick-lfu e))))
 
 (declare top)
 
@@ -4454,9 +4483,7 @@
                          (when (>= n-to-gc (* 0.1 size))
                            (let [ks-to-gc
                                  (top n-to-gc
-                                   (fn [k]
-                                     (let [e ^TickedCacheEntry (get snapshot k)]
-                                       (+ (.-tick-lru e) (.-tick-lfu e))))
+                                   (fn [k] (tce-tick-sum (get snapshot k)))
                                    (keys snapshot))]
 
                              (cache_
@@ -4477,16 +4504,18 @@
                      args   (if fresh? (next args) args)
 
                      _ #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
+                     ^TickedCacheEntry e0 (when-not fresh? (get (cache_) args))
                      ^TickedCacheEntry e
-                     (cache_ args
-                       (fn swap-fn [?e]
-                         (if (or (nil? ?e) fresh?
-                                 (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
-                           (TickedCacheEntry. (delay (apply f args)) instant tick 1)
-                           (let [e ^TickedCacheEntry ?e]
-                             (TickedCacheEntry. (.-delay e) (.-udt e)
-                               tick (inc (.-tick-lfu e)))))))]
+                     (if (and e0 (<= (- instant (.-udt e0)) ttl-ms))
+                       e0 ; Common hit path, no swap needed
+                       (cache_ args
+                         (fn swap-fn [?e]
+                           (if (or (nil? ?e) fresh?
+                                   (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
+                             (TickedCacheEntry. (delay (apply f args)) instant tick 0)
+                             ?e))))]
 
+                 (tce-touch! e tick)
                  #?(:clj
                     (deref-cached! [dv (.-delay e)]
                       (cache_
