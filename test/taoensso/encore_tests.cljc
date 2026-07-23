@@ -1038,7 +1038,55 @@
      (is (= @c        6))
      (is (= (c :+= 2) 8))
      (is (= (c :=+ 2) 8))
-     (is (= @c        10))]))
+     (is (= @c        10))])
+
+  (let [rc (enc/rolling-counter 60000)]
+    (dotimes [_ 128] (rc))
+    (is (= @rc 128))))
+
+#?(:clj
+   (deftest _rolling-counter-search
+     (let [window-start #'enc/rc-window-start
+           ts [10 20 20 30]]
+       [(is (= (window-start ts 0 4  0) 0))
+        (is (= (window-start ts 0 4 10) 0))
+        (is (= (window-start ts 0 4 11) 1))
+        (is (= (window-start ts 0 4 20) 1))
+        (is (= (window-start ts 0 4 21) 3))
+        (is (= (window-start ts 0 4 31) 4))
+        (is (= (window-start ts 2 4  0) 2))])))
+
+#?(:clj
+   (deftest _rolling-counter-concurrency
+     (let [rc       (enc/rolling-counter 1)
+           n-threads 32
+           executor (java.util.concurrent.Executors/newFixedThreadPool n-threads)]
+       (try
+         (let [observed
+               (reduce
+                 (fn [acc _]
+                   (dotimes [_ 12000] (rc))
+                   (Thread/sleep 5)
+                   (let [ready (java.util.concurrent.CountDownLatch. n-threads)
+                         start (java.util.concurrent.CountDownLatch. 1)
+                         fs
+                         (enc/repeatedly-into [] n-threads
+                           (fn []
+                             (.submit executor ^java.util.concurrent.Callable
+                               (fn []
+                                 (.countDown ready)
+                                 (.await ready)
+                                 (.await start)
+                                 @rc))))]
+                     (.await ready)
+                     (.countDown start)
+                     (into acc (map #(.get ^java.util.concurrent.Future %) fs))))
+                 []
+                 (range 4))]
+           (is (every? zero? observed)))
+
+         (finally
+           (.shutdownNow executor))))))
 
 #?(:clj
    (deftest _java-version

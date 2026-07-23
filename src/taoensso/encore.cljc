@@ -4882,21 +4882,22 @@
 
 (comment (let [c (counter)] (dotimes [_ 100] (c 2)) (c)))
 
+(defn- rc-window-start ^long [ts ^long lo ^long hi ^long udt-min]
+  (loop [lo lo, hi hi]
+    (if (< lo hi)
+      (let [mid (+ lo (quot (- hi lo) 2))]
+        (if (< (nth ts mid) udt-min)
+          (recur (inc mid) hi)
+          (recur lo        mid)))
+      lo)))
+
 (defn- rc-deref [^long msecs ts_ n-skip_ gc-fn]
   (let [t1 (now-udt)
         ^long n-skip0  (n-skip_)
         ts             (ts_)
-        n-total  (count ts)
-        ^long n-window
-        (reduce
-          (fn [^long n ^long t0]
-            (if (<= (- t1 t0) msecs)
-              (inc n)
-              (do  n)))
-          0
-          (core/subvec ts n-skip0))
-
-        n-skip1 (- n-total n-window)]
+        n-total        (count ts)
+        n-skip1        (rc-window-start ts n-skip0 n-total (- t1 msecs))
+        n-window       (- n-total n-skip1)]
 
     ;; (println {:n-total n-total :n-window n-window :n-skip0 n-skip0 :n-skip1 n-skip1})
     (when (<              n-skip0 n-skip1)
@@ -4906,33 +4907,35 @@
 
     n-window))
 
+;; Keep appended timestamps ordered for `rc-window-start`, including when
+;; concurrent callers obtain their timestamps before acquiring `ts_`.
 #?(:clj
-   (deftype RollingCounter [^long msecs ts_ n-skip_ p_]
+   (deftype RollingCounter [^long msecs ts_ n-skip_ lock]
      clojure.lang.IFn
      (invoke [this]
-       (when-let [p (p_)] @p) ; Block iff latched
-       (let [t1 (now-udt)] (ts_ #(conj % t1)))
+       (let [t1 (now-udt)]
+         (ts_
+           (fn [ts]
+             (conj ts (if-let [t0 (peek ts)] (max t0 t1) t1)))))
        this ; Return to allow optional deref
        )
 
      clojure.lang.IDeref
      (deref [_]
-       (when-let [p (p_)] @p) ; Block iff latched
-       (rc-deref msecs ts_ n-skip_
-         (fn gc [n-skip1]
-           (let [p (promise)]
-             (if (-cas!? p_ nil p) ; Latch
-               (do
-                 (ts_ #(core/subvec % n-skip1))
-                 (reset!  n-skip_ 0)
-                 (reset!  p_ nil)
-                 (deliver p  nil))))))))
+       (locking lock
+         (rc-deref msecs ts_ n-skip_
+           (fn gc [n-skip1]
+             (ts_ #(into [] (core/subvec % n-skip1)))
+             (reset! n-skip_ 0))))))
 
    :cljs
    (deftype RollingCounter [^long msecs ts_ n-skip_]
      IFn
      (-invoke [this]
-       (let [t1 (now-udt)] (ts_ #(conj % t1)))
+       (let [t1 (now-udt)]
+         (ts_
+           (fn [ts]
+             (conj ts (if-let [t0 (peek ts)] (max t0 t1) t1)))))
        this ; Return to allow optional deref
        )
 
@@ -4940,7 +4943,7 @@
      (-deref [_]
        (rc-deref msecs ts_ n-skip_
          (fn gc [n-skip1]
-           (ts_ #(core/subvec % n-skip1))
+           (ts_ #(into [] (core/subvec % n-skip1)))
            (reset! n-skip_ 0))))))
 
 (defn rolling-counter
@@ -4953,7 +4956,7 @@
     (long (truss/have pos-int? msecs))
     (latom [])
     (latom 0)
-    #?(:clj (latom nil))))
+    #?(:clj (new-object))))
 
 (comment
   (def myrc (rolling-counter 4000))
