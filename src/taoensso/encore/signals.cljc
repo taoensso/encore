@@ -665,15 +665,19 @@
                :clj  (enc/assoc-some {:okay :stopped}
                        :drained? (when runner (boolean (deref @runner 0 nil)))))
 
-            (let [drained? ; Block <= `:drain-msecs` to finish handling current signals
+            (let [drained_ ; Stop accepting new work before awaiting pending work
                   #?(:cljs nil
                      :clj
-                     (when runner
+                     (when runner (runner)))
+
+                  drained? ; Block <= `:drain-msecs` to finish handling current signals
+                  #?(:cljs nil
+                     :clj
+                     (when drained_
                        (boolean
-                         (when-let [drained_ @runner]
-                           (if-let [drain-msecs (get-in dispatch-opts [:async :drain-msecs])]
-                             (deref drained_ drain-msecs nil)
-                             (deref drained_))))))
+                         (if-let [drain-msecs (get-in dispatch-opts [:async :drain-msecs])]
+                           (deref drained_ drain-msecs nil)
+                           (deref drained_)))))
 
                   handler-result
                   (truss/try*
@@ -687,9 +691,7 @@
                     #?(:clj (catch clojure.lang.ArityException _ {:okay :stopped}))
                     (catch :all t
                       (when error-fn* (error-fn* nil t))
-                      {:error t})
-
-                    (finally (when runner (runner))))]
+                      {:error t}))]
 
               (enc/assoc-some handler-result :drained? drained?))))
 
@@ -764,10 +766,10 @@
                         (truss/catching
                           (if (and rl-backp (rl-backp)) ; backp-fn rate-limited
                             nil                         ; noop
-                            (let [backp-fn
-                                  (if (enc/identical-kw? backp-fn ::default)
-                                    *default-handler-backp-fn*
-                                    backp-fn)]
+                            (when-let [backp-fn
+                                       (if (enc/identical-kw? backp-fn ::default)
+                                         *default-handler-backp-fn*
+                                         backp-fn)]
                               (backp-fn {:handler-id handler-id})))))))))))
 
           (fn sync-wrapped-handler-fn
@@ -1418,14 +1420,20 @@ improve these docs!"
                      kind-filter ns-filter id-filter min-level,
                      error-fn backp-fn]}])}
 
-         (let [removed-handler# (get-wrapped-handler-fn ~*sig-handlers* ~'handler-id)
+         (let [removed-handler_# (volatile! nil)
                new-handlers-vec#
                (enc/update-var-root! ~*sig-handlers*
                  (fn [m#]
-                   (add-handler m# ~'handler-id ~'handler-fn,
-                     ~lib-dispatch-opts ~'dispatch-opts)))]
+                   (if-not ~'handler-fn
+                     m#
+                     (do
+                       (vreset! removed-handler_#
+                         (get-wrapped-handler-fn m# ~'handler-id))
+                       (add-handler m# ~'handler-id ~'handler-fn,
+                         ~lib-dispatch-opts ~'dispatch-opts)))))]
 
-           (when removed-handler# (removed-handler#))
+           (when-let [removed-handler# @removed-handler_#]
+             (removed-handler#))
            (get-handlers-map new-handlers-vec#))))))
 
 (comment (api:add-handler! `*my-sig-handlers* 'lib-dispatch-opts))
@@ -1437,11 +1445,16 @@ improve these docs!"
   ?{<handler-id> {:keys [dispatch-opts handler-fn]}} for all handlers
   still registered."
         ~'[handler-id]
-        (let [removed-handler#  (get-wrapped-handler-fn ~*sig-handlers* ~'handler-id)
-              new-handlers-vec# (enc/update-var-root!   ~*sig-handlers*
-                                  (fn [m#] (remove-handler m# ~'handler-id)))]
+        (let [removed-handler_# (volatile! nil)
+              new-handlers-vec#
+              (enc/update-var-root! ~*sig-handlers*
+                (fn [m#]
+                  (vreset! removed-handler_#
+                    (get-wrapped-handler-fn m# ~'handler-id))
+                  (remove-handler m# ~'handler-id)))]
 
-          (when removed-handler# (removed-handler#))
+          (when-let [removed-handler# @removed-handler_#]
+            (removed-handler#))
           (get-handlers-map new-handlers-vec#)))))
 
 (comment (api:remove-handler! `*my-sig-handlers*))

@@ -2521,6 +2521,8 @@
 
       (is (enc/submap? (rns/add-handler! :hid1 (fn ([]) ([_] (cnt))) {:async nil, :sample 1.0}) {:hid1 {:dispatch-opts {:async nil, :sample 1.0}, :handler-fn fn?}}))
       (is (enc/submap? (rns/get-handlers)                                                       {:hid1 {:dispatch-opts {:async nil, :sample 1.0}, :handler-fn fn?}}))
+      (is (enc/submap? (rns/add-handler! :hid1 nil                   {:async nil, :sample 0.0}) {:hid1 {:dispatch-opts {:async nil, :sample 1.0}, :handler-fn fn?}})
+        "Nil handler is a no-op")
 
       (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
       (is (nil? (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info  "foo"))))
@@ -2645,6 +2647,19 @@
 
    (testing "Handler stopping"
      [(is (= (sigs/stop-handlers! []) nil))
+      #?(:clj
+         (let [stopped_ (atom [])
+               handler (fn [id] (fn ([_]) ([] (swap! stopped_ conj id))))]
+           (clear-handlers!)
+           (rns/add-handler! :hid1 (handler :root-old) {:async nil})
+           (rns/with-handler :hid1 (handler :local) {:async nil}
+             (do
+               (rns/add-handler! :hid1 (handler :root-new) {:async nil})
+               (is (= @stopped_ [:root-old]) "Stops displaced root, not local binding")))
+           (is (= @stopped_ [:root-old :local]))
+           (rns/remove-handler! :hid1)
+           (is (= @stopped_ [:root-old :local :root-new]))))
+
       (let [st?_ (atom false)]
         (clear-handlers!)
         (rns/add-handler!    :hid1 (fn ([_]) ([] (enc/hot-sleep 2000) (reset! st?_ true))))
