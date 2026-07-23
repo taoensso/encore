@@ -4411,43 +4411,45 @@
                        udt-floor (- instant ttl-ms)]
 
                    (when (-cas!? latch_ nil latch)
-                     ;; First prune ttl-expired stuff
-                     (when ttl?
-                       (cache_
-                         (fn swap-fn [m]
-                           (persistent!
-                             (reduce-kv
-                               (fn [acc k ^TickedCacheEntry e]
-                                 (if (< (.-udt e) udt-floor)
-                                   (dissoc! acc k)
-                                   acc))
-                               (transient (or m {}))
-                               m)))))
+                     (try
+                       ;; First prune ttl-expired stuff
+                       (when ttl?
+                         (cache_
+                           (fn swap-fn [m]
+                             (persistent!
+                               (reduce-kv
+                                 (fn [acc k ^TickedCacheEntry e]
+                                   (if (< (.-udt e) udt-floor)
+                                     (dissoc! acc k)
+                                     acc))
+                                 (transient (or m {}))
+                                 m)))))
 
-                     ;; Then prune by ascending (worst) tick-sum:
-                     (let [snapshot (cache_)
-                           n-to-gc  (- (count snapshot) size)]
+                       ;; Then prune by ascending (worst) tick-sum:
+                       (let [snapshot (cache_)
+                             n-to-gc  (- (count snapshot) size)]
 
-                       (when (>= n-to-gc (* 0.1 size))
-                         (let [ks-to-gc
-                               (top n-to-gc
-                                 (fn [k]
-                                   (let [e ^TickedCacheEntry (get snapshot k)]
-                                     (+ (.-tick-lru e) (.-tick-lfu e))))
-                                 (keys snapshot))]
+                         (when (>= n-to-gc (* 0.1 size))
+                           (let [ks-to-gc
+                                 (top n-to-gc
+                                   (fn [k]
+                                     (let [e ^TickedCacheEntry (get snapshot k)]
+                                       (+ (.-tick-lru e) (.-tick-lfu e))))
+                                   (keys snapshot))]
 
-                           (cache_
-                             (fn swap-fn [m]
-                               (persistent!
-                                 (reduce (fn [acc in] (dissoc! acc in))
-                                   (transient (or m {})) ks-to-gc)))))))
+                             (cache_
+                               (fn swap-fn [m]
+                                 (persistent!
+                                   (reduce (fn [acc in] (dissoc! acc in))
+                                     (transient (or m {})) ks-to-gc)))))))
 
-                     #?(:clj
-                        (do
-                          (reset!     latch_ nil)
-                          (.countDown latch)))
-
-                     nil)))
+                       nil
+                       (finally
+                         #?(:clj
+                            (do
+                              (reset!     latch_ nil)
+                              (.countDown latch))
+                            :default nil))))))
 
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
@@ -4490,23 +4492,25 @@
                (when (gc-now? gc-rate)
                  (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
                    (when (-cas!? latch_ nil latch)
-                     (cache_
-                       (fn swap-fn [m]
-                         (persistent!
-                           (reduce-kv
-                             (fn [acc k ^SimpleCacheEntry e]
-                               (if (> (- instant (.-udt e)) ttl-ms)
-                                 (dissoc! acc k)
-                                 acc))
-                             (transient (or m {}))
-                             m))))
+                     (try
+                       (cache_
+                         (fn swap-fn [m]
+                           (persistent!
+                             (reduce-kv
+                               (fn [acc k ^SimpleCacheEntry e]
+                                 (if (> (- instant (.-udt e)) ttl-ms)
+                                   (dissoc! acc k)
+                                   acc))
+                               (transient (or m {}))
+                               m))))
 
-                     #?(:clj
-                        (do
-                          (reset!     latch_ nil)
-                          (.countDown latch)))
-
-                     nil)))
+                       nil
+                       (finally
+                         #?(:clj
+                            (do
+                              (reset!     latch_ nil)
+                              (.countDown latch))
+                            :default nil))))))
 
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
