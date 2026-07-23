@@ -4326,7 +4326,7 @@
               (:cache/del :mem/del)
               (let [xn (next  xs)
                     x2 (first xn)]
-                (if (identical-kw? x2 :mem/all)
+                (if (case x2 (:cache/all :mem/all) true false)
                   (vreset! cache_ {})
                   (vswap!  cache_ dissoc xn))
                 nil)
@@ -4357,7 +4357,7 @@
                (:cache/del :mem/del)
                (let [xn (next  xs)
                      x2 (first xn)]
-                 (if (identical-kw? x2 :mem/all)
+                 (if (case x2 (:cache/all :mem/all) true false)
                    (.clear  cache_)
                    (.remove cache_ (or xn nil-sentinel)))
                  nil)
