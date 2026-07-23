@@ -1408,6 +1408,16 @@
     [(is (= @c1 4))
      (is (= @c2 4))]))
 
+(deftest _rate-limiter-deltas
+  (let [rl1 (enc/rate-limiter {:5/min [5 60000]})]
+    [(is (truss/throws? (rl1 "unexpected-command" "rid")))
+     (is (= (rl1 8 "r1") [:5/min 60000 {:5/min 60000}])
+       "delta > limit denied with full-window backoff, even without prior entry")
+     (is (nil?  (rl1   "r1")) "denied delta committed no state")
+     (is (nil?  (rl1 3 "r2")) "delta <= limit allowed")
+     (is (nil?  (rl1 2 "r2")) "cumulative deltas up to limit allowed")
+     (is (some? (rl1 1 "r2")) "cumulative deltas beyond limit denied")]))
+
 #?(:clj
    (deftest _rate-limiter-concurrency
      (let [n        128
