@@ -4589,15 +4589,25 @@
   Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run.
   Doesn't support request ids!"
   [msecs]
-  (let [last_ (volatile! 0) ; No specific atomicity needs
+  (let [last_ #?(:clj  (java.util.concurrent.atomic.AtomicLong. 0)
+                 :cljs (volatile! 0))
         msecs (long msecs)]
 
     (fn a-rate-limiter-once-per
       ([req-id] (truss/ex-info! "[encore/rate-limiter] Basic rate limiters don't support request ids" {}))
       ([      ]
        (let [t1 (now-udt*)]
-         #?(:clj  (if (> (- t1 ^long (.deref last_)) msecs) (do (.reset  last_ t1) nil) true)
-            :cljs (if (> (- t1              @last_)  msecs) (do (vreset! last_ t1) nil) true)))))))
+         #?(:clj
+            (loop []
+              (let [t0 (.get ^java.util.concurrent.atomic.AtomicLong last_)]
+                (if (> (- t1 t0) msecs)
+                  (if (.compareAndSet ^java.util.concurrent.atomic.AtomicLong last_ t0 t1) nil (recur))
+                  true)))
+
+            :cljs
+            (if (> (- t1 @last_) msecs)
+              (do (vreset! last_ t1) nil)
+              true)))))))
 
 (deftype LimitSpec  [^long n ^long ms])
 (deftype LimitEntry [^long n ^long udt0])

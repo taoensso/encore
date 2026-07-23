@@ -1324,6 +1324,32 @@
     [(is (= @c1 4))
      (is (= @c2 4))]))
 
+#?(:clj
+   (deftest _rate-limiter-concurrency
+     (let [n        128
+           limiter  (enc/rate-limiter-once-per 60000)
+           ready    (java.util.concurrent.CountDownLatch. n)
+           start    (java.util.concurrent.CountDownLatch. 1)
+           executor (java.util.concurrent.Executors/newFixedThreadPool n)]
+       (try
+         (let [results
+               (enc/repeatedly-into [] n
+                 (fn []
+                   (.submit executor ^java.util.concurrent.Callable
+                     (fn []
+                       (.countDown ready)
+                       (.await     ready)
+                       (.await     start)
+                       (not (limiter))))))]
+
+           (.await     ready)
+           (.countDown start)
+           (is (= (count (filter true? (mapv #(.get ^java.util.concurrent.Future %) results))) 1)))
+
+         (finally
+           (.countDown   start)
+           (.shutdownNow executor))))))
+
 ;;;; Runner
 
 #?(:clj
