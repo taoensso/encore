@@ -5637,13 +5637,26 @@
     (def f2 (pre-cache 4 fp (fn [] (Thread/sleep 500)  :f2)))))
 
 #?(:clj
+   (defn- shutdown-hook-add! [f]
+     (let [hook (Thread. ^Runnable f)]
+       (.addShutdownHook (Runtime/getRuntime) hook)
+       hook)))
+
+#?(:clj
+   (defn- shutdown-hook-remove! [^Thread hook]
+     (try
+       (.removeShutdownHook (Runtime/getRuntime) hook)
+       (catch IllegalStateException _ false) ; JVM shutdown already underway
+       (catch SecurityException     _ false))))
+
+#?(:clj
    (defn call-on-shutdown!
      "Registers given nullary fn as a JVM shutdown hook.
      (f) will be called sometime during shutdown. While running, it will
      attempt to block shutdown."
      [f]
-     (.addShutdownHook (Runtime/getRuntime)
-       (Thread. ^Runnable f))))
+     (shutdown-hook-add! f)
+     nil))
 
 #?(:clj
    (defn runner
@@ -5711,35 +5724,71 @@
         convey-bindings? true
         daemon-threads?  true}}]
 
-     (let [stopped?_ (latom false)]
+     (let [stopped?_          (latom false)
+           ^Object state-lock (Object.)
+
+           stop-accepting!
+           (fn []
+             (locking state-lock
+               (compare-and-set! stopped?_ false true)))]
 
        (if (= mode :sync) ; Undocumented, mostly used for testing
          (reify
            clojure.lang.IDeref (deref [_] ((promise) :drained))
            clojure.lang.IFn
-           (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
-           (invoke [_ f] (when-not (stopped?_) (truss/try* (f) (catch :all _)) true)))
+           (invoke [r] (when (stop-accepting!) @r))
+           (invoke [_ f]
+             (locking state-lock
+               (when-not (stopped?_)
+                 (truss/try* (f) (catch :all _))
+                 true))))
 
-         (let [cnt-executing (java.util.concurrent.atomic.AtomicLong. 0)
-               abq           (java.util.concurrent.ArrayBlockingQueue.
-                               (as-pos-int buffer-size) false)
+         (let [cnt-pending     (java.util.concurrent.atomic.AtomicLong. 0)
+               abq             (java.util.concurrent.ArrayBlockingQueue. (as-pos-int buffer-size) false)
+               drained_        (atom ((promise) :drained))
+               shutdown-hook_  (atom nil)
+               drained? (fn [] (zero? (.get cnt-pending)))
 
-               drained? (fn [] (and (zero? (.size abq)) (zero? (.get cnt-executing))))
-               drained-fn
+               remove-shutdown-hook!
                (fn []
-                 (if (drained?)
-                   ((promise) :drained)
-                   (promised :daemon (loop [] (if (drained?) :drained (recur))))))
+                 (when-let [hook @shutdown-hook_]
+                   (when (compare-and-set! shutdown-hook_ hook nil)
+                     (shutdown-hook-remove! hook))))
 
+               reserve-submission!
+               (fn []
+                 (locking state-lock
+                   (when-not (stopped?_)
+                     ;; Reserve before initialization/queueing so stop must await submission.
+                     (when (zero? (.getAndIncrement cnt-pending))
+                       (reset! drained_ (promise)))
+                     true)))
+
+               pending-dec!
+               (fn []
+                 ;; Capture before decrement in case a new drain generation begins.
+                 (let [drained @drained_
+                       n       (.decrementAndGet cnt-pending)]
+                   (when (zero? n)
+                     (when (stopped?_) (remove-shutdown-hook!))
+                     (drained :drained))
+                   n))
+
+               drained-fn (fn [] (locking state-lock @drained_))
                init-fn
                (fn []
-                 (call-on-shutdown!
-                   (fn []
-                     (when auto-stop? (compare-and-set! stopped?_ false true))
-                     ;; Optionally block JVM shutdown to complete pending requests
-                     (if-let [^long msecs drain-msecs]
-                       (when (pos?  msecs) (deref (drained-fn) msecs nil))
-                       (do                 (deref (drained-fn))))))
+                 (let [hook
+                       (shutdown-hook-add!
+                         (fn []
+                           (when auto-stop? (stop-accepting!))
+                           ;; Optionally block JVM shutdown to complete pending requests
+                           (if-let [^long msecs drain-msecs]
+                             (when (pos?  msecs) (deref (drained-fn) msecs nil))
+                             (do                 (deref (drained-fn))))))]
+                   (reset! shutdown-hook_ hook)
+                   ;; Stop may race delayed initialization.
+                   (when (and (stopped?_) (drained?))
+                     (remove-shutdown-hook!)))
 
                  ;; Create worker threads
                  (dotimes [n (as-pos-int n-threads)]
@@ -5748,14 +5797,14 @@
                            (loop []
                              (if-let [f (.poll abq 200 java.util.concurrent.TimeUnit/MILLISECONDS)]
                                (do
-                                 (.incrementAndGet cnt-executing)
                                  (truss/try*
                                    (f)
                                    (catch :all _)
-                                   (finally (.decrementAndGet cnt-executing)))
+                                   (finally (pending-dec!)))
                                  ;; Unconditionally drain abq even when stopped
                                  (recur))
-                               (when-not (stopped?_) (recur)))))
+                              (when-not (and (stopped?_) (drained?))
+                                (recur)))))
 
                          thread-name (str-join-once "-" [(or thread-name `runner) "loop" (inc n) "of" n-threads])
                          thread (Thread. wfn thread-name)]
@@ -5778,13 +5827,14 @@
                run-fn
                (case mode
                  :blocking (fn blocking-run [f] (or (.offer abq f) (do (.put abq f) false)))
-                 :dropping (fn dropping-run [f]     (.offer abq f))
+                 :dropping (fn dropping-run [f] (if (.offer abq f) true (do (pending-dec!) false)))
+
                  :sliding
                  (fn sliding-run [f]
                    (or
                      (.offer abq f) ; Common case
                      (loop []
-                       (.poll abq) ; Drop earliest f
+                       (when (.poll abq) (pending-dec!)) ; Drop earliest f
                        (if (.offer abq f)
                          false ; Successfully took new f, but drop/s occurred
                          (recur)))))
@@ -5796,13 +5846,23 @@
            (reify
              clojure.lang.IDeref (deref [_] (drained-fn))
              clojure.lang.IFn
-             (invoke [r  ] (when (compare-and-set! stopped?_ false true) @r))
+             (invoke [r]
+               (when (stop-accepting!)
+                 (let [drained @r]
+                   (when (drained?) (remove-shutdown-hook!))
+                   drained)))
              (invoke [_ f]
-               (when-not (stopped?_)
-                 (.deref init!_)
-                 (if convey-bindings?
-                   (run-fn (binding-fn (f)))
-                   (run-fn              f))))))))))
+               (when (reserve-submission!)
+                 (try
+                   (.deref init!_)
+                   (when-let [msecs (get opts :debug/submit-after)]
+                     (Thread/sleep (int msecs)))
+                   (if convey-bindings?
+                     (run-fn (binding-fn (f)))
+                     (run-fn              f))
+                   (catch Throwable t
+                     (pending-dec!)
+                     (throw t)))))))))))
 
 (comment
   (let [r1 (runner {:mode :sync})

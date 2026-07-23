@@ -1378,8 +1378,85 @@
       (let [r (enc/runner {:mode :dropping, :buffer-size 4})] (dotimes [_ 4] (r (fn [] (Thread/sleep 250)))) (is (= (deref (r) 250  ::timeout) ::timeout)))
       (let [r (enc/runner {:mode :dropping, :buffer-size 4})] (dotimes [_ 4] (r (fn [] (Thread/sleep 250)))) (is (= (deref (r) 2500 ::timeout) :drained)))
 
+      (testing "Shutdown hook released after draining"
+        (let [hook       (Thread.)
+              removed_   (atom [])
+              started    (java.util.concurrent.CountDownLatch. 1)
+              release    (java.util.concurrent.CountDownLatch. 1)
+              add-var    (ns-resolve 'taoensso.encore 'shutdown-hook-add!)
+              remove-var (ns-resolve 'taoensso.encore 'shutdown-hook-remove!)]
+          (with-redefs-fn
+            {add-var    (fn [_] hook)
+             remove-var (fn [hook] (swap! removed_ conj hook) true)}
+            (fn []
+              (let [r (enc/runner {:mode :dropping})]
+                (try
+                  (is (true? (r (fn [] (.countDown started) (.await release)))))
+                  (is (.await started 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
+                  (let [drained (r)]
+                    (is (empty? @removed_))
+                    (.countDown release)
+                    (is (= (deref drained 1000 ::timeout) :drained))
+                    (is (= @removed_ [hook])))
+                  (finally (.countDown release))))))))
+
+      (testing "Stop waits for an in-progress submission"
+        (let [hook         (Thread.)
+              init-started (java.util.concurrent.CountDownLatch. 1)
+              init-release (java.util.concurrent.CountDownLatch. 1)
+              stop-started (java.util.concurrent.CountDownLatch. 1)
+              ran?_        (atom false)
+              add-var      (ns-resolve 'taoensso.encore 'shutdown-hook-add!)
+              remove-var   (ns-resolve 'taoensso.encore 'shutdown-hook-remove!)]
+          (with-redefs-fn
+            {add-var
+             (fn [_]
+               (.countDown init-started)
+               (.await init-release)
+               hook)
+
+             remove-var (fn [_] true)}
+            (fn []
+              (let [r          (enc/runner {:mode :blocking})
+                    submitting (future (r (fn [] (reset! ran?_ true))))]
+                (try
+                  (is (.await init-started 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
+                  (let [stopping
+                        (future
+                          (.countDown stop-started)
+                          (r))]
+                    (is (.await stop-started 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
+                    (let [drained (deref stopping 1000 ::timeout)]
+                      (is (not= drained ::timeout))
+                      (is (= (deref drained 50 ::timeout) ::timeout))
+                      (.countDown init-release)
+                      (is (true? (deref submitting 1000 ::timeout)))
+                      (is (= (deref drained 1000 ::timeout) :drained)))
+                    (is (true? @ran?_))
+                    (is (nil? (r (fn [] (reset! ran?_ false))))))
+                  (finally (.countDown init-release))))))))
+
+      (testing "Stopped workers wait for reserved submissions"
+        (let [ran?_      (atom false)
+              r          (enc/runner {:mode :blocking, :debug/submit-after 1000})
+              submitting (future (r (fn [] (reset! ran?_ true))))
+              pending
+              (loop [remaining 500]
+                (let [drained @r]
+                  (if (= (deref drained 0 ::pending) ::pending)
+                    drained
+                    (if (pos? remaining)
+                      (do (Thread/sleep 1) (recur (dec remaining)))
+                      ::not-observed))))
+
+              _       (is (not= pending ::not-observed))
+              drained (r)]
+
+          [(is (= (deref submitting 2000 ::timeout) true))
+           (is (= (deref drained    2000 ::timeout) :drained))
+           (is (true? @ran?_))]))
+
       (testing "High-volume, cross-thread runner calls"
-        ;; May block up to 200 msecs per @(r)
         (every? true?
           (let [n  2e4 ; Laps per run
                 fp (enc/future-pool [:ratio 1.0])]
