@@ -5,7 +5,7 @@
    [clojure.string  :as str]
    [taoensso.encore :as enc]
    #?(:cljs [goog.array]))
-  #?(:clj (:import [java.util LinkedList])))
+  #?(:clj (:import [java.util ArrayList LinkedList])))
 
 (comment
   (remove-ns 'taoensso.encore.stats)
@@ -439,17 +439,17 @@
 ;;;; Stateful SummaryStats
 
 (defn- buf-new
-  ([    ] #?(:clj (LinkedList.) :cljs (array)))
+  ([    ] #?(:clj (ArrayList.) :cljs (array)))
   ([init]
-   #?(:clj  (if init (LinkedList. init) (LinkedList.))
+   #?(:clj  (if init (ArrayList. ^java.util.Collection init) (ArrayList.))
       :cljs (if init (to-array    init) (array)))))
 
 (defn- buf-add [buf x]
-  #?(:clj  (.add ^LinkedList buf x)
+  #?(:clj  (.add ^ArrayList buf x)
      :cljs (.push            buf x)))
 
 (defn- buf-len ^long [buf]
-  #?(:clj  (.size ^LinkedList buf)
+  #?(:clj  (.size ^ArrayList buf)
      :cljs (alength           buf)))
 
 (defprotocol ISummaryStatsBuffered

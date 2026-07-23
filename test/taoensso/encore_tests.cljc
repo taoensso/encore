@@ -1686,6 +1686,8 @@
 
    (is (nil? (ss-merging-error 10 100 10)))
 
+   #?(:clj (is (instance? java.util.ArrayList (#'stats/buf-new))))
+
    (let [ssb (stats/summary-stats-buffered {:buffer-init [3 1 2]})]
      (is (enc/submap? @@ssb {:n 3 :sum 6 :min 1 :max 3})))
 
