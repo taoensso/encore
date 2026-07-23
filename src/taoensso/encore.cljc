@@ -3917,12 +3917,15 @@
      (defn ^:no-doc caching-satisfies?
        "Private, don't use."
        [protocol x]
-       (let [t (if (fn? x) ::fn (type x))]
-         (or
-           (get (cache_) t)
+       (let [p (:on-interface protocol)
+             t (if (fn? x) ::fn (type x))]
+         (if-some [result (get (get (cache_) p) t)]
+           result
            (if-let [uncachable-type? (re-find #"\d" (str t))]
              (do               (clojure.core/satisfies? protocol x))
-             (cache_ t (fn [_] (clojure.core/satisfies? protocol x)))))))))
+             (let [result (clojure.core/satisfies? protocol x)]
+               (cache_ p (fn [m] (assoc m t result)))
+               result)))))))
 
 ;;;; Swap API
 ;; - reset-in!   ; Keys: 0, 1, n (general)

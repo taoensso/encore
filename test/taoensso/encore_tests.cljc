@@ -106,11 +106,18 @@
    #?(:cljs (is (truss/submap? (meta #'var-cljs)       {:doc "doc.cljs"})))
    #?(:cljs (is (truss/submap? (meta #'var-cljs-alias) {:doc "doc.cljs" :foo "foo.cljs"})))])
 
-(defprotocol       IMyProtocol (my-protocol-fn [_]))
-(deftype MyType [] IMyProtocol (my-protocol-fn [_]))
+(defprotocol        IMyProtocol (my-protocol-fn [_]))
+(defprotocol   IMyOtherProtocol (my-other-protocol-fn [_]))
+(deftype  MyType [] IMyProtocol (my-protocol-fn [_]))
+(deftype MyType2 [] IMyProtocol (my-protocol-fn [_]))
 
 (deftest _satisfies?
-  [(is (true?  (enc/satisfies? IMyProtocol (MyType.))))
+  [(is (true?  (enc/satisfies? IMyProtocol      (MyType.))))
+   (is (false? (enc/satisfies? IMyOtherProtocol (MyType.))))
+
+   (is (false? (enc/satisfies? IMyOtherProtocol (MyType2.))))
+   (is (true?  (enc/satisfies? IMyProtocol      (MyType2.))))
+
    (is (false? (enc/satisfies? IMyProtocol "String")))])
 
 ;;;; Cond
