@@ -4204,6 +4204,16 @@
        `(let [~(with-meta 'd {:tag 'clojure.lang.Delay}) ~delay] (.deref ~'d))
        (list '.deref (with-meta delay '{:tag clojure.lang.Delay})))))
 
+#?(:clj
+   (defmacro ^:private deref-cached! [[delay-sym delay-expr] & on-error]
+     `(let [~(with-meta delay-sym {:tag 'clojure.lang.Delay}) ~delay-expr]
+        (try
+          (.deref ~delay-sym)
+          (catch Throwable t#
+            (try
+              ~@on-error
+              (finally (throw t#))))))))
+
 (comment (let [d (delay nil)] (qb 1e6 @d (deref! d)))) ; [42.05 23.15]
 (comment (+ ^long (or nil 1) 1)) ; Reflects
 
@@ -4218,23 +4228,26 @@
            (let [in_  (volatile! (new-object))
                  out_ (volatile! nil)]
              (fn [in* f0]
-               (loop []
-                 (if (= in* @in_)
-                   @out_
-                   (let [out (f0)]
-                     (vreset! in_  in*)
-                     (vreset! out_ out)
-                     out)))))
+               (if (= in* @in_)
+                 @out_
+                 (let [out (f0)]
+                   (vreset! in_  in*)
+                   (vreset! out_ out)
+                   out))))
 
            :clj
            (let [cache_ (java.util.concurrent.atomic.AtomicReference. nil)] ; [in out_]
              (fn [in* f0]
-               (deref!
-                 (loop []
-                   (let [current (.get cache_)]
-                     (or
-                       (when-let [[in out_] current] (when (= in in*) out_))
-                       (let [dv (delay (f0))] (if (.compareAndSet cache_ current [in* dv]) dv (recur))))))))))]
+               (deref-cached!
+                 [dv
+                  (loop []
+                    (let [current (.get cache_)]
+                      (or
+                        (when-let [[in out_] current] (when (= in in*) out_))
+                        (let [dv (delay (f0))] (if (.compareAndSet cache_ current [in* dv]) dv (recur))))))]
+                 (let [current (.get cache_)]
+                   (when (identical? (second current) dv)
+                     (.compareAndSet cache_ current nil)))))))]
 
     (fn memoized-fn
       ([            ] (call sentinel              (fn [] (f))))
@@ -4258,21 +4271,23 @@
            cachen_  (java.util.concurrent.ConcurrentHashMap.)]
 
        (fn
-         ([ ] (deref! (or (.get cache0_) (let [dv (delay (f))] (if (.compareAndSet cache0_ nil dv) dv (.get cache0_))))))
+         ([ ] (deref-cached! [dv (or (.get cache0_) (let [dv (delay (f))] (if (.compareAndSet cache0_ nil dv) dv (.get cache0_))))] (.compareAndSet cache0_ dv nil)))
          ([x]
           (let [x* (if (identical? x nil) sentinel x)]
-            (deref!
-              (or
-                (.get cache1_ x*)
-                (let [dv (delay (f x))]
-                  (or (.putIfAbsent cache1_ x* dv) dv))))))
+            (deref-cached!
+              [dv
+               (or
+                 (.get cache1_ x*)
+                 (let [dv (delay (f x))]
+                   (or (.putIfAbsent cache1_ x* dv) dv)))]
+              (.remove cache1_ x* dv))))
 
-         ([x1 x2               ] (let [xs [x1 x2]               ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2))               ] (or (.putIfAbsent cachen_ xs dv) dv))))))
-         ([x1 x2 x3            ] (let [xs [x1 x2 x3]            ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3))            ] (or (.putIfAbsent cachen_ xs dv) dv))))))
-         ([x1 x2 x3 x4         ] (let [xs [x1 x2 x3 x4]         ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4))         ] (or (.putIfAbsent cachen_ xs dv) dv))))))
-         ([x1 x2 x3 x4 x5      ] (let [xs [x1 x2 x3 x4 x5]      ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5))      ] (or (.putIfAbsent cachen_ xs dv) dv))))))
-         ([x1 x2 x3 x4 x5 x6   ] (let [xs [x1 x2 x3 x4 x5 x6]   ] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6))   ] (or (.putIfAbsent cachen_ xs dv) dv))))))
-         ([x1 x2 x3 x4 x5 x6 x7] (let [xs [x1 x2 x3 x4 x5 x6 x7]] (deref! (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6 x7))] (or (.putIfAbsent cachen_ xs dv) dv))))))))))
+         ([x1 x2               ] (let [xs [x1 x2]               ] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2))               ] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))
+         ([x1 x2 x3            ] (let [xs [x1 x2 x3]            ] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3))            ] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))
+         ([x1 x2 x3 x4         ] (let [xs [x1 x2 x3 x4]         ] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4))         ] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))
+         ([x1 x2 x3 x4 x5      ] (let [xs [x1 x2 x3 x4 x5]      ] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5))      ] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))
+         ([x1 x2 x3 x4 x5 x6   ] (let [xs [x1 x2 x3 x4 x5 x6]   ] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6))   ] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))
+         ([x1 x2 x3 x4 x5 x6 x7] (let [xs [x1 x2 x3 x4 x5 x6 x7]] (deref-cached! [dv (or (.get cachen_ xs) (let [dv (delay (f x1 x2 x3 x4 x5 x6 x7))] (or (.putIfAbsent cachen_ xs dv) dv)))] (.remove cachen_ xs dv))))))))
 
 (comment
   (let [f0 (fmemoize (fn []))
@@ -4346,9 +4361,12 @@
             cache_ (java.util.concurrent.ConcurrentHashMap.)]
 
         (fn
-          ([ ] @(or (.get cache_ nil-sentinel)
+          ([ ] (deref-cached!
+                 [dv
+                  (or (.get cache_ nil-sentinel)
                     (let [dv (delay (f))]
-                      (or (.putIfAbsent cache_ nil-sentinel dv) dv))))
+                      (or (.putIfAbsent cache_ nil-sentinel dv) dv)))]
+                 (.remove cache_ nil-sentinel dv)))
 
           ([& xs]
            (let [x1 (first xs)]
@@ -4363,13 +4381,18 @@
                  nil)
 
                (:cache/fresh :mem/fresh)
-               @(let [xn (next xs)
-                      dv (delay (apply f xn))]
-                  (.put cache_ (or xn nil-sentinel) dv) dv)
+               (let [xn (next xs)
+                     k  (or xn nil-sentinel)
+                     dv (delay (apply f xn))]
+                 (.put cache_ k dv)
+                 (deref-cached! [dv dv] (.remove cache_ k dv)))
 
-               @(or (.get cache_ xs)
-                  (let [dv (delay (apply f xs))]
-                    (or (.putIfAbsent cache_ xs dv) dv))))))))))
+               (deref-cached!
+                 [dv
+                  (or (.get cache_ xs)
+                    (let [dv (delay (apply f xs))]
+                      (or (.putIfAbsent cache_ xs dv) dv)))]
+                 (.remove cache_ xs dv)))))))))
 
   ([{:keys [size ttl-ms gc-every] :as opts} f]
 
@@ -4465,7 +4488,16 @@
                              (TickedCacheEntry. (.-delay e) (.-udt e)
                                tick (inc (.-tick-lfu e)))))))]
 
-                 @(.-delay e)))))))
+                 #?(:clj
+                    (deref-cached! [dv (.-delay e)]
+                      (cache_
+                        (fn [m]
+                          (let [^TickedCacheEntry current (get m args)]
+                            (if (and current (identical? (.-delay current) dv))
+                              (dissoc m args)
+                              m)))))
+                    :cljs
+                    @(.-delay e))))))))
 
      ttl-ms ; De-raced, commands, ttl, gc
      (let [gc-now? gc-now?
@@ -4525,7 +4557,16 @@
                                    (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
                              (SimpleCacheEntry. (delay (apply f args)) instant)
                              ?e))))]
-                 @(.-delay e)))))))
+                 #?(:clj
+                    (deref-cached! [dv (.-delay e)]
+                      (cache_
+                        (fn [m]
+                          (let [^SimpleCacheEntry current (get m args)]
+                            (if (and current (identical? (.-delay current) dv))
+                              (dissoc m args)
+                              m)))))
+                    :cljs
+                    @(.-delay e))))))))
 
      :else (cache f))))
 

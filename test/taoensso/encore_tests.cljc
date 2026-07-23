@@ -753,6 +753,20 @@
       (is (= (cached-fn "infrequent-recent") 2) "Cache retained (recent)")
       (is (= (cached-fn "infrequent-old")    4) "Cache dropped")])])
 
+#?(:clj
+   (deftest _memoized-exceptions
+     [(doseq [memoizer [enc/fmemoize enc/cache]]
+        (let [calls_ (atom 0)
+              cached (memoizer
+                       (fn [x]
+                         (if (= (swap! calls_ inc) 1)
+                           (throw (Exception. "Expected"))
+                           [x :success])))]
+
+          (is (truss/throws? Exception (cached :x)))
+          (is (= (cached :x) [:x :success]))
+          (is (= @calls_ 2))))]))
+
 (deftest _memoize-last
   [(let [c     (enc/counter)
          f     (enc/memoize-last (fn [& args] (c) (vec args)))
