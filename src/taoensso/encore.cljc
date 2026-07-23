@@ -6446,13 +6446,46 @@
   (tf-cancelled? [_] "Returns true iff the timeout is cancelled.")
   (tf-cancel!    [_] "Returns true iff the timeout was successfully cancelled (i.e. was previously pending)."))
 
+(deftype ^:private TimeoutResult [^boolean error? value])
+(def ^:private timeout-running (new-object))
+
+(defn- timeout-pending-state? [state]
+  (or
+    (identical-kw? state :timeout/pending)
+    (identical?    state timeout-running)))
+
+(defn- timeout-public-result [state]
+  (cond
+    (identical? state timeout-running) :timeout/pending
+    (instance?    TimeoutResult state)
+    (let [result ^TimeoutResult state]
+      (if      (.-error? result)
+        (throw (.-value  result))
+        (do    (.-value  result))))
+    :else state))
+
+#?(:clj
+   (defn- timeout-future-result [state]
+     (cond
+       (identical-kw? state :timeout/cancelled)
+       (throw (java.util.concurrent.CancellationException.))
+
+       (instance? TimeoutResult state)
+       (let [result ^TimeoutResult state]
+         (if (.-error? result)
+           (throw (java.util.concurrent.ExecutionException.
+                    ^Throwable (.-value result)))
+           (.-value result)))
+
+       :else (timeout-public-result state))))
+
 #?(:cljs
    (deftype TimeoutFuture [f result__ udt]
      ITimeoutFuture
      (tf-state      [_] {:fn f :udt udt})
-     (tf-poll       [_]                     @result__)
-     (tf-done?      [_] (not (identical-kw? @result__ :timeout/pending)))
-     (tf-pending?   [_]      (identical-kw? @result__ :timeout/pending))
+     (tf-poll       [_]      (timeout-public-result  @result__))
+     (tf-done?      [_] (not (timeout-pending-state? @result__)))
+     (tf-pending?   [_]      (timeout-pending-state? @result__))
      (tf-cancelled? [_]      (identical-kw? @result__ :timeout/cancelled))
      (tf-cancel!    [_] (-cas!? result__ :timeout/pending :timeout/cancelled))
 
@@ -6464,9 +6497,9 @@
      [f result__ ^long udt ^CountDownLatch latch]
      ITimeoutFuture
      (tf-state      [_] {:fn f :udt udt})
-     (tf-poll       [_]                     (result__))
-     (tf-done?      [_] (not (identical-kw? (result__) :timeout/pending)))
-     (tf-pending?   [_]      (identical-kw? (result__) :timeout/pending))
+     (tf-poll       [_]      (timeout-public-result  (result__)))
+     (tf-done?      [_] (not (timeout-pending-state? (result__))))
+     (tf-pending?   [_]      (timeout-pending-state? (result__)))
      (tf-cancelled? [_]      (identical-kw? (result__) :timeout/cancelled))
      (tf-cancel!    [_]
        (if (-cas!? result__ :timeout/pending :timeout/cancelled)
@@ -6474,17 +6507,24 @@
          false))
 
      clojure.lang.IPending (isRealized  [t] (tf-done? t))
-     clojure.lang.IDeref   (deref       [_] (.await latch) (result__))
+     clojure.lang.IDeref   (deref       [t] (.await latch) (tf-poll t))
      clojure.lang.IBlockingDeref
-     (deref [_ timeout-msecs timeout-val]
+     (deref [t timeout-msecs timeout-val]
        (if (.await latch timeout-msecs java.util.concurrent.TimeUnit/MILLISECONDS)
-         (result__)
+         (tf-poll t)
          timeout-val))
 
      java.util.concurrent.Future
      (isCancelled [t]   (tf-cancelled? t))
      (isDone      [t]   (tf-done?      t))
-     (cancel      [t _] (tf-cancel!    t))))
+     (cancel      [t _] (tf-cancel!    t))
+     (get         [_]
+       (.await latch)
+       (timeout-future-result (result__)))
+     (get         [_ timeout unit]
+       (if (.await latch timeout unit)
+         (timeout-future-result (result__))
+         (throw (java.util.concurrent.TimeoutException.))))))
 
 (defn timeout-future? #?(:cljs {:tag 'boolean}) [x] (instance? TimeoutFuture x))
 
@@ -6509,10 +6549,14 @@
          #?@(:clj [latch (CountDownLatch. 1)])
          cas-f
          (fn []
-           (let [result_ (delay (f))]
-             (when (-cas!? result__ :timeout/pending result_)
-               @result_
-               #?(:clj (.countDown latch)))))]
+           (when (-cas!? result__ :timeout/pending timeout-running)
+             (truss/try*
+               (reset! result__ (TimeoutResult. false (f)))
+               (catch :all t
+                 (reset! result__ (TimeoutResult. true t)))
+               (finally
+                 #?(:clj  (.countDown latch)
+                    :cljs nil)))))]
 
      (let [impl (force impl_)] (-schedule-timeout impl msecs cas-f))
      (TimeoutFuture. f result__ udt #?(:clj latch)))))

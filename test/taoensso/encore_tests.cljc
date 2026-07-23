@@ -1891,6 +1891,54 @@
        (ts 0 #(deliver early_ :called))
        (is (= (deref early_ 1000 ::timeout) :called)))))
 
+(deftest _timeout-future
+  (let [immediate-impl_ (delay (reify enc/ITimeoutImpl (-schedule-timeout [_ _ f] (f))))
+        successful (enc/call-after-timeout immediate-impl_ 0 (fn [] :result))
+        calls_     (atom 0)
+        failed
+        (enc/call-after-timeout immediate-impl_ 0
+          (fn [] (swap! calls_ inc) (throw ex1)))
+
+        scheduled_ (atom nil)
+        deferred-impl_
+        (delay
+          (reify enc/ITimeoutImpl
+            (-schedule-timeout [_ _ f] (reset! scheduled_ f))))
+        cancelled (enc/call-after-timeout deferred-impl_ 1000 (fn [] :late))]
+
+    [(is (= @successful :result))
+     (is (=      (enc/tf-poll     successful) :result))
+     (is (true?  (enc/tf-done?    successful)))
+     (is (false? (enc/tf-pending? successful)))
+     #?@(:clj
+         [(is (= (.get ^java.util.concurrent.Future successful) :result))
+          (is
+            (try
+              (.get ^java.util.concurrent.Future failed)
+              false
+              (catch java.util.concurrent.ExecutionException e
+                (identical? (.getCause e) ex1))))
+          (is (truss/throws? java.util.concurrent.TimeoutException
+                (.get ^java.util.concurrent.Future cancelled
+                  0 java.util.concurrent.TimeUnit/MILLISECONDS)))])
+
+     (is (enc/timeout-future? failed))
+     (is (true? (enc/tf-done? failed)))
+     (is (truss/throws? #?(:clj (deref failed 100 ::timeout) :cljs @failed)))
+     (is (truss/throws? (enc/tf-poll failed)))
+     (is (= @calls_ 1))
+
+     (is (= (enc/tf-poll cancelled) :timeout/pending))
+     (is (true?  (enc/tf-pending? cancelled)))
+     (is (true?  (enc/tf-cancel!  cancelled)))
+     (is (false? (enc/tf-cancel!  cancelled)))
+     (is (= @cancelled :timeout/cancelled))
+     (is (true? (enc/tf-cancelled? cancelled)))
+     #?(:clj
+        (is (truss/throws? java.util.concurrent.CancellationException
+              (.get ^java.util.concurrent.Future cancelled))))
+     (do (@scheduled_) (is (= @cancelled :timeout/cancelled)))]))
+
 (defmacro async-test [msecs bindings pre post]
   (if-not (:ns &env)
     `(let ~bindings [~@pre (do (Thread/sleep ~msecs) :sleep) ~@post])
