@@ -4511,13 +4511,16 @@
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
                      _      #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
+                     ^SimpleCacheEntry e0 (when-not fresh? (get (cache_) args))
                      ^SimpleCacheEntry e
-                     (cache_ args
-                       (fn swap-fn [?e]
-                         (if (or (nil? ?e) fresh?
-                                 (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
-                           (SimpleCacheEntry. (delay (apply f args)) instant)
-                           ?e)))]
+                     (if (and e0 (<= (- instant (.-udt e0)) ttl-ms))
+                       e0 ; Common hit path, no atomic update needed
+                       (cache_ args
+                         (fn swap-fn [?e]
+                           (if (or (nil? ?e) fresh?
+                                   (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
+                             (SimpleCacheEntry. (delay (apply f args)) instant)
+                             ?e))))]
                  @(.-delay e)))))))
 
      :else (cache f))))

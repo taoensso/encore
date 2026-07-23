@@ -714,7 +714,22 @@
 
    #?(:clj
       (testing "TTL"
-        [(is (= (reset! cache-idx_ 0)             0))
+        [(let [calls_ (atom 0)
+               cached (enc/cache {:ttl-ms 10 :gc-every 1e9}
+                        (fn [x] [x (swap! calls_ inc)]))]
+
+           [(is (= (cached :x) [:x 1]))
+            (is (= (cached :x) [:x 1]) "Cache hit")
+
+            (do (Thread/sleep 20) :sleep>ttl-ms)
+            (is (= (cached :x) [:x 2]) "Expired")
+            (is (= (cached :cache/fresh :x) [:x 3]) "Fresh")
+            (is (= (cached :x)              [:x 3]))
+
+            (is (= (cached :cache/del :x) nil))
+            (is (= (cached :x) [:x 4]) "Deleted")])
+
+         (is (= (reset! cache-idx_ 0)             0))
          (is (= (cached-fn :cache/del :cache/all) nil))
 
          (is (= (cached-fn "foo") 1))
