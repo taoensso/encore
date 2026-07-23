@@ -132,7 +132,7 @@
          (do                     out))))
 
     (^bytes [?ba1 ?ba2 & more]
-     (ba-join (ba-join ?ba1 ?ba2) (ba-join* more)))))
+     (ba-join* (cons ?ba1 (cons ?ba2 more))))))
 
 (comment (vec (let [ba byte-array] (ba-join nil (ba [0]) (ba [1 2]) nil (ba [3 4 5]) nil nil (ba [6])))))
 
