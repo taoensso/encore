@@ -2465,11 +2465,11 @@
 
 (deftest _signal-misc
   [(testing "Dynamic context (`*ctx*`)"
-     [(is (= (binding [rns/*ctx* "my-ctx"] rns/*ctx*) "my-ctx") "Supports manual `binding`")
-      (is (= (rns/with-ctx       "my-ctx"  rns/*ctx*) "my-ctx") "Supports any data type")
+     [(is (= (binding [rns/*ctx* {:ctx "my-ctx"}] rns/*ctx*) {:ctx "my-ctx"}) "Supports manual `binding`")
+      (is (= (rns/with-ctx       {:ctx "my-ctx"}  rns/*ctx*) {:ctx "my-ctx"}) "Supports map values")
 
-      (is (= (rns/with-ctx "my-ctx1"       (rns/with-ctx+ nil                        rns/*ctx*)) "my-ctx1")              "nil update => keep old-ctx")
-      (is (= (rns/with-ctx "my-ctx1"       (rns/with-ctx+ (fn [old] [old "my-ctx2"]) rns/*ctx*)) ["my-ctx1" "my-ctx2"])  "fn  update => apply")
+      (is (= (rns/with-ctx {:ctx "my-ctx1"} (rns/with-ctx+ nil                             rns/*ctx*)) {:ctx "my-ctx1"})                "nil update => keep old-ctx")
+      (is (= (rns/with-ctx {:ctx "my-ctx1"} (rns/with-ctx+ #(assoc % :ctx2 "my-ctx2") rns/*ctx*)) {:ctx "my-ctx1" :ctx2 "my-ctx2"}) "fn  update => apply")
       (is (= (rns/with-ctx {:a :A1 :b :B1} (rns/with-ctx+ {:a :A2 :c :C2}            rns/*ctx*)) {:a :A2 :b :B1 :c :C2}) "map update => merge")])
 
    (testing "Dynamic transform (`*xfn*`)"

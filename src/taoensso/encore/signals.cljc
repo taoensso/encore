@@ -1492,10 +1492,10 @@ improve these docs!"
 #?(:clj
    (defn- api:*ctx* []
      `(enc/def* ~'*ctx* {:dynamic true}
-        "Optional context (state) attached to all signals.
-  Value may be any type, but is usually nil or a map. Default (root) value is nil.
+        "Optional context map (state) attached to all signals.
+  Default (root) value is nil.
 
-  Useful for dynamically attaching arbitrary app-level state to signals.
+  Useful for dynamically attaching app-level contextual data to signals.
 
   Re/bind dynamic        value using `with-ctx`, `with-ctx+`, or `binding`.
   Modify  root (default) value using `set-ctx!`.
@@ -1504,8 +1504,8 @@ improve these docs!"
   futures, agents, etc.
 
   Tips:
-    - Value may be (or may contain) an atom if you want mutable semantics.
-    - Value may be of form {<scope-id> <data>} for custom scoping, etc.
+    - Map values may include atoms if you want mutable semantics.
+    - Use {<scope-id> <data>} entries for custom scoping, etc.
     - Use `get-env` to set default (root) value based on environmental config."
         nil)))
 
@@ -1545,7 +1545,7 @@ improve these docs!"
         nil)))
 
 (defn update-ctx
-  "Returns `new-ctx` given `old-ctx` and an update map or fn."
+  "Returns ?map `new-ctx` given ?map `old-ctx` and an update map or fn."
   [old-ctx update-map-or-fn]
   (enc/cond
     (nil? update-map-or-fn)              old-ctx
@@ -1560,7 +1560,7 @@ improve these docs!"
 #?(:clj
    (defn- api:set-ctx! []
      `(defn ~'set-ctx!
-        "Set `*ctx*` var's default (root) value. See `*ctx*` for details."
+        "Sets `*ctx*` var's default (root) ?map value. See `*ctx*` for details."
         ~'[root-ctx] (enc/set-var-root! ~'*ctx* ~'root-ctx))))
 
 #?(:clj
@@ -1574,18 +1574,18 @@ improve these docs!"
    (defn- api:with-ctx []
      (let [*ctx* (symbol (str *ns*) "*ctx*")]
        `(defmacro ~'with-ctx
-          "Evaluates given body with given `*ctx*` value. See `*ctx*` for details."
+          "Evaluates given body with given ?map `*ctx*` value. See `*ctx*` for details."
           ~'[ctx & body] `(binding [~'~*ctx* ~~'ctx] ~@~'body)))))
 
 #?(:clj
    (defn- api:with-ctx+ []
      (let [*ctx* (symbol (str *ns*) "*ctx*")]
        `(defmacro ~'with-ctx+
-          "Evaluates given body with updated `*ctx*` value.
+          "Evaluates given body with updated ?map `*ctx*` value.
 
   `update-map-or-fn` may be:
     - A map to merge with    current `*ctx*` value, or
-    - A unary fn to apply to current `*ctx*` value
+    - A unary fn to apply to current `*ctx*` value, returning ?map
 
   See `*ctx*` for details."
           ~'[update-map-or-fn & body]
