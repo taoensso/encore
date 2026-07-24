@@ -2639,13 +2639,24 @@
 
    #?(:clj
       (testing "Handler backp-fn (handler dispatch detects back pressure, triggers `backp-fn`)"
-        (let [fn-arg_ (atom nil)]
+        (let [fn-arg_ (atom nil)
+              started (java.util.concurrent.CountDownLatch. 1)
+              release (java.util.concurrent.CountDownLatch. 1)]
           (clear-handlers!)
-          (rns/add-handler! :hid1 (fn [_] (Thread/sleep 2000)) {:backp-fn (fn [x] (reset! fn-arg_ x)), :async {:mode :blocking, :buffer-size 1}})
-          (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "1"))
-          (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "2")) ; Should trigger back pressure
-          (Thread/sleep 4000) ; Wait for second signal to enqueue
-          (is (enc/submap? @fn-arg_ {:handler-id :hid1})))))
+          (try
+            (rns/add-handler! :hid1
+              (fn [_] (.countDown started) (.await release))
+              {:backp-fn (fn [x] (reset! fn-arg_ x))
+               :async {:mode :dropping, :buffer-size 1}})
+
+            (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "1"))
+            (is (.await started 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
+            (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "2")) ; Fill buffer
+            (sigs/call-handlers! rns/*sig-handlers* (MySignal. :info "3")) ; Trigger back pressure
+            (is (enc/submap? @fn-arg_ {:handler-id :hid1}))
+            (finally
+              (.countDown release)
+              (rns/remove-handler! :hid1))))))
 
    (testing "Handler stopping"
      [(is (= (sigs/stop-handlers! []) nil))
@@ -2675,19 +2686,22 @@
         (is (true? @st?_) "Replacing handler stops old handler"))
 
       (is (nil? (clear-handlers!)))
-      (is (= (let [sleep! (fn [] (enc/hot-sleep 500))
+      (is (= (let [sleep!    (fn [] (enc/hot-sleep 500))
+                   hid4-done #?(:clj  (java.util.concurrent.CountDownLatch. 1)
+                                :cljs nil)
                    handlers
                    (-> []
                      (sigs/add-handler :hid1 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {})
                      (sigs/add-handler :hid2 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs nil}})
                      (sigs/add-handler :hid3 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 1000}})
-                     (sigs/add-handler :hid4 (fn ([_] (sleep!)) #?(:cljs ([])))       {} {:async {:drain-msecs 100}})
+                     (sigs/add-handler :hid4 (fn ([_] (sleep!) #?(:clj (.countDown hid4-done))) #?(:cljs ([]))) {} {:async {:drain-msecs 100}})
                      (sigs/add-handler :hid5 (fn ([_] (sleep!))          ([]))        {} {})
                      (sigs/add-handler :hid6 (fn ([_] (sleep!))          ([] (ex1!))) {} {}))]
 
                (sigs/call-handlers!  handlers (MySignal. :info "foo"))
-               [(sigs/stop-handlers! handlers)
-                (sigs/stop-handlers! handlers)])
+               (let [stopped (sigs/stop-handlers! handlers)]
+                 #?(:clj (is (.await hid4-done 5000 java.util.concurrent.TimeUnit/MILLISECONDS)))
+                 [stopped (sigs/stop-handlers! handlers)]))
 
             [{:hid1 {:okay :stopped, #?@(:clj [:drained? true])},
               :hid2 {:okay :stopped, #?@(:clj [:drained? true])},
