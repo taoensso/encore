@@ -537,7 +537,26 @@
       (is (= (enc/ba->hex-str (byte-array [0]))   "00"))
       (is (= (enc/ba->hex-str (byte-array [0 1])) "0001"))
       (let [v (vec (range -128 128))]
-        (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))]))
+        (is (= (-> v byte-array enc/ba->hex-str enc/hex-str->ba vec) v)))
+
+      (let [rng (proxy [java.util.Random] [] (nextBytes [_] (throw (AssertionError. "RNG should not be called"))))]
+        (is (truss/throws? IllegalArgumentException
+              (com.taoensso.encore.Ids/genHexId rng 0))))
+
+      (let [id (com.taoensso.encore.Ids/genHexId (java.util.Random. 0) 33)]
+        [(is (= (count id) 33))
+         (is (re-matches #"[0-9a-f]{33}" id))
+         (is (not= id (apply str (repeat 33 "0"))))])
+
+      (let [calls_ (atom 0)
+            rng
+            (proxy [java.util.Random] []
+              (nextBytes [ba]
+                (aset-byte ba 0
+                  (unchecked-byte (if (= (swap! calls_ inc) 1) 0x0f 0x10)))))
+            id (com.taoensso.encore.Ids/genHexId rng 1)]
+        [(is (= id "1"))
+         (is (= @calls_ 2))])]))
 
 (deftest _abbreviate-ns
  [(is (= (enc/abbreviate-ns 0 :foo.bar.baz)  :foo.bar.baz))

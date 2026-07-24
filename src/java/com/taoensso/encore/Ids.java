@@ -69,9 +69,13 @@ public class Ids {
         dest[destOffset + 1] = HEX_ENCODING[b | 0x100];
     }
 
-    private static final void bytesToBase16(byte[] bytes, char[] dest, int length) {
-        for (int i = 0; i < length; i++) {
+    private static final void bytesToBase16(byte[] bytes, char[] dest, int charLength) {
+        int byteLength = charLength / 2;
+        for (int i = 0; i < byteLength; i++) {
             byteToBase16(bytes[i], dest, i * 2);
+        }
+        if ((charLength & 1) != 0) {
+            dest[charLength - 1] = HEX_ENCODING[bytes[byteLength] & 0xFF];
         }
     }
 
@@ -104,15 +108,18 @@ public class Ids {
 
     private static final String toHexId(byte[] bytes, int len) {
         char[] chars = localChars(len);
-        bytesToBase16(bytes, chars, (len + 1) / 2); // Round up
+        bytesToBase16(bytes, chars, len);
         return new String(chars, 0, len);
     }
 
     private static final byte[] INVALID_HEX_BYTES_16 = new byte[16];
-    private static final boolean validHexBytes(byte[] bytes) {
+    private static final boolean validHexBytes(byte[] bytes, int len) {
         // We disallow all-zero ids for compatibility with OpenTelemetry
-        for (byte b : bytes) { if (b != 0) { return true; }}
-        return false;
+        int byteLength = len / 2;
+        for (int i = 0; i < byteLength; i++) {
+            if (bytes[i] != 0) { return true; }
+        }
+        return ((len & 1) != 0) && ((bytes[byteLength] & 0xF0) != 0);
     }
 
     public static final String genHexId8 () { return genHexId8 (ThreadLocalRandom.current()); }
@@ -137,14 +144,15 @@ public class Ids {
     public static final String genHexId(                   ) { return genHexId32(ThreadLocalRandom.current());    }
     public static final String genHexId(            int len) { return genHexId  (ThreadLocalRandom.current(), len); }
     public static final String genHexId(Random rng, int len) {
+        if (len <= 0) { throw new IllegalArgumentException("len must be positive"); }
         switch (len) {
           case 32: return genHexId32(rng);
           case 16: return genHexId16(rng);
           case  8: return genHexId8 (rng);
         }
 
-        byte[] bytes = localBytes((len + 1) / 2); // Round up
-        do { rng.nextBytes(bytes); } while (!validHexBytes(bytes));
+        byte[] bytes = localBytes((len / 2) + (len & 1)); // Round up without overflow
+        do { rng.nextBytes(bytes); } while (!validHexBytes(bytes, len));
         return toHexId(bytes, len);
     }
 }
