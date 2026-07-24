@@ -838,8 +838,8 @@
    with-handler with-handler+
    add-handler! remove-handler! stop-handlers!
 
-   *ctx* set-ctx! with-ctx with-ctx+
-   *xfn* set-xfn! with-xfn with-xfn+])
+   *ctx* set-root-ctx! with-ctx with-ctx+
+   *xfn* set-root-xfn! with-xfn with-xfn+])
 
 ;;;
 
@@ -887,7 +887,7 @@
       Note: call filters (1a, 1b) should generally be AT LEAST as permissive
       as handler filters (2b) since they're always applied first.
 
-    To set call transform (3): use `set-xfn!`, `with-xfn`.
+    To set call transform (3): use `set-root-xfn!`, `with-xfn`.
 
   Compile-time vs runtime filtering:
 
@@ -1498,7 +1498,7 @@ improve these docs!"
   Useful for dynamically attaching app-level contextual data to signals.
 
   Re/bind dynamic        value using `with-ctx`, `with-ctx+`, or `binding`.
-  Modify  root (default) value using `set-ctx!`.
+  Modify  root (default) value using `set-root-ctx!`.
 
   As with all dynamic Clojure vars, \"binding conveyance\" applies when using
   futures, agents, etc.
@@ -1518,7 +1518,7 @@ improve these docs!"
   Useful for dynamically filtering and/or modifying signals by signal data/content/etc.
 
   Re/bind dynamic        value using `with-xfn`, `with-xfn+`, `binding`.
-  Modify  root (default) value using `set-xfn!`.
+  Modify  root (default) value using `set-root-xfn!`.
 
   As with all dynamic Clojure vars, \"binding conveyance\" applies when using
   futures, agents, etc.
@@ -1526,10 +1526,10 @@ improve these docs!"
   Examples:
 
     ;; Filter all signals by returning nil:
-    (t/set-xfn! (fn [signal] (when-not (:skip-me? signal) signal)))
+    (t/set-root-xfn! (fn [signal] (when-not (:skip-me? signal) signal)))
 
     ;; Remove key/s from all signals:
-    (t/set-xfn! (fn [signal] (dissoc signal :unwanted-key1 ...)))
+    (t/set-root-xfn! (fn [signal] (dissoc signal :unwanted-key1 ...)))
 
     ;; Remove key/s from signals to specific handler:
     (t/add-handler! ::my-handler my-handler
@@ -1558,17 +1558,23 @@ improve these docs!"
        :expected '#{nil map fn}})))
 
 #?(:clj
-   (defn- api:set-ctx! []
-     `(defn ~'set-ctx!
-        "Sets `*ctx*` var's default (root) ?map value. See `*ctx*` for details."
-        ~'[root-ctx] (enc/set-var-root! ~'*ctx* ~'root-ctx))))
+   (defn- api:set-root-ctx! []
+     `(do
+        (defn ~'set-root-ctx!
+          "Sets `*ctx*` var's default (root) ?map value. See `*ctx*` for details."
+          ~'[root-ctx] (enc/set-var-root! ~'*ctx* ~'root-ctx))
+        (def ~(with-meta 'set-ctx! {:deprecated true, :no-doc true, :doc "Prefer `set-root-ctx!`"})
+          ~'set-root-ctx!))))
 
 #?(:clj
-   (defn- api:set-xfn! []
-     `(defn ~'set-xfn!
-        "Set `*xfn*` var's default (root) value. See `*xfn*` for details."
-        ~'[?root-xfn]
-        (enc/set-var-root! ~'*xfn* ~'?root-xfn))))
+   (defn- api:set-root-xfn! []
+     `(do
+        (defn ~'set-root-xfn!
+          "Set `*xfn*` var's default (root) value. See `*xfn*` for details."
+          ~'[?root-xfn]
+          (enc/set-var-root! ~'*xfn* ~'?root-xfn))
+        (def ~(with-meta 'set-xfn! {:deprecated true, :no-doc true, :doc "Prefer `set-root-xfn!`"})
+          ~'set-root-xfn!))))
 
 #?(:clj
    (defn- api:with-ctx []
@@ -1671,13 +1677,13 @@ improve these docs!"
 
           ~@(when (incl? :ctx)
               [(api:*ctx*)
-               (api:set-ctx!)
+               (api:set-root-ctx!)
                (api:with-ctx)
                (api:with-ctx+)])
 
           ~@(when (incl? :xfn)
               [(api:*xfn*)
-               (api:set-xfn!)
+               (api:set-root-xfn!)
                (api:with-xfn)
                (api:with-xfn+)])))))
 

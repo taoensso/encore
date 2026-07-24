@@ -38,7 +38,7 @@
   (remove-handler! :hid1)
   (get-handlers)
 
-  (set-ctx!  {:base 1})
+  (set-root-ctx! {:base 1})
   (with-ctx  {:ctx 2} (do *ctx*))
   (with-ctx+ {:ctx 2} (do *ctx*))
 
