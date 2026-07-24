@@ -1416,7 +1416,102 @@
      (is (nil?  (rl1   "r1")) "denied delta committed no state")
      (is (nil?  (rl1 3 "r2")) "delta <= limit allowed")
      (is (nil?  (rl1 2 "r2")) "cumulative deltas up to limit allowed")
-     (is (some? (rl1 1 "r2")) "cumulative deltas beyond limit denied")]))
+     (is (some? (rl1 1 "r2")) "cumulative deltas beyond limit denied")])
+
+  ;; GC effectively disabled so the expired entry is certainly retained,
+  ;; exercising the expired-entry (not absent-entry) path
+  (let [rl (enc/rate-limiter {:gc-every 2e9} {:a [5 100]})]
+    [(is (nil? (rl "r1")) "Seed entry")
+     (do (enc/hot-sleep 150) :sleep>window)
+     (is (=    (rl 8 "r1") [:a 100 {:a 100}]) "delta > limit denied even for expired (uncollected) entry")
+     (is (nil? (rl 5 "r1")) "delta <= limit allowed in fresh window")])
+
+  #?(:clj
+     (let [rl (enc/rate-limiter {:a [5 60000]})]
+       [(is (nil?  (rl "r1")) "Seed entry")
+        (is (some? (rl Long/MAX_VALUE "r1")) "Huge delta clamped + denied, no overflow")
+        (is (nil?  (rl Long/MIN_VALUE "r2")) "Huge negative delta clamped + allowed, no underflow")
+        (is (nil?  (rl 5 "r2")) "Full fresh quota available after negative delta (count floored at 0)")
+        (is (some? (rl 1 "r2")) "Quota exhausted: proves floor at 0, not stored negative count")
+        (is (nil?  ((enc/rate-limiter-once-per 10000000000000000000000N)))
+          "Huge BigInt window clamps rather than throws, first call allowed")])))
+
+(deftest _clj-eq
+  (let [clj-eq #'enc/clj-eq]
+    [(is (= @(clj-eq :x) :x) "Deref returns underlying value")
+     (is (=  (clj-eq [1 :a "s"])    (clj-eq [#?(:clj 1N :cljs 1) :a "s"])) "Clojure hashed-key equality semantics")
+     (is (= (hash (clj-eq 1)) (hash (clj-eq  #?(:clj 1N :cljs 1))))        "Clojure hash semantics")
+     (is (not=    (clj-eq 1) 1) "Wrapped never equals unwrapped")
+     (is (= (get {(clj-eq 1) :a} (clj-eq #?(:clj 1N :cljs 1))) :a) "Works as Clojure map key (hasheq + equiv)")
+     #?@(:clj
+         [(is (let [v [1 2]
+                    l (java.util.ArrayList. v)]
+                (and (= v l) (not= (hash v) (hash l)) (not= (clj-eq v) (clj-eq l))))
+            "Hash-inconsistent values remain distinct")
+
+          (is (let [chm (java.util.concurrent.ConcurrentHashMap.)]
+                (.put chm (clj-eq 1) "v")
+                (and
+                  (=    (.get chm (clj-eq 1N)) "v")
+                  (nil? (.get chm 1))))
+            "CHM keys get Clojure hashed-key semantics")])]))
+
+#?(:clj
+   (deftest _rate-limiter-rid-equality
+     (let [rl (enc/rate-limiter {:a [1 60000]})]
+       [(is (nil?  (rl    (Long/valueOf 1))) "First call allowed")
+        (is (some? (rl (Integer/valueOf 1))) "Numerically = rid shares quota")
+        (is (some? (rl 1N))                  "Ditto")])))
+
+#?(:clj
+   (deftest _rate-limiter-hammer
+     ;; Exact allowed counts under multi-threaded contention
+     (let [hammer
+           (fn [rl n-threads n-ops key-fn]
+             (let [allowed (enc/counter)
+                   fs
+                   (mapv
+                     (fn [tid]
+                       (future
+                         (dotimes [i n-ops]
+                           (when-not (rl (key-fn tid i)) (allowed)))))
+                     (range n-threads))]
+               (run! deref fs)
+               @allowed))]
+
+       [(is (= (let [rl (enc/rate-limiter {:a [1000 600000]})]
+                 (hammer rl 8 10000 (fn [_ _] :x)))
+              1000)
+          "Same rid: exactly n allowed")
+
+        (is (= (let [rl (enc/rate-limiter {:a [1000 600000]})
+                     allowed (enc/counter)
+                     fs (mapv
+                          (fn [_]
+                            (future
+                              (dotimes [_ 10000]
+                                (when-not (rl) (allowed)))))
+                          (range 8))]
+                 (run! deref fs)
+                 @allowed)
+              1000)
+          "Nil rid: exactly n allowed")
+
+        (is (= (let [rl (enc/rate-limiter {:a [1000 600000]})]
+                 (hammer rl 8 10000 (fn [tid _] tid)))
+              8000)
+          "Disjoint rids: exactly n*threads allowed")
+
+        (is (= (let [rl (enc/rate-limiter {:a [500 600000] :b [1000 600000]})]
+                 (hammer rl 8 10000 (fn [_ _] :x)))
+              500)
+          "Multi-limit atomicity: most-restrictive limit exact")
+
+        (is (= (let [rl (enc/rate-limiter {:a [10 600000]})]
+                 (dotimes [_ 100] (rl :rl/peek :x))
+                 (hammer rl 1 100 (fn [_ _] :x)))
+              10)
+          "Peek doesn't consume")])))
 
 #?(:clj
    (deftest _rate-limiter-concurrency

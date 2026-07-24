@@ -4658,21 +4658,74 @@
 
        `(def ~sym (cache ~cache-opts (fn ~@body))))))
 
+;;;; Clojure equality wrapper
+
+(deftype CljEq [x ^int h]
+  #?@(:clj
+      [Object
+       (hashCode [_] h)
+       (equals   [_ other]
+         (and (instance? CljEq other)
+           (== h (.-h ^CljEq other))
+           (=  x (.-x ^CljEq other))))
+       (toString [_] (str "CljEq[" x "]"))
+       clojure.lang.IHashEq (hasheq [_] h)
+       clojure.lang.IDeref  (deref  [_] x)]
+
+      :cljs
+      [IEquiv (-equiv [_ other]
+                (and (instance? CljEq other)
+                  (=  h (.-h ^CljEq other))
+                  (=  x (.-x ^CljEq other))))
+       IHash  (-hash  [_] h)
+       IDeref (-deref [_] x)]))
+
+(defn- clj-eq
+  "Returns given immutable arg wrapped with Clojure hashed-key semantics:
+  two wrappers are equal iff their wrapped values have equal Clojure hashes
+  and are `=`. Useful for keys in Java hash collections like
+  `java.util.concurrent.ConcurrentHashMap`:
+
+    (.get chm         1)  != (.get chm         1N), but
+    (.get chm (clj-eq 1)) == (.get chm (clj-eq 1N))
+
+  Deref the wrapper to get the underlying value: @(clj-eq x) => x"
+  [x] (CljEq. x (hash x)))
+
 ;;;; Rate limits
 
 (def ^:private max-limit-msecs
   "Limit windows are clamped to <= ~100k years, avoids arithmetic overflow."
   (long 3.15e15))
 
+(def ^:private max-limit-n
+  "Limit counts and deltas are clamped to +/- 1e15,
+  avoids arithmetic overflow. Exact in Cljs doubles."
+  (long 1e15))
+
+#?(:clj
+   (defn- rid-key
+     "Returns given rate-limiter req-id as a ConcurrentHashMap key with
+     Clojure hashed-key semantics. Types whose Java equality and hash
+     semantics already match Clojure's pass through unwrapped; others get
+     `clj-eq` wrapped. The choice is deterministic by type, and unwrapped
+     types are never Clojure-equal to wrapped types."
+     [rid]
+     (if (or (instance? String  rid) (keyword? rid)
+             (instance? Boolean rid) (symbol?  rid)
+             (instance? java.util.UUID rid))
+       rid
+       (clj-eq rid))))
+
 (defn ^:no-doc rate-limiter-once-per
   "Private, don't use.
   Returns a basic rate limiter (fn []) that will return falsey (allow) at most once
   every given number of milliseconds.
 
-  Similar to (rate-limiter [1 <msecs>]) but significantly faster to construct and run.
+  Similar to (rate-limiter [[1 <msecs>]]) but significantly faster to construct and run.
   Doesn't support request ids!"
   [msecs]
-  (let [msecs (long (min (long msecs) max-limit-msecs))
+  (let [msecs (long (min msecs max-limit-msecs)) ; Clamp before cast
         ;; Init s.t. first call is allowed even for max window
         t0    (- max-limit-msecs)
         last_ #?(:clj  (java.util.concurrent.atomic.AtomicLong. t0)
@@ -4709,10 +4762,70 @@
         (.-worst-lid acc)
         (.-worst-ms  acc)))))
 
+(defn- limit-?hits
+  "Returns ?LimitHits for given rid entries against spec.
+  Iterates spec (not entries) so that lids without an entry
+  (fresh rid, or gc'd) still see delta checked. Entries without
+  a lid in spec cannot exist."
+  [spec entries ^long delta ^long instant]
+  (when (or entries (> delta 1)) ; Absent entries pass iff delta <= 1
+    (reduce-kv
+      (fn [^LimitHits acc lid ^LimitSpec s]
+        (if-let [^LimitEntry e (get entries lid)]
+          (if (<= (+ (.-n e) delta) (.-n s))
+            acc
+            (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
+              (if (<= tdelta 0)
+                ;; Window expired ~ absent entry, but delta must
+                ;; still fit the fresh window
+                (if (<= delta (.-n s))
+                  acc
+                  (limit-hits acc lid (.-ms s)))
+                (limit-hits acc lid tdelta))))
+
+          ;; Absent entry ~ zero count, window unstarted
+          (if (<= delta (.-n s))
+            acc
+            (limit-hits acc lid (.-ms s)))))
+      nil
+      spec)))
+
+(defn- limit-entries
+  "Returns given rid entries {<lid> <LimitEntry>}, updated
+  with delta committed against every lid in spec.
+  Counts clamped >= 0 so (undocumented) negative deltas can't
+  accumulate without bound."
+  [spec entries ^long delta ^long instant]
+  (reduce-kv
+    (fn [acc lid ^LimitSpec s]
+      (assoc acc lid
+        (if-let [^LimitEntry e (get entries lid)]
+          (let [udt0 (.-udt0 e)]
+            (if (>= instant (+ udt0 (.-ms s)))
+              (LimitEntry. (max 0    delta)          instant)
+              (LimitEntry. (max 0 (+ delta (.-n e))) udt0)))
+          (do (LimitEntry. (max 0    delta)          instant)))))
+    entries
+    spec))
+
+(defn- limit-gc-entries
+  "Returns given rid entries {<lid> <LimitEntry>}, without
+  expired (or unspec'd) entries."
+  [spec entries ^long instant]
+  (reduce-kv
+    (fn [acc lid ^LimitEntry e]
+      (if-let [^LimitSpec s (get spec lid)]
+        (if (>= instant (+ (.-udt0 e) (.-ms s)))
+          (dissoc acc lid)
+          (do     acc))
+        (dissoc acc lid)))
+    entries
+    entries))
+
 (let [limit-spec
       (fn [n ms]
-        (LimitSpec.
-          (long      (truss/have pos? n)) ; 0 would anyway allow through first call
+        (LimitSpec. ; Clamp before cast
+          (long (min (truss/have pos? n)  max-limit-n)) ; 0 would anyway allow through first call
           (long (min (truss/have pos? ms) max-limit-msecs))))]
 
   (defn- coerce-limit-spec [x]
@@ -4722,8 +4835,8 @@
       (reduce
         (fn [acc [n ms ?lid]] ; ?lid for back compatibility
           (assoc acc
-            (or ?lid [(long n) ms])
-            (limit-spec     n  ms)))
+            (or ?lid [(long (min n max-limit-n)) ms]) ; Clamp before cast
+            (limit-spec           n              ms)))
         {} x)
 
       (set? x) ; #{"1/2d"}, etc.
@@ -4753,7 +4866,7 @@
   Spec forms:
     * Vec: [   [n msecs-window] ...] ; e.g.           [[2 (enc/msecs :hours 1)] ...]
     * Map: {id [n msecs-window] ...} ; e.g.  {\"2/1h\" [2 (enc/msecs :hours 1)] ...}
-    * Set: #{\"<n>/<n><s|m|h|d>\"}   ; e.g. #{\"2/1h\" ...}
+    * Set: #{\"<n>/<n><s|m|h|d|w>\"} ; e.g. #{\"2/1h\" ...}
 
   Call the returned limiter fn with a request id (any Clojure value!) to
   enforce limits independently for each id.
@@ -4764,18 +4877,14 @@
       [<worst-limit-id> <worst-backoff-msecs> {<limit-id> <backoff-msecs>}]
 
   Or call the returned limiter fn with an extra command argument:
-    (limiter-fn :rl/peek  <req-id) - Check limits WITHOUT incrementing count
-    (limiter-fn :rl/reset <req-id) - Reset all limits for given req-id"
+    (limiter-fn :rl/peek  <req-id>) - Check limits WITHOUT incrementing count
+    (limiter-fn :rl/reset <req-id>) - Reset all limits for given req-id"
 
   ([     spec] (rate-limiter nil spec))
   ([opts spec]
    (cond
-     :let [{:keys [with-state?]} opts] ; Undocumented, mostly for tests
-
-     (empty? spec)
-     (if with-state?
-       [nil (constantly nil)]
-       (do  (constantly nil)))
+     (get opts :with-state?) (truss/ex-info! "[encore/rate-limiter] Undocumented `:with-state?` option has been removed")
+     (empty? spec) (constantly nil)
 
      :let [spec (coerce-limit-spec spec)] ; {<lid> <LimitSpec>}
 
@@ -4787,105 +4896,148 @@
         (let [^LimitSpec s (val (first spec))]
           (when (== (.-n s) 1) (.-ms s))))]
 
-     (if with-state?
-       [nil (rate-limiter-once-per once-per-msecs)]
-       (do  (rate-limiter-once-per once-per-msecs)))
+     (rate-limiter-once-per once-per-msecs)
 
      :let
-     [latch_ (latom nil) ; Used to pause writes during gc
-      reqs_  (latom nil) ; {<rid> {<lid> <LimitEntry>}}
-
-      {:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
+     [{:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
 
       gc-now? gc-now?
       gc-rate (let [gce (max 1 (long gc-every))] (/ 1.0 gce))
 
-      f1
-      (fn [rid ^long delta peek?]
-        (let [instant (now-udt)]
-          (when (and (not peek?) (gc-now? gc-rate))
-            (let [latch #?(:clj (CountDownLatch. 1) :default nil)]
-              (when (-cas!? latch_ nil latch)
-                (try
-                  (reqs_
-                    (fn swap-fn [reqs] ; {<rid> <entries>}
-                      (persistent!
-                        (reduce-kv
-                          (fn [acc rid entries]
-                            (let [new-entries
-                                  (reduce-kv
-                                    (fn [acc lid ^LimitEntry e]
-                                      (if-let [^LimitSpec s (get spec lid)]
-                                        (if (>= instant (+ (.-udt0 e) (.-ms s)))
-                                          (dissoc acc lid)
-                                          (do     acc))
-                                        (dissoc acc lid)))
-                                    entries ; {<lid <LimitEntry>}
-                                    entries)]
-                              (if (empty? new-entries)
-                                (dissoc! acc rid)
-                                (assoc!  acc rid new-entries))))
-                          (transient (or reqs {}))
-                          (do            reqs)))))
-                  nil
-                  (finally
-                    #?(:clj
-                       (do
-                         (reset!     latch_ nil)
-                         (.countDown latch))
-                       :default nil))))))
+      #?@(:clj
+          [reqs_ ; {<rid-key> {<lid> <LimitEntry>}}, entry vals are immutable.
+           ;; Ref swapped for a fresh map on `:rl/all` reset: single atomic
+           ;; reset point for keyed rids, also resets CHM high-water table.
+           (AtomicReference. (java.util.concurrent.ConcurrentHashMap.))
 
-          ;; Need to atomically check if all limits pass before
-          ;; committing to any n increments:
-          (loop []
-            (let [reqs        (reqs_)    ; {<lid> <entries>}
-                  entries (get reqs rid) ; {<lid> <LimitEntry>}
-                  ?hits                  ; ?LimitHits
-                  ;; Iterate spec (not entries) so that lids without an
-                  ;; entry (fresh rid, or gc'd) still see delta checked.
-                  ;; Entries without a lid in spec cannot exist.
-                  (when (or entries (> delta 1)) ; Absent entries pass iff delta <= 1
-                    (reduce-kv
-                      (fn [^LimitHits acc lid ^LimitSpec s]
-                        (if-let [^LimitEntry e (get entries lid)]
-                          (if (<= (+ (.-n e) delta) (.-n s))
-                            acc
-                            (let [tdelta (- (+ (.-udt0 e) (.-ms s)) instant)]
-                              (if (<= tdelta 0)
-                                acc
-                                (limit-hits acc lid tdelta))))
+           nil-reqs_ ; ?{<lid> <LimitEntry>} for nil rid. Dedicated ref avoids
+           ;; CHM bin locking for the common contended no-rid case, Ref. [1]
+           (AtomicReference. nil)
 
-                          ;; Absent entry ~ zero count, window unstarted
-                          (if (<= delta (.-n s))
-                            acc
-                            (limit-hits acc lid (.-ms s)))))
-                      nil
-                      spec))]
+           gc-running_ (java.util.concurrent.atomic.AtomicBoolean. false)
+           gc-iter_    (latom nil) ; ?[reqs iter], persists across bounded sweeps
 
-              (if (or peek? ?hits)
-                ;; No action (peeking, or hit >= 1 spec)
-                (when-let [^LimitHits h ?hits]
-                  [(.-worst-lid h) (.-worst-ms h) (.-m h)])
+           gc!
+           (fn [^long instant]
+             (when (.compareAndSet gc-running_ false true)
+               (try
+                 (let [entries (.get nil-reqs_)]
+                   (when entries
+                     (let [new-entries (limit-gc-entries spec entries instant)]
+                       (when-not (identical? new-entries entries)
+                         ;; Iff still same entries, else next sweep
+                         (.compareAndSet nil-reqs_ entries (not-empty new-entries))))))
 
-                ;; Passed all limits, ready to commit increments:
-                (if-let [l (latch_)]
-                  #?(:clj (do (.await ^CountDownLatch l) (recur)) :default nil)
-                  (let [new-entries
-                        (reduce-kv
-                          (fn [acc lid ^LimitSpec s]
-                            (assoc acc lid
-                              (if-let [^LimitEntry e (get entries lid)]
-                                (let [udt0 (.-udt0 e)]
-                                  (if (>= instant (+ udt0 (.-ms s)))
-                                    (LimitEntry.    delta          instant)
-                                    (LimitEntry. (+ delta (.-n e)) udt0)))
-                                (do (LimitEntry.    delta          instant)))))
-                          entries
-                          spec)]
+                 (let [^java.util.concurrent.ConcurrentHashMap reqs (.get reqs_)
+                       ^java.util.Iterator it
+                       (or
+                         (when-let [[m it] (gc-iter_)] ; Iff for current map
+                           (when (identical? m reqs) it))
+                         (.iterator (.entrySet reqs)))
 
-                    (if (-cas!? reqs_ reqs (assoc reqs rid new-entries))
-                      nil
-                      (recur)))))))))
+                       ;; Bound work per sweep to limit pause on the
+                       ;; triggering caller, resume from iter next sweep
+                       max-work (max 8192 (quot (.size reqs) 8))]
+
+                   (loop [n 0]
+                     (if (and (.hasNext it) (< n max-work))
+                       (let [^java.util.Map$Entry me (.next it)
+                             rid         (.getKey   me)
+                             entries     (.getValue me)
+                             new-entries (limit-gc-entries spec entries instant)]
+
+                         (when-not (identical? new-entries entries)
+                           (if (empty? new-entries)
+                             (.remove  reqs rid entries) ; Iff still same entries
+                             (.replace reqs rid entries new-entries)))
+                         (recur (inc n)))
+
+                       ;; Publish cursor iff map still current, else discard
+                       ;; so old (possibly high-water) map isn't retained.
+                       (let [cursor
+                             (when (and (.hasNext it) (identical? reqs (.get reqs_)))
+                               [reqs it])]
+                         (reset! gc-iter_ cursor)
+
+                         ;; Reset may land between validation and publication.
+                         (when (and cursor (not (identical? reqs (.get reqs_))))
+                           (-cas!? gc-iter_ cursor nil)))))
+                   nil)
+                 (finally (.set gc-running_ false)))))
+
+           f1
+           (fn [rid ^long delta peek?]
+             (let [instant (now-udt)]
+
+               (when (and (not peek?) (gc-now? gc-rate)) (gc! instant))
+
+               ;; Need to atomically check if all limits pass before
+               ;; committing to any n increments. All limits for a rid
+               ;; live in one immutable map, swapped by per-rid CAS:
+               (if (nil? rid)
+                 (loop [] ; [1] Common no-rid case: plain CAS, no CHM
+                   (let [entries (.get nil-reqs_) ; ?{<lid> <LimitEntry>}
+                         ?hits   (limit-?hits spec entries delta instant)]
+
+                     (if (or peek? ?hits)
+                       (when-let [^LimitHits h ?hits]
+                         [(.-worst-lid h) (.-worst-ms h) (.-m h)])
+
+                       (let [new-entries (limit-entries spec entries delta instant)]
+                         (if (.compareAndSet nil-reqs_ entries new-entries)
+                           nil
+                           (recur))))))
+
+                 (let [rid (rid-key rid)]
+                   (loop []
+                     (let [^java.util.concurrent.ConcurrentHashMap reqs (.get reqs_)
+                           entries (.get reqs rid) ; ?{<lid> <LimitEntry>}
+                           ?hits   (limit-?hits spec entries delta instant)]
+
+                       (if (or peek? ?hits)
+                         ;; No action (peeking, or hit >= 1 spec)
+                         (when-let [^LimitHits h ?hits]
+                           [(.-worst-lid h) (.-worst-ms h) (.-m h)])
+
+                         ;; Passed all limits, ready to commit increments:
+                         (let [new-entries (limit-entries spec entries delta instant)]
+                           (if (if (nil? entries)
+                                 (nil? (.putIfAbsent reqs rid new-entries))
+                                 (do   (.replace     reqs rid entries new-entries)))
+                             nil
+                             (recur))))))))))]
+
+          :cljs
+          [reqs_ (latom nil) ; {<rid> {<lid> <LimitEntry>}}
+
+           f1
+           (fn [rid ^long delta peek?]
+             (let [instant (now-udt)]
+               (when (and (not peek?) (gc-now? gc-rate))
+                 (reqs_
+                   (fn swap-fn [reqs] ; {<rid> <entries>}
+                     (persistent!
+                       (reduce-kv
+                         (fn [acc rid entries]
+                           (let [new-entries (limit-gc-entries spec entries instant)]
+                             (if (empty? new-entries)
+                               (dissoc! acc rid)
+                               (assoc!  acc rid new-entries))))
+                         (transient (or reqs {}))
+                         (do            reqs))))))
+
+               (let [entries (get (reqs_) rid)
+                     ?hits   (limit-?hits spec entries delta instant)]
+
+                 (if (or peek? ?hits)
+                   ;; No action (peeking, or hit >= 1 spec)
+                   (when-let [^LimitHits h ?hits]
+                     [(.-worst-lid h) (.-worst-ms h) (.-m h)])
+
+                   ;; Passed all limits, commit increments:
+                   (let [new-entries (limit-entries spec entries delta instant)]
+                     (reqs_ (fn [reqs] (assoc reqs rid new-entries)))
+                     nil)))))])
 
       limiter-fn
       (fn a-rate-limiter
@@ -4896,31 +5048,35 @@
            (:rl/reset :limiter/reset)
            (do
              (if (case req-id (:rl/all :limiter/all) true false)
-               (reset! reqs_ nil)
-               (reqs_ #(dissoc % req-id)))
+               #?(:clj  (do (.set nil-reqs_ nil)
+                            (.set reqs_ (java.util.concurrent.ConcurrentHashMap.))
+                            (reset! gc-iter_ nil)) ; Don't retain old map
+                  :cljs (reset! reqs_ nil))
+               #?(:clj  (if (nil? req-id)
+                          (.set nil-reqs_ nil)
+                          (.remove ^java.util.concurrent.ConcurrentHashMap
+                            (.get reqs_) (rid-key req-id)))
+                  :cljs (reqs_ #(dissoc % req-id))))
              nil)
 
            nil                      (f1 req-id +1 false)
            (:rl/peek :limiter/peek) (f1 req-id +1 true)
 
-           (if (number? cmd) ; Undocumented arb delta
-             (f1 req-id (long cmd) false)
+           (if (number? cmd) ; Undocumented arb delta, clamp before cast
+             (f1 req-id
+               (if (== cmd cmd) ; NaN guard (Clj/Cljs parity: NaN ~ 0)
+                 (long (min (max cmd (- max-limit-n)) max-limit-n))
+                 0)
+               false)
              (truss/unexpected-arg! cmd
                {:context  `rate-limiter
                 :param    'rate-limiter-command
                 :expected #{:rl/reset :rl/peek}
                 :req-id   req-id})))))]
 
-     :always
-     (if with-state?
-       [reqs_ limiter-fn]
-       (do    limiter-fn)))))
+     :always limiter-fn)))
 
 (comment
-  (let [[s_ rl1] (rate-limiter {:with-state? true} {:2s [1 2000] :5s [2 5000]})]
-    (def s_  s_)
-    (def rl1 rl1))
-
   (qb 1e6 (rl1)) ; 99.78
   (do (dotimes [n 2e6] (rl1 (str (rand)))) (count @s_)) ; Test GC
 
@@ -7469,7 +7625,7 @@
     truss/matching-error)
 
   (defn ^:no-doc rate-limiter*
-    "Prefer `rate-limiter`."
+    "No longer supported."
     {:deprecated "Encore v3.120.0 (2024-09-22)"}
     ([     spec] (rate-limiter            {:with-state? true} spec))
     ([opts spec] (rate-limiter (assoc opts :with-state? true) spec)))
