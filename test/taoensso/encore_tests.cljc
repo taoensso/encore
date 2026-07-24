@@ -1384,6 +1384,8 @@
 (deftest  _rate-limit-specs
   [(is (= (test-limit-spec {"a" [1.0 2] "b" [3 4]}) {"a"   [1 2], "b"   [3 4]}))
    (is (= (test-limit-spec [    [1.0 2]     [3 4]]) {[1 2] [1 2], [3 4] [3 4]}))
+   (is (= (test-limit-spec {"a" [0.5 0.5]}) {"a" [1 1]}))
+   (is (= (test-limit-spec [    [0.5 0.5]]) {[1 1] [1 1]}))
    (is (= (test-limit-spec #{"1/2s" "3/4m" "5/6.5h" "7/8d" "9/10w"})
          {"1/2s"   [1 (enc/msecs :secs    2)]
           "3/4m"   [3 (enc/msecs :mins    4)]

@@ -4725,7 +4725,7 @@
   Similar to (rate-limiter [[1 <msecs>]]) but significantly faster to construct and run.
   Doesn't support request ids!"
   [msecs]
-  (let [msecs (long (min msecs max-limit-msecs)) ; Clamp before cast
+  (let [msecs (max 1 (long (min msecs max-limit-msecs))) ; Clamp before cast
         ;; Init s.t. first call is allowed even for max window
         t0    (- max-limit-msecs)
         last_ #?(:clj  (java.util.concurrent.atomic.AtomicLong. t0)
@@ -4825,8 +4825,8 @@
 (let [limit-spec
       (fn [n ms]
         (LimitSpec. ; Clamp before cast
-          (long (min (truss/have pos? n)  max-limit-n)) ; 0 would anyway allow through first call
-          (long (min (truss/have pos? ms) max-limit-msecs))))]
+          (max 1 (long (min (truss/have pos? n)  max-limit-n)))
+          (max 1 (long (min (truss/have pos? ms) max-limit-msecs)))))]
 
   (defn- coerce-limit-spec [x]
     (cond
@@ -4834,9 +4834,8 @@
       (vector? x) ; [[n ms] ...]
       (reduce
         (fn [acc [n ms ?lid]] ; ?lid for back compatibility
-          (assoc acc
-            (or ?lid [(long (min n max-limit-n)) ms]) ; Clamp before cast
-            (limit-spec           n              ms)))
+          (let [^LimitSpec s (limit-spec n ms)]
+            (assoc acc (or ?lid [(.-n s) (.-ms s)]) s)))
         {} x)
 
       (set? x) ; #{"1/2d"}, etc.
