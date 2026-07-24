@@ -1939,7 +1939,7 @@
 
 (let [nx (new-object)
       min-transient-card 64 ; Elevated transient overhead here
-      dissoc? (fn [v]   (case v (:merge/dissoc :swap/dissoc) true false))
+      dissoc? (fn [v]   (and (keyword? v) (case v (:merge/dissoc :swap/dissoc) true false)))
       dissoc* (fn [m k] (if (transient? m) (dissoc! m k) (dissoc m k)))]
 
   (defn ^:no-doc merge-with*
@@ -1967,25 +1967,38 @@
            (fn [m1* k2 v2] ; m2 kvs into m1
              (let [v1 (get m1 k2 nx)]
                (cond
-                 (and nest? (map? v1) (map? v2)) (assoc*  m1* k2 (p! (merge-with* true f v1 v2)))
-                 (identical? v1 nx)              (assoc*  m1* k2                            v2)
-                 (dissoc?    v2)                 (dissoc* m1* k2)
+                 (and nest? (map? v2) (or (map? v1) (identical? v1 nx) (nil? f)))
+                 (assoc* m1* k2 (p! (merge-with* true f (when (map? v1) v1) v2)))
+
+                 (dissoc?    v2)    (dissoc* m1* k2)
+                 (identical? v1 nx) (assoc*  m1* k2 v2)
                  f
                  (let [v3 (f v1 v2)]
                    (if (dissoc? v3)
                      (dissoc*  m1* k2)
                      (assoc*   m1* k2 v3)))
                  :else (assoc* m1* k2 v2))))
+
            m1* (p! m2)))
 
        :else ; |m2| >= |m1|: use m2 as base, add everything from m1 not in m2
-       (let [m2*
-             (if (transient? m2)
-               m2
-               (let [m2 (with-meta m2 (meta m1))] ; Preserve left metadata
-                 (if (>= n2 min-transient-card)
-                   (transient m2)
-                   (do        m2))))
+       (let [m2 (p! m2)
+             m2-base
+             (reduce-kv
+               (fn [m k v]
+                 (let [v1 (get m1 k nx)]
+                   (cond
+                     (dissoc? v) (dissoc m k)
+                     (and nest? (map? v) (or (identical? v1 nx) (and (nil? f) (not (map? v1)))))
+                     (assoc m k (p! (merge-with* true f nil v)))
+                     :else m)))
+               m2 m2)
+
+             m2*
+             (let [m2-base (with-meta m2-base (meta m1))] ; Preserve left metadata
+               (if (>= n2 min-transient-card)
+                 (transient m2-base)
+                 (do        m2-base)))
 
              assoc* (if (transient? m2*) assoc! assoc)]
 

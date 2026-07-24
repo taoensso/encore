@@ -503,11 +503,35 @@
 
    (testing "Special vals"
      [(is (= (enc/merge {:a :A1 :b :B1} {:a :A1 :b :merge/dissoc})      {:a :A1}))
+      (is (= (enc/merge {}                     {:a :merge/dissoc})      {}))
+      (is (= (enc/merge {:a :A1 :b :B1}        {:c :merge/dissoc})      {:a :A1 :b :B1}))
+      (is (= (enc/merge {:a :A1} {:a :merge/dissoc :b :B2 :c :C2})      {:b :B2 :c :C2}))
+      (is (= (enc/merge {}       {:a  :swap/dissoc})                    {}))
+      (is (= (enc/merge {:a :A1} (transient {:b :merge/dissoc :c :C2})) {:a :A1 :c :C2}))
       (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? true})  {:b :B2}))
       (is (= (enc/merge {:a :A1}        {:b :B2 :merge/replace? false}) {:a :A1 :b :B2}))])
 
    (testing "Nesting"
      [(is (= (enc/nested-merge) nil))
+      (is (= (enc/nested-merge {} {:a {:b :merge/dissoc :c :C2}}) {:a {:c :C2}}))
+
+      (let [calls_ (atom 0)
+            f      (fn [v1 v2] (swap! calls_ inc) [:merged v1 v2])
+            r1     (enc/nested-merge-with f {:a 1 :left true} {:a {:x 2}})
+            n1     @calls_
+            _      (reset! calls_ 0)
+            r2     (enc/nested-merge-with f {:a 1} {:a {:x 2} :right true})
+            n2     @calls_]
+        [(is (= r1 {:a [:merged 1 {:x 2}], :left true}))
+         (is (= r2 {:a [:merged 1 {:x 2}], :right true}))
+         (is (= [n1 n2] [1 1]))])
+
+      (let [deep (reduce (fn [m _] {:x m}) :leaf (range 20000))
+            f    (fn [_ _] :merged)]
+        [(is (= (enc/nested-merge-with f {:a 1 :left true} {:a deep})  {:a :merged :left true}))
+         (is (= (enc/nested-merge-with f {:a 1} {:a deep :right true}) {:a :merged :right true}))
+         (is (= (enc/nested-merge-with f {:a {:b 1}} {:a {:b deep} :right true}) {:a {:b :merged} :right true}))])
+
       (is (= (enc/nested-merge
                {:a1 :A1 :b1 :B1  :c1 {:a2 :A2 :b2 {:a3 :A3 :b3 :B3  :d1 :D1 :e1 :E1}}}
                {        :b1 :B1* :c1 {        :b2 {        :b3 :B3* :d1 nil :e1 :swap/dissoc}}}
