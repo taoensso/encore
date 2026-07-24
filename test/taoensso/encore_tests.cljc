@@ -2452,7 +2452,9 @@
                 :elide? :submap/nx
                 :allow?
                 '(taoensso.encore/and?
-                   (< (Math/random) 0.5)
+                   (< #?(:clj  (.nextDouble (java.util.concurrent.ThreadLocalRandom/current))
+                         :cljs (Math/random))
+                      0.5)
                    (let [sf taoensso.encore-tests.required-ns/*rt-call-filter*]
                      (if sf (sf __kind __ns __id __level) true))
                    (> 1 0)

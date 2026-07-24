@@ -415,11 +415,16 @@
                (get opts :allow?
                  ;; Try keep expansion minimal, and avoid resolving to core since
                  ;; these backticks will always resolve to Clj only (never Cljs)
-                 (let [sample-form
+                 (let [rand-form
+                       (if cljs?
+                         '(Math/random)
+                         '(.nextDouble (java.util.concurrent.ThreadLocalRandom/current)))
+
+                       sample-form
                        (when-let [sform (get opts :sample)]
                          (if (enc/const-form? sform)
-                           (do                    `(~'< ~'(Math/random) ~(enc/as-pnum! sform)))
-                           `(~'if-let [~'s ~sform] (~'< ~'(Math/random)  (~'double   ~'s)) true)))
+                           (do                    `(~'< ~rand-form ~(enc/as-pnum! sform)))
+                           `(~'if-let [~'s ~sform] (~'< ~rand-form  (~'double   ~'s)) true)))
 
                        sf-form
                        (case (int (or sf-arity -1))
@@ -711,14 +716,18 @@
                           allow?
                           (if track-stats?
                             (enc/and?
-                              (if sample-rate  (if (< (Math/random) (double sample-rate)) true (do (cnt-sampled)  false)) true)
+                              (if sample-rate  (if (< #?(:clj  (.nextDouble (java.util.concurrent.ThreadLocalRandom/current))
+                                                         :cljs (Math/random))
+                                                       (double sample-rate)) true (do (cnt-sampled) false)) true)
                               (if spec-filter* (if (allow-signal? sig-raw spec-filter*)   true (do (cnt-filtered) false)) true)
                               (if when-fn      (if (when-fn #_sig-raw)                    true (do (cnt-filtered) false)) true)
                               (if rl-handler   (if (rl-handler) (do (cnt-rate-limited) false) true) true) ; Nb last (increments count)
                               )
 
                             (enc/and?
-                              (if sample-rate  (< (Math/random) (double sample-rate))  true)
+                              (if sample-rate  (< #?(:clj  (.nextDouble (java.util.concurrent.ThreadLocalRandom/current))
+                                                     :cljs (Math/random))
+                                                  (double sample-rate)) true)
                               (if spec-filter* (allow-signal? sig-raw spec-filter*)    true)
                               (if when-fn      (when-fn #_sig-raw)                     true)
                               (if rl-handler   (if (rl-handler) false true)            true) ; Nb last (increments count)
