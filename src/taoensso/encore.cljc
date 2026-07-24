@@ -4401,14 +4401,13 @@
 
    (cond
      size ; De-raced, commands, ttl, gc, max-size
-     (let [gc-now?  gc-now?
-           ticker   (counter)
+     (let [ticker   (counter)
            cache_   (latom nil) ; {<args> <TickedCacheEntry>}
            latch_   (latom nil) ; Used to pause writes during gc
-           ttl-ms   (long (or ttl-ms 0))
+           ttl-ms   (if ttl-ms (max 1 (long ttl-ms)) 0)
            ttl?     (not (zero? ttl-ms))
-           size     (long size)
-           gc-every (long (or gc-every (clamp-int 1000 16000 size)))]
+           size     (max 1 (long size))
+           gc-every (max 1 (long (or gc-every (clamp-int 1000 16000 size))))]
 
        (fn cached [& args]
          (let [a1 (first args)]
@@ -4503,10 +4502,10 @@
      (let [gc-now? gc-now?
            cache_  (latom nil) ; {<args> <SimpleCacheEntry>}
            latch_  (latom nil) ; Used to pause writes during gc
-           ttl-ms  (long ttl-ms)
+           ttl-ms  (max 1 (long ttl-ms))
            gc-rate
            (let [gce (or gc-every 8e3)]
-             (/ 1.0 (long gce)))]
+             (/ 1.0 (max 1 (long gce))))]
 
        (fn cached [& args]
          (let [a1 (first args)]
