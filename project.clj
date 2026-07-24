@@ -13,7 +13,7 @@
   :javac-options ["-source" "8" "-target" "8"] ; Support Java >= v8
   :dependencies
   [[org.clojure/tools.reader "1.6.0"]
-   [com.taoensso/truss       "2.4.0"]]
+   [com.taoensso/truss       "2.5.0"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
@@ -65,7 +65,7 @@
      [org.clojure/core.async "1.9.865"]
      [thheller/shadow-cljs   "3.4.11"]
      [nrepl                  "1.7.0"]
-     [cider/cider-nrepl      "0.61.0"]
+     [cider/cider-nrepl      "0.62.2"]
      #_[com.google.javascript/closure-compiler-unshaded "v20250407"]]
 
     :plugins
