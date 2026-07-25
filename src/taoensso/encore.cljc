@@ -4699,10 +4699,16 @@
 #?(:clj
    (defn- rid-key
      "Returns given rate-limiter req-id as a ConcurrentHashMap key with
-     Clojure hashed-key semantics. Types whose Java equality and hash
-     semantics already match Clojure's pass through unwrapped; others get
+     Clojure hashed-key semantics. Types whose Java `.equals` already
+     coincides with Clojure `=` pass through unwrapped; others get
      `clj-eq` wrapped. The choice is deterministic by type, and unwrapped
-     types are never Clojure-equal to wrapped types."
+     types are never Clojure-equal to wrapped types.
+
+     NB the criterion is `.equals`, NOT hash: Java and Clojure hashes
+     differ for most of these types, which is harmless since a hash map
+     needs only self-consistency. So don't widen this set by hash
+     reasoning, e.g. Longs must NOT pass through since
+     (.equals 1 (int 1)) is false while (= 1 (int 1)) is true."
      [rid]
      (if (or (instance? String  rid) (keyword? rid)
              (instance? Boolean rid) (symbol?  rid)
@@ -4741,8 +4747,12 @@
               true)))))))
 
 (deftype LimitSpec  [^long n ^long ms])
-(deftype LimitEntry [^long n ^long udt0])
 (deftype LimitHits  [m worst-lid ^long worst-ms])
+
+;; NB identity equality (no `equals`), and always freshly allocated on
+;; commit. This is what makes the `.equals`-based conditional CHM writes
+;; in `rate-limiter` behave as identity CAS.
+(deftype LimitEntry [^long n ^long udt0])
 
 (defn- limit-hits
   "Returns given `?LimitHits`, updated with a hit for given limit id."
@@ -4927,8 +4937,9 @@
                            (when (identical? m reqs) it))
                          (.iterator (.entrySet reqs)))
 
-                       ;; Bound work per sweep to limit pause on the
-                       ;; triggering caller, resume from iter next sweep
+                       ;; Sweep <= 8192 entries, or ~1/8th of map if larger,
+                       ;; to limit pause on the triggering caller.
+                       ;; Resume from iter next sweep
                        max-work (max 8192 (quot (.size reqs) 8))]
 
                    (loop [n 0]
@@ -5069,9 +5080,6 @@
      :always limiter-fn)))
 
 (comment
-  (qb 1e6 (rl1)) ; 99.78
-  (do (dotimes [n 2e6] (rl1 (str (rand)))) (count @s_)) ; Test GC
-
   (let [rl1 (rate-limiter-once-per                         250)
         rl2 (rate-limiter {:allow-basic? true} {"1/250" [1 250]})
         rl3 (rate-limiter {}                   {"1/250" [1 250]})]
