@@ -1,5 +1,6 @@
+;; No `:deps` here: bb's built-in `taoensso.encore` stub shadows any classpath
+;; Encore, so declaring one has no effect on `bb-tests`.
 {:paths ["bb"]
- :deps  {com.taoensso/encore {:mvn/version "3.117.0"}} ; For bb-tests
  :tasks
  {graal-tests
   {:doc "Run Graal native-image tests"
