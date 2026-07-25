@@ -4660,37 +4660,30 @@
 
 ;;;; Clojure equality wrapper
 
-(deftype CljEq [x ^int h]
-  #?@(:clj
-      [Object
-       (hashCode [_] h)
-       (equals   [_ other]
-         (and (instance? CljEq other)
-           (== h (.-h ^CljEq other))
-           (=  x (.-x ^CljEq other))))
-       (toString [_] (str "CljEq[" x "]"))
-       clojure.lang.IHashEq (hasheq [_] h)
-       clojure.lang.IDeref  (deref  [_] x)]
+#?(:clj
+   (deftype CljEq [x ^int h]
+     Object
+     (hashCode [_] h)
+     (equals   [_ other]
+       (and (instance? CljEq other)
+         (== h (.-h ^CljEq other))
+         (=  x (.-x ^CljEq other))))
+     (toString [_] (str "CljEq[" x "]"))
+     clojure.lang.IHashEq (hasheq [_] h)
+     clojure.lang.IDeref  (deref  [_] x)))
 
-      :cljs
-      [IEquiv (-equiv [_ other]
-                (and (instance? CljEq other)
-                  (=  h (.-h ^CljEq other))
-                  (=  x (.-x ^CljEq other))))
-       IHash  (-hash  [_] h)
-       IDeref (-deref [_] x)]))
+#?(:clj
+   (defn- clj-eq
+     "Returns given immutable arg wrapped with Clojure hashed-key semantics:
+     two wrappers are equal iff their wrapped values have equal Clojure hashes
+     and are `=`. Useful for keys in Java hash collections like
+     `java.util.concurrent.ConcurrentHashMap`:
 
-(defn- clj-eq
-  "Returns given immutable arg wrapped with Clojure hashed-key semantics:
-  two wrappers are equal iff their wrapped values have equal Clojure hashes
-  and are `=`. Useful for keys in Java hash collections like
-  `java.util.concurrent.ConcurrentHashMap`:
+       (.get chm         1)  != (.get chm         1N), but
+       (.get chm (clj-eq 1)) == (.get chm (clj-eq 1N))
 
-    (.get chm         1)  != (.get chm         1N), but
-    (.get chm (clj-eq 1)) == (.get chm (clj-eq 1N))
-
-  Deref the wrapper to get the underlying value: @(clj-eq x) => x"
-  [x] (CljEq. x (hash x)))
+     Deref the wrapper to get the underlying value: @(clj-eq x) => x"
+     [x] (CljEq. x (hash x))))
 
 ;;;; Rate limits
 

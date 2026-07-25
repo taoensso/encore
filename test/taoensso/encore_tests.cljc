@@ -1422,10 +1422,10 @@
 
   ;; GC effectively disabled so the expired entry is certainly retained,
   ;; exercising the expired-entry (not absent-entry) path
-  (let [rl (enc/rate-limiter {:gc-every 2e9} {:a [5 100]})]
+  (let [rl (enc/rate-limiter {:gc-every 2e9} {:a [5 20]})]
     [(is (nil? (rl "r1")) "Seed entry")
-     (do (enc/hot-sleep 150) :sleep>window)
-     (is (=    (rl 8 "r1") [:a 100 {:a 100}]) "delta > limit denied even for expired (uncollected) entry")
+     (do (enc/hot-sleep 30) :sleep>window)
+     (is (=    (rl 8 "r1") [:a 20 {:a 20}]) "delta > limit denied even for expired (uncollected) entry")
      (is (nil? (rl 5 "r1")) "delta <= limit allowed in fresh window")])
 
   #?(:clj
@@ -1438,25 +1438,27 @@
         (is (nil?  ((enc/rate-limiter-once-per 10000000000000000000000N)))
           "Huge BigInt window clamps rather than throws, first call allowed")])))
 
-(deftest _clj-eq
-  (let [clj-eq #'enc/clj-eq]
-    [(is (= @(clj-eq :x) :x) "Deref returns underlying value")
-     (is (=  (clj-eq [1 :a "s"])    (clj-eq [#?(:clj 1N :cljs 1) :a "s"])) "Clojure hashed-key equality semantics")
-     (is (= (hash (clj-eq 1)) (hash (clj-eq  #?(:clj 1N :cljs 1))))        "Clojure hash semantics")
-     (is (not=    (clj-eq 1) 1) "Wrapped never equals unwrapped")
-     (is (= (get {(clj-eq 1) :a} (clj-eq #?(:clj 1N :cljs 1))) :a) "Works as Clojure map key (hasheq + equiv)")
-     #?@(:clj
-         [(is (let [v [1 2]
-                    l (java.util.ArrayList. v)]
-                (and (= v l) (not= (hash v) (hash l)) (not= (clj-eq v) (clj-eq l))))
-            "Hash-inconsistent values remain distinct")
+#?(:clj
+   (deftest _clj-eq
+     (let [clj-eq #'enc/clj-eq]
+       [(is (= @(clj-eq :x) :x) "Deref returns underlying value")
+        (is (=  (clj-eq [1 :a "s"])    (clj-eq [1N :a "s"])) "Clojure hashed-key equality semantics")
+        (is (= (hash (clj-eq 1)) (hash (clj-eq  1N)))        "Clojure hash semantics")
+        (is (not=    (clj-eq 1) 1) "Wrapped never equals unwrapped")
+        (is (= (get {(clj-eq 1) :a} (clj-eq 1N)) :a) "Works as Clojure map key (hasheq + equiv)")
 
-          (is (let [chm (java.util.concurrent.ConcurrentHashMap.)]
-                (.put chm (clj-eq 1) "v")
-                (and
-                  (=    (.get chm (clj-eq 1N)) "v")
-                  (nil? (.get chm 1))))
-            "CHM keys get Clojure hashed-key semantics")])]))
+        (is (let [v [1 2]
+                  l (java.util.ArrayList. v)]
+              (and (= v l) (not= (hash v) (hash l)) ; Fixture premise
+                (not= (clj-eq v) (clj-eq l))))
+          "Hash-inconsistent values remain distinct")
+
+        (is (let [chm (java.util.concurrent.ConcurrentHashMap.)]
+              (.put chm (clj-eq 1) "v")
+              (and
+                (=    (.get chm (clj-eq 1N)) "v")
+                (nil? (.get chm 1))))
+          "CHM keys get Clojure hashed-key semantics")])))
 
 #?(:clj
    (deftest _rate-limiter-rid-equality
