@@ -628,7 +628,7 @@
 
      Source var's API-level metadata will be preserved (docstring, arglists, etc.).
      Changes to Clj source var's value will also be applied to alias.
-     See also [[defaliases]].
+     See also `defaliases`.
 
      Advanced: alias attrs may contain `:alias/keys` to select source attrs to preserve.
      Value may be a literal key collection, or a symbol naming a key collection var."
