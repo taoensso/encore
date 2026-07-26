@@ -51,4 +51,5 @@
   (sigs/call-handlers! *sig-handlers* (MySignal.))
 
   (enc/println "Main ending")
-  (enc/println "Should see 2x \"**success**\" in upcoming output <---"))
+  (enc/println "Should see 2x \"**success**\" in upcoming output <---")
+  (stop-handlers!))
