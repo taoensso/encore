@@ -13,7 +13,12 @@
    [_         msecs task-fn]
    "Calls (task-fn) after given msecs, no auto binding conveyance!
    Returns (fn cancel []) which can be used to cancel call.
-   If given `task-id`, first cancels pending task with that id."))
+   If given `task-id`, first cancels pending task with that id.")
+
+  #?(:clj
+     (^:no-doc timers-gc [_]
+      "Purges all lazily cancelled timer tasks and returns the number purged.
+      O(num-tasks + num-cancelled * log(num-tasks)).")))
 
 #?(:clj
    (deftype ^:no-doc TimerTask [^long udt-due task-id f ^java.util.concurrent.atomic.AtomicBoolean done?]
@@ -135,7 +140,22 @@
                 ([remove?]
                  (when (cancel-task! task remove?)
                    (when id      (.remove by-id id task))
-                   true))))))))))
+                   true)))))
+
+          (timers-gc [_]
+            (locking pq
+              (let [^java.util.Iterator iter (.iterator pq)
+                    removed
+                    (loop [n 0]
+                      (if (.hasNext iter)
+                        (let [^TimerTask task (.next iter)
+                              ^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
+                          (if (.get done?)
+                            (do (.remove iter) (recur (inc n)))
+                            (recur n)))
+                        n))]
+                (when (pos? removed) (.notify pq))
+                (do         removed)))))))))
 
 #?(:cljs
    (defn ^:no-doc timer-service

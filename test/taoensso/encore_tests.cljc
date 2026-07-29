@@ -2113,6 +2113,22 @@
        (is (zero? (:queued @ts))))))
 
 #?(:clj
+   (deftest _timer-service-gc
+     (let [ts     (timers/timer-service {:inactivity-timeout-msecs 1})
+           cancel (ts 60000 (fn []))]
+       (cancel)
+       (ts :id 60000 (fn []))
+       (ts :id 60000 (fn []))
+       (is (= 3 (:queued @ts)))
+       (is (= 2 (timers/timers-gc ts)))
+       (is (= 1 (:queued @ts)))
+       (is (true? (timers/timer-pending? ts :id)))
+       (is (true? (timers/timer-cancel ts :id)))
+       (is (= 1 (timers/timers-gc ts)))
+       (is (zero? (:queued @ts)))
+       (is (zero? (timers/timers-gc ts))))))
+
+#?(:clj
    (deftest _timer-service-restarts
      (let [ts (timers/timer-service {:inactivity-timeout-msecs 1})]
        (dotimes [_ 32]
