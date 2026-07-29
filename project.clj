@@ -20,7 +20,7 @@
    :provided {:injections   [(println "Lein profile: :provided")]
               :dependencies [[org.clojure/clojurescript "1.12.145"]
                              [org.clojure/clojure       "1.12.5"]]}
-   :c1.13    {:dependencies [[org.clojure/clojure       "1.13.0-alpha4"]]}
+   :c1.13    {:dependencies [[org.clojure/clojure       "1.13.0-alpha6"]]}
    :c1.12    {:dependencies [[org.clojure/clojure       "1.12.5"]]}
    :c1.11    {:dependencies [[org.clojure/clojure       "1.11.4"]]}
    :c1.10    {:dependencies [[org.clojure/clojure       "1.10.3"]]}
@@ -94,7 +94,8 @@
    "build-once" ["do" ["clean"] ["cljsbuild" "once"]]
    "deploy-lib" ["do" ["build-once"] ["deploy" "clojars"] ["install"]]
 
-   "test-clj"      ["with-profile" "+c1.13:+c1.12:+c1.11:+c1.10" "test"]
-   "test-cljs"     ["with-profile" "+c1.12" "cljsbuild"   "test"]
-   "test-all"      ["do" ["clean"] ["test-clj"] ["test-cljs"] ["test-shutdown"]]
-   "test-shutdown" ["with-profile" "+c1.12,+test-shutdown" "run"]})
+   "test-clj"       ["with-profile" "+c1.13:+c1.12:+c1.11:+c1.10" "test"]
+   "test-clj-java8" ["with-profile" "+c1.12:+c1.11:+c1.10"        "test"]
+   "test-cljs"      ["with-profile" "+c1.12" "cljsbuild"   "test"]
+   "test-all"       ["do" ["clean"] ["test-clj"] ["test-cljs"] ["test-shutdown"]]
+   "test-shutdown"  ["with-profile" "+c1.12,+test-shutdown" "run"]})
