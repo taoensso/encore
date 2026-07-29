@@ -2088,13 +2088,29 @@
 
 #?(:clj
    (deftest _timer-task-ordering
-     (let [task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE (fn []))
-           task-0   (taoensso.encore.timers.TimerTask. 0              (fn []))
-           task-max (taoensso.encore.timers.TimerTask. Long/MAX_VALUE (fn []))]
+     (let [done?    (java.util.concurrent.atomic.AtomicBoolean. false)
+           task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE nil (fn []) done?)
+           task-0   (taoensso.encore.timers.TimerTask. 0              nil (fn []) done?)
+           task-max (taoensso.encore.timers.TimerTask. Long/MAX_VALUE nil (fn []) done?)]
        [(is (neg?  (compare task-min task-0)))
         (is (neg?  (compare task-0 task-max)))
         (is (zero? (compare task-0 task-0)))
         (is (pos?  (compare task-max task-min)))])))
+
+#?(:clj
+   (deftest _timer-service-eager-cancel
+     (let [ts (timers/timer-service
+                {:cancel-mode :eager, :inactivity-timeout-msecs 1})]
+       (let [cancel (ts 60000 (fn []))]
+         (is (= 1 (:queued @ts)))
+         (is (true? (cancel)))
+         (is (zero? (:queued @ts))))
+
+       (ts :id 60000 (fn []))
+       (ts :id 60000 (fn []))
+       (is (= 1 (:queued @ts)))
+       (is (true? (timers/timer-cancel ts :id)))
+       (is (zero? (:queued @ts))))))
 
 #?(:clj
    (deftest _timer-service-restarts

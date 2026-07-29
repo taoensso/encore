@@ -16,28 +16,44 @@
    If given `task-id`, first cancels pending task with that id."))
 
 #?(:clj
-   (deftype ^:no-doc TimerTask  [^long udt-due f]
-     Comparable (compareTo [_ task] (Long/compare udt-due (.-udt-due ^TimerTask task)))
-     clojure.lang.IFn (invoke [_] (f))))
+   (deftype ^:no-doc TimerTask [^long udt-due task-id f ^java.util.concurrent.atomic.AtomicBoolean done?]
+     Comparable       (compareTo [_ task] (Long/compare udt-due (.-udt-due ^TimerTask task)))
+     clojure.lang.IFn (invoke    [_] (f))))
 
 #?(:clj
    (defn ^:no-doc timer-service
      "Returns a lightweight timer service inspired by http-kit's timer code.
      Uses a single task thread that'll auto start+stop as needed.
+
      Scheduling: O(log(num-tasks)
-     Cancelling: O(1) (cancel only), or O(num-tasks) (with queue removal)."
+     Cancelling: O(1)         with `:lazy`  cancel mode (default), or
+                 O(num-tasks) with `:eager` cancel mode."
+
      ([] (timer-service nil))
-     ([{:keys [inactivity-timeout-msecs thread-fn]
+     ([{:keys [cancel-mode inactivity-timeout-msecs thread-fn]
         :or
-        {inactivity-timeout-msecs 60000
+        {cancel-mode              :lazy
+         inactivity-timeout-msecs 60000
          thread-fn future-call}}]
 
       ;; Benched ~20% faster than equivalent `java.util.concurrent.DelayQueue`,
       ;; and also supports thread auto start/stop
 
-      (let [running? (java.util.concurrent.atomic.AtomicBoolean. false)
-            by-id    (java.util.concurrent.ConcurrentHashMap.) ; {task-id ab:done?}
+      (let [eager-cancel? (= :eager (truss/have #{:lazy :eager} cancel-mode))
+            running? (java.util.concurrent.atomic.AtomicBoolean. false)
+            by-id    (java.util.concurrent.ConcurrentHashMap.) ; {task-id TimerTask}
             pq       (java.util.PriorityQueue.)
+
+            cancel-task!
+            (fn [^TimerTask task remove?]
+              (let [^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
+                (when (.compareAndSet done? false true)
+                  (when remove?
+                    (locking pq
+                      (.remove pq task) ; O(n)
+                      (.notify pq)))
+                  true)))
+
             runner
             (fn runner []
               (loop [stop-on-empty? false]
@@ -66,7 +82,12 @@
                   (case action
                     :call
                     (do
-                      (task)
+                      (let [^TimerTask task task
+                            ^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
+                        (when (.compareAndSet done? false true)
+                          (when-let [id (.-task-id task)]
+                            (.remove by-id id task))
+                          (truss/catching (task))))
                       (recur false))
 
                     :wait (recur false)
@@ -82,68 +103,65 @@
           (invoke [self id msecs f] (timer-call-after self id  msecs f))
 
           ITimers
-          (timer-pending?   [_ id] (if-let   [^java.util.concurrent.atomic.AtomicBoolean ab (.get    by-id id)] (false?   (.get ab)) false))
-          (timer-cancel     [_ id] (when-let [^java.util.concurrent.atomic.AtomicBoolean ab (.remove by-id id)] (.compareAndSet ab false true)))
+          (timer-cancel   [_ id] (when-let [^TimerTask task (.remove by-id id)] (cancel-task! task eager-cancel?)))
+          (timer-pending? [_ id]
+            (if-let [^TimerTask task (.get by-id id)]
+              (let [^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
+                (false? (.get done?)))
+              false))
+
           (timer-call-after [_ id msecs f]
             (let [ab:done? (java.util.concurrent.atomic.AtomicBoolean. false)
-                  task
-                  (TimerTask. (+ (System/currentTimeMillis) (long msecs))
-                    (fn run-task []
-                      (when (.compareAndSet ab:done? false true)
-                        (when id (.remove by-id id ab:done?))
-                        (truss/catching (f)))))]
+                  task (TimerTask. (+ (System/currentTimeMillis) (long msecs)) id f ab:done?)]
 
               (when id
-                (when-let [^java.util.concurrent.atomic.AtomicBoolean ab:old-done?
+                (when-let [^TimerTask old-task
                            (loop []
                              (if-let [old  (.get by-id id)]
-                               (if (.replace     by-id id old ab:done?) old (recur))
-                               (if (.putIfAbsent by-id id     ab:done?) (recur) nil)))]
-                  (.set ab:old-done? true)))
+                               (if (.replace     by-id id old task) old (recur))
+                               (if (.putIfAbsent by-id id     task) (recur) nil)))]
+                  (cancel-task! old-task eager-cancel?)))
 
               (let [start-runner?
                     (locking pq
                       (.offer  pq task)
+                      (when (and eager-cancel? (.get ab:done?)) (.remove pq task))
                       (.notify pq)
-                      (.compareAndSet running? false true))]
+                      (and (not (.isEmpty pq)) (.compareAndSet running? false true)))]
                 (when start-runner? (thread-fn runner)))
 
               (fn cancel-task
-                ([       ] (cancel-task false))
+                ([       ] (cancel-task eager-cancel?))
                 ([remove?]
-                 (when (.compareAndSet ab:done? false true)
-                   (when id      (.remove by-id id ab:done?))
-                   (when remove? (locking pq (.remove pq task))) ; O(n)
+                 (when (cancel-task! task remove?)
+                   (when id      (.remove by-id id task))
                    true))))))))))
 
 #?(:cljs
    (defn ^:no-doc timer-service
-     "Returns a simple timer service based on `js/setTimeout`."
+     "Returns a simple timer service based on `js/setTimeout`.
+     Use `:eager` cancel mode to clear cancelled timeouts immediately."
      ([     ] (timer-service nil))
-     ([_opts]
-      (let [by-id_ (volatile! {})] ; {task-id done?_}
+     ([{:keys [cancel-mode] :or {cancel-mode :lazy}}]
+      (let [eager-cancel? (= :eager (truss/have #{:lazy :eager} cancel-mode))
+            by-id_ (volatile! {})] ; {task-id [done?_ timeout-id]}
         (reify
           IFn
           (-invoke [self    msecs f] (timer-call-after self nil msecs f))
           (-invoke [self id msecs f] (timer-call-after self id  msecs f))
 
           ITimers
-          (timer-pending?   [_ id] (if-let   [done?_ (get @by-id_ id)] (not      @done?_) false))
-          (timer-cancel     [_ id]
-            (when-let [done?_ (get @by-id_ id)]
+          (timer-pending? [_ id] (if-let [[done?_] (get @by-id_ id)] (not @done?_) false))
+          (timer-cancel   [_ id]
+            (when-let [[done?_ timeout-id] (get @by-id_ id)]
               (when-not @done?_
                 (vreset! done?_ true)
                 (vswap! by-id_ dissoc id)
+                (when eager-cancel? (js/clearTimeout timeout-id))
                 true)))
+
           (timer-call-after [_ id msecs f]
             (let [done?_ (volatile! false)
-                  _
-                  (when id
-                    (when-let [old-done?_ (get @by-id_ id)]
-                      (vreset! old-done?_ true))
-
-                    (vswap! by-id_ assoc id done?_))
-
                   timeout-id
                   (js/setTimeout
                     (fn run-task []
@@ -151,10 +169,20 @@
                         (vreset! done?_ true)
                         (when id (vswap! by-id_ dissoc id))
                         (f)))
-                    msecs)]
+                    msecs)
+
+                  entry [done?_ timeout-id]
+                  _
+                  (when id
+                    (when-let [[old-done?_ old-timeout-id] (get @by-id_ id)]
+                      (when-not @old-done?_
+                        (vreset! old-done?_ true)
+                        (when eager-cancel? (js/clearTimeout old-timeout-id))))
+
+                    (vswap! by-id_ assoc id entry))]
 
               (fn cancel-task
-                ([       ] (cancel-task false))
+                ([       ] (cancel-task eager-cancel?))
                 ([remove?]
                  (when-not @done?_
                    (vreset! done?_ true)
