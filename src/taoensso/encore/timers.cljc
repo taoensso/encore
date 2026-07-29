@@ -129,7 +129,12 @@
 
           ITimers
           (timer-pending?   [_ id] (if-let   [done?_ (get @by-id_ id)] (not      @done?_) false))
-          (timer-cancel     [_ id] (when-let [done?_ (get @by-id_ id)] (when-not @done?_ (vreset! done?_ true))))
+          (timer-cancel     [_ id]
+            (when-let [done?_ (get @by-id_ id)]
+              (when-not @done?_
+                (vreset! done?_ true)
+                (vswap! by-id_ dissoc id)
+                true)))
           (timer-call-after [_ id msecs f]
             (let [done?_ (volatile! false)
                   _
