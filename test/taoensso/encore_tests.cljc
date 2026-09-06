@@ -1327,6 +1327,8 @@
          (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :new      :swap/old))) @a]) [:old :new]))
          (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :new :swap/changed?))) @a]) [true :new]))
          (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old] (enc/swapped :swap/abort     old))) @a]) [:old :old]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [_] (enc/swapped :swap/abort :swap/new))) @a]) [:old :old]))
+         (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [_] (enc/swapped :swap/abort :swap/changed?))) @a]) [false :old]))
          (is (= (let [a (atom :old)] [(enc/swap-in! a (fn [old]              :swap/abort         )) @a]) [:old :old]))])
 
       (testing "n keys"

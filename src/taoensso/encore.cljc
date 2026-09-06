@@ -4099,7 +4099,7 @@
 
       (if (identical-kw? m1 :swap/abort)
         (if sw?
-          (return-swapped s1 m0 m1) ; rv
+          (return-swapped s1 m0 m0) ; rv
           (return m0 m0 m0 m0)) ; [m0 v0 m1 v1]
 
         (if (-cas!? atom_ m0 m1)
