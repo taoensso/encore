@@ -3027,9 +3027,11 @@
              replacement ; Fix CLJS-911
              (if (string? replacement)
                replacement
-               ;; Note that the merged CLJS-911 fix actually tries to vary
-               ;; behaviour here based on the number of matches(!)
-               (fn [& args] (replacement (vec args))))]
+               (fn [& args]
+                 ;; Strip offset/input and any named-groups object.
+                 (let [matches (vec (drop-last (if (string? (last args)) 2 3) args))]
+                   (replacement
+                     (if (= (count matches) 1) (first matches) matches)))))]
          (.replace s (js/RegExp. (.-source match) flags) replacement))
        :else (truss/ex-info! (str "Invalid match arg: " match)))))
 
