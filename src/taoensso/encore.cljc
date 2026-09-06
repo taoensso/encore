@@ -1775,8 +1775,15 @@
   given {<old-new> <new-key>} replacements. O(min(n_replacements, n_m))."
   [replacements m]
   (cond
-    (empty? m)            m ; Preserve metadata
-    (empty? replacements) m ; ''
+    (empty? m) m ; Preserve metadata
+    :let  [n-replacements (count replacements)]
+    (zero? n-replacements) m ; ''
+
+    (== n-replacements 1)
+    (let [[old-k new-k] (first replacements)]
+      (if-let [e (find m old-k)]
+        (assoc (dissoc m old-k) new-k (val e))
+        (do    m)))
 
     (not (editable? m))
     (reduce-kv
@@ -1787,14 +1794,15 @@
       (reduce-kv (fn [acc old-k _] (dissoc acc old-k)) m replacements)
       replacements)
 
-    (> (count m) (count replacements))
+    (> (count m) n-replacements)
     (persistent!
       (reduce-kv
         (fn [acc old-k new-k]
           (if-let [e (find m old-k)]
-            (assoc! (dissoc! acc old-k) new-k (val e))
+            (assoc! acc new-k (val e))
             (do              acc)))
-        (transient m)
+        (reduce-kv (fn [acc old-k _] (dissoc! acc old-k))
+          (transient m) replacements)
         replacements))
 
     :else
@@ -1802,9 +1810,12 @@
       (reduce-kv
         (fn [acc old-k v]
           (if-let [e (find replacements old-k)]
-            (assoc! (dissoc! acc old-k) (val e) v)
+            (assoc! acc (val e) v)
             (do              acc)))
-        (transient m)
+        (reduce-kv
+          (fn [acc old-k _]
+            (if (contains? replacements old-k) (dissoc! acc old-k) acc))
+          (transient m) m)
         (do        m)))))
 
 (comment (rename-keys {:a :X} {:a :A :b :B :c :C}))

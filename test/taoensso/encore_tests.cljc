@@ -301,7 +301,10 @@
 
 (deftest _rename-keys
   (doseq [m [{:a 1 :b 2} {:a 1 :b 2 :c 3}]
-          m [(into (sorted-map-by #(compare %2 %1)) m)]]
+          m [m (into (sorted-map-by #(compare %2 %1)) m)]]
+    (is (= (enc/rename-keys {:a :d} m) (assoc (dissoc m :a) :d 1)))
+    (is (= (enc/rename-keys {:missing :a} m) m))
+    (is (= (enc/rename-keys {:a :a} m) m))
     (is (= (enc/rename-keys (array-map :a :b :b :a) m)
            (assoc m :a 2 :b 1)))
     (is (= (enc/rename-keys (array-map :a :b :b :d) m)
