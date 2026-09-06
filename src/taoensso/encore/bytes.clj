@@ -216,7 +216,7 @@
 (enc/deprecated (enc/defalias utf8-str enc/a-utf8-str))
 (defn ?utf8-ba->?str [?ba] (when-let [ba ?ba] (enc/utf8-ba->str ba)))
 (defn ?str->?utf8-ba [?s]  (when-let [s  ?s]  (enc/str->utf8-ba  s)))
-(declare ca->utf8-ba chars?)
+(declare chars?)
 
 (defn ^:public as-ba
   "Returns a byte[] from given input:
@@ -232,7 +232,7 @@
    (enc/cond
      (bytes?   x)               x
      (string?  x) (str->utf8-ba x)
-     (chars?   x) (ca->utf8-ba  x)
+     (chars?   x) (str->utf8-ba (String. ^chars x))
      (enc/int? x) (byte-array   x)
      (seqable? x) (byte-array   x)
      :else

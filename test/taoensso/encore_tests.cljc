@@ -1804,7 +1804,11 @@
                                         -115 -32 -78 -78 -32 -78 -65 32 -32 -78 -72 -32 -78 -126 -32 -78 -83
                                         -32 -78 -75 -32 -78 -65 -32 -78 -72 32 49 48])))])
 
-      (testing "chars" (let [s enc/a-utf8-str] (is (= (String. (bytes/as-ca s)) s))))
+      (testing "chars"
+        (let [s enc/a-utf8-str, ca (bytes/as-ca s)]
+          (is (= (String. ca) s))
+          (is (= (bytes/utf8-ba->str (bytes/as-ba ca)) s))
+          (is (= (vec (bytes/as-ba 3 ca)) [72 105 32]))))
       (testing "parse-buffer-len" (is (= (bytes/parse-buffer-len [1 (bytes/as-ba 3)]) 4)))
 
       (testing "with-io"
