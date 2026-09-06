@@ -4295,7 +4295,14 @@
            cachen_  (java.util.concurrent.ConcurrentHashMap.)]
 
        (fn
-         ([ ] (deref-cached! [dv (or (.get cache0_) (let [dv (delay (f))] (if (.compareAndSet cache0_ nil dv) dv (.get cache0_))))] (.compareAndSet cache0_ dv nil)))
+         ([ ]
+          (deref-cached!
+            [dv
+             (loop []
+               (or (.get cache0_)
+                 (let [dv (delay (f))]
+                   (if (.compareAndSet cache0_ nil dv) dv (recur)))))]
+            (.compareAndSet cache0_ dv nil)))
          ([x]
           (let [x* (if (identical? x nil) sentinel x)]
             (deref-cached!

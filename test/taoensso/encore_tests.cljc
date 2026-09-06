@@ -800,6 +800,22 @@
           (is (= (cached :x) [:x :success]))
           (is (= @calls_ 2))))]))
 
+#?(:clj
+   (deftest _fmemoize-concurrent-exceptions
+     (let [expected (Exception. "Expected")
+           cached   (enc/fmemoize (fn [] (throw expected)))
+           start    (promise)
+           jobs
+           (mapv
+             (fn [_]
+               (future
+                 @start
+                 (every? #(identical? expected %)
+                   (repeatedly 2000 #(try (cached) (catch Throwable t t))))))
+             (range 8))]
+       (deliver start true)
+       (is (every? true? (map deref jobs))))))
+
 (deftest _memoize-last
   [(let [c     (enc/counter)
          f     (enc/memoize-last (fn [& args] (c) (vec args)))
