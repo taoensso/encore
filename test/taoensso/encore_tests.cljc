@@ -592,6 +592,10 @@
 
 (deftest _utf8-byte-strings (let [s enc/a-utf8-str] (is (= s (-> s enc/str->utf8-ba enc/utf8-ba->str)))))
 
+(deftest _rand-id-fn
+  [(is (re-matches #"[0-9A-Za-z_-]{21}" ((enc/rand-id-fn {}))))
+   (is (re-matches #"[abc]{8}" ((enc/rand-id-fn {:chars "abc" :len 8}))))])
+
 (deftest _str-replace
   [(is (= (enc/str-replace "x x" "x" "$&$$") "$&$$ $&$$"))
    (is (= (enc/str-replace "ab" #"." str/upper-case) "AB"))

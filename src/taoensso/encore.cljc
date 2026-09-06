@@ -3756,7 +3756,7 @@
               (.append sb (aget chars possible-ch-idx))))
 
           (cond
-            (== (.length sb) len) (str sb)
+            (== (sb-length sb) len) (str sb)
             (== idx      max-idx) (recur 0 (dec stepn) (rand-bytes-fn stepn))
             :else (recur (unchecked-inc idx) max-idx rand-bytes)))))))
 
