@@ -5416,12 +5416,12 @@
        (let [item-cmp
              (if identity-keyfn?
                (fn [x y]
-                 (cmp
+                 (.compare ^java.util.Comparator cmp
                    (sentinel->nil x)
                    (sentinel->nil y)))
 
                (fn [x y]
-                 (cmp
+                 (.compare ^java.util.Comparator cmp
                    (keyfn (sentinel->nil x))
                    (keyfn (sentinel->nil y)))))
 
@@ -5454,7 +5454,7 @@
                  e))
 
              ;; Keep only the best `n` items, with the current worst at root.
-             pq (java.util.PriorityQueue. (fn [^objects x ^objects y] (cmp (aget y 0) (aget x 0))))]
+             pq (java.util.PriorityQueue. (fn [^objects x ^objects y] (.compare ^java.util.Comparator cmp (aget y 0) (aget x 0))))]
 
          (run!
            (fn [in]
@@ -5463,7 +5463,7 @@
                (if (< (.size pq) n)
                  (.offer pq (make-entry k x))
                  (let [^objects worst (.peek pq)]
-                   (when (neg? (cmp k (aget worst 0)))
+                   (when (neg? (.compare ^java.util.Comparator cmp k (aget worst 0)))
                      (let [^objects e (.poll pq)]
                        (aset e 0 k)
                        (aset e 1 x)
