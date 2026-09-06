@@ -5230,7 +5230,7 @@
           :or   {gc-every 16e3}}]
 
    (let [nmax     (long nmax)
-         acc_     (latom (vec init-val))
+         acc_     (latom (vec (take-last nmax init-val)))
          gc-every (when gc-every (long gc-every))
          ticker   (when gc-every (counter))
          latch_   (when gc-every (latom nil))]
@@ -5274,7 +5274,7 @@
       (let [nmax (long nmax)
             ^java.util.LinkedList ll
             (if init-val
-              (java.util.LinkedList. init-val)
+              (java.util.LinkedList. ^java.util.Collection (or (take-last nmax init-val) []))
               (java.util.LinkedList.))]
 
         (fn rolling-list-fn

@@ -1157,7 +1157,13 @@
             (let [msrng (enc/secure-rng-mock!!! 2)] [(.nextLong msrng) (.nextDouble msrng)])))]))
 
 (deftest _rolling-sequentials
-  [(do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
+  [(doseq [make-rolling [enc/rolling-vector #?(:clj enc/rolling-list)]
+           nmax [0 2]]
+     (let [r (make-rolling nmax {:init-val [1 2 3 4]})]
+       (is (= (vec (r)) (if (zero? nmax) [] [3 4])))
+       (r 5)
+       (is (= (vec (r)) (if (zero? nmax) [] [4 5])))))
+   (do     (is (= (let [rv (enc/rolling-vector 3)] (dotimes [idx 1e4] (rv idx))      (rv))  [9997 9998 9999])))
    #?(:clj (is (= (let [rl (enc/rolling-list   3)] (dotimes [idx 1e4] (rl idx)) (vec (rl))) [9997 9998 9999])))])
 
 #?(:clj
