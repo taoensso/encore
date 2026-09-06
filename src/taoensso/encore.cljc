@@ -4934,7 +4934,7 @@
      (rate-limiter-once-per once-per-msecs)
 
      :let
-     [{:keys [gc-every] :or {gc-every 1.6e4}} opts ; Undocumented
+     [{:keys [gc-every] :or {gc-every #?(:clj 4e3 :cljs 1.6e4)}} opts ; Undocumented
 
       gc-now? gc-now?
       gc-rate (let [gce (max 1 (long gc-every))] (/ 1.0 gce))
@@ -4970,10 +4970,10 @@
                            (when (identical? m reqs) it))
                          (.iterator (.entrySet reqs)))
 
-                       ;; Sweep <= 8192 entries, or ~1/8th of map if larger,
-                       ;; to limit pause on the triggering caller.
-                       ;; Resume from iter next sweep
-                       max-work (max 8192 (quot (.size reqs) 8))]
+                       ;; Sweep up to 8192 entries, or ~1/32nd of a larger map.
+                       ;; Default interval < budget lets GC keep up with churn;
+                       ;; At defaults, stable large maps take ~128k calls per sweep.
+                       max-work (max 8192 (quot (.size reqs) 32))]
 
                    (loop [n 0]
                      (if (and (.hasNext it) (< n max-work))
