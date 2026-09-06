@@ -1772,6 +1772,9 @@
         (let [ba (bytes/ba-join (bytes/as-ba [1 2]) (bytes/as-ba [3]) (bytes/as-ba [5 6]) (bytes/as-ba [7 8 9]))]
           (is (= (mapv vec (bytes/ba-parts ba 0 2 1 1 0 0 0 1)) [[1 2] [3] [5] [] [] [] [6] [7 8 9]]))))
 
+      (testing "ba-parts* empty lengths"
+        (is (= (mapv vec (bytes/ba-parts* [] (byte-array [1 2 3]) 1 [])) [[2 3]])))
+
       (testing "nempty-bas"
         [(false? (bytes/nempty-ba? nil))
          (false? (bytes/nempty-ba? ""))

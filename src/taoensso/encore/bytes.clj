@@ -144,7 +144,7 @@
   (defn ba-parts*
     "Returns `to` with partitions of given byte[] coinjoined."
     [to ba start-idx lengths]
-    (loop [idx (long start-idx), remaining lengths, acc to]
+    (loop [idx (long start-idx), remaining (seq lengths), acc to]
       (if-let [[^int len] remaining]
         (recur (+ idx len) (next remaining)
           (conj acc (ba-range ba idx (+ idx len))))
