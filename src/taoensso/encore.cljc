@@ -5375,7 +5375,9 @@
 
            comparator
            (if-let [kfn (when (not= ?keyfn identity) ?keyfn)]
-             (fn [x y] (comparator (kfn x) (kfn y)))
+             (fn [x y]
+               #?(:clj  (.compare ^java.util.Comparator comparator (kfn x) (kfn y))
+                  :cljs (comparator (kfn x) (kfn y))))
              comparator)
 
            a (to-array coll)]

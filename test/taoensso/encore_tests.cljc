@@ -1946,6 +1946,12 @@
 
 ;;;; Stats
 
+(deftest _sortv
+  [(is (= (enc/sortv :v > [{:v 1} {:v 3} {:v 2}]) [{:v 3} {:v 2} {:v 1}]))
+   #?(:clj
+      (is (= (enc/sortv :v (java.util.Comparator/naturalOrder) [{:v 2} {:v 1}])
+             [{:v 1} {:v 2}])))])
+
 (deftest sorted-nums
   [(testing "Sorted longs"
      [(is (= (vec (stats/sorted-longs nil))               []))
