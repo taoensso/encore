@@ -593,7 +593,8 @@
 (deftest _utf8-byte-strings (let [s enc/a-utf8-str] (is (= s (-> s enc/str->utf8-ba enc/utf8-ba->str)))))
 
 (deftest _str-replace
-  [(is (= (enc/str-replace "ab" #"." str/upper-case) "AB"))
+  [(is (= (enc/str-replace "x x" "x" "$&$$") "$&$$ $&$$"))
+   (is (= (enc/str-replace "ab" #"." str/upper-case) "AB"))
    (is (= (enc/str-replace "ab" #"(a)(b)" #(str/join "/" %)) "ab/a/b"))
    (is (= (enc/str-replace "a" (re-pattern "(?<letter>a)") #(str/join "/" %)) "a/a"))])
 

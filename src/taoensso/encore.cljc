@@ -3018,7 +3018,8 @@
      :cljs
      (cond
        (string? match) ; string -> string replacement
-       (.replace s (js/RegExp. (gstr/regExpEscape match) "g") replacement)
+       (.replace s (js/RegExp. (gstr/regExpEscape match) "g")
+         (if (string? replacement) (fn [] replacement) replacement))
        ;; (.hasOwnProperty match "source") ; No! Ref. <http://goo.gl/8hdqxb>
 
        (instance? js/RegExp match) ; pattern -> string/fn replacement
