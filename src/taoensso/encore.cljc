@@ -855,8 +855,9 @@
   #?(:cljs {:tag 'boolean})
   [x]
   ;; Avoid actually loading `core.async`
-  #?(:cljs (instance? cljs.core.async.impl.channels.ManyToManyChannel                   x)
-     :clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (.getName (class x)))))
+  #?(:cljs (and (exists?   cljs.core.async.impl.channels.ManyToManyChannel)
+                (instance? cljs.core.async.impl.channels.ManyToManyChannel x))
+     :clj  (=     "clojure.core.async.impl.channels.ManyToManyChannel" (some-> x class .getName))))
 
 (comment (chan? (clojure.core.async/chan)))
 

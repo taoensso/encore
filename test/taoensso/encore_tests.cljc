@@ -1231,7 +1231,9 @@
 
 (deftest _predicates
   [(is      (enc/can-meta? []))
-   (is (not (enc/can-meta? "foo")))])
+   (is (not (enc/can-meta? "foo")))
+   (is (false? (enc/chan? nil)))
+   (is (false? (enc/chan? :not-a-channel)))])
 
 (deftest _instants
   [(is (true?  (enc/inst? (enc/now-inst))))
