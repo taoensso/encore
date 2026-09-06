@@ -7081,8 +7081,7 @@
               (.setResponseType    xhr
                 (case resp-type
                   (:auto nil)        ""
-                  (:text :edn)       "text"
-                  :json              "json"
+                  (:text :edn :json) "text"
                   :xml               "document"
                   :bin/array-buffer  "arraybuffer"
                   :bin/blob          "blob"
