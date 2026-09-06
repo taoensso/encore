@@ -6945,7 +6945,7 @@
          (fn callback [resp-map]
            (let [{:keys [success? ?status ?error ?content ?content-type]} resp-map]
              ;; ?status ; ∈ #{nil 200 404 ...}, non-nil iff server responded
-             ;; ?error  ; ∈ #{nil <http-error-status-code> <thrown-error> :bad-edn
+             ;; ?error  ; ∈ #{nil <http-error-status-code> <thrown-error> :bad-edn :bad-json
                               :exception :http-error :abort :timeout :unknown
                               :xhr-pool-depleted :xhr-pool-timeout}
              (js/alert (str \"Ajax response: \" resp-map)))))"
@@ -7025,7 +7025,7 @@
                         status   (.getStatus xhr) ; -1, 200, etc.
 
                         [status content-type content error]
-                        (when (not= status -1) ; Got a response from server
+                        (when (or success? (pos? status)) ; Got a response from server
                           (let [content-type (.getResponseHeader xhr "content-type") ; Case insensitive
                                 resp-type
                                 (cond
@@ -7042,7 +7042,10 @@
                                 [content error]
                                 (case resp-type
                                   :text [(.getResponseText xhr)]
-                                  :json [(.getResponseJson xhr)]
+                                  :json
+                                  (truss/try*
+                                    [(.getResponseJson xhr)]
+                                    (catch :all _ [(.getResponseText xhr) :bad-json]))
                                   :xml  [(.getResponseXml  xhr)]
                                   :edn
                                   (when-let [edn (.getResponseText xhr)]
