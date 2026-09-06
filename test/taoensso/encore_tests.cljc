@@ -1376,6 +1376,15 @@
 
    (is (true? ((enc/name-filter :any) "foo")))
 
+   (let [nf (enc/name-filter "a+b*")]
+     [(is (true?  (nf "a+bc")))
+      (is (false? (nf "aaab")))])
+
+   (let [nf (enc/name-filter "a[b](.*)")]
+     [(is (true?  (nf "a[b]")))
+      (is (true?  (nf "a[b].c")))
+      (is (false? (nf "ab.c")))])
+
    (let [nf (enc/name-filter "a.b.*")]
      [(is (true?  (nf "a.b.c")))
       (is (false? (nf "a.b")))

@@ -3265,11 +3265,14 @@
       (fn [s]
         (when (str-contains? s "*")
           (re-pattern
-            (-> (str "^" s "$")
-              (str/replace "(.*)"            "__OR_CHILDREN__")
-              (str/replace "."               "\\.")
-              (str/replace "*"               ".*")
-              (str/replace "__OR_CHILDREN__" "(\\..*)?")))))
+            (str "^"
+              (str/replace s #"\(\.\*\)|\*|[\\.^$|?+()\[\]{}]"
+                (fn [token]
+                  (case token
+                    "*"    ".*"
+                    "(.*)" "(\\..*)?"
+                    (str "\\" token))))
+              "$"))))
 
       compile->match-fn
       (fn compile->match-fn
