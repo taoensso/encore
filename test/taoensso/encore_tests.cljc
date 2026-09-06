@@ -2214,12 +2214,14 @@
 
     [(is (fn?    (ts 100 (fn [] (c))))  "Schedule")
      (is (true? ((ts 100 (fn [] (c))))) "Cancel")
+     (is (fn?    (timers/timer-call-after ts 100 (fn [] (c)))))
+     (is (true? ((timers/timer-call-after ts 100 (fn [] (c))))))
 
      (do (dotimes [_ 100] (ts :id1 100 (fn [] (c)))) :debounced)
      (is (true? (timers/timer-pending? ts :id1)))
      (is (true? (timers/timer-cancel   ts :id1)))]
 
-    [(is (= @c 1))]))
+    [(is (= @c 2))]))
 
 ;;;;
 

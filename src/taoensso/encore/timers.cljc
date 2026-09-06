@@ -115,6 +115,7 @@
                 (false? (.get done?)))
               false))
 
+          (timer-call-after [self msecs f] (timer-call-after self nil msecs f))
           (timer-call-after [_ id msecs f]
             (let [ab:done? (java.util.concurrent.atomic.AtomicBoolean. false)
                   task (TimerTask. (+ (System/currentTimeMillis) (long msecs)) id f ab:done?)]
@@ -180,6 +181,7 @@
                 (when eager-cancel? (js/clearTimeout timeout-id))
                 true)))
 
+          (timer-call-after [self msecs f] (timer-call-after self nil msecs f))
           (timer-call-after [_ id msecs f]
             (let [done?_ (volatile! false)
                   timeout-id
