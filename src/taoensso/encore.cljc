@@ -4534,17 +4534,18 @@
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
 
-                     _ #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
                      ^TickedCacheEntry e0 (when-not fresh? (get (cache_) args))
                      ^TickedCacheEntry e
                      (if (and e0 (<= (- instant (.-udt e0)) ttl-ms))
                        e0 ; Common hit path, no swap needed
-                       (cache_ args
-                         (fn swap-fn [?e]
-                           (if (or (nil? ?e) fresh?
-                                   (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
-                             (TickedCacheEntry. (delay (apply f args)) instant tick 0)
-                             ?e))))]
+                       (do
+                         #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
+                         (cache_ args
+                           (fn swap-fn [?e]
+                             (if (or (nil? ?e) fresh?
+                                     (> (- instant (.-udt ^TickedCacheEntry ?e)) ttl-ms))
+                               (TickedCacheEntry. (delay (apply f args)) instant tick 0)
+                               ?e)))))]
 
                  (tce-touch! e tick)
                  #?(:clj
@@ -4605,17 +4606,18 @@
 
                (let [fresh? (case a1 (:cache/fresh :mem/fresh) true false)
                      args   (if fresh? (next args) args)
-                     _      #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
                      ^SimpleCacheEntry e0 (when-not fresh? (get (cache_) args))
                      ^SimpleCacheEntry e
                      (if (and e0 (<= (- instant (.-udt e0)) ttl-ms))
                        e0 ; Common hit path, no atomic update needed
-                       (cache_ args
-                         (fn swap-fn [?e]
-                           (if (or (nil? ?e) fresh?
-                                   (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
-                             (SimpleCacheEntry. (delay (apply f args)) instant)
-                             ?e))))]
+                       (do
+                         #?(:clj (when-let [l (latch_)] (.await ^CountDownLatch l)) :default nil)
+                         (cache_ args
+                           (fn swap-fn [?e]
+                             (if (or (nil? ?e) fresh?
+                                     (> (- instant (.-udt ^SimpleCacheEntry ?e)) ttl-ms))
+                               (SimpleCacheEntry. (delay (apply f args)) instant)
+                               ?e)))))]
                  #?(:clj
                     (deref-cached! [dv (.-delay e)]
                       (cache_
