@@ -1486,18 +1486,16 @@
        (let [o (if (nil? o) (js-obj) o)]
          (if-let [ks (seq ks)]
            (loop [o-next o, ks-next ks]
-             (let [k1 (name (first ks-next))
-                   o-next
-                   (let [o-next* (gobj/get o-next k1 sentinel)]
-                     (if (identical? o-next* sentinel)
-                       (let [new-obj (js-obj)]
-                         (do
-                           (gobj/set o-next k1 new-obj)
-                           (do                 new-obj)))
-                       o-next*))]
-
+             (let [k1 (name (first ks-next))]
                (if-let [ks-next (next ks-next)]
-                 (recur        o-next ks-next)
+                 (let [child (gobj/get o-next k1 sentinel)
+                       child
+                       (if (identical? child sentinel)
+                         (let [child (js-obj)]
+                           (gobj/set o-next k1 child)
+                           child)
+                         child)]
+                   (recur child ks-next))
                  (do (gobj/set o-next k1 v) o))))
            ;; Resolve nil => [nil] ambiguity in `assoc-in`
            o)))))

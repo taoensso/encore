@@ -313,6 +313,15 @@
       (is (= (keys (enc/rename-keys {:a :z} m))
              (keys (assoc (dissoc m :a) :z 1)))))))
 
+#?(:cljs
+   (deftest _oset-in
+     (let [o (enc/oset-in nil [:a :b] 1)]
+       (is (= (js->clj o) {"a" {"b" 1}}))
+       (is (identical? o (enc/oset-in o [:a :b] 2)))
+       (is (= (js->clj o) {"a" {"b" 2}}))
+       (enc/oset-in o [:a] 3)
+       (is (= (js->clj o) {"a" 3})))))
+
 ;;;; Sub fns
 
 (deftest _subvec
