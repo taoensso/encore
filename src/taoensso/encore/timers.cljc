@@ -21,8 +21,8 @@
       O(num-tasks) on Java 11+")))
 
 #?(:clj
-   (deftype ^:no-doc TimerTask [^long udt-due task-id f ^java.util.concurrent.atomic.AtomicBoolean done?]
-     Comparable       (compareTo [_ task] (Long/compare udt-due (.-udt-due ^TimerTask task)))
+   (deftype ^:no-doc TimerTask [^long msecs-due task-id f ^java.util.concurrent.atomic.AtomicBoolean done?]
+     Comparable       (compareTo [_ task] (Long/compare msecs-due (.-msecs-due ^TimerTask task)))
      clojure.lang.IFn (invoke    [_] (f))))
 
 #?(:clj
@@ -56,6 +56,8 @@
                   (.setDaemon (boolean daemon?))
                   (.start))))
             eager-cancel? (= :eager (truss/have #{:lazy :eager} cancel-mode))
+            nano-origin (System/nanoTime)
+            now-msecs (fn ^long [] (quot (unchecked-subtract (System/nanoTime) nano-origin) 1000000))
             running? (java.util.concurrent.atomic.AtomicBoolean. false)
             by-id    (java.util.concurrent.ConcurrentHashMap.) ; {task-id TimerTask}
             pq       (java.util.PriorityQueue.)
@@ -86,8 +88,8 @@
                   (let [[action task]
                         (locking pq
                           (if-let [^TimerTask task (.peek pq)]
-                            (let [now (System/currentTimeMillis)
-                                  due (.-udt-due task)
+                            (let [now (now-msecs)
+                                  due (.-msecs-due task)
                                   wait (if (> due now) (- due now) 0)]
                               (if (pos? wait)
                                 (do
@@ -149,7 +151,7 @@
           (timer-call-after [self msecs f] (timer-call-after self nil msecs f))
           (timer-call-after [_ id msecs f]
             (let [ab:done? (java.util.concurrent.atomic.AtomicBoolean. false)
-                  task (TimerTask. (+ (System/currentTimeMillis) (long msecs)) id f ab:done?)]
+                  task (TimerTask. (+ (now-msecs) (max 0 (long msecs))) id f ab:done?)]
 
               (when id
                 (when-let [^TimerTask old-task

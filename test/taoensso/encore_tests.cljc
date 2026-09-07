@@ -2148,6 +2148,18 @@
        (is (instance? LinkageError (deref error_ 1000 ::timeout))))))
 
 #?(:clj
+   (deftest _timer-service-delays
+     (let [ts (timers/timer-service {:inactivity-timeout-msecs 1})]
+       (doseq [msecs [Long/MIN_VALUE -1 0 30]]
+         (let [result_ (promise)
+               start (System/nanoTime)]
+           (ts msecs #(deliver result_ (System/nanoTime)))
+           (let [end (deref result_ 1000 nil)]
+             (is (some? end))
+             (when (and end (pos? msecs))
+               (is (>= (- end start) (* (dec msecs) 1000000))))))))))
+
+#?(:clj
    (deftest _timer-task-ordering
      (let [done?    (java.util.concurrent.atomic.AtomicBoolean. false)
            task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE nil (fn []) done?)
