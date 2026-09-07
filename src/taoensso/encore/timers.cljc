@@ -31,7 +31,9 @@
      Uses a single task thread that'll auto start+stop as needed.
      Workers keep the JVM alive by default, including while idle.
      `:daemon? true` allows JVM exit without waiting for pending callbacks.
-     A custom `:thread-fn` controls its own daemon status.
+     A custom `:thread-fn` must start the supplied fn asynchronously,
+     return promptly, and throw only if the worker was not started.
+     It controls its own daemon status, overriding `:daemon?`.
 
      Scheduling: O(log(num-tasks)
      Cancelling: O(1)         with `:lazy`  cancel mode (default), or
@@ -68,45 +70,66 @@
                       (.notify pq)))
                   true)))
 
+            start-runner!
+            (fn [runner] ; Called with pq locked
+              (when (and (not (.isEmpty pq)) (.compareAndSet running? false true))
+                (try
+                  (thread-fn runner)
+                  (catch Throwable t
+                    (.set running? false)
+                    (throw t)))))
+
             runner
             (fn runner []
-              (loop [stop-on-empty? false]
-                (let [[action task]
-                      (locking pq
-                        (if-let [^TimerTask task (.peek pq)]
-                          (let [wait (- (.-udt-due task) (System/currentTimeMillis))]
-                            (if (pos? wait)
+              (try
+                (loop [stop-on-empty? false]
+                  (let [[action task]
+                        (locking pq
+                          (if-let [^TimerTask task (.peek pq)]
+                            (let [now (System/currentTimeMillis)
+                                  due (.-udt-due task)
+                                  wait (if (> due now) (- due now) 0)]
+                              (if (pos? wait)
+                                (do
+                                  (try
+                                    (.wait pq wait)
+                                    (catch InterruptedException _))
+                                  [:wait nil])
+                                (do (.poll pq) [:call task])))
+
+                            (if stop-on-empty?
+                              (do
+                                (.compareAndSet running? true false)
+                                [:stop nil])
                               (do
                                 (try
-                                  (.wait pq wait)
+                                  (.wait pq (long inactivity-timeout-msecs))
                                   (catch InterruptedException _))
-                                [:wait nil])
-                              (do (.poll pq) [:call task])))
+                                [:wait-empty nil]))))]
 
-                          (if stop-on-empty?
-                            (do
-                              (.compareAndSet running? true false)
-                              [:stop nil])
-                            (do
-                              (try
-                                (.wait pq (long inactivity-timeout-msecs))
-                                (catch InterruptedException _))
-                              [:wait-empty nil]))))]
+                    (case action
+                      :call
+                      (do
+                        (let [^TimerTask task task
+                              ^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
+                          (when (.compareAndSet done? false true)
+                            (when-let [id (.-task-id task)]
+                              (.remove by-id id task))
+                            (truss/catching (task))))
+                        (recur false))
 
-                  (case action
-                    :call
-                    (do
-                      (let [^TimerTask task task
-                            ^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
-                        (when (.compareAndSet done? false true)
-                          (when-let [id (.-task-id task)]
-                            (.remove by-id id task))
-                          (truss/catching (task))))
-                      (recur false))
-
-                    :wait (recur false)
-                    :wait-empty (recur true)
-                    :stop nil))))]
+                      :wait (recur false)
+                      :wait-empty (recur true)
+                      :stop nil)))
+                (catch Throwable t
+                  (locking pq
+                    (.set running? false)
+                    (try
+                      (start-runner! runner)
+                      (catch Throwable launch-error
+                        (when-not (identical? t launch-error)
+                          (.addSuppressed t launch-error)))))
+                  (throw t))))]
 
         (reify
           Object (toString [this] (str "encore.timer-service[" @this " " (Integer/toHexString (System/identityHashCode this)) "]"))
@@ -136,13 +159,17 @@
                                (if (.putIfAbsent by-id id     task) (recur) nil)))]
                   (cancel-task! old-task eager-cancel?)))
 
-              (let [start-runner?
-                    (locking pq
-                      (.offer  pq task)
-                      (when (and eager-cancel? (.get ab:done?)) (.remove pq task))
-                      (.notify pq)
-                      (and (not (.isEmpty pq)) (.compareAndSet running? false true)))]
-                (when start-runner? (thread-fn runner)))
+              (locking pq
+                (.offer pq task)
+                (when (and eager-cancel? (.get ab:done?)) (.remove pq task))
+                (.notify pq)
+                (try
+                  (start-runner! runner)
+                  (catch Throwable t
+                    (cancel-task! task false)
+                    (.remove pq task)
+                    (when id (.remove by-id id task))
+                    (throw t))))
 
               (fn cancel-task
                 ([       ] (cancel-task eager-cancel?))

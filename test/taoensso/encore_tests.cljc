@@ -2112,6 +2112,42 @@
        (is (= (deref bound_ 1000 ::timeout) 2)))))
 
 #?(:clj
+   (deftest _timer-service-launch-failure
+     (let [starts_ (atom 0)
+           ts
+           (timers/timer-service
+             {:inactivity-timeout-msecs 1
+              :thread-fn
+              (fn [f]
+                (if (= (swap! starts_ inc) 1)
+                  (throw (java.util.concurrent.RejectedExecutionException.))
+                  (future-call f)))})
+           result_ (promise)]
+       (is (thrown? java.util.concurrent.RejectedExecutionException
+             (ts :rejected 0 #(deliver result_ :rejected))))
+       (is (false? (timers/timer-pending? ts :rejected)))
+       (ts 0 #(deliver result_ :called))
+       (is (= (deref result_ 1000 ::timeout) :called)))))
+
+#?(:clj
+   (deftest _timer-service-worker-failure
+     (let [entered_ (promise), release_ (promise), error_ (promise), result_ (promise)
+           ts
+           (timers/timer-service
+             {:inactivity-timeout-msecs 1
+              :thread-fn
+              (fn [f]
+                (future
+                  (try (f) (catch LinkageError e (deliver error_ e)))))})]
+       (ts 0 #(do (deliver entered_ true) @release_ (throw (LinkageError. "test"))))
+       (try
+         (is (= (deref entered_ 1000 ::timeout) true))
+         (ts 0 #(deliver result_ :called))
+         (finally (deliver release_ true)))
+       (is (= (deref result_ 1000 ::timeout) :called))
+       (is (instance? LinkageError (deref error_ 1000 ::timeout))))))
+
+#?(:clj
    (deftest _timer-task-ordering
      (let [done?    (java.util.concurrent.atomic.AtomicBoolean. false)
            task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE nil (fn []) done?)
