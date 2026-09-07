@@ -5295,7 +5295,7 @@
              (threadlocal
                (let [pattern
                      (case pattern
-                       :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+                       :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
                        :rss2    "EEE, dd MMM yyyy HH:mm:ss z"
                        pattern)
 

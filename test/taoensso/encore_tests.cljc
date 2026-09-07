@@ -1211,6 +1211,15 @@
              (is (= (ff ref-inst) "2024-06-09T21:15:20.17") "Depends on auto zone")))]))])
 
 #?(:clj
+   (deftest _simple-date-format
+     (doseq [^String zone ["GMT" "GMT+02:00" "GMT+05:30" "GMT+05:45" "GMT-03:30"]]
+       (let [formatter (enc/simple-date-format :iso8601
+                         {:timezone (java.util.TimeZone/getTimeZone zone)})
+             formatted (.format formatter (java.util.Date. 0))]
+         (is (= (.toInstant (java.time.OffsetDateTime/parse formatted))
+                java.time.Instant/EPOCH))))))
+
+#?(:clj
    (deftest _interrupts
      (testing "Preserve interrupt flag"
        ;; Java 8 doesn't retain interrupt status after thread termination,
