@@ -363,7 +363,22 @@
 (defn read-ba ^bytes [^DataInput in len] (let [ba (byte-array len)] (.readFully in ba) ba))
 (defn read-?ba       [^DataInput in len] (when (pos? ^long len) (read-ba in len)))
 
-(defn skip-dynamic-ba        [^DataInput in] (.skipBytes in (read-dynamic-uint in)))
+(defn skip-dynamic-ba
+  "Skips a length-prefixed byte array, returning its payload length.
+  Throws EOFException if the payload is truncated."
+  [^DataInput in]
+  (let [len (read-dynamic-uint in)]
+    (loop [remaining len]
+      (if (> remaining 1)
+        (let [skipped (.skipBytes in (int (min (dec remaining) Integer/MAX_VALUE)))]
+          (if (pos? skipped)
+            (recur (- remaining skipped))
+            (do (.readByte in) (recur (dec remaining)))))
+        (do
+          ;; Read the final byte since file streams can skip past EOF.
+          (when (pos? remaining) (.readByte in))
+          len)))))
+
 (defn read-dynamic-ba ^bytes [^DataInput in] (read-ba    in (read-dynamic-uint in)))
 (defn read-dynamic-?ba       [^DataInput in] (read-?ba   in (read-dynamic-uint in)))
 (defn read-dynamic-?ba*      [^DataInputStream in]

@@ -1874,6 +1874,28 @@
                 (is (=         n3 4))
                 (is (bytes/ba= x3 (bytes/as-ba [1 2 3])))])))])
 
+      (testing "skip-dynamic-ba"
+        (doseq [no-skip? [false true], payload [[] [10 20]]]
+          (let [ba (bytes/with-out [out] 16
+                     (bytes/write-dynamic-ba out (byte-array payload))
+                     (.writeByte out 99))
+                in (java.io.DataInputStream.
+                     (if no-skip?
+                       (proxy [java.io.ByteArrayInputStream] [ba] (skip [n] 0))
+                       (java.io.ByteArrayInputStream. ba)))]
+            (is (= (bytes/skip-dynamic-ba in) (count payload)))
+            (is (= (.readUnsignedByte in) 99))))
+        (is (truss/throws? java.io.EOFException
+              (bytes/with-in [in] (bytes/with-out [out] 1 (bytes/write-dynamic-uint out 2))
+                (bytes/skip-dynamic-ba in))))
+        (let [file (java.io.File/createTempFile "encore-skip-" ".bin")]
+          (try
+            (with-open [out (java.io.DataOutputStream. (java.io.FileOutputStream. file))]
+              (bytes/write-dynamic-uint out 2))
+            (with-open [in (java.io.DataInputStream. (java.io.FileInputStream. file))]
+              (is (truss/throws? java.io.EOFException (bytes/skip-dynamic-ba in))))
+            (finally (.delete file)))))
+
       (testing "dynamic-strs"
         (let [dba
               (bytes/with-out [dos] 1
