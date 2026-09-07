@@ -112,7 +112,6 @@
           Object (toString [this] (str "encore.timer-service[" @this " " (Integer/toHexString (System/identityHashCode this)) "]"))
           clojure.lang.IDeref (deref [_] {:running? (.get running?) :queued (.size pq)})
           clojure.lang.IFn
-          (invoke [_] (.compareAndSet running? true false)) ; Stop now, undocumented
           (invoke [self    msecs f] (timer-call-after self nil msecs f))
           (invoke [self id msecs f] (timer-call-after self id  msecs f))
 
