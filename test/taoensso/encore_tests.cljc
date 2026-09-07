@@ -2087,6 +2087,31 @@
 ;;;; Timers
 
 #?(:clj
+   (deftest _timer-service-daemon
+     (doseq [opts [{} {:daemon? false} {:daemon? true}]
+             caller-daemon? [false true]]
+       (let [ts (timers/timer-service (assoc opts :inactivity-timeout-msecs 1))
+             result_ (promise)]
+         (doto (Thread. ^Runnable
+                 (fn [] (ts 0 #(deliver result_ (.isDaemon (Thread/currentThread))))))
+           (.setDaemon caller-daemon?)
+           (.start))
+         (is (= (deref result_ 1000 ::timeout) (boolean (:daemon? opts))))))))
+
+#?(:clj
+   (deftest _timer-service-bindings
+     (let [ts (timers/timer-service {:inactivity-timeout-msecs 1000})
+           first_ (promise), plain_ (promise), bound_ (promise)]
+       (binding [*print-length* 1]
+         (ts 0 #(deliver first_ *print-length*)))
+       (is (= (deref first_ 1000 ::timeout) (.getRawRoot #'*print-length*)))
+       (binding [*print-length* 2]
+         (ts 0           #(deliver plain_ *print-length*))
+         (ts 0 (bound-fn [] (deliver bound_ *print-length*))))
+       (is (= (deref plain_ 1000 ::timeout) (.getRawRoot #'*print-length*)))
+       (is (= (deref bound_ 1000 ::timeout) 2)))))
+
+#?(:clj
    (deftest _timer-task-ordering
      (let [done?    (java.util.concurrent.atomic.AtomicBoolean. false)
            task-min (taoensso.encore.timers.TimerTask. Long/MIN_VALUE nil (fn []) done?)

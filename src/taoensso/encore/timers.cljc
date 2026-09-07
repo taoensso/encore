@@ -29,22 +29,31 @@
    (defn ^:no-doc timer-service
      "Returns a lightweight timer service inspired by http-kit's timer code.
      Uses a single task thread that'll auto start+stop as needed.
+     Workers keep the JVM alive by default, including while idle.
+     `:daemon? true` allows JVM exit without waiting for pending callbacks.
+     A custom `:thread-fn` controls its own daemon status.
 
      Scheduling: O(log(num-tasks)
      Cancelling: O(1)         with `:lazy`  cancel mode (default), or
                  O(num-tasks) with `:eager` cancel mode."
 
      ([] (timer-service nil))
-     ([{:keys [cancel-mode inactivity-timeout-msecs thread-fn]
+     ([{:keys [cancel-mode inactivity-timeout-msecs daemon? thread-fn]
         :or
         {cancel-mode              :lazy
          inactivity-timeout-msecs 60000
-         thread-fn future-call}}]
+         daemon?                  false}}]
 
       ;; Benched ~20% faster than equivalent `java.util.concurrent.DelayQueue`,
       ;; and also supports thread auto start/stop
 
-      (let [eager-cancel? (= :eager (truss/have #{:lazy :eager} cancel-mode))
+      (let [thread-fn
+            (or thread-fn
+              (fn [f]
+                (doto (Thread. ^Runnable f "encore/timers")
+                  (.setDaemon (boolean daemon?))
+                  (.start))))
+            eager-cancel? (= :eager (truss/have #{:lazy :eager} cancel-mode))
             running? (java.util.concurrent.atomic.AtomicBoolean. false)
             by-id    (java.util.concurrent.ConcurrentHashMap.) ; {task-id TimerTask}
             pq       (java.util.PriorityQueue.)
