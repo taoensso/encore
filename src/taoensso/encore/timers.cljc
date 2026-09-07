@@ -46,9 +46,6 @@
          inactivity-timeout-msecs 60000
          daemon?                  false}}]
 
-      ;; Benched ~20% faster than equivalent `java.util.concurrent.DelayQueue`,
-      ;; and also supports thread auto start/stop
-
       (let [thread-fn
             (or thread-fn
               (fn [f]
@@ -278,14 +275,15 @@
 
 (comment
   (let [ts (timer-service)
+        n  1000000
+        done (java.util.concurrent.CountDownLatch. n)
+        f  (fn [] (.countDown done))
+        r  (java.util.Random. 42)
         n0 (System/nanoTime)
-        c  (java.util.concurrent.atomic.AtomicLong. 0)
-        r  (java.util.Random.)
-        n  1e6]
+        _  (dotimes [_ n] (ts (.nextInt r 1000) f))
+        schedule-nsecs (- (System/nanoTime) n0)]
 
-    (dotimes [_ n]
-      (ts (.nextInt (java.util.Random.) 1000)
-        (fn [] (.incrementAndGet c))))
-
-    (while (< (.get c) n))
-    (- (System/nanoTime) n0)))
+    (when-not (.await done 60 java.util.concurrent.TimeUnit/SECONDS)
+      (throw (ex-info "Timer benchmark timed out" {:remaining (.getCount done)})))
+    {:schedule-msecs (/ schedule-nsecs 1e6)
+     :total-msecs    (/ (- (System/nanoTime) n0) 1e6)}))
