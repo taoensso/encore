@@ -299,6 +299,17 @@
      (is (= (pw nil   {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a  [2 3 4]}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))
      (is (= (pw :seqs {:a [1 2 3 #{1 2 3 {:a '(1 2 3)}}] 1 "1" 2 nil 3 {1 "1" 2 "2" 3 "3"}}) {:a [2 3 4 #{4 3 2 {:a '(2 3 4)}}], 2 "1", 3 nil, 4 {2 "1", 3 "2", 4 "3"}}))]))
 
+(deftest _rename-keys
+  (doseq [m [{:a 1 :b 2} {:a 1 :b 2 :c 3}]
+          m [(into (sorted-map-by #(compare %2 %1)) m)]]
+    (is (= (enc/rename-keys (array-map :a :b :b :a) m)
+           (assoc m :a 2 :b 1)))
+    (is (= (enc/rename-keys (array-map :a :b :b :d) m)
+           (assoc (dissoc m :a) :b 1 :d 2)))
+    (when (sorted? m)
+      (is (= (keys (enc/rename-keys {:a :z} m))
+             (keys (assoc (dissoc m :a) :z 1)))))))
+
 ;;;; Sub fns
 
 (deftest _subvec

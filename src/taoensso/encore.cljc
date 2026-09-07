@@ -1778,6 +1778,15 @@
     (empty? m)            m ; Preserve metadata
     (empty? replacements) m ; ''
 
+    (not (editable? m))
+    (reduce-kv
+      (fn [acc old-k new-k]
+        (if-let [e (find m old-k)]
+          (assoc acc new-k (val e))
+          (do    acc)))
+      (reduce-kv (fn [acc old-k _] (dissoc acc old-k)) m replacements)
+      replacements)
+
     (> (count m) (count replacements))
     (persistent!
       (reduce-kv
