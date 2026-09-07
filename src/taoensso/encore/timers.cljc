@@ -157,17 +157,13 @@
                   task (TimerTask. (+ (now-msecs) (max 0 (long msecs))) id f ab:done?)]
 
               (when (some? id)
-                (when-let [^TimerTask old-task
-                           (loop []
-                             (if-let [old  (.get by-id id)]
-                               (if (.replace     by-id id old task) old (recur))
-                               (if (.putIfAbsent by-id id     task) (recur) nil)))]
+                (when-let [^TimerTask old-task (.put by-id id task)]
                   (cancel-task! old-task eager-cancel?)))
 
               (locking pq
                 (.offer pq task)
                 (when (and eager-cancel? (.get ab:done?)) (.remove pq task))
-                (.notify pq)
+                (when (identical? task (.peek pq)) (.notify pq))
                 (try
                   (start-runner! runner)
                   (catch Throwable t

@@ -2100,6 +2100,24 @@
         (is (false? (timers/timer-pending? ts id)))))))
 
 #?(:clj
+   (deftest _timer-service-concurrent-replacement
+     (let [ts (timers/timer-service {:inactivity-timeout-msecs 1})
+           entered_ (promise), release_ (promise), result_ (promise)
+           calls_ (atom 0)]
+       (ts 0 #(do (deliver entered_ true) @release_))
+       (try
+         (is (= (deref entered_ 1000 ::timeout) true))
+         (let [start_ (promise)
+               jobs (doall
+                      (repeatedly 4
+                        #(future @start_ (dotimes [_ 128] (ts :id 0 (fn [] (swap! calls_ inc)))))))]
+           (deliver start_ true)
+           (doseq [job jobs] @job))
+         (ts :id 1 #(deliver result_ @calls_))
+         (finally (deliver release_ true)))
+       (is (= (deref result_ 1000 ::timeout) 0)))))
+
+#?(:clj
    (deftest _timer-service-options
      (doseq [timeout [0 -1 0.5]]
        (is (thrown? Exception
