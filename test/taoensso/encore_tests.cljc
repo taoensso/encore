@@ -1263,12 +1263,33 @@
 
 #?(:clj
    (deftest _simple-date-format
+     (testing "Preserve existing parsing and output, including indirect library use"
+       (doseq [formatter-fn
+               [(fn [tz] (enc/simple-date-format  :iso8601 {:timezone tz}))
+                (fn [tz] (enc/simple-date-format* :iso8601 nil        tz))]]
+         (doseq [[zone expected]
+                 [["GMT"       "1970-01-01T00:00:00.000Z"]
+                  ["GMT+02:00" "1970-01-01T02:00:00.000+02"]
+                  ["GMT+05:30" "1970-01-01T05:30:00.000+05"]]]
+           (let [^java.text.SimpleDateFormat formatter
+                 (formatter-fn (java.util.TimeZone/getTimeZone ^String zone))]
+             (is (= (.format formatter (java.util.Date. 0)) expected)))))
+       (doseq [suffix ["+00" "+0000" "Z"]]
+         (is (= (.getTime (.parse (enc/simple-date-format :iso8601)
+                           (str "2099-01-01T00:00:00.000" suffix)))
+                4070908800000))))
+
      (doseq [^String zone ["GMT" "GMT+02:00" "GMT+05:30" "GMT+05:45" "GMT-03:30"]]
-       (let [formatter (enc/simple-date-format :iso8601
+       (let [formatter (enc/simple-date-format :iso8601-full-offset
                          {:timezone (java.util.TimeZone/getTimeZone zone)})
              formatted (.format formatter (java.util.Date. 0))]
+         (is (= (.getTime (.parse formatter formatted)) 0))
          (is (= (.toInstant (java.time.OffsetDateTime/parse formatted))
-                java.time.Instant/EPOCH))))))
+                java.time.Instant/EPOCH))))
+
+     (is (thrown? java.text.ParseException
+           (.parse (enc/simple-date-format :iso8601-full-offset)
+             "2099-01-01T00:00:00.000+00")))))
 
 #?(:clj
    (deftest _interrupts

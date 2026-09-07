@@ -5329,8 +5329,9 @@
              (threadlocal
                (let [pattern
                      (case pattern
-                       :iso8601 "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
-                       :rss2    "EEE, dd MMM yyyy HH:mm:ss z"
+                       :iso8601             "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+                       :iso8601-full-offset "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
+                       :rss2                "EEE, dd MMM yyyy HH:mm:ss z"
                        pattern)
 
                      locale
@@ -5354,7 +5355,7 @@
                  (do                          sdf)))))]
 
      (defn simple-date-format*
-       "Returns a thread-local `java.text.SimpleDateFormat`."
+       "Like `simple-date-format`, with positional locale and timezone."
        ^java.text.SimpleDateFormat [pattern locale timezone]
        (.get ^ThreadLocal (get-tl   pattern locale timezone)))
 
