@@ -2086,6 +2086,27 @@
 
 ;;;; Timers
 
+(deftest _timer-service-ids
+  (let [ts (timers/timer-service {:cancel-mode :eager})]
+    (is (false? (timers/timer-pending? ts nil)))
+    (is (nil?   (timers/timer-cancel   ts nil)))
+    (doseq [id [false :id]]
+      (let [old-cancel (ts id 60000 (fn []))
+            new-cancel (ts id 60000 (fn []))]
+        (is (nil? (old-cancel)))
+        (is (true? (timers/timer-pending? ts id)))
+        (is (true? (timers/timer-cancel   ts id)))
+        (is (nil? (new-cancel)))
+        (is (false? (timers/timer-pending? ts id)))))))
+
+#?(:clj
+   (deftest _timer-service-options
+     (doseq [timeout [0 -1 0.5]]
+       (is (thrown? Exception
+             (timers/timer-service {:inactivity-timeout-msecs timeout}))))
+     (doseq [timeout [1.5 1N 60000.0]]
+       (is (some? (timers/timer-service {:inactivity-timeout-msecs timeout}))))))
+
 #?(:clj
    (deftest _timer-service-daemon
      (doseq [opts [{} {:daemon? false} {:daemon? true}]

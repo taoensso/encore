@@ -29,13 +29,15 @@
    (defn ^:no-doc timer-service
      "Returns a lightweight timer service inspired by http-kit's timer code.
      Uses a single task thread that'll auto start+stop as needed.
+     Callbacks execute serially; keep them short to avoid delaying others.
      Workers keep the JVM alive by default, including while idle.
      `:daemon? true` allows JVM exit without waiting for pending callbacks.
+     `:inactivity-timeout-msecs` must be >= 1 ms (fractions are truncated).
      A custom `:thread-fn` must start the supplied fn asynchronously,
      return promptly, and throw only if the worker was not started.
      It controls its own daemon status, overriding `:daemon?`.
 
-     Scheduling: O(log(num-tasks)
+     Scheduling: O(log(num-tasks))
      Cancelling: O(1)         with `:lazy`  cancel mode (default), or
                  O(num-tasks) with `:eager` cancel mode."
 
@@ -46,7 +48,8 @@
          inactivity-timeout-msecs 60000
          daemon?                  false}}]
 
-      (let [thread-fn
+      (let [inactivity-timeout-msecs (long (truss/have pos? (long inactivity-timeout-msecs)))
+            thread-fn
             (or thread-fn
               (fn [f]
                 (doto (Thread. ^Runnable f "encore/timers")
@@ -102,7 +105,7 @@
                                 [:stop nil])
                               (do
                                 (try
-                                  (.wait pq (long inactivity-timeout-msecs))
+                                  (.wait pq inactivity-timeout-msecs)
                                   (catch InterruptedException _))
                                 [:wait-empty nil]))))]
 
@@ -112,8 +115,8 @@
                         (let [^TimerTask task task
                               ^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
                           (when (.compareAndSet done? false true)
-                            (when-let [id (.-task-id task)]
-                              (.remove by-id id task))
+                            (let [id (.-task-id task)]
+                              (when (some? id) (.remove by-id id task)))
                             (truss/catching (task))))
                         (recur false))
 
@@ -132,15 +135,18 @@
 
         (reify
           Object (toString [this] (str "encore.timer-service[" @this " " (Integer/toHexString (System/identityHashCode this)) "]"))
-          clojure.lang.IDeref (deref [_] {:running? (.get running?) :queued (.size pq)})
+          clojure.lang.IDeref (deref [_] (locking pq {:running? (.get running?) :queued (.size pq)}))
           clojure.lang.IFn
           (invoke [self    msecs f] (timer-call-after self nil msecs f))
           (invoke [self id msecs f] (timer-call-after self id  msecs f))
 
           ITimers
-          (timer-cancel   [_ id] (when-let [^TimerTask task (.remove by-id id)] (cancel-task! task eager-cancel?)))
+          (timer-cancel   [_ id]
+            (when (some? id)
+              (when-let [^TimerTask task (.remove by-id id)]
+                (cancel-task! task eager-cancel?))))
           (timer-pending? [_ id]
-            (if-let [^TimerTask task (.get by-id id)]
+            (if-let [^TimerTask task (when (some? id) (.get by-id id))]
               (let [^java.util.concurrent.atomic.AtomicBoolean done? (.-done? task)]
                 (false? (.get done?)))
               false))
@@ -150,7 +156,7 @@
             (let [ab:done? (java.util.concurrent.atomic.AtomicBoolean. false)
                   task (TimerTask. (+ (now-msecs) (max 0 (long msecs))) id f ab:done?)]
 
-              (when id
+              (when (some? id)
                 (when-let [^TimerTask old-task
                            (loop []
                              (if-let [old  (.get by-id id)]
@@ -167,14 +173,14 @@
                   (catch Throwable t
                     (cancel-task! task false)
                     (.remove pq task)
-                    (when id (.remove by-id id task))
+                    (when (some? id) (.remove by-id id task))
                     (throw t))))
 
               (fn cancel-task
                 ([       ] (cancel-task eager-cancel?))
                 ([remove?]
                  (when (cancel-task! task remove?)
-                   (when id      (.remove by-id id task))
+                   (when (some? id) (.remove by-id id task))
                    true)))))
 
           (timers-gc [_]
@@ -195,6 +201,7 @@
 #?(:cljs
    (defn ^:no-doc timer-service
      "Returns a simple timer service based on `js/setTimeout`.
+     Callbacks execute serially; keep them short to avoid delaying others.
      Use `:eager` cancel mode to clear cancelled timeouts immediately."
      ([     ] (timer-service nil))
      ([{:keys [cancel-mode] :or {cancel-mode :lazy}}]
@@ -223,13 +230,13 @@
                     (fn run-task []
                       (when-not @done?_
                         (vreset! done?_ true)
-                        (when id (vswap! by-id_ dissoc id))
+                        (when (some? id) (vswap! by-id_ dissoc id))
                         (f)))
                     msecs)
 
                   entry [done?_ timeout-id]
                   _
-                  (when id
+                  (when (some? id)
                     (when-let [[old-done?_ old-timeout-id] (get @by-id_ id)]
                       (when-not @old-done?_
                         (vreset! old-done?_ true)
@@ -242,7 +249,7 @@
                 ([remove?]
                  (when-not @done?_
                    (vreset! done?_ true)
-                   (when id      (vswap! by-id_ dissoc id))
+                   (when (some? id) (vswap! by-id_ dissoc id))
                    (when remove? (js/clearTimeout timeout-id))
                    true))))))))))
 
@@ -260,6 +267,7 @@
 (defn call-after
   "Calls (task-fn) after given number of msecs.
   No auto binding conveyance, use `bound-fn` to keep dynamic bindings.
+  Callbacks execute serially; keep them short to avoid delaying others.
 
   Returns (fn cancel []) which can be used to cancel call.
 
