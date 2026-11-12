@@ -877,10 +877,10 @@
          (is (= (enc/swap-in! a [:nx] (fn [v] (enc/swapped :swap/abort v))) nil))
          (is (= @a {:a :x2 :b :B}) "No change")
 
-         (is (= (enc/swap-in! a [:nx] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= (enc/swap-in! a [:nx] :nf (fn [_] :swap/dissoc)) :nf))
          (is (= @a {:a :x2 :b :B}) "No change")
 
-         (is (= (enc/swap-in! a [:a] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= (enc/swap-in! a [:a] (fn [_] :swap/dissoc)) nil))
          (is (= @a {:b :B}))
 
          (is (truss/throws? #?(:clj ClassCastException) (enc/swap-in! a [:b :c] (fn [_] :x)))
@@ -909,10 +909,10 @@
          (is (= (enc/swap-in! a [:a :nx] (fn [v] (enc/swapped :swap/abort v))) nil))
          (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
 
-         (is (= (enc/swap-in! a [:a :nx] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= (enc/swap-in! a [:a :nx] :nf (fn [_] :swap/dissoc)) :nf))
          (is (= @a {:a {:b1 :x1 :b2 :x2}}) "No change")
 
-         (is (= (enc/swap-in! a [:a :b1] (fn [_] :swap/dissoc)) :swap/dissoc))
+         (is (= (enc/swap-in! a [:a :b1] (fn [_] :swap/dissoc)) nil))
          (is (= @a {:a {:b2 :x2}}))
 
          (is (truss/throws? #?(:clj ClassCastException) (enc/swap-in! a [:a :b2 :c] (fn [_] :x)))
@@ -1401,7 +1401,7 @@
          (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old] (enc/swapped :swap/abort  old))) @a]) [:v2a {:k1 {:k2 :v2a}}]))
          (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old] (enc/swapped :swap/dissoc old))) @a]) [:v2a {:k1 {}}]))
          (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :swap/abort      )) @a]) [:v2a {:k1 {:k2 :v2a}}]))
-         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :swap/dissoc     )) @a]) [:swap/dissoc {:k1 {}}]))])
+         (is (= (let [a (atom {:k1 {:k2 :v2a}})] [(enc/swap-in! a [:k1 :k2] (fn [old]              :swap/dissoc     )) @a]) [nil          {:k1 {}}]))])
 
       (testing "n keys"
         [(is (= (let [a (atom nil)] [(enc/swap-val! a :k2     (fn [old]              :v2b     )) @a]) [:v2b {:k2 :v2b}]))
@@ -1413,7 +1413,7 @@
          (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old] (enc/swapped :swap/abort  old))) @a]) [:v2a {:k1 :v1a, :k2 :v2a}]))
          (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old] (enc/swapped :swap/dissoc old))) @a]) [:v2a {:k1 :v1a}]))
          (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :swap/abort      )) @a]) [:v2a {:k1 :v1a, :k2 :v2a}]))
-         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :swap/dissoc     )) @a]) [:swap/dissoc {:k1 :v1a}]))])
+         (is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/swap-val! a :k2 (fn [old]              :swap/dissoc     )) @a]) [nil          {:k1 :v1a}]))])
 
       (testing "Pull"
         [(is (= (let [a (atom {:k1 :v1a, :k2 :v2a})] [(enc/pull-val! a :k2    ) @a]) [:v2a {:k1 :v1a}]))

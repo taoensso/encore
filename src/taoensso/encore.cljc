@@ -4122,7 +4122,7 @@
       (let [m0 @atom_
             m1 (dissoc m0 k)]
         (if (-cas!? atom_ m0 m1)
-          (return m0 (get m0 k not-found) m1 :swap/dissoc) ; [m0 v0/nx m1 v1]
+          (return m0 (get m0 k not-found) m1 not-found) ; [m0 v0/nx m1 v1/nx]
           (recur))))
 
     (loop []
@@ -4137,15 +4137,13 @@
             (return-swapped s1 m0 m0) ; rv
             (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
-          (let [m1
-                (if (identical-kw? v1 :swap/dissoc)
-                  (dissoc m0 k)
-                  (assoc  m0 k v1))]
+          (let [dissoc? (identical-kw? v1 :swap/dissoc)
+                m1 (if dissoc? (dissoc m0 k) (assoc m0 k v1))]
 
             (if (-cas!? atom_ m0 m1)
               (if sw?
                 (return-swapped s1 m0 m1) ; rv
-                (return m0 v0 m1 v1)) ; [m0 v0/nx m1 v1]
+                (return m0 v0 m1 (if dissoc? not-found v1))) ; [m0 v0/nx m1 v1/nx]
               (recur))))))))
 
 (defn- -swap-kn!
@@ -4159,7 +4157,7 @@
           (let [m0 @atom_
                 m1 (dissoc-in m0 ks)]
             (if (-cas!? atom_ m0 m1)
-              (return m0 (get-in m0 ks not-found) m1 :swap/dissoc) ; [m0 v0/nx m1 v1]
+              (return m0 (get-in m0 ks not-found) m1 not-found) ; [m0 v0/nx m1 v1/nx]
               (recur))))
 
         (loop []
@@ -4174,15 +4172,13 @@
                 (return-swapped s1 m0 m0) ; rv
                 (return m0 v0 m0 v0)) ; [m0 v0/nx m1 v1]
 
-              (let [m1
-                    (if (identical-kw? v1 :swap/dissoc)
-                      (dissoc-in m0 ks)
-                      (assoc-in  m0 ks v1))]
+              (let [dissoc? (identical-kw? v1 :swap/dissoc)
+                    m1 (if dissoc? (dissoc-in m0 ks) (assoc-in m0 ks v1))]
 
                 (if (-cas!? atom_ m0 m1)
                   (if sw?
                     (return-swapped s1 m0 m1) ; rv
-                    (return m0 v0 m1 v1)) ; [m0 v0/nx m1 v1]
+                    (return m0 v0 m1 (if dissoc? not-found v1))) ; [m0 v0/nx m1 v1/nx]
                   (recur)))))))
 
       (-swap-k1! return atom_ (nth ks 0) not-found f))
