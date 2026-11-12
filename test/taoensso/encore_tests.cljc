@@ -484,6 +484,8 @@
    (is (= (enc/update-in {           } [:a :b ]     (fn [m] (dissoc m :k))) {:a {:b nil}}))
    (is (= (enc/update-in {:a {:b :B} } [:a :b ]     (fn [_] :swap/dissoc))  {:a {}}))
    (is (= (enc/update-in {:a {:b :B} } [:a :nx]     (fn [_] :swap/dissoc))  {:a {:b :B}}))
+   (is (= (enc/update-in {:a :A      } [      ]     (fn [_] :swap/abort))   {:a :A}))
+   (is (= (enc/update-in nil           [:a    ]     (fn [_] :swap/dissoc))  nil))
 
    (is (truss/throws? #?(:clj ClassCastException) (enc/update-in {:a :A} [:a :b] (fn [_] :x)))
      "Non-associative val")])

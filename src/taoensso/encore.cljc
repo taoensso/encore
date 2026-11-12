@@ -1848,7 +1848,8 @@
   ([m ks           f] (update-in m ks nil f))
   ([m ks not-found f]
    (if (empty? ks)
-     (f m) ; m would also be a sensible choice, but (f m) is more useful
+     (let [new (f m)] ; m would also be a sensible choice, but (f m) is more useful
+       (case new (:update/abort :swap/abort) m new))
      (let [old (get-in m ks not-found)
            new (f old)]
        (case new
